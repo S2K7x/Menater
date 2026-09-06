@@ -462,9 +462,9 @@ stopped being at the merge. It wants a rewrite describing the *engine*, not a
 translation — that is a decision, not a mechanical pass.
 
 **The `VulnPipe/` archives are still French** and deliberately left alone:
-`ROADMAP.md` (explicitly an archive), `NIGHTLY_LOG.md` and the six
-`Prompts/PHASE_*.md`. They are history; rewriting history is how you
-lose it.
+`ROADMAP.md` (explicitly an archive) and the six `Prompts/PHASE_*.md`. They are
+history; rewriting history is how you lose it.
+`NIGHTLY_LOG.md` moved to the root: it is memory about live code, not history.
 
 ---
 
