@@ -1,0 +1,9 @@
+# The generator and its inputs are not the site.
+# `index.html` plus `shots/` and `favicon.svg` are what gets served; everything
+# below is how they are produced, or the variant meant for a host that blocks
+# external images. Shipping them would put a 2.4 MB duplicate of the page and a
+# build script on a public URL for nothing.
+build.sh
+build.py
+page.src.html
+page.html

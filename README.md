@@ -204,15 +204,33 @@ knows it exists.
 cd site && ./build.sh     # after editing page.src.html or a caption
 ```
 
+### Deploying it
+
+**Root Directory is `site`, and that is the only setting.** Vercel's importer
+scans the repository for a framework, finds `dashboard/` — a Vite app — and
+offers to build the console instead, pre-filling seventeen environment
+variables from the root `.env.example` along the way. Pointing it at `site/`
+removes the question: that folder has no `package.json` and no `.env.example`,
+so there is nothing to detect and nothing to ask for.
+
+| Setting | Value |
+|---|---|
+| Root Directory | **`site`** |
+| Framework Preset | **Other** |
+| Build / Install Command | leave empty |
+| Environment Variables | **none** — the page is static and reads nothing |
+
+`site/vercel.json` carries the rest: long-lived caching on the screenshots,
+which never change under their own name, and the three headers a public page
+should not be without. `site/.vercelignore` keeps the generator and the inlined
+variant off the public host.
+
 **Every screenshot is a real screen**, taken against `docker compose up` with
 alerts injected through the real pipeline — no mockups, and none of them is a
 console with nothing in it. The captions say what state the install was in,
 including that no model key was configured, which is why every verdict on them
 reads `fallback verdict`. A page about a product that refuses to fill a gap with
 a default cannot itself show an invented one.
-
-`vercel.json` points the build output at `site/`: the repository root has no
-`package.json`, so with nothing said Vercel would serve the repository itself.
 
 ---
 
