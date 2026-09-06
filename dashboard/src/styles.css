@@ -671,9 +671,20 @@ code, .soc-mono { font-family: var(--mono); }
 .soc-check-field input {
   width: auto; min-width: 20px; min-height: 20px; margin-top: 2px; flex: none;
 }
-.soc-check-field > span {
+/* FOURTH time this project pays for `.soc-field span` (0,1,1). This rule reset
+   the capitals, the tracking, the size and the colour — and not the FONT, so
+   all five checkbox explanations rendered as monospace prose. Mono means "this
+   string came from the machine, and it is exact"; a sentence telling you what
+   watch-only mode does is neither. Same omission the `.soc-help` rule below
+   documents, in the one place it was not applied.
+
+   Qualified with `.soc-field` so it wins by SPECIFICITY (0,2,1) rather than by
+   source order: the two rules were tied at (0,1,1) and this one only won by
+   sitting 166 lines further down, which the next edit to the sheet would
+   silently change. */
+.soc-field.soc-check-field > span {
   margin: 0; text-transform: none; letter-spacing: 0; font-size: 0.86rem;
-  color: var(--fg); line-height: 1.5;
+  font-family: var(--sans); color: var(--fg); line-height: 1.5;
 }
 .soc-check-field b { color: var(--accent); }
 

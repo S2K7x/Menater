@@ -311,6 +311,27 @@ describe('la vignette qui porte l\'accent le porte vraiment', () => {
     expect(css).toMatch(/\.soc-statbar li\.soc-stat-focus\s*\{[^}]*background:\s*var\(--accent\)/);
     expect(css).not.toMatch(/^\.soc-stat-focus\s*\{\s*background/m);
   });
+
+  it("rend l'explication d'une case a cocher en prose, pas en monospace", () => {
+    /*
+     * QUATRIEME fois que `.soc-field span` (0,1,1) est paye. La regle des
+     * cases a cocher neutralisait les capitales, la chasse, la taille et la
+     * couleur -- et PAS la police, donc les cinq explications de reglage
+     * sortaient en monospace. Le mono dit « cette chaine vient de la machine,
+     * et elle est exacte » : une phrase qui explique le mode observation
+     * n'est ni l'un ni l'autre. Meme oubli que celui documente sur
+     * `.soc-help`, dans le seul endroit ou il n'avait pas ete applique.
+     *
+     * Le test exige aussi les DEUX classes : a (0,1,1) contre (0,1,1) la
+     * regle ne gagnait que par son ordre dans la feuille, ce que la
+     * prochaine edition change en silence.
+     */
+    const css = readFileSync(join(import.meta.dirname, '..', 'styles.css'), 'utf8');
+    const rule = css.match(/\.soc-field\.soc-check-field > span\s*\{[^}]*\}/);
+    expect(rule, 'la regle doit nommer .soc-field pour gagner en specificite').toBeTruthy();
+    expect(rule![0]).toMatch(/font-family:\s*var\(--sans\)/);
+    expect(css).not.toMatch(/^\.soc-check-field > span\s*\{/m);
+  });
 });
 
 /* ==========================================================================

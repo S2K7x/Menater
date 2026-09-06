@@ -167,7 +167,7 @@ Docker is still the normal mode. To work on the code with hot reload:
 ```bash
 cd dashboard && npm install
 npm run dev     # API (4400) + code analysis (4319) + Vite interface (5174)
-npm test        # 912 tests
+npm test        # 913 tests
 ```
 
 See [dashboard/README.md](dashboard/README.md).
