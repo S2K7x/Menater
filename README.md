@@ -5,6 +5,10 @@ A security console in two halves, in one web application:
 - the **SOC** handles what *has already happened* — an alert is already an incident;
 - **VulnPipe** handles what *is about to happen* — a flaw in the code, before it ships.
 
+**→ [menater.vercel.app](https://menater.vercel.app)** — what the product is, what
+it refuses to do, and what it does not do yet, with screenshots of a running
+install. Read that first if you are here to find out what this is.
+
 ---
 
 ## This project is built to run in Docker
@@ -178,6 +182,37 @@ run them against the Docker stack:
 ```bash
 MENATER_TEST_PG=postgres://menater:<password>@localhost:5432/menater_test npm test
 ```
+
+---
+
+## The presentation site
+
+[`site/`](site/) is a static page describing the project, deployed on Vercel at
+**[menater.vercel.app](https://menater.vercel.app)**. It is not part of the
+console and the Docker stack does not serve it: nothing in `docker-compose.yml`
+knows it exists.
+
+| File | Holds |
+|---|---|
+| `site/page.src.html` | **The source.** `<!--SHOT:name-->` marks where a screenshot goes |
+| `site/shots/` | Seven screenshots of a running install, and `captions.json` beside them |
+| `site/index.html` | Generated — what Vercel serves. HTML plus seven cached PNGs |
+| `site/page.html` | Generated — the same page with the images inlined, for hosts that block external images |
+| `site/build.sh` | Writes the two outputs from the one source |
+
+```bash
+cd site && ./build.sh     # after editing page.src.html or a caption
+```
+
+**Every screenshot is a real screen**, taken against `docker compose up` with
+alerts injected through the real pipeline — no mockups, and none of them is a
+console with nothing in it. The captions say what state the install was in,
+including that no model key was configured, which is why every verdict on them
+reads `fallback verdict`. A page about a product that refuses to fill a gap with
+a default cannot itself show an invented one.
+
+`vercel.json` points the build output at `site/`: the repository root has no
+`package.json`, so with nothing said Vercel would serve the repository itself.
 
 ---
 
