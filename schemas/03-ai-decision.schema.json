@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://soc.local/schemas/03-ai-decision.decision.json",
+  "title": "SOC AI triage decision",
+  "description": "Contrat de sortie du node Claude. La partie 'API' (envoyee comme input_schema du tool, strict:true) est ce bloc SANS les contraintes numeriques et de longueur, que l'API Anthropic n'accepte pas en mode strict. La validation complete ci-dessous est rejouee cote n8n dans le node 'Parse & Validate Decision'.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["verdict", "confidence", "reasoning", "recommended_action", "data_lineage"],
+  "properties": {
+    "verdict": {
+      "type": "string",
+      "enum": ["false_positive", "true_positive", "needs_human"]
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Probabilite calibree, 2 decimales max."
+    },
+    "reasoning": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 600,
+      "description": "2 a 3 phrases max. Doit nommer toute source d'enrichment 'unavailable'."
+    },
+    "recommended_action": {
+      "type": "string",
+      "enum": ["auto_close", "escalate", "isolate_host_temporary", "ticket"]
+    },
+    "data_lineage": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Chemins pointes des champs enrichment reellement utilises."
+    }
+  },
+  "x-guardrails": [
+    { "id": "G6", "rule": "confidence < 0.7  =>  verdict === 'needs_human'" },
+    { "id": "G7", "rule": "recommended_action === 'auto_close'  =>  verdict === 'false_positive'" },
+    { "id": "G8", "rule": "recommended_action === 'isolate_host_temporary'  =>  verdict === 'true_positive' && confidence >= 0.85" },
+    { "id": "G9", "rule": "verdict === 'needs_human'  =>  recommended_action in ['escalate','ticket']" },
+    { "id": "G10", "rule": "enrichment_meta.sources_unavailable non vide  =>  reasoning mentionne chaque source manquante" },
+    { "id": "G11", "rule": "data_lineage ne reference que des sources dont status === 'ok'" },
+    { "id": "G12", "rule": "reasoning <= 3 phrases" }
+  ]
+}

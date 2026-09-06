@@ -1,0 +1,2460 @@
+/*
+ * ============================================================================
+ * SOC CONSOLE — VISUAL SYSTEM
+ *
+ * The same register as VulnPipe: cold charcoal ground, a single acid-green
+ * accent, very tight capitalised headings, hairline cards. The tokens are
+ * taken over unchanged so the two products recognise each other as a family.
+ *
+ * VULNPIPE'S THREE RULES APPLY, AND THE SECOND IS VITAL HERE
+ *
+ *  1. ONE ACCENT ONLY. The acid green designates exactly one thing per screen.
+ *
+ *  2. RED AND ORANGE ARE NOT DECORATIVE. On a triage console this is the rule
+ *     the whole product rests on: an analyst scanning forty rows must be able
+ *     to trust the colour. Red says "critical or failed", orange "worth a
+ *     look", green "handled". A red button would teach them to ignore red
+ *     exactly where it saves time.
+ *
+ *  3. THE PALETTE IS A VARIABLE, THE ROLES ARE FIXED. Six themes share this
+ *     file (`theme/themes.css`) without a single rule below knowing their
+ *     names: everything goes through the tokens. That is what makes a seventh
+ *     theme free — and a hardcoded colour immediately wrong.
+ *
+ * ONE RULE SPECIFIC TO THIS CONSOLE
+ *
+ *  4. "WAITING FOR A HUMAN" IS THE ONLY STATE THAT CARRIES THE ACCENT. It is
+ *     the one state where the system is blocked and someone must act.
+ *     Everything else — verdicts, severities, sources — uses the risk palette.
+ * ============================================================================
+ */
+
+/*
+ * The palette is NOT here: it lives in `theme/themes.css`, one definition per
+ * theme. This file holds only what never changes from one theme to the next —
+ * geometry and typography.
+ */
+@import './theme/themes.css';
+
+:root {
+  --radius: 4px;
+
+  --display: 'Archivo Black', 'Helvetica Neue', 'Arial Narrow', Impact, system-ui, sans-serif;
+  --sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+
+  /* Switching theme is instant on the tokens, but the large planes (ground,
+     panels) benefit from a short transition: without it the switch looks like
+     a page reload. 120 ms, no more — beyond that you watch the screen
+     "hesitate". */
+  --theme-swap: 120ms ease;
+}
+
+/* Respects the system setting: a full-screen colour transition is exactly
+   the kind of animation that setting exists to remove. */
+@media (prefers-reduced-motion: reduce) {
+  :root { --theme-swap: 0s; }
+}
+
+* { box-sizing: border-box; }
+html { color-scheme: dark; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  transition: background var(--theme-swap), color var(--theme-swap);
+}
+
+/* The large planes follow the theme switch. Deliberately limited to
+   `background` and `color` on containers: animating `border-color` everywhere
+   would make tables shimmer, and animating EVERYTHING (`transition: all`)
+   would make every button hover sluggish. */
+.soc-panel,
+.soc-subnav,
+.soc-savebar {
+  transition: background var(--theme-swap), border-color var(--theme-swap);
+}
+
+h1, h2, h3 {
+  font-family: var(--display);
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+  line-height: 1.05;
+  margin: 0 0 12px;
+  font-weight: 900;
+}
+
+h1 { font-size: clamp(1.8rem, 4vw, 2.8rem); }
+h2 { font-size: clamp(1.3rem, 2.6vw, 1.9rem); }
+h3 { font-size: 1.02rem; letter-spacing: 0.02em; }
+
+p { margin: 0 0 12px; }
+a { color: var(--accent); }
+code, .soc-mono { font-family: var(--mono); }
+
+.soc-kicker {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--faint);
+  display: block;
+  margin-bottom: 10px;
+}
+
+.soc-app { max-width: 1440px; margin: 0 auto; padding: 0 24px 80px; }
+
+/* --- Header --------------------------------------------------------------- */
+
+.soc-header {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; padding: 16px 0; flex-wrap: wrap;
+  border-bottom: 1px solid var(--line);
+}
+
+.soc-logo { display: flex; align-items: center; gap: 10px; }
+
+/* The mark takes the accent, and it takes it THROUGH the token: its `fill` is
+   `currentColor`, so a theme change in Settings recolours it with everything
+   else and no JavaScript runs. A hex written into the SVG would follow none of
+   the six themes — which is why the component carries no colour at all. */
+.soc-logo-sign { display: inline-flex; flex: none; color: var(--accent); }
+
+.soc-logo-mark {
+  /* "MENATER" is longer than an acronym: the size is set so the logo block
+     stays on one line down to small widths. */
+  font-family: var(--display); font-size: 1.45rem; line-height: 1;
+  color: var(--accent); text-transform: uppercase; letter-spacing: -0.02em;
+}
+
+.soc-logo-word {
+  font-family: var(--display); font-size: 0.86rem; line-height: 1.05;
+  text-transform: uppercase; border-left: 1px solid var(--line-strong); padding-left: 10px;
+}
+
+.soc-nav { display: flex; gap: 4px; flex-wrap: wrap; }
+
+.soc-tab {
+  background: none; border: none; border-bottom: 2px solid transparent;
+  color: var(--muted); font-family: var(--display); text-transform: uppercase;
+  font-size: 0.78rem; letter-spacing: 0.04em; padding: 10px 12px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.soc-tab:hover { color: var(--fg); }
+.soc-tab-active { color: var(--accent); border-bottom-color: var(--accent); }
+
+.soc-tab-count {
+  font-family: var(--mono); font-size: 0.72rem; background: var(--surface-2);
+  color: var(--muted); padding: 2px 6px; border-radius: var(--radius);
+}
+.soc-tab-count-alert { background: var(--accent); color: var(--accent-fg); }
+
+
+/* --- Barre de mesures ----------------------------------------------------- */
+
+.soc-statbar {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 2px; background: var(--line); border: 1px solid var(--line);
+  /* The default <ul> padding would open an empty column on the left. */
+  margin: 24px 0; padding: 0; list-style: none;
+}
+.soc-statbar li { list-style: none; background: var(--panel); padding: 16px 12px; }
+.soc-statbar strong {
+  display: block; font-family: var(--display); font-size: 1.7rem; line-height: 1.1;
+}
+.soc-statbar span { font-size: 0.72rem; color: var(--faint); text-transform: uppercase; letter-spacing: 0.08em; }
+.soc-stat-alert strong { color: var(--red); }
+.soc-stat-warn strong { color: var(--orange); }
+.soc-stat-ok strong { color: var(--green); }
+/*
+ * `.soc-statbar li` (0,1,1) battait `.soc-stat-focus` (0,1,0) : la vignette
+ * gardait le fond du panneau et prenait quand meme `--accent-fg`, c'est-a-dire
+ * du BLANC SUR CREME — 1.05:1 sur le theme clair. Le chiffre le plus important
+ * de la console, « N alertes vous attendent », etait litteralement invisible.
+ * Meme famille que le piege `--hero` : une couleur posee sur une surface qui
+ * n'est pas celle qu'on croyait. Le selecteur nomme donc les deux classes.
+ */
+.soc-statbar li.soc-stat-focus { background: var(--accent); }
+.soc-stat-focus strong, .soc-stat-focus span { color: var(--accent-fg); }
+
+/* --- Panneaux ------------------------------------------------------------- */
+
+.soc-panel {
+  background: var(--surface); border: 1px solid var(--line);
+  /* Closer together and holding less air than they used to: the space was
+     being spent separating titles that all shouted, and the type scale at the
+     bottom of this file separates them now. */
+  padding: 20px; margin-bottom: 16px;
+}
+.soc-panel-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap; margin-bottom: 12px;
+}
+.soc-panel-head h2, .soc-panel-head h3 { margin: 0; }
+
+/* --- Filtres -------------------------------------------------------------- */
+
+.soc-filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+
+.soc-chip {
+  background: var(--panel); border: 1px solid var(--line); color: var(--muted);
+  font-family: var(--mono); font-size: 0.72rem; text-transform: uppercase;
+  letter-spacing: 0.08em; padding: 6px 10px; cursor: pointer;
+}
+.soc-chip:hover { color: var(--fg); border-color: var(--line-strong); }
+.soc-chip[aria-pressed='true'] { color: var(--accent); border-color: var(--accent); }
+
+.soc-search {
+  flex: 1; min-width: 200px; background: var(--panel); border: 1px solid var(--line);
+  color: var(--fg); font-family: var(--mono); font-size: 0.78rem; padding: 8px 10px;
+}
+.soc-search:focus { outline: none; border-color: var(--accent); }
+
+/* --- File de triage ------------------------------------------------------- */
+
+.soc-queue { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+.soc-queue th {
+  text-align: left; font-family: var(--mono); font-size: 0.66rem;
+  letter-spacing: 0.16em; text-transform: uppercase; color: var(--faint);
+  padding: 0 12px 10px; border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.soc-queue td { padding: 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.soc-queue tbody tr { cursor: pointer; }
+.soc-queue tbody tr:hover { background: var(--surface-2); }
+.soc-queue tbody tr[aria-selected='true'] { background: var(--panel); box-shadow: inset 3px 0 0 var(--accent); }
+
+.soc-row-id { font-family: var(--mono); font-size: 0.78rem; color: var(--fg); }
+.soc-row-rule { color: var(--fg); }
+.soc-row-sub { color: var(--faint); font-size: 0.78rem; font-family: var(--mono); }
+
+/* The blocked row carries the accent: it is the only one asking for an
+   action. */
+.soc-queue tbody tr.soc-row-blocked { box-shadow: inset 3px 0 0 var(--accent); }
+
+/* ==========================================================================
+ * CINQ COLONNES, ET POURQUOI PAS HUIT
+ *
+ * La table posait huit questions de front — etat, alerte, severite, verdict,
+ * confiance, action, temps de traitement, reception — chacune reclamant sa
+ * largeur. Sur un portable, les six colonnes etroites gagnaient : elles ne se
+ * coupent pas (`nowrap`), donc c'est le NOM DE LA REGLE, la seule chose qui
+ * dit de quoi il s'agit, qui se pliait sur quatre lignes. Une ligne faisait
+ * 120 px de haut pour cinq mots utiles.
+ *
+ * Rien n'a ete supprime : trois colonnes ont ete repliees dans celle qui
+ * repond a la meme question.
+ *
+ *   severite  → dans « alerte »   : « c'est quoi » et « c'est grave » sont
+ *                                    une seule question.
+ *   confiance → dans « decision » : 0.58 ne veut rien dire sans le verdict.
+ *   duree     → sous « recu »     : deux faits de temps, un seul balayage.
+ *
+ * C'est la loi de proximite prise au serieux : ce qui se lit ensemble se
+ * place ensemble, et l'oeil cesse de faire l'appariement lui-meme.
+ * ========================================================================== */
+
+/* La regle prend toute la place que les trois colonnes rendent. */
+.soc-col-alert { width: 40%; min-width: 240px; }
+
+/*
+ * `nowrap`, et le nom de la regle porte le retour a la ligne.
+ *
+ * En `wrap`, une regle un peu longue poussait la pastille de severite sur une
+ * ligne a elle : la couleur qui doit se comparer d'un coup d'oeil sur quarante
+ * lignes se retrouvait a une hauteur differente a chaque ligne. Une colonne de
+ * pastilles qui ondule ne se compare plus.
+ */
+.soc-row-rule {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: nowrap;
+}
+/* `min-width: 0` : sans lui, l'element flex refuse de devenir plus etroit que
+   son contenu et repousse la pastille de severite hors de la cellule. Meme
+   piege que la barre d'onglets a 375 px. */
+.soc-row-name { min-width: 0; }
+
+/* Verdict, note de repli et barre de confiance : une pile, pas une ligne. */
+.soc-cell-decision { display: flex; flex-direction: column; gap: 4px; }
+
+/*
+ * Le temps de traitement garde son libelle, en plus petit que la valeur.
+ * Une duree nue sous une autre duree ne dit pas de quoi elle est la duree —
+ * et deviner est exactement ce que cette console refuse de faire faire.
+ *
+ * La colonne ne se coupe PAS : laissee libre, « TIME TAKEN 0 ms » se pliait
+ * sur trois lignes et redevenait l'element le plus haut de la ligne — la
+ * mesure la moins regardee reprenant la place qu'on venait de lui retirer.
+ */
+.soc-queue td[data-label] .soc-cell-dwell,
+.soc-queue tbody td:last-child { white-space: nowrap; }
+.soc-cell-dwell { margin-top: 3px; }
+.soc-cell-dwell span {
+  font-size: 0.66rem; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--faint); margin-right: 4px;
+}
+
+/* --- Pastilles ------------------------------------------------------------ */
+
+.soc-pill {
+  display: inline-block; font-family: var(--mono); font-size: 0.66rem;
+  letter-spacing: 0.1em; text-transform: uppercase; padding: 4px 8px;
+  border: 1px solid currentColor; white-space: nowrap;
+}
+.soc-pill-critical, .soc-pill-high, .soc-pill-failed { color: var(--red); background: var(--red-bg); }
+.soc-pill-medium, .soc-pill-warn { color: var(--orange); background: var(--orange-bg); }
+.soc-pill-low, .soc-pill-ok { color: var(--green); background: var(--green-bg); }
+.soc-pill-info { color: var(--blue); background: var(--blue-bg); }
+.soc-pill-neutral { color: var(--grey); }
+.soc-pill-accent { color: var(--accent-fg); background: var(--accent); border-color: var(--accent); }
+
+.soc-shadow-badge {
+  font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--blue); border: 1px dashed var(--blue);
+  padding: 2px 6px;
+}
+
+/* --- Jauge de confiance --------------------------------------------------- */
+
+.soc-conf { display: flex; align-items: center; gap: 8px; min-width: 110px; }
+.soc-conf-bar { flex: 1; height: 4px; background: var(--panel); border: 1px solid var(--line); }
+.soc-conf-bar span { display: block; height: 100%; background: var(--grey); }
+.soc-conf-bar.soc-conf-strong span { background: var(--green); }
+.soc-conf-bar.soc-conf-weak span { background: var(--orange); }
+.soc-conf-bar.soc-conf-none span { background: var(--red); }
+.soc-conf-value { font-family: var(--mono); font-size: 0.78rem; color: var(--muted); }
+
+/* --- Fiche de cas --------------------------------------------------------- */
+
+.soc-case-layout { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr); gap: 24px; }
+/* --- Tracking tab ---------------------------------------------------------
+   The colours state the severity BEFORE the word is read: red for a broken
+   chain, orange for a stalled one. A missing link is drawn AS A RECESS, in its
+   own place, rather than omitted — that is the difference between "something
+   is missing" and "it was shorter".
+   -------------------------------------------------------------------------- */
+
+.soc-trace-chains { display: grid; gap: 10px; }
+
+.soc-trace-chain { background: var(--panel); border: 1px solid var(--line); }
+.soc-trace-chain > summary {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 12px 12px; cursor: pointer; list-style: none;
+  /* 44 px touch target: the same rule as everywhere else. */
+  min-height: 44px;
+}
+.soc-trace-chain > summary::-webkit-details-marker { display: none; }
+.soc-trace-chain > summary:hover { background: var(--surface); }
+.soc-trace-chain[open] > summary { border-bottom: 1px solid var(--line); }
+.soc-trace-chain > summary .soc-icon { margin-left: auto; transition: transform 0.15s ease; }
+.soc-trace-chain[open] > summary .soc-icon { transform: rotate(180deg); }
+.soc-trace-chain-id { font-size: 0.78rem; color: var(--fg); }
+.soc-trace-chain > *:not(summary) { margin-left: 12px; margin-right: 12px; }
+.soc-trace-chain > *:last-child { margin-bottom: 12px; }
+.soc-trace-verdict-help { margin: 12px 12px; font-size: 0.86rem; }
+
+.soc-trace-steps { list-style: none; margin: 12px 12px; padding: 0; display: grid; gap: 2px;
+  background: var(--line); border: 1px solid var(--line); }
+.soc-trace-step {
+  display: grid; grid-template-columns: 30px minmax(90px, 1fr) 2fr auto;
+  align-items: center; gap: 10px; padding: 10px 12px; background: var(--hero);
+  font-size: 0.78rem;
+}
+.soc-trace-step-index { font-family: var(--mono); font-size: 0.72rem; color: var(--faint); }
+.soc-trace-step-name { font-family: var(--mono); font-size: 0.78rem; color: var(--fg); }
+.soc-trace-step-state { color: var(--muted); }
+.soc-trace-step-link { font-family: var(--mono); font-size: 0.72rem; white-space: nowrap; }
+/* The absent link is recessed, not absent: hatched, pale, but present. */
+.soc-trace-step-missing { background: repeating-linear-gradient(
+  135deg, var(--panel), var(--panel) 6px, var(--hero) 6px, var(--hero) 12px); }
+.soc-trace-step-missing .soc-trace-step-name,
+.soc-trace-step-missing .soc-trace-step-state { color: var(--faint); }
+.soc-trace-step-error { box-shadow: inset 3px 0 0 var(--red); }
+.soc-trace-step-empty { box-shadow: inset 3px 0 0 var(--orange); }
+.soc-trace-warn { color: var(--orange); }
+
+.soc-trace-chain-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+.soc-trace-replay { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line); }
+.soc-trace-noreplay { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line); }
+.soc-trace-check { display: flex; align-items: center; gap: 8px; font-size: 0.86rem; color: var(--muted); }
+.soc-trace-check input { width: 16px; height: 16px; accent-color: var(--accent); }
+
+.soc-trace-orphans { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.soc-trace-orphan { background: var(--panel); border: 1px solid var(--line); padding: 12px 12px; }
+.soc-trace-orphan-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.soc-trace-orphan p { margin: 6px 0 0; }
+
+.soc-link-button {
+  background: none; border: none; padding: 8px 0; cursor: pointer;
+  color: var(--accent); font-family: var(--mono); font-size: 0.78rem;
+  letter-spacing: 0.08em; text-transform: uppercase; min-height: 44px;
+}
+.soc-link-button:hover { color: var(--accent-dim); }
+
+/* --- File de triage : ce qui vient d'arriver ------------------------------ */
+
+/* In shadow mode, an alert handled end to end finishes `closed`, so at the
+   BOTTOM of a sort by state. The badge and the rail say why this row came up —
+   a sort that changes without saying so reads as a bug. */
+.soc-fresh {
+  display: inline-block; margin-right: 8px; padding: 2px 6px;
+  background: var(--accent); color: var(--accent-fg);
+  font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.1em;
+  text-transform: uppercase; vertical-align: middle;
+}
+.soc-queue tbody tr.soc-row-fresh { box-shadow: inset 3px 0 0 var(--accent-dim); }
+
+.soc-sort { display: flex; align-items: center; gap: 8px; }
+.soc-sort span {
+  font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--faint); white-space: nowrap;
+}
+.soc-sort select {
+  background: var(--panel); border: 1px solid var(--line); color: var(--fg);
+  font-family: var(--mono); font-size: 0.78rem; padding: 8px 8px;
+}
+.soc-sort select:focus { outline: none; border-color: var(--accent); }
+
+.soc-warn-note {
+  display: block; margin-top: 6px; color: var(--orange); font-size: 0.78rem;
+  text-transform: none; letter-spacing: 0;
+}
+
+@media (max-width: 1080px) { .soc-case-layout { grid-template-columns: 1fr; } }
+
+.soc-case-head { border-bottom: 1px solid var(--line); padding-bottom: 16px; margin-bottom: 16px; }
+.soc-case-title { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.soc-case-meta {
+  display: flex; gap: 16px; flex-wrap: wrap; font-family: var(--mono);
+  font-size: 0.78rem; color: var(--faint); margin-top: 10px;
+}
+.soc-case-meta b { color: var(--muted); font-weight: 400; }
+
+.soc-block { margin-bottom: 24px; }
+.soc-block h3 { margin-bottom: 10px; }
+
+.soc-log {
+  font-family: var(--mono); font-size: 0.78rem; color: var(--muted);
+  background: var(--hero); border-left: 2px solid var(--line-strong);
+  padding: 12px 12px; overflow-x: auto; white-space: pre-wrap; word-break: break-word;
+}
+
+/* --- Processing chain ----------------------------------------------------- */
+
+.soc-chain { list-style: none; padding: 0; margin: 0; }
+.soc-chain li {
+  position: relative; padding: 0 0 16px 24px; border-left: 2px solid var(--line);
+  margin-left: 6px;
+}
+.soc-chain li:last-child { padding-bottom: 0; }
+.soc-chain li::before {
+  content: ''; position: absolute; left: -6px; top: 4px;
+  width: 10px; height: 10px; background: var(--bg);
+  border: 2px solid var(--line-strong); border-radius: 50%;
+}
+.soc-chain li.soc-step-success::before { border-color: var(--green); }
+.soc-chain li.soc-step-error::before { border-color: var(--red); }
+.soc-chain li.soc-step-waiting::before { border-color: var(--accent); background: var(--accent); }
+.soc-chain li.soc-step-waiting { border-left-color: var(--accent); }
+.soc-chain-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.soc-chain-wf { font-family: var(--display); text-transform: uppercase; font-size: 0.86rem; }
+.soc-chain-time { font-family: var(--mono); font-size: 0.72rem; color: var(--faint); }
+.soc-chain-note { color: var(--muted); font-size: 0.86rem; margin: 4px 0 0; }
+.soc-chain li.soc-step-error .soc-chain-note { color: var(--red); }
+
+/* --- Enrichissement ------------------------------------------------------- */
+
+.soc-sources { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.soc-source { background: var(--panel); border: 1px solid var(--line); padding: 12px; }
+.soc-source-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.soc-source-name { font-family: var(--display); text-transform: uppercase; font-size: 0.78rem; }
+.soc-source.soc-src-ok { border-left: 3px solid var(--green); }
+.soc-source.soc-src-unavailable { border-left: 3px solid var(--orange); }
+.soc-source.soc-src-skipped { border-left: 3px solid var(--grey); }
+.soc-kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 0.78rem; }
+.soc-kv dt { color: var(--faint); font-family: var(--mono); font-size: 0.72rem; }
+.soc-kv dd { margin: 0; color: var(--fg); font-family: var(--mono); font-size: 0.78rem; word-break: break-word; }
+
+/* --- Decision ------------------------------------------------------------- */
+
+.soc-verdict { border: 1px solid var(--line); background: var(--panel); padding: 16px; }
+.soc-verdict-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.soc-reasoning { color: var(--fg); font-size: 0.94rem; margin: 0 0 12px; }
+.soc-lineage { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.soc-lineage li {
+  font-family: var(--mono); font-size: 0.72rem; color: var(--muted);
+  background: var(--surface-2); padding: 4px 8px;
+}
+.soc-guardrail {
+  border-left: 2px solid var(--orange); background: var(--orange-bg);
+  padding: 8px 12px; font-size: 0.78rem; color: var(--fg); margin-top: 12px;
+}
+
+/* --- Approbation ---------------------------------------------------------- */
+
+.soc-approval { border: 1px solid var(--accent); background: var(--panel); padding: 16px; }
+.soc-approval-field { margin-bottom: 12px; }
+.soc-approval-field h4 {
+  font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--faint); margin: 0 0 4px;
+}
+.soc-approval-field p { margin: 0; font-size: 0.86rem; }
+
+.soc-field { display: block; margin-bottom: 12px; }
+.soc-field span {
+  display: block; font-family: var(--mono); font-size: 0.72rem;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); margin-bottom: 6px;
+}
+.soc-field input, .soc-field textarea, .soc-field select {
+  width: 100%; background: var(--hero); border: 1px solid var(--line);
+  color: var(--fg); font-family: var(--sans); font-size: 0.86rem; padding: 10px 10px;
+}
+.soc-field input:focus, .soc-field textarea:focus { outline: none; border-color: var(--accent); }
+.soc-field textarea { min-height: 74px; resize: vertical; }
+
+.soc-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+
+.soc-primary {
+  background: var(--accent); color: var(--accent-fg); border: 1px solid var(--accent);
+  font-family: var(--display); text-transform: uppercase; font-size: 0.78rem;
+  letter-spacing: 0.03em; padding: 12px 16px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 10px;
+}
+.soc-primary:hover:not(:disabled) { background: var(--accent-dim); border-color: var(--accent-dim); }
+.soc-primary:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.soc-secondary {
+  background: none; color: var(--fg); border: 1px solid var(--line-strong);
+  font-family: var(--display); text-transform: uppercase; font-size: 0.78rem;
+  letter-spacing: 0.03em; padding: 12px 16px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 10px; text-decoration: none;
+}
+.soc-secondary:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.soc-secondary:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* A rejection does not take red: it is not a security verdict, it is a
+   legitimate human decision. Red stays reserved for risk. */
+.soc-danger-note { color: var(--muted); font-size: 0.78rem; margin-top: 10px; }
+
+/* --- Bandeaux ------------------------------------------------------------- */
+
+.soc-banner {
+  border-left: 3px solid var(--line-strong); background: var(--panel);
+  padding: 12px 16px; margin-bottom: 16px; font-size: 0.86rem;
+  display: flex; gap: 10px; align-items: flex-start;
+}
+.soc-banner-error { border-left-color: var(--red); background: var(--red-bg); }
+.soc-banner-warn { border-left-color: var(--orange); background: var(--orange-bg); }
+.soc-banner-info { border-left-color: var(--accent); }
+.soc-banner-ok { border-left-color: var(--green); background: var(--green-bg); }
+.soc-banner p { margin: 0; }
+.soc-banner strong { display: block; margin-bottom: 2px; }
+
+/* --- Audit ---------------------------------------------------------------- */
+
+.soc-hash {
+  font-family: var(--mono); font-size: 0.72rem; color: var(--muted);
+  word-break: break-all; background: var(--hero); padding: 8px 10px;
+  border-left: 2px solid var(--line-strong);
+}
+
+/* --- ATT&CK --------------------------------------------------------------- */
+
+.soc-attack { display: flex; gap: 8px; flex-wrap: wrap; list-style: none; padding: 0; margin: 0; }
+.soc-attack li {
+  border: 1px solid var(--line-strong); padding: 6px 10px; font-size: 0.78rem;
+}
+.soc-attack b { font-family: var(--mono); font-size: 0.72rem; color: var(--accent); display: block; }
+.soc-attack span { color: var(--muted); font-size: 0.72rem; }
+
+/* --- Divers --------------------------------------------------------------- */
+
+.soc-empty { color: var(--faint); font-style: italic; padding: 24px 0; text-align: center; }
+.soc-icon { display: inline-flex; flex-shrink: 0; }
+.soc-muted { color: var(--muted); }
+.soc-faint { color: var(--faint); font-size: 0.78rem; }
+
+.soc-health-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.soc-health-item { background: var(--panel); border: 1px solid var(--line); padding: 16px; }
+.soc-health-item h3 { margin: 0 0 6px; }
+
+.soc-wf-list { list-style: none; padding: 0; margin: 0; }
+.soc-wf-list span { color: var(--muted); }
+.soc-wf-list li {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 8px 0; border-bottom: 1px solid var(--line); font-family: var(--mono); font-size: 0.78rem;
+}
+.soc-wf-list li:last-child { border-bottom: none; }
+
+.soc-footer {
+  border-top: 1px solid var(--line); margin-top: 40px; padding-top: 16px;
+  color: var(--faint); font-size: 0.78rem;
+}
+
+/* --- Connectivity diagnostic ---------------------------------------------- */
+
+.soc-check-list { list-style: none; padding: 0; margin: 0; }
+
+.soc-check {
+  background: var(--panel); border: 1px solid var(--line);
+  border-left: 3px solid var(--line-strong);
+  padding: 12px 12px; margin-bottom: 8px;
+}
+/* The diagnostic's colour code is the same as the risk one: an analyst
+   should not have to learn two colour grammars inside one product. */
+.soc-check-ok { border-left-color: var(--green); }
+.soc-check-warn { border-left-color: var(--orange); }
+.soc-check-fail { border-left-color: var(--red); }
+.soc-check-skip { border-left-color: var(--grey); }
+
+.soc-check-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.soc-check-ok .soc-icon { color: var(--green); }
+.soc-check-warn .soc-icon { color: var(--orange); }
+.soc-check-fail .soc-icon { color: var(--red); }
+.soc-check-skip .soc-icon { color: var(--grey); }
+
+.soc-check-label {
+  font-family: var(--display); text-transform: uppercase;
+  font-size: 0.78rem; flex: 1; min-width: 200px;
+}
+.soc-check-detail { margin: 6px 0 0; color: var(--muted); font-size: 0.86rem; }
+.soc-check-remedy {
+  margin: 6px 0 0; color: var(--fg); font-size: 0.78rem;
+  border-left: 2px solid var(--line-strong); padding-left: 10px;
+}
+.soc-check-remedy b { color: var(--accent); }
+
+
+/* ==========================================================================
+ * ELEMENTS ADDED BY THE MERGE
+ * ========================================================================== */
+
+/* Page header: one title per tab, set once at the top. */
+.soc-page-head h2 { margin-bottom: 10px; }
+
+/* The explanation line under the queue title. The sort order is not obvious;
+   without it the screen looks broken. */
+.soc-queue-lede { margin: -6px 0 16px; font-size: 0.86rem; }
+
+/* Grand nombre d'une vignette de mesure. Remplace six styles inline. */
+.soc-bignum {
+  display: block; font-family: var(--display); font-size: 1.7rem; line-height: 1.1;
+}
+
+/* Header tools: mode, language, refresh, sign out. */
+.soc-header-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.soc-icon-button { padding: 8px 12px; }
+
+/* Language selector. Two buttons rather than a dropdown: with two choices a
+   list adds a click and hides the option you cannot see. */
+.soc-lang {
+  display: inline-flex; border: 1px solid var(--line-strong); overflow: hidden;
+}
+.soc-lang button {
+  background: none; border: none; cursor: pointer; color: var(--muted);
+  font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.12em;
+  text-transform: uppercase; padding: 8px 10px; min-height: 34px;
+}
+.soc-lang button:hover { color: var(--fg); }
+.soc-lang button[aria-pressed='true'] { background: var(--accent); color: var(--accent-fg); }
+.soc-lang-wide { margin-top: 6px; }
+.soc-lang-wide button { padding: 10px 16px; }
+
+/* Checkbox with an explanation: one pattern for all five settings. */
+.soc-check-field {
+  display: flex; flex-direction: row; align-items: flex-start; gap: 12px;
+}
+.soc-check-field input {
+  width: auto; min-width: 20px; min-height: 20px; margin-top: 2px; flex: none;
+}
+.soc-check-field > span {
+  margin: 0; text-transform: none; letter-spacing: 0; font-size: 0.86rem;
+  color: var(--fg); line-height: 1.5;
+}
+.soc-check-field b { color: var(--accent); }
+
+/* --- Documentation -------------------------------------------------------- */
+
+.soc-doc {
+  background: var(--surface); border: 1px solid var(--line); margin-bottom: 12px;
+}
+
+.soc-doc summary {
+  display: flex; align-items: center; gap: 12px; cursor: pointer;
+  padding: 16px 16px; list-style: none;
+  font-family: var(--display); text-transform: uppercase; font-size: 0.94rem;
+}
+.soc-doc summary::-webkit-details-marker { display: none; }
+.soc-doc summary:hover { background: var(--surface-2); }
+.soc-doc summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.soc-doc-num {
+  font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.14em;
+  color: var(--faint); flex: none;
+}
+.soc-doc-title { flex: 1; }
+
+/* The chevron rotates on opening: that is the cue the block folds away. */
+.soc-doc summary .soc-icon { color: var(--muted); transition: transform 0.15s ease; }
+.soc-doc[open] summary .soc-icon { transform: rotate(180deg); color: var(--accent); }
+.soc-doc[open] summary { border-bottom: 1px solid var(--line); }
+
+.soc-doc-body { padding: 16px 16px 24px; }
+
+/* The code-analysis diagrams, carried over from the old presentation page.
+   Each scrolls in ITS OWN box: a 920 px wide SVG must not make the whole page
+   scroll on a phone. */
+.soc-doc-figures { margin-top: 24px; display: grid; gap: 24px; }
+.soc-doc-figures figure { margin: 0; }
+.soc-doc-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.soc-doc-figures figcaption {
+  margin-top: 8px; color: var(--faint); font-size: 0.78rem; max-width: 80ch;
+}
+.soc-doc-lede { color: var(--fg); margin: 0 0 16px; max-width: 78ch; }
+
+.soc-doc-list { margin: 0; }
+.soc-doc-point {
+  border-top: 1px solid var(--line); padding: 12px 0 0; margin-top: 12px;
+}
+.soc-doc-point:first-child { border-top: none; padding-top: 0; margin-top: 0; }
+.soc-doc-point dt {
+  font-family: var(--display); text-transform: uppercase; font-size: 0.78rem;
+  color: var(--accent); margin-bottom: 6px;
+}
+.soc-doc-point dd {
+  margin: 0; color: var(--muted); font-size: 0.94rem; max-width: 80ch; line-height: 1.6;
+}
+
+/* --- Section d'analyse de code -------------------------------------------- */
+
+/* The rules specific to code analysis live in `vulnpipe/styles.css`, loaded
+   after this one. It redefines neither the tokens nor the globals: only its
+   `vp-*` classes, scoped under `.vp-embed`. */
+.soc-app > main > .vp-embed { margin-top: 4px; }
+
+/* In the Settings tab the analysis section is already inside a panel: it must
+   not add its own ground or its own bottom margin. */
+.soc-panel .vp-embed { padding-bottom: 0; }
+
+
+/* Sign-in screen: a narrow, centred column. The constraint used to be carried
+   by an inline style; moving it here stops a rewrite of the component from
+   erasing it unnoticed — which is exactly what happened. */
+.soc-login { max-width: 460px; padding-top: 80px; }
+
+/* --- Orientation ---------------------------------------------------------- */
+
+/* Lien vers la section du Guide qui explique l'onglet en cours. */
+.soc-guide-link { padding: 8px 12px; font-size: 0.72rem; }
+
+/* The answer to "is anything waiting for me?", written out in full. Neutral
+   when nothing is waiting: the accent must designate one thing per screen, and
+   here that thing is someone being blocked. */
+.soc-waiting {
+  display: flex; align-items: center; gap: 10px;
+  margin: 12px 0 0; padding: 12px 12px;
+  border: 1px solid var(--line); background: var(--panel);
+  font-size: 0.94rem; color: var(--muted);
+}
+.soc-waiting .soc-icon { color: var(--green); }
+.soc-waiting-on {
+  border-color: var(--accent); color: var(--fg);
+}
+.soc-waiting-on .soc-icon { color: var(--accent); }
+
+/* --- Carte de bienvenue --------------------------------------------------- */
+
+.soc-firstrun { border-left: 3px solid var(--accent); }
+
+.soc-firstrun-grid {
+  list-style: none; margin: 16px 0 0; padding: 0;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 2px;
+  background: var(--line); border: 1px solid var(--line);
+}
+.soc-firstrun-grid li {
+  background: var(--panel); padding: 16px 16px;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+}
+.soc-firstrun-icon { color: var(--accent); }
+.soc-firstrun-grid h3 { margin: 0; font-size: 0.86rem; }
+.soc-firstrun-grid p { margin: 0; color: var(--muted); font-size: 0.86rem; flex: 1; }
+.soc-firstrun-grid button { margin-top: 4px; }
+
+/* --- Glossaire en bulle --------------------------------------------------- */
+
+/* `inline-block` and not `inline`: otherwise the absolute bubble positions
+   itself against the parent block and lands at the other end of the line. */
+.soc-term { display: inline-block; position: relative; }
+
+.soc-term summary {
+  display: inline; list-style: none; cursor: help;
+  border-bottom: 1px dotted var(--faint);
+}
+.soc-term summary::-webkit-details-marker { display: none; }
+.soc-term summary:hover { border-bottom-color: var(--accent); color: var(--accent); }
+.soc-term summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/*
+ * Two classes, not one: the bubble appears inside containers that impose
+ * capitals and letter-spacing (`.soc-statbar span`, column headers). A single
+ * selector lost the specificity and the definition rendered in spaced small
+ * capitals, unreadable.
+ *
+ * AND BOTH PARENTS ARE NAMED, for the same reason. `.soc-info` (the circled
+ * "i") reuses this bubble; listing only `.soc-term` meant its popover was not
+ * positioned and not reset at all — it rendered as a paragraph of Archivo
+ * Black capitals inside the `<h3>` it hangs from, pushing the number it was
+ * supposed to explain out of the tile. The trap is the one this file already
+ * documents twice: a rule that needs a parent class must name EVERY parent it
+ * is meant to serve.
+ */
+.soc-term .soc-term-bubble,
+.soc-info .soc-term-bubble {
+  position: absolute; z-index: 30; top: calc(100% + 8px); left: 0;
+  width: max-content; max-width: min(320px, 78vw);
+  background: var(--hero); border: 1px solid var(--line-strong);
+  box-shadow: var(--shadow); padding: 12px 12px;
+  /* The bubble comes out of a small-capitals column header: without a reset,
+     the definition inherited the letter-spacing and became unreadable. */
+  font-family: var(--sans); font-size: 0.86rem; line-height: 1.55;
+  letter-spacing: 0; text-transform: none; color: var(--muted);
+  white-space: normal; text-align: left;
+}
+/*
+ * FERMEE, LA BULLE N'EXISTE PAS — Y COMPRIS POUR UN LECTEUR D'ECRAN.
+ *
+ * ============================================================================
+ * CE QUE CETTE UNIQUE REGLE CORRIGE
+ *
+ * Rien dans cette feuille ne masquait la bulle d'un `<details>` ferme : elle
+ * etait seulement posee en absolu, hors du flux, et invisible A L'OEIL. Elle
+ * restait dans l'arbre de rendu — `innerText` du titre la renvoyait — donc
+ * dans l'arbre d'accessibilite, donc DANS LE NOM DU TITRE.
+ *
+ * Le titre d'une vignette de mesure s'appelait :
+ *   « Human disagreementHuman disagreementThe share of decisions put to a
+ *     human that the human declined. It is the only number that says… »
+ *
+ * La navigation par titres est le premier moyen de parcourir une page quand
+ * on ne voit pas l'ecran. Chaque section y devenait un paragraphe, et chaque
+ * en-tete de colonne de la file de triage aussi.
+ *
+ * Une regle, et elle couvre les deux bulles partout ou elles se posent —
+ * titres, cellules d'en-tete, etiquettes de la barre de mesures. Le repli
+ * d'un `<details>` doit retirer son contenu de TOUT, pas seulement du regard.
+ * ============================================================================
+ */
+.soc-term:not([open]) .soc-term-bubble,
+.soc-info:not([open]) .soc-term-bubble { display: none; }
+
+.soc-term .soc-term-bubble-flip,
+.soc-info .soc-term-bubble-flip { left: auto; right: 0; }
+
+/*
+ * Le disque du « i » est plus etroit qu'un mot : la bulle deborde de huit
+ * pixels de chaque cote pour rester centree sous lui. Ecrite ICI et pas en
+ * bas du fichier — plus bas, elle passerait apres le bloc mobile, qui la
+ * recolle aux bords de l'ecran, et l'annulerait.
+ */
+.soc-info .soc-term-bubble { top: calc(100% + 6px); left: -8px; }
+.soc-info .soc-term-bubble-flip { left: auto; right: -8px; }
+
+.soc-term .soc-term-bubble strong,
+.soc-info .soc-term-bubble strong {
+  display: block; color: var(--accent); font-family: var(--display);
+  text-transform: uppercase; font-size: 0.78rem; margin-bottom: 6px;
+}
+
+/* --- The circled "i" ------------------------------------------------------
+ *
+ * `<details>` again, for the reasons the glossary bubble already uses it:
+ * keyboard open, Escape closes, no React state pushed down into a forty-row
+ * table. It differs from `.soc-term` in what it marks — `Term` dresses a WORD
+ * that carries a definition, `Explain` is a separate affordance attached to a
+ * title, so it gets a target of its own rather than a dotted underline.
+ * ------------------------------------------------------------------------- */
+
+.soc-info { display: inline-block; position: relative; vertical-align: middle; }
+
+.soc-info > summary {
+  display: inline-flex; align-items: center; justify-content: center;
+  list-style: none; cursor: help;
+  width: 16px; height: 16px; border-radius: 50%;
+  border: 1px solid var(--line-strong); color: var(--faint);
+  font-family: var(--sans); font-size: 0.66rem; font-weight: 700;
+  font-style: italic; line-height: 1; letter-spacing: 0;
+  text-transform: none;
+}
+.soc-info > summary::-webkit-details-marker { display: none; }
+.soc-info > summary:hover { color: var(--accent); border-color: var(--accent); }
+.soc-info > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.soc-info[open] > summary { color: var(--accent); border-color: var(--accent); }
+
+/*
+ * On a touch screen the 16 px disc is under the 44 px recommendation. The disc
+ * keeps its drawn size and the TARGET grows around it, so the row spacing does
+ * not change: an icon that grew would push every title it sits beside.
+ */
+@media (pointer: coarse) {
+  .soc-info > summary { position: relative; }
+  .soc-info > summary::after {
+    content: ''; position: absolute; top: 50%; left: 50%;
+    width: 44px; height: 44px; transform: translate(-50%, -50%);
+  }
+}
+
+/* ==========================================================================
+ * MOBILE
+ *
+ * An on-call analyst looks at their phone first. Three things broke below
+ * 760 px: the tab bar overflowed, the triage table forced the whole page to
+ * scroll horizontally, and the touch targets were under the recommended 44 px.
+ * ========================================================================== */
+
+@media (max-width: 1080px) {
+  .soc-case-layout { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 860px) {
+  .soc-app { padding: 0 12px 64px; }
+
+  .soc-header {
+    padding: 12px 0 0; gap: 12px;
+    /* In a column: logo and tools on one line, tabs underneath, full width.
+       Side by side, the six tabs ended up on three rows of two. */
+    flex-direction: column; align-items: stretch;
+  }
+  .soc-header > .soc-logo { order: 0; }
+  .soc-header-tools { order: 1; justify-content: flex-start; }
+  .soc-nav { order: 2; }
+
+  /* Horizontal scrolling OF THE BAR, not of the page. The six destinations
+     stay visible and reachable in one gesture.
+     `min-width: 0` IS NOT DECORATIVE: a flex item has `min-width: auto`, so it
+     refuses to become narrower than its content. Without this line
+     `overflow-x: auto` never applies — the bar kept the width of its six tabs
+     (668 px) and it was THE WHOLE PAGE that scrolled, with panels that looked
+     twice too narrow. */
+  .soc-nav {
+    flex-wrap: nowrap; overflow-x: auto; gap: 0;
+    min-width: 0; width: 100%;
+    margin: 0 -12px; padding: 0 12px;
+    scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  }
+  .soc-nav::-webkit-scrollbar { display: none; }
+  .soc-tab { flex: none; padding: 12px 12px; min-height: 46px; font-size: 0.78rem; }
+
+  .soc-panel { padding: 16px 12px; }
+  .soc-statbar { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
+
+  /* Cibles tactiles : 44 px est le minimum praticable au pouce. */
+  .soc-primary, .soc-secondary, .soc-chip { min-height: 44px; }
+  .soc-field input, .soc-field select, .soc-field textarea { min-height: 44px; font-size: 16px; }
+
+  /* --- The triage table becomes a stack of cards --------------------------
+   *
+   * Eight columns do not fit in 375 px, and horizontal scrolling on the main
+   * list makes the sort unreadable: you never see the state and the rule at
+   * the same time. Each row becomes a card, and each cell carries its own
+   * label (`data-label`, set on the JSX side).
+   */
+  .soc-queue thead { display: none; }
+  .soc-queue, .soc-queue tbody, .soc-queue tr, .soc-queue td { display: block; width: 100%; }
+
+  .soc-queue tr {
+    border: 1px solid var(--line); background: var(--panel);
+    margin-bottom: 10px; padding: 12px 12px;
+  }
+  .soc-queue tr.soc-row-blocked { border-left: 3px solid var(--accent); }
+
+  .soc-queue td {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 12px; padding: 6px 0; border: none; text-align: right;
+  }
+  .soc-queue td::before {
+    content: attr(data-label);
+    font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--faint);
+    text-align: left; flex: none;
+  }
+  /* The rule is the card's title: it takes the full width, with no label —
+     "Alert" above the alert's name teaches nothing. */
+  .soc-queue td[data-label]:nth-child(2) { display: block; text-align: left; padding-bottom: 10px; }
+  .soc-queue td[data-label]:nth-child(2)::before { display: none; }
+  .soc-queue .soc-row-rule { white-space: normal; }
+
+  .soc-conf { justify-content: flex-end; }
+  /* En carte, l'etiquette est a gauche et la valeur a droite : la pile de la
+     cellule « decision » doit donc s'aligner a droite, sinon le verdict et sa
+     barre repartent au milieu. */
+  .soc-cell-decision { align-items: flex-end; }
+  .soc-queue td > div { text-align: right; }
+  /* Sauf la cellule-titre, qui reste alignee a gauche comme le reste du haut
+     de la carte. */
+  .soc-queue td[data-label]:nth-child(2) > div { text-align: left; }
+  .soc-col-alert { width: auto; min-width: 0; }
+  /* En carte, la largeur n'est plus contrainte par des voisines : le nom peut
+     reprendre plusieurs lignes sous sa pastille, et la colonne de temps a le
+     droit de se couper plutot que de deborder du telephone. */
+  .soc-row-rule { flex-wrap: wrap; }
+  .soc-queue td[data-label] .soc-cell-dwell,
+  .soc-queue tbody td:last-child { white-space: normal; }
+
+  /* Incident card: the metadata becomes a list rather than a row. */
+  .soc-case-meta { flex-direction: column; gap: 6px; }
+  .soc-sources { grid-template-columns: 1fr; }
+  .soc-health-grid { grid-template-columns: 1fr; }
+
+  /* Sur telephone, une bulle ancree a gauche d'une colonne de droite sortait
+     de l'ecran : on la centre sur la largeur utile. */
+  .soc-term, .soc-info { position: static; }
+  .soc-term .soc-term-bubble,
+  .soc-info .soc-term-bubble { left: 14px; right: 14px; width: auto; max-width: none; }
+
+  .soc-firstrun-grid { grid-template-columns: 1fr; }
+
+  .soc-doc summary { padding: 12px 16px; gap: 10px; font-size: 0.86rem; }
+  .soc-doc-body { padding: 16px; }
+
+  .soc-log, .soc-hash { font-size: 0.72rem; }
+
+  /* Quatre colonnes ne tiennent pas sous 720 px : le maillon passe en trois
+     lignes plutot qu'en defilement horizontal, qu'on ne decouvre jamais. Le
+     numero garde sa colonne, le reste s'aligne dessous — sinon le lien vers
+     n8n retombe sous le numero et n'appartient plus visuellement a l'etape. */
+  .soc-trace-step { grid-template-columns: 30px 1fr; row-gap: 2px; }
+  .soc-trace-step-state,
+  .soc-trace-step-link { grid-column: 2 / -1; justify-self: start; }
+}
+
+@media (max-width: 520px) {
+  /* The action labels disappear: the icon is enough, and the title stays
+     announced to screen readers through `aria-label`. The tabs keep theirs —
+     a bar of six bare icons would be a guessing game. */
+  .soc-header-tools .soc-tab-label { display: none; }
+  .soc-icon-button { padding: 10px 12px; }
+  .soc-statbar { grid-template-columns: repeat(2, 1fr); }
+  .soc-bignum { font-size: 1.45rem; }
+}
+
+/* --- Sous-navigation d'un onglet ------------------------------------------ */
+
+/* `min-width: 0`: without it a flex item refuses to become narrower than its
+   content, `overflow-x` never applies, and it is the PAGE that scrolls at
+   375 px instead of the bar. The same trap as `.soc-nav`. */
+/*
+ * L'enveloppe porte le collant et les degrades de bord ; la barre porte le
+ * defilement. Un pseudo-element pose sur le conteneur qui defile partirait
+ * avec le contenu au lieu de rester sur le bord.
+ */
+.soc-subnav-wrap {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  margin-bottom: 24px;
+}
+
+/*
+ * Le signe qu'il y a d'autres sections hors du cadre. Sans lui, trois des dix
+ * sections des Reglages n'existaient pas pour qui ne pense pas a faire defiler
+ * une barre qui n'a pas l'air de defiler.
+ *
+ * `pointer-events: none` : le degrade recouvre le dernier onglet, et un voile
+ * qui avale un clic est pire que pas de voile du tout.
+ */
+.soc-subnav-wrap::before,
+.soc-subnav-wrap::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  width: 36px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 120ms ease;
+  z-index: 1;
+}
+.soc-subnav-wrap::before {
+  left: 1px;
+  background: linear-gradient(to right, var(--panel), transparent);
+}
+.soc-subnav-wrap::after {
+  right: 1px;
+  background: linear-gradient(to left, var(--panel), transparent);
+}
+.soc-subnav-wrap[data-edges='left']::before,
+.soc-subnav-wrap[data-edges='both']::before { opacity: 1; }
+.soc-subnav-wrap[data-edges='right']::after,
+.soc-subnav-wrap[data-edges='both']::after { opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .soc-subnav-wrap::before, .soc-subnav-wrap::after { transition: none; }
+}
+
+.soc-subnav {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  padding: 6px;
+}
+
+.soc-subtab {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  color: var(--muted);
+  font-family: var(--sans);
+  font-size: 0.78rem;
+  font-weight: 500;
+  padding: 10px 12px;
+  /* 44 px tall: touch target, the rule for the rest of the application. */
+  min-height: 44px;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.soc-subtab:hover { color: var(--fg); background: var(--surface); }
+
+.soc-subtab-active,
+.soc-subtab-active:hover {
+  background: var(--surface-2);
+  border-color: var(--line-strong);
+  color: var(--fg);
+}
+
+.soc-subtab-text { display: flex; flex-direction: column; gap: 2px; }
+
+/* The complement explains WHAT HAPPENS ON SAVE (applied immediately, restart
+   required, to copy elsewhere). It disappears below 900 px: there is no room,
+   and the block itself repeats it at the top. */
+.soc-subtab-hint {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.soc-subtab-active .soc-subtab-hint { color: var(--muted); }
+
+.soc-subtab-count {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  background: var(--surface-2);
+  color: var(--muted);
+  padding: 2px 6px;
+  border-radius: var(--radius);
+}
+.soc-subtab-active .soc-subtab-count { background: var(--panel); }
+/* An alarm counter stays red even on a closed tab: what is filed away in a
+   drawer must still be visible, or it is no longer an alarm. */
+.soc-subtab-count-alert,
+.soc-subtab-active .soc-subtab-count-alert {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+
+@media (max-width: 900px) {
+  .soc-subtab-hint { display: none; }
+}
+
+/* --- Settings save bar ---------------------------------------------------- */
+
+/* Stuck to the bottom of the window. The draft is SHARED across the six
+   sections: a change made in "Pipeline" saves from "Console". A button
+   relegated to the foot of a single section would suggest the opposite. */
+.soc-savebar {
+  position: sticky;
+  bottom: 0;
+  z-index: 6;
+  background: var(--panel);
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow);
+}
+
+.soc-savebar-dirty {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--orange);
+  display: inline-flex;
+  align-items: center;
+}
+
+/* --- Theme picker ---------------------------------------------------------- */
+
+.soc-theme-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(215px, 1fr));
+  gap: 10px;
+  margin: 4px 0 10px;
+}
+
+.soc-theme-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  cursor: pointer;
+  text-align: left;
+  /* 44 px: touch target, the rule for the rest of the application. */
+  min-height: 60px;
+}
+
+.soc-theme-card:hover { border-color: var(--line-strong); }
+
+.soc-theme-card-active,
+.soc-theme-card-active:hover {
+  border-color: var(--accent);
+  background: var(--surface-2);
+}
+
+/* The preview carries its colours as inline styles: it shows a palette that
+   has NOT been applied, so it cannot read the current tokens. */
+.soc-theme-card .soc-theme-swatch {
+  display: block;
+  flex: none;
+  margin: 0;
+  position: relative;
+  width: 46px;
+  height: 38px;
+  border: 1px solid;
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.soc-theme-card .soc-theme-dot {
+  position: absolute; top: 6px; left: 6px; margin: 0;
+  width: 9px; height: 9px; border-radius: 50%;
+}
+.soc-theme-card .soc-theme-bar {
+  position: absolute; left: 6px; height: 3px; border-radius: var(--radius);
+  opacity: 0.85; top: 21px; width: 33px; margin: 0;
+}
+.soc-theme-card .soc-theme-bar-short { top: 28px; width: 20px; opacity: 0.5; }
+
+/* Selectors prefixed with `.soc-theme-card` — and that is necessary, not
+   decorative: the generic `.soc-field span` (0,1,1) dresses EVERY span
+   descending from a field in small grey capitals. Without this prefix the
+   theme's name rendered in discreet grey, at 11 px. */
+.soc-theme-card .soc-theme-text {
+  display: flex; flex-direction: column; gap: 4px; min-width: 0; margin: 0;
+}
+
+.soc-theme-card .soc-theme-name {
+  display: block;
+  font-family: var(--display);
+  text-transform: uppercase;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  color: var(--fg);
+  margin: 0;
+}
+
+.soc-theme-card .soc-theme-hint {
+  display: block;
+  font-family: var(--sans);
+  font-size: 0.72rem;
+  color: var(--faint);
+  text-transform: none;
+  letter-spacing: 0;
+  line-height: 1.3;
+  margin: 0;
+}
+
+.soc-theme-card .soc-theme-check {
+  position: absolute; top: 8px; right: 8px;
+  margin: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 19px; height: 19px; border-radius: 50%;
+  background: var(--accent); color: var(--accent-fg);
+}
+
+/* --- Onglet Workflow ------------------------------------------------------- */
+
+/* The graph and the card side by side on a wide screen, stacked below.
+   `min-width: 0` on the graph column: without it the SVG imposes its width and
+   it is the page that scrolls. */
+.soc-wf-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 16px;
+  align-items: start;
+}
+
+.soc-wf-canvas {
+  min-width: 0;
+  overflow-x: auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 10px;
+}
+
+.soc-wf-svg { display: block; max-width: none; }
+
+/* The graph keeps its size and the container scrolls: that is the only way to
+   keep the labels readable on a graph 2500 px long. */
+.soc-wf-canvas { max-height: 62vh; overflow: auto; }
+
+/* --- Liaisons --- */
+.soc-wf-edge path { stroke: var(--line-strong); stroke-width: 1.6; color: var(--line-strong); }
+/* The error and timeout branches stand out at first glance: they are the ones
+   you follow when looking for why nothing happened. */
+.soc-wf-edge-error path { stroke: var(--red); color: var(--red); stroke-dasharray: 5 3; }
+.soc-wf-edge-alt path { stroke: var(--muted); color: var(--muted); stroke-dasharray: 2 3; }
+
+.soc-wf-port {
+  font-family: var(--mono);
+  font-size: 9px;
+  fill: var(--faint);
+  letter-spacing: 0.05em;
+}
+.soc-wf-edge-error .soc-wf-port { fill: var(--red); }
+
+/* --- Nœuds --- */
+.soc-wf-node { cursor: pointer; }
+.soc-wf-node rect {
+  fill: var(--surface);
+  stroke: var(--line-strong);
+  stroke-width: 1;
+}
+.soc-wf-node:hover rect { stroke: var(--fg); }
+.soc-wf-node:focus-visible rect { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* THE EFFECT IS THE FIRST INFORMATION: it decides what is replayed after a
+   failure. A `write` is never replayed — it becomes "undetermined". */
+.soc-wf-read rect { stroke: var(--blue); }
+.soc-wf-write rect { stroke: var(--orange); stroke-width: 2; }
+
+.soc-wf-selected rect { fill: var(--surface-2); stroke: var(--accent); stroke-width: 2; }
+
+.soc-wf-node-type {
+  font-family: var(--mono);
+  font-size: 8.5px;
+  fill: var(--faint);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.soc-wf-node-label { font-family: var(--sans); font-size: 11px; fill: var(--fg); }
+
+/* --- Legend --- */
+.soc-wf-legend { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 12px; }
+.soc-wf-legend-item {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--mono); font-size: 0.72rem;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+}
+.soc-wf-swatch {
+  width: 13px; height: 13px; border-radius: var(--radius);
+  background: var(--surface); border: 1px solid var(--line-strong);
+}
+.soc-wf-effect-read .soc-wf-swatch { border-color: var(--blue); }
+.soc-wf-effect-write .soc-wf-swatch { border-color: var(--orange); border-width: 2px; }
+
+/* --- Fiche d'un nœud --- */
+.soc-wf-inspector {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+.soc-wf-inspector h3 { margin: 2px 0 8px; }
+.soc-wf-inspector .soc-wf-id { margin: 0 0 12px; font-size: 0.72rem; }
+.soc-wf-inspector code { font-family: var(--mono); color: var(--fg); }
+
+.soc-wf-effect-pure.soc-pill { color: var(--muted); background: var(--surface-2); }
+.soc-wf-effect-read.soc-pill { color: var(--blue); background: var(--blue-bg); }
+.soc-wf-effect-write.soc-pill { color: var(--orange); background: var(--orange-bg); }
+
+.soc-wf-effect-help { font-size: 0.78rem; margin: 8px 0 12px; }
+
+/* The node's note replaces the n8n canvas `stickyNote`s: versioned with the
+   graph, and shown where it is read — not parked beside it. */
+.soc-wf-note {
+  border-left: 2px solid var(--accent);
+  padding-left: 12px;
+  font-size: 0.86rem;
+  color: var(--fg);
+  margin: 0 0 12px;
+}
+
+.soc-wf-subhead {
+  font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--faint); margin: 16px 0 8px; font-weight: 400;
+}
+
+.soc-wf-params {
+  font-family: var(--mono); font-size: 0.72rem; line-height: 1.5;
+  background: var(--hero);
+  border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 12px; margin: 0;
+  max-height: 260px; overflow: auto; white-space: pre-wrap; word-break: break-word;
+}
+
+/* --- Variables --- */
+.soc-wf-vars {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 0 16px;
+}
+.soc-wf-var span:first-child { font-family: var(--mono); text-transform: none; letter-spacing: 0; }
+/*
+ * `.soc-field span.soc-wf-var-help`, et NON `.soc-wf-var-help`.
+ *
+ * ==========================================================================
+ * TROISIEME OCCURRENCE DU MEME PIEGE, ET LA PLUS COUTEUSE
+ *
+ * `.soc-field span` est (0,1,1) : il habille TOUT span sous un champ en petites
+ * capitales grises espacees. Une classe nue est (0,1,0) — elle perd. La regle
+ * ci-dessous existait deja, ecrite comme classe nue : elle n'a jamais rien
+ * annule.
+ *
+ * Resultat a l'ecran : les QUATORZE aides des variables du pipeline — « ON :
+ * LE PIPELINE DECIDE MAIS N'EXECUTE RIEN… » — rendues en capitales espacees.
+ * Trois lignes chacune, quarante lignes de capitales sur un ecran, la ou les
+ * capitales se lisent environ dix pour cent moins vite et ou le texte perd la
+ * silhouette des mots qui sert a les reconnaitre.
+ *
+ * CLAUDE.md documente ce piege et note qu'il est deja revenu deux fois. Une
+ * classe simple ne suffit jamais ici : il faut nommer l'element.
+ * ==========================================================================
+ */
+.soc-field span.soc-wf-var-help {
+  text-transform: none; letter-spacing: 0; line-height: 1.4;
+  /* Same three properties as `.soc-help` above, and for the same reason: the
+     fourteen pipeline-variable help texts were faint monospace too. */
+  font-family: var(--sans); color: var(--muted);
+}
+
+.soc-toggle {
+  align-self: flex-start;
+  background: var(--surface); border: 1px solid var(--line-strong);
+  border-radius: var(--radius); color: var(--muted);
+  font-family: var(--mono); font-size: 0.78rem; letter-spacing: 0.08em;
+  text-transform: uppercase; padding: 0 12px; min-height: 44px; cursor: pointer;
+}
+.soc-toggle-on { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+
+.soc-wf-saved { color: var(--green); font-size: 0.86rem; display: inline-flex; align-items: center; }
+.soc-wf-hint { align-self: center; }
+
+@media (max-width: 1000px) {
+  .soc-wf-split { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* The step list: it replaces the graph below 700 px. Both are rendered and
+   one is hidden — a selection survives a change of width. */
+.soc-wf-view { min-width: 0; }
+.soc-wf-list { display: none; }
+
+@media (max-width: 700px) {
+  .soc-wf-canvas { display: none; }
+  .soc-wf-list {
+    display: block; list-style: none; margin: 0; padding: 0;
+    border: 1px solid var(--line); border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .soc-wf-list li + li { border-top: 1px solid var(--line); }
+  .soc-wf-row {
+    display: flex; align-items: center; gap: 12px; width: 100%;
+    background: var(--panel); border: none; border-left: 3px solid var(--line-strong);
+    color: var(--fg); text-align: left; padding: 12px 12px; min-height: 56px; cursor: pointer;
+  }
+  .soc-wf-row.soc-wf-effect-read { border-left-color: var(--blue); }
+  .soc-wf-row.soc-wf-effect-write { border-left-color: var(--orange); }
+  .soc-wf-row-active { background: var(--surface-2); }
+  .soc-wf-row-num { font-family: var(--mono); font-size: 0.72rem; color: var(--faint); flex: none; }
+  .soc-wf-row-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+  .soc-wf-row-label { font-size: 0.94rem; }
+  .soc-wf-row-type {
+    font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--faint);
+  }
+  .soc-wf-row .soc-wf-swatch { flex: none; }
+}
+
+/* --- n8n / built-in engine comparison -------------------------------------- */
+
+/* LES QUATRE COMPTEURS ENSEMBLE, toujours. Isoler le taux d'accord donnerait
+   exactement le mauvais feu vert : il peut porter sur trop peu de cas, ou
+   absorber ceux qu'on n'a pas su comparer. */
+.soc-shadow-counts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin: 16px 0 16px;
+}
+
+.soc-shadow-count {
+  display: flex; flex-direction: column; gap: 4px;
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 12px 16px;
+}
+
+.soc-shadow-num { font-family: var(--display); font-size: 1.7rem; color: var(--fg); line-height: 1.1; }
+.soc-shadow-ok { color: var(--green); }
+.soc-shadow-bad { color: var(--red); }
+/* Neither green nor red: "we do not know" is neither good nor bad, and
+     colouring it either way would already be a conclusion. */
+.soc-shadow-unknown { color: var(--muted); }
+
+.soc-shadow-label {
+  font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--muted);
+}
+.soc-shadow-count .soc-faint { text-transform: none; letter-spacing: 0; font-size: 0.72rem; line-height: 1.35; }
+
+.soc-shadow-blockers { margin: 6px 0 0; padding-left: 16px; }
+.soc-shadow-blockers li { margin-bottom: 4px; }
+
+.soc-shadow-subhead {
+  font-family: var(--display); text-transform: uppercase;
+  font-size: 0.94rem; letter-spacing: 0.04em; margin: 24px 0 10px;
+}
+
+.soc-shadow-list { list-style: none; margin: 0; padding: 0; }
+.soc-shadow-list > li { margin-bottom: 16px; }
+.soc-shadow-alert { margin: 0 0 6px; }
+.soc-shadow-alert code { font-family: var(--mono); font-size: 0.86rem; color: var(--fg); }
+
+.soc-shadow-diff {
+  border-left: 3px solid var(--line-strong);
+  background: var(--panel);
+  padding: 12px 12px;
+  margin-bottom: 8px;
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+.soc-shadow-blocking { border-left-color: var(--red); }
+.soc-shadow-notable { border-left-color: var(--orange); }
+
+.soc-shadow-field { display: flex; align-items: center; gap: 10px; margin: 0 0 8px; }
+.soc-shadow-field code { font-family: var(--mono); font-size: 0.78rem; color: var(--fg); }
+.soc-shadow-blocking .soc-pill { color: var(--red); background: var(--red-bg); }
+.soc-shadow-notable .soc-pill { color: var(--orange); background: var(--orange-bg); }
+
+/* The two values side by side and NAMED: "n8n says X, we say Y" can be
+   settled; "divergence" cannot. */
+.soc-shadow-values { display: flex; flex-wrap: wrap; gap: 10px 24px; margin: 0 0 8px; }
+.soc-shadow-side {
+  font-family: var(--mono); font-size: 0.78rem; color: var(--fg);
+  word-break: break-word; min-width: 0;
+}
+.soc-shadow-side b {
+  color: var(--faint); font-weight: 400; text-transform: uppercase;
+  font-size: 0.66rem; letter-spacing: 0.1em; margin-right: 6px;
+}
+.soc-shadow-diff .soc-muted { margin: 0; font-size: 0.78rem; }
+
+.soc-shadow-unknown-list { margin-top: 16px; }
+.soc-shadow-unknown-list summary { cursor: pointer; color: var(--muted); font-size: 0.86rem; min-height: 44px; display: flex; align-items: center; }
+.soc-shadow-unknown-list ul { margin: 6px 0 0; padding-left: 16px; font-size: 0.78rem; color: var(--muted); }
+.soc-shadow-unknown-list code { font-family: var(--mono); color: var(--fg); }
+
+/* --- Getting started: the list of what is missing -------------------------
+ *
+ * It shows AT THE TOP of Settings and disappears when everything is in place.
+ * A banner that is always lit stops being read; this one has nothing left to
+ * say once the pipeline can decide.
+ */
+
+.soc-setup { border-left: 3px solid var(--orange); }
+.soc-setup-ready { border-left-color: var(--green); }
+
+.soc-setup-row { display: flex; gap: 10px; align-items: flex-start; }
+.soc-setup-ready .soc-setup-row svg { color: var(--green); flex: none; margin-top: 2px; }
+
+.soc-setup-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 2px; }
+
+.soc-setup-list li {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 10px 0; border-top: 1px solid var(--line);
+}
+.soc-setup-list li > svg { color: var(--orange); flex: none; margin-top: 2px; }
+
+/* A completed row fades without disappearing: removing it would make the list
+   jump at every setting, and you would lose track of what is already done. */
+.soc-setup-done { opacity: 0.55; }
+.soc-setup-done > svg { color: var(--green); }
+
+.soc-setup-text { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.soc-setup-hint {
+  color: var(--muted); font-size: 0.78rem; line-height: 1.45;
+  text-transform: none; letter-spacing: 0;
+}
+
+.soc-setup-list button { flex: none; align-self: center; }
+
+/* --- Help text under a field --------------------------------------------
+ *
+ * The style was repeated inline on each field to neutralise the small capitals
+ * of `.soc-field span`. A class avoids the sixth copy.
+ */
+/* `.soc-field span` is a DESCENDANT selector (0,1,1): a bare class (0,1,0)
+   does not beat it, and the help under a field came out in small grey capitals
+   — the explanation turned into a label. The selector is therefore qualified
+   to win, without touching the shared rule. Same trap as `.soc-cred-label`
+   just above. */
+.soc-help,
+.soc-field span.soc-help {
+  text-transform: none; letter-spacing: 0; line-height: 1.45;
+  font-size: 0.78rem;
+  /* AND THE FONT, AND THE COLOUR. `.soc-field span` also sets `--mono` and
+     `--faint`, and neutralising only the capitals left every help text in this
+     console as faint monospace prose. Mono is for values you compare character
+     by character; a paragraph explaining a setting is neither. `--faint` is the
+     token for what you may skip, and a sentence saying an empty push lane would
+     send P1 down the slow lane is not one of those. Invisible while the help
+     texts were one short line each; obvious the moment one ran to three. */
+  font-family: var(--sans); color: var(--muted);
+}
+
+/* --- Sources de logs ------------------------------------------------------ */
+
+.soc-ingest-sources { display: grid; gap: 16px; }
+
+/* The mapping table can be wide: it scrolls INSIDE its frame. Without
+   `min-width: 0` a grid item refuses to shrink below its content, and the
+   whole page would scroll — the same trap as the tab bar at 375 px. */
+.soc-table-wrap { overflow-x: auto; min-width: 0; }
+
+.soc-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+.soc-table th {
+  text-align: left; font-family: var(--mono); font-size: 0.66rem;
+  letter-spacing: 0.16em; text-transform: uppercase; color: var(--faint);
+  padding: 0 12px 8px; border-bottom: 1px solid var(--line); white-space: nowrap;
+}
+.soc-table td {
+  padding: 8px 12px; border-bottom: 1px solid var(--line);
+  vertical-align: top; color: var(--fg);
+}
+.soc-table-compact code { font-family: var(--mono); font-size: 0.78rem; }
+
+@media (max-width: 760px) {
+  /* The same fold as the triage queue: the table becomes a stack of cards,
+     and `data-label` carries the header `thead` no longer shows. */
+  .soc-table-compact thead { display: none; }
+  .soc-table-compact tr {
+    display: grid; gap: 2px; padding: 8px 0; border-bottom: 1px solid var(--line);
+  }
+  .soc-table-compact td { border: none; padding: 2px 0; display: flex; gap: 8px; }
+  .soc-table-compact td::before {
+    content: attr(data-label); color: var(--faint); font-family: var(--mono);
+    font-size: 0.66rem; letter-spacing: 0.14em; text-transform: uppercase;
+    min-width: 96px; flex: none;
+  }
+}
+
+/* --- Credentials: the label and its badge on the SAME line ---------------
+ *
+ * `.soc-field span` is a descendant selector in `display: block`: it catches
+ * every span under a field, the badge included, which then rendered as a
+ * full-width bar — indistinguishable from a second input. Prefix your own
+ * selectors rather than touching the shared rule.
+ */
+.soc-field span.soc-cred-label {
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.soc-field span.soc-cred-label .soc-cred-name { display: inline; margin: 0; }
+.soc-field span.soc-cred-label .soc-pill { display: inline-block; margin: 0; }
+
+/* --- Acknowledgeable banners ---------------------------------------------
+ *
+ * ACKNOWLEDGED IS NOT HIDDEN. A message that has been read folds behind a line
+ * that still COUNTS it: removing it would let the page claim a tidiness it
+ * does not have. Same rule as for the sub-tabs.
+ */
+
+.soc-notices { display: grid; gap: 8px; }
+
+.soc-notices-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap;
+}
+.soc-notices-action { padding: 6px 10px; font-size: 0.72rem; }
+
+/* The banner carries its close button on the right, without crushing the
+   text. */
+.soc-banner { position: relative; }
+.soc-notice-dismiss {
+  position: absolute; top: 8px; right: 8px;
+  background: none; border: 1px solid transparent; color: var(--faint);
+  padding: 4px; line-height: 0; cursor: pointer;
+}
+.soc-notice-dismiss:hover { color: var(--fg); border-color: var(--line); }
+
+/* An acknowledged message stays readable but stops shouting: it is only
+   displayed if the user asks for the full list again. */
+.soc-banner-read { opacity: 0.5; }
+
+.soc-notices-toggle {
+  background: none; border: none; color: var(--faint);
+  font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.12em;
+  text-transform: uppercase; cursor: pointer; padding: 4px 0;
+  display: inline-flex; align-items: center; gap: 6px; justify-self: start;
+}
+.soc-notices-toggle:hover { color: var(--fg); }
+
+@media (max-width: 760px) {
+  /* Cible tactile de 44 px, comme partout ailleurs sur mobile. */
+  .soc-notice-dismiss { top: 4px; right: 4px; padding: 12px; }
+  .soc-banner p { padding-right: 32px; }
+}
+
+/* --- Tuning rules ---------------------------------------------------------
+ *
+ * The list puts WHAT NEEDS AN ACTION first — expired, then never triggered —
+ * rather than the engine's evaluation order. Nobody opens this screen to
+ * replay a priority; they open it because something needs revisiting.
+ */
+
+.soc-rule-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+
+.soc-rule-list li {
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 12px 0; border-top: 1px solid var(--line);
+}
+.soc-rule-list li:first-child { border-top: none; }
+
+/* An expired rule matches nothing any more: it is shown as extinguished, not
+   removed — otherwise it would vanish at the exact moment someone has to
+   decide whether to renew or delete it. */
+.soc-rule-expired { opacity: 0.6; box-shadow: inset 3px 0 0 var(--red); padding-left: 12px; }
+
+.soc-rule-main { flex: 1; min-width: 0; }
+.soc-rule-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+.soc-rule-conds { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.soc-rule-conds code {
+  font-family: var(--mono); font-size: 0.78rem; color: var(--muted);
+  background: var(--hero); border: 1px solid var(--line); padding: 4px 8px;
+}
+
+.soc-rule-actions { display: flex; gap: 6px; flex: none; }
+
+.soc-rule-templates { margin-top: 16px; display: grid; gap: 2px; }
+.soc-rule-template {
+  display: flex; gap: 12px; align-items: flex-start; justify-content: space-between;
+  padding: 12px 0; border-top: 1px solid var(--line);
+}
+.soc-rule-template button { flex: none; }
+
+/* Two fields side by side while there is room. `minmax(0, 1fr)` and not
+   `1fr`: without the `0`, a grid column refuses to become narrower than its
+   content and overflows. */
+.soc-rule-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+
+.soc-rule-cond {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 2fr) auto;
+  gap: 12px; align-items: start;
+  padding: 12px; margin-bottom: 10px;
+  background: var(--hero); border: 1px solid var(--line);
+}
+.soc-rule-cond button { align-self: center; }
+
+@media (max-width: 760px) {
+  .soc-rule-cond { grid-template-columns: minmax(0, 1fr); }
+  .soc-rule-list li { flex-direction: column; }
+  .soc-rule-actions { width: 100%; }
+  .soc-rule-template { flex-direction: column; }
+}
+
+/* --- Test alerts: one button per path ------------------------------------
+ *
+ * They wrap rather than scroll: the list is short and complete, and a scenario
+ * you cannot see is a path you will never test.
+ */
+.soc-scenarios { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.soc-scenario {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 10px; font-size: 0.78rem;
+}
+
+@media (max-width: 760px) {
+  /* Cible tactile de 44 px, comme le reste de l'interface sur mobile. */
+  .soc-scenario { min-height: 44px; flex: 1 1 auto; justify-content: center; }
+}
+
+/* --- The in-console assistant ---------------------------------------------
+ *
+ * The only floating element in the application, and the only one that survives
+ * a change of tab. Three constraints shaped what follows:
+ *
+ *  - NO HARDCODED COLOUR. A mockup's pink would follow none of the six themes.
+ *    Everything goes through tokens; `--accent-fg` is the text laid ON the
+ *    accent, never a background.
+ *  - THE PREFIX IS `soc-ai-`, checked free before it was written.
+ *    `.soc-field span` (0,1,1) has dressed components that were not its own
+ *    three times already: no bare element selector is written here.
+ *  - ON MOBILE THE PANEL TAKES THE SCREEN. A 380 px card on a 375 px phone
+ *    overflows, and the launcher ends up under the virtual keyboard.
+ */
+
+.soc-ai-launcher {
+  position: fixed; right: 20px; bottom: 20px; z-index: 60;
+  width: 54px; height: 54px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--accent); color: var(--accent-fg);
+  border: 1px solid var(--accent-dim); box-shadow: var(--shadow);
+  cursor: pointer;
+}
+.soc-ai-launcher:hover { background: var(--accent-dim); }
+.soc-ai-launcher-open { background: var(--surface-2); color: var(--fg); border-color: var(--line-strong); }
+
+.soc-ai-panel {
+  position: fixed; right: 20px; bottom: 86px; z-index: 60;
+  display: flex; flex-direction: column;
+  width: 380px; max-width: calc(100vw - 40px);
+  /* Bounded by the viewport: a long thread scrolls INSIDE the panel, it
+   * never pushes the page. */
+  height: 560px; max-height: calc(100vh - 130px);
+  background: var(--panel); border: 1px solid var(--line-strong);
+  border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden;
+}
+
+.soc-ai-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
+  padding: 12px 12px; border-bottom: 1px solid var(--line); background: var(--surface);
+}
+.soc-ai-head strong { display: block; font-size: 0.94rem; }
+.soc-ai-sub { display: block; font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
+.soc-ai-head-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+
+.soc-ai-ghost {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 8px; font-size: 0.72rem;
+  color: var(--muted); background: transparent;
+  border: 1px solid var(--line); border-radius: var(--radius); cursor: pointer;
+}
+.soc-ai-ghost:hover { color: var(--fg); border-color: var(--line-strong); }
+
+.soc-ai-scroll {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  padding: 12px; display: flex; flex-direction: column; gap: 10px;
+}
+
+.soc-ai-intro { display: flex; flex-direction: column; gap: 8px; }
+.soc-ai-intro p { margin: 0; font-size: 0.78rem; color: var(--fg); }
+.soc-ai-note { color: var(--muted); font-size: 0.78rem; }
+
+.soc-ai-suggest-title {
+  margin-top: 6px; font-size: 0.72rem; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--faint);
+}
+.soc-ai-suggestions { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+
+/* Right-aligned, in the user's column: these are their sentences, not the
+ * assistant's. */
+.soc-ai-suggestion {
+  max-width: 92%; text-align: left;
+  padding: 8px 12px; border-radius: var(--radius) var(--radius) 0 var(--radius);
+  font-size: 0.78rem; color: var(--accent-fg); background: var(--accent);
+  border: 1px solid var(--accent-dim); cursor: pointer;
+}
+.soc-ai-suggestion:hover { background: var(--accent-dim); }
+
+.soc-ai-blocked {
+  display: flex; gap: 8px; align-items: flex-start;
+  padding: 10px; border-radius: var(--radius);
+  color: var(--orange); background: var(--orange-bg); border: 1px solid var(--line);
+}
+.soc-ai-blocked p { margin: 0; font-size: 0.78rem; color: inherit; }
+
+.soc-ai-bubble {
+  max-width: 88%; padding: 10px 12px; border-radius: var(--radius);
+  font-size: 0.78rem; line-height: 1.5;
+}
+.soc-ai-bubble p { margin: 0; white-space: pre-wrap; }
+
+.soc-ai-bubble-user {
+  align-self: flex-end;
+  color: var(--accent-fg); background: var(--accent);
+  border-radius: var(--radius) var(--radius) 0 var(--radius);
+}
+.soc-ai-bubble-assistant {
+  align-self: flex-start;
+  color: var(--fg); background: var(--surface);
+  border: 1px solid var(--line); border-radius: var(--radius) var(--radius) var(--radius) 0;
+}
+.soc-ai-bubble-failed { color: var(--red); background: var(--red-bg); }
+
+/* The tool trace. Quiet, never absent: an answer that cannot be checked is an
+ * answer believed for the wrong reasons. */
+.soc-ai-trace {
+  display: block; margin-top: 6px;
+  font-size: 0.72rem; color: var(--faint); font-family: var(--mono, monospace);
+}
+.soc-ai-capped {
+  display: block; margin-top: 6px; font-size: 0.72rem; color: var(--orange);
+}
+
+.soc-ai-pending { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+.soc-ai-dots { display: inline-flex; gap: 4px; }
+.soc-ai-dots i {
+  width: 5px; height: 5px; border-radius: 50%; background: var(--muted);
+  animation: soc-ai-blink 1.1s infinite ease-in-out;
+}
+.soc-ai-dots i:nth-child(2) { animation-delay: 0.15s; }
+.soc-ai-dots i:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes soc-ai-blink {
+  0%, 80%, 100% { opacity: 0.25; }
+  40% { opacity: 1; }
+}
+
+/* A looping blink is exactly what `prefers-reduced-motion` exists to stop. */
+@media (prefers-reduced-motion: reduce) {
+  .soc-ai-dots i { animation: none; opacity: 0.6; }
+}
+
+.soc-ai-composer {
+  display: flex; align-items: flex-end; gap: 8px;
+  padding: 10px; border-top: 1px solid var(--line); background: var(--surface);
+}
+.soc-ai-composer textarea {
+  flex: 1 1 auto; min-width: 0; resize: none;
+  max-height: 120px; padding: 10px 10px;
+  /* 16px: below that, iOS zooms the page on focus. */
+  font-size: 16px; font-family: inherit; line-height: 1.4;
+  color: var(--fg); background: var(--hero);
+  border: 1px solid var(--line); border-radius: var(--radius);
+}
+.soc-ai-composer textarea:focus { outline: none; border-color: var(--accent); }
+
+.soc-ai-send {
+  flex-shrink: 0; width: 38px; height: 38px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--accent-fg); background: var(--accent);
+  border: 1px solid var(--accent-dim); cursor: pointer;
+}
+.soc-ai-send:disabled { opacity: 0.45; cursor: not-allowed; }
+
+@media (max-width: 760px) {
+  /* The panel takes the screen: a 380 px card overflows a 375 px phone, and
+   * the launcher sat under the virtual keyboard. */
+  .soc-ai-panel {
+    right: 0; left: 0; bottom: 0; top: 0;
+    width: auto; max-width: none; height: auto; max-height: none;
+    border-radius: 0; border-left: none; border-right: none;
+  }
+  .soc-ai-launcher { right: 14px; bottom: 14px; }
+  .soc-ai-ghost, .soc-ai-suggestion { min-height: 44px; }
+}
+
+/* A link inside a paragraph, not a button that looks like one: it sits mid
+ * sentence, so it must not take a line of its own or a border. */
+.soc-ai-link {
+  padding: 0; background: none; border: none;
+  font: inherit; color: var(--accent); cursor: pointer;
+  text-decoration: underline; text-underline-offset: 2px;
+}
+.soc-ai-link:hover { color: var(--accent-dim); }
+
+/* --- Settings → MCP: the install page -------------------------------------
+ *
+ * Four numbered steps, each with the block you copy at the end of it. The
+ * numbering is the design: someone installing this on another machine follows
+ * it top to bottom once and never comes back.
+ */
+.soc-mcp-step {
+  margin: 24px 0 8px; font-size: 0.78rem; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--accent);
+  border-top: 1px solid var(--line); padding-top: 16px;
+}
+.soc-mcp-step:first-of-type { border-top: none; }
+
+.soc-mcp-block {
+  margin: 10px 0 4px; border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--hero); overflow: hidden;
+}
+.soc-mcp-block-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 8px 10px; background: var(--surface); border-bottom: 1px solid var(--line);
+}
+.soc-mcp-block pre {
+  margin: 0; padding: 12px; overflow-x: auto;
+  font-size: 0.78rem; line-height: 1.5; color: var(--fg);
+  /* A token or a JSON block must never be re-wrapped: a line break pasted into
+   * a config file is a config file that does not parse. */
+  white-space: pre;
+}
+
+.soc-mcp-copy {
+  display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
+  padding: 4px 10px; font-size: 0.72rem;
+  color: var(--muted); background: transparent;
+  border: 1px solid var(--line); border-radius: var(--radius); cursor: pointer;
+}
+.soc-mcp-copy:hover { color: var(--fg); border-color: var(--line-strong); }
+
+.soc-mcp-catalogue {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 12px; margin-top: 10px;
+}
+.soc-mcp-catalogue p { margin: 4px 0 0; font-size: 0.78rem; line-height: 1.5; }
+
+@media (max-width: 760px) {
+  .soc-mcp-copy { min-height: 44px; }
+}
+
+/* ==========================================================================
+ * LOOKUP — manual threat-intelligence lookup
+ *
+ * Prefix `soc-intel-`, checked free before it was written: see the
+ * `.vp-scope` / `.soc-sources` / `.soc-field span` traps in CLAUDE.md. Every
+ * colour here is a token, so the panel follows all six themes; a hardcoded
+ * value would be visibly wrong on at least one of them.
+ * ========================================================================== */
+
+.soc-intel-form { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-top: 16px; }
+.soc-intel-form .soc-field { margin-bottom: 0; }
+.soc-intel-kind { min-width: 190px; }
+/* 16px exactly: anything smaller and iOS zooms the whole page on focus. */
+.soc-intel-form input, .soc-intel-pwform input { font-size: 16px; }
+
+/* `.soc-field span` is a descendant selector (0,1,1) that dresses EVERY span
+   under a field in small grey capitals. A bare class does not beat it — this
+   has come back twice in this codebase — so the element is named too. */
+.soc-field span.soc-intel-label { text-transform: uppercase; letter-spacing: 0.06em; }
+
+.soc-intel-value { margin: 0; font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace); word-break: break-all; }
+.soc-intel-headline { font-size: 0.94rem; margin: 12px 0 6px; }
+.soc-intel-scope { margin: 0 0 16px; font-size: 0.86rem; }
+.soc-intel-scope b { color: var(--fg); }
+
+/* The verdict panel carries its colour on the left edge only: a full tinted
+   surface at this size competes with the risk pills in the queue behind it. */
+.soc-intel-verdict { border-left: 3px solid var(--line-strong); }
+.soc-intel-verdict-flagged { border-left-color: var(--red); }
+.soc-intel-verdict-watch { border-left-color: var(--orange); }
+.soc-intel-verdict-clean { border-left-color: var(--green); }
+.soc-intel-verdict-unknown { border-left-color: var(--blue); }
+
+.soc-intel-signals { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 8px; }
+.soc-intel-signal { display: flex; gap: 10px; align-items: flex-start; line-height: 1.45; font-size: 0.86rem; }
+.soc-intel-signal svg { flex: 0 0 auto; margin-top: 2px; }
+.soc-intel-signal-strong { color: var(--red); }
+.soc-intel-signal-weak { color: var(--orange); }
+.soc-intel-signal-context { color: var(--muted); }
+
+.soc-intel-source-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 6px 0 0; }
+.soc-intel-reason { margin: 12px 0 0; font-size: 0.86rem; }
+
+.soc-intel-chips { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.soc-intel-chip {
+  font-size: 0.78rem; padding: 2px 8px; border-radius: var(--radius);
+  background: var(--surface-2); color: var(--muted); border: 1px solid var(--line);
+}
+.soc-intel-chip-bad { color: var(--red); border-color: var(--red); background: var(--red-bg); }
+.soc-intel-json { font-size: 0.78rem; color: var(--muted); word-break: break-all; }
+
+.soc-intel-breaches { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 10px; }
+.soc-intel-breaches li {
+  padding: 10px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+}
+
+.soc-intel-fields { margin-top: 12px; }
+.soc-intel-fields summary { cursor: pointer; color: var(--muted); font-size: 0.78rem; }
+.soc-intel-fields dl { display: grid; gap: 6px; margin: 12px 0 0; }
+.soc-intel-fields dl > div { display: grid; grid-template-columns: minmax(140px, 200px) 1fr; gap: 12px; align-items: start; }
+.soc-intel-fields dt { color: var(--faint); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.soc-intel-fields dd { margin: 0; font-size: 0.86rem; word-break: break-word; }
+
+.soc-intel-examples, .soc-intel-history { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 8px; }
+.soc-intel-examples li, .soc-intel-history li { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+.soc-intel-providers { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 12px; }
+.soc-intel-providers li { padding: 12px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.soc-intel-providers p { margin: 6px 0 0; }
+.soc-intel-provider-head { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+.soc-intel-pwform { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-top: 16px; }
+.soc-intel-pwform .soc-field { margin-bottom: 0; }
+
+/* The jump from an alert's observable to the Lookup tab. Small on purpose:
+   it sits inside a metadata line, and a full button there would read as the
+   primary action of the case card, which it is not. */
+.soc-intel-jump {
+  margin-left: 6px; padding: 2px 6px; line-height: 0;
+  background: transparent; border: 1px solid var(--line); border-radius: var(--radius);
+  color: var(--muted); cursor: pointer; vertical-align: middle;
+}
+.soc-intel-jump:hover { color: var(--accent); border-color: var(--accent); }
+
+@media (max-width: 720px) {
+  .soc-intel-form, .soc-intel-pwform { flex-direction: column; align-items: stretch; }
+  .soc-intel-kind { min-width: 0; }
+  .soc-intel-fields dl > div { grid-template-columns: 1fr; gap: 2px; }
+  /* 44 px touch target, like every other control on a narrow screen. */
+  .soc-intel-jump { min-width: 44px; min-height: 44px; }
+}
+
+/* ==========================================================================
+ * READABILITY PASS — WHERE THE EYE IS SUPPOSED TO LAND
+ *
+ * The console had one visual weight for everything. Every panel opened with a
+ * spaced mono kicker, an Archivo Black headline sized like the page title, and
+ * a paragraph of explanation — so a screen whose entire content was "nothing
+ * to report" carried three billboards. When every element shouts, none of them
+ * is loud: the hierarchy exists in the markup and nowhere on the retina.
+ *
+ * Three levels are declared here, and nothing is allowed to sit between them:
+ *
+ *   1. THE PAGE TITLE. One per screen, in the page head. It answers "where
+ *      am I".
+ *   2. A SECTION. Small display capitals, the size of a strong label. It
+ *      answers "what is this block" and must never compete with level 1.
+ *   3. A BLOCK INSIDE A SECTION. Quieter still, and grey: at that depth the
+ *      content is the message, the label only files it.
+ *
+ * And prose leaves the page. Every sentence that explains rather than reports
+ * goes behind a circled "i" (`.soc-info`) or a fold (`.soc-fold`) — available
+ * in one click, absent from the scan. That is the whole point: the information
+ * is not removed, it stops competing with the numbers.
+ * ========================================================================== */
+
+/*
+ * `.soc-panel.soc-page-head h2` is (0,2,1) and `.soc-panel h2` is (0,1,1), so
+ * the page title wins wherever both apply — deliberately, and not by document
+ * order, which the next edit to this file would silently change. Same lesson
+ * as the `.soc-field span` trap: at this depth a single class is not enough.
+ */
+.soc-panel.soc-page-head h2 {
+  font-size: clamp(1.5rem, 3vw, 2.1rem);
+  margin-bottom: 10px;
+}
+
+/* Level 2. A section title is a LABEL, not a headline. */
+.soc-panel h2 {
+  font-size: 1rem;
+  letter-spacing: 0.06em;
+  line-height: 1.3;
+}
+
+/* Level 3. */
+h3 { font-size: 0.86rem; letter-spacing: 0.06em; }
+
+/*
+ * The kicker keeps its job — naming the question a section answers — and loses
+ * its weight. In the page head it is the only kicker on screen and stays as
+ * it was; repeated on every panel it read as a second title.
+ */
+.soc-panel .soc-kicker {
+  font-size: 0.64rem;
+  letter-spacing: 0.16em;
+  margin-bottom: 5px;
+}
+.soc-panel.soc-page-head .soc-kicker {
+  font-size: 0.72rem;
+  letter-spacing: 0.22em;
+  margin-bottom: 10px;
+}
+
+/* --- Folds ---------------------------------------------------------------
+ *
+ * Evidence an analyst needs SOMETIMES — a raw log, two audit hashes, a list of
+ * published workflows — stays one click away instead of occupying the screen
+ * on every case. What is folded says how much is inside, so nobody has to open
+ * it to find out whether it is worth opening.
+ * ------------------------------------------------------------------------- */
+
+.soc-fold { border-top: 1px solid var(--line); margin-top: 4px; }
+.soc-fold:first-child { border-top: none; }
+
+.soc-fold > summary {
+  display: flex; align-items: center; gap: 8px;
+  list-style: none; cursor: pointer; padding: 10px 0;
+  font-family: var(--display); text-transform: uppercase;
+  font-size: 0.86rem; letter-spacing: 0.06em; color: var(--fg);
+  /* Under the touch recommendation without this: a summary is a real target. */
+  min-height: 44px;
+}
+.soc-fold > summary::-webkit-details-marker { display: none; }
+.soc-fold > summary:hover { color: var(--accent); }
+.soc-fold > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* The chevron is drawn, not loaded, and rotates on open — the affordance
+   people already read as "there is more behind this". */
+.soc-fold-chevron {
+  flex: none; width: 9px; height: 9px; margin-right: 2px;
+  border-right: 2px solid var(--faint); border-bottom: 2px solid var(--faint);
+  transform: rotate(-45deg); transition: transform 120ms ease;
+}
+.soc-fold[open] > summary .soc-fold-chevron { transform: rotate(45deg); }
+@media (prefers-reduced-motion: reduce) {
+  .soc-fold-chevron { transition: none; }
+}
+
+/* What is inside, announced on the closed summary. */
+.soc-fold-hint {
+  margin-left: auto; font-family: var(--mono); font-size: 0.72rem;
+  letter-spacing: 0.04em; color: var(--faint); text-transform: none;
+}
+.soc-fold-body { padding: 0 0 14px; }
+
+/* --- A section with nothing to say ---------------------------------------
+ *
+ * "No broken chain, no stalled chain" is good news, and it was rendered as a
+ * full panel with a headline the size of the page title. Good news gets one
+ * quiet line: the screen then reads as calm at a glance, which is exactly what
+ * it is reporting.
+ * ------------------------------------------------------------------------- */
+
+.soc-quiet {
+  display: flex; align-items: center; gap: 8px;
+  color: var(--muted); font-size: 0.86rem; margin: 0; padding: 10px 0;
+}
+/*
+ * Le vert se MERITE ici aussi. `.soc-quiet` sert deux choses : « aucune chaine
+ * rompue » (une bonne nouvelle) et « rien ne correspond a cette recherche »
+ * (un resultat nul). Colorer les deux en vert felicitait une recherche qui
+ * n'a rien trouve — la meme faute que l'ecran « aucune faille » corrige un
+ * onglet plus loin. Le vert est donc demande, pas subi.
+ */
+.soc-quiet-ok .soc-icon { color: var(--green); }
+
+/*
+ * Le trait qui separe deux groupes d'onglets. Il ne porte aucun libelle : un
+ * titre de groupe ferait une deuxieme ligne de navigation permanente pour une
+ * information qu'un espace suffit a donner.
+ */
+.soc-nav-sep {
+  align-self: center; flex: none;
+  width: 1px; height: 16px; margin: 0 6px;
+  background: var(--line-strong);
+}
+
+/*
+ * Quand un cas est ouvert, sa regle EST le titre de l'ecran : il n'y a pas
+ * d'en-tete de page au-dessus. Il reprend donc le niveau 1, que la regle
+ * `.soc-panel h2` lui avait retire avec les titres de section.
+ */
+.soc-case-title h2 {
+  font-size: clamp(1.2rem, 2.2vw, 1.5rem);
+  letter-spacing: -0.01em;
+}
+
+/* ==========================================================================
+ * LE GUIDE : QUATRE GROUPES, UNE RECHERCHE, ET DES PLIS QUI SE PRESENTENT
+ *
+ * L'accordeon etait deja la — le repli n'etait pas le probleme. Ce qui
+ * manquait a une documentation de quinze sections et quatre-vingt-dix points,
+ * c'est de pouvoir y CHERCHER, et de pouvoir parcourir les titres autrement
+ * qu'un par un.
+ * ========================================================================== */
+
+.soc-doc-search { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+/* Le champ prend la place : c'est le premier geste sur cet ecran. */
+.soc-doc-search .soc-search { flex: 1; min-width: 220px; }
+.soc-doc-search .soc-secondary { padding: 6px 10px; font-size: 0.72rem; }
+
+/*
+ * L'intitule d'un groupe. Il ne se replie pas et ne porte pas de cadre : un
+ * troisieme niveau a ouvrir avant de lire annulerait ce que le groupement
+ * fait gagner. Il nomme, et il s'efface.
+ */
+.soc-doc-group { margin-bottom: 20px; }
+.soc-doc-group-label {
+  margin: 0 0 8px; padding-left: 2px;
+  color: var(--faint);
+}
+
+/*
+ * Ce que la section contient, lisible sans l'ouvrir — et, pendant une
+ * recherche, ce qu'elle en garde. Meme regle que partout ailleurs : un pli
+ * muet doit etre ouvert pour savoir s'il valait la peine, donc il n'economise
+ * rien.
+ */
+.soc-doc-count {
+  font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.04em;
+  color: var(--faint); text-transform: none; flex: none;
+}
+
+/*
+ * Le terme cherche, dans le texte.
+ *
+ * `<mark>` a un fond jaune par defaut dans tous les navigateurs — une couleur
+ * qui n'appartient a aucun des six themes, et qui sur cette console voudrait
+ * dire « attention » puisque l'orange y est reserve au risque. Il prend donc
+ * l'accent du theme, qui ne designe qu'une chose a la fois : ici, ce qu'on
+ * vient de chercher.
+ */
+.soc-hit {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+/* Les entrees de glossaire trouvees par la recherche du Guide. Bordees a
+   l'accent : c'est une reponse directe au mot tape, pas une section a ouvrir. */
+.soc-doc-glossary { border-left: 3px solid var(--accent); }
+
+/* La raison d'une execution en erreur, sous sa pastille dans le journal. */
+.soc-trace-log-note { margin-top: 4px; white-space: normal; }
+
+/*
+ * UN TITRE ET SON DISQUE, COTE A COTE — ET LE DISQUE HORS DU TITRE.
+ *
+ * ============================================================================
+ * POURQUOI CE CONTENEUR EXISTE
+ *
+ * Le « i » etait ecrit A L'INTERIEUR du `<h2>`. Deux consequences, toutes deux
+ * invisibles a l'oeil :
+ *
+ *  1. Le nom accessible du titre avalait la bulle. Un lecteur d'ecran
+ *     annoncait « Human disagreementHuman disagreementThe share of decisions
+ *     put to a human that the human declined… » COMME NOM DE TITRE. La
+ *     navigation par titres est le premier moyen de parcourir une page pour
+ *     qui ne voit pas l'ecran : chaque section y devenait un paragraphe.
+ *
+ *  2. `<details>` est du contenu de flux ; un titre attend du contenu de
+ *     phrase. Le balisage etait invalide, ce qui est la cause du point 1.
+ *
+ * Le disque est donc le VOISIN du titre, jamais son enfant. Rien ne change a
+ * l'ecran : la ligne de base est partagee.
+ * ============================================================================
+ */
+.soc-titled {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.soc-titled > h2, .soc-titled > h3 { margin: 0; }
+/* Dans un en-tete de panneau, la marge est deja portee par `.soc-panel-head`. */
+.soc-panel-head .soc-titled { margin-bottom: 0; }
+
+/* ---------------------------------------------------------------------------
+   Ingestion tab — prefix `soc-ing-`.
+   CHECKED FREE BEFORE IT WAS WRITTEN. `.vp-scope`, `.soc-sources` and
+   `.soc-field span` have each cost this project a defect; the check is two
+   greps and it goes before the first rule, not after the bug report.
+
+   These are NEW class names, so nothing earlier in the file can be cancelled
+   by them and the "a rule appended after the media queries" trap does not
+   apply: the block carries its own `@media` at the bottom, in its own reading
+   order. Modifying an EXISTING rule still goes next to that rule.
+   --------------------------------------------------------------------------- */
+
+.soc-ing-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  margin: 16px 0 22px;
+}
+
+.soc-ing-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+  padding: 14px 16px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--fg);
+  cursor: pointer;
+  font: inherit;
+}
+
+.soc-ing-card:hover { border-color: var(--line-strong); }
+
+/* The chosen architecture, named by BOTH the border and the accent on the
+   heading: a border alone is the kind of difference that disappears on a
+   low-contrast display, and this is a choice someone must be able to re-read
+   at a glance six weeks later. */
+.soc-ing-card[aria-pressed='true'] {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.soc-ing-card[aria-pressed='true'] .soc-ing-card-head strong { color: var(--accent); }
+
+.soc-ing-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.soc-ing-card-head strong { font-size: 0.92rem; }
+
+.soc-ing-reco {
+  font-style: normal;
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 2px;
+  background: var(--accent);
+  /* Follows the accent, never the background. A bright accent with a light
+     label gives a pill nobody can read — the rule the theme tests assert. */
+  color: var(--accent-fg);
+}
+
+.soc-ing-card-when { font-size: 0.8rem; line-height: 1.5; color: var(--fg); }
+
+/* The cost, quieter than the benefit but never hidden. `--muted` and not
+   `--faint`: the faint token is for things you may skip, and a trade-off is
+   not one of them. */
+.soc-ing-card-cost {
+  font-size: 0.76rem;
+  line-height: 1.5;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+
+.soc-ing-numbers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0 16px;
+}
+
+.soc-ing-source {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 14px 16px;
+  margin: 14px 0;
+}
+
+.soc-ing-source-head {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.soc-ing-source-name { flex: 1 1 200px; min-width: 0; }
+
+.soc-ing-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  margin: 10px 0;
+  cursor: pointer;
+}
+.soc-ing-toggle input { width: 16px; height: 16px; }
+
+@media (max-width: 760px) {
+  .soc-ing-source-head { align-items: stretch; }
+  /* 44 px touch targets, the same floor as the rest of the console. */
+  .soc-ing-card, .soc-ing-toggle { min-height: 44px; }
+}

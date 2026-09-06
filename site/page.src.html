@@ -1,0 +1,1300 @@
+<title>MENATER</title>
+<meta name="description" content="A self-hosted SOC triage console with an LLM in the loop and a human on the trigger. Shadow mode by default, a closed action catalogue, and a hash-chained audit log.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;700&display=swap">
+
+<style>
+/* ==========================================================================
+   MENATER — presentation page.
+
+   The palette is the product's own, token for token (dashboard/src/theme/
+   themes.css). The six themes are here in full because the design system is
+   part of what this page is presenting: it is a demonstration, not a swatch
+   picture. `data-palette` on <html>, defaulting to `grayed` — the brand's.
+
+   Every rule in DESIGN.md § 12 applies to this page too: no gradients, no
+   glass, no radius above 4 px, no superlatives, no fabricated metrics, and
+   no green that was not earned.
+   ========================================================================== */
+
+:root,
+[data-palette='grayed'] {
+  --bg:#232830; --surface:#2b313a; --surface-2:#333a45; --panel:#1f242b; --hero:#171b21;
+  --fg:#f2f4f7; --muted:#98a2b3; --faint:#757f8c;
+  --line:#3d4550; --line-strong:#4d5663;
+  --accent:#c3f53c; --accent-dim:#9dc72a; --accent-fg:#171b21;
+  --red:#ff6b6b; --red-bg:#3a2226; --orange:#ffb020; --orange-bg:#382c18;
+  --green:#6ee7a0; --green-bg:#1d3329; --blue:#7cc4ff; --blue-bg:#1b2b3a; --grey:#8d97a5;
+  --shadow:0 18px 40px rgba(0,0,0,.35);
+  color-scheme: dark;
+}
+[data-palette='punk'] {
+  --bg:#3b3d2a; --surface:#45472f; --surface-2:#515338; --panel:#33351f; --hero:#24261a;
+  --fg:#f5e7bd; --muted:#bfb389; --faint:#9d9672;
+  --line:#565839; --line-strong:#6d6f47;
+  --accent:#c31f1b; --accent-dim:#a01916; --accent-fg:#f5e7bd;
+  --red:#ff997c; --red-bg:#4a2a1f; --orange:#f0b429; --orange-bg:#47381a;
+  --green:#b7d44a; --green-bg:#35401f; --blue:#9fc3c9; --blue-bg:#29383a; --grey:#a99f7c;
+  --shadow:0 18px 40px rgba(0,0,0,.45);
+  color-scheme: dark;
+}
+[data-palette='blued'] {
+  --bg:#1f31c4; --surface:#2739d6; --surface-2:#3548e6; --panel:#182699; --hero:#111c78;
+  --fg:#ffffff; --muted:#b9c4ff; --faint:#909ff5;
+  --line:#3d50e0; --line-strong:#5568f5;
+  --accent:#c8f24b; --accent-dim:#a5cc33; --accent-fg:#16249b;
+  --red:#ffb2a8; --red-bg:#3a2a92; --orange:#ffcf5c; --orange-bg:#35318f;
+  --green:#c8f24b; --green-bg:#23408c; --blue:#a8e5ff; --blue-bg:#1e3bb4; --grey:#9fabf0;
+  --shadow:0 18px 40px rgba(10,20,100,.5);
+  color-scheme: dark;
+}
+[data-palette='attck'] {
+  --bg:#7a1c08; --surface:#8f2410; --surface-2:#a32d15; --panel:#5e1406; --hero:#3d0d03;
+  --fg:#fff3e4; --muted:#f5bfa0; --faint:#e0a58a;
+  --line:#b03a1c; --line-strong:#d04f28;
+  --accent:#ffdd1c; --accent-dim:#d9b800; --accent-fg:#5e1406;
+  --red:#ffa796; --red-bg:#6d1a08; --orange:#ffdd1c; --orange-bg:#6b2a08;
+  --green:#9ce5a8; --green-bg:#2f4a1c; --blue:#7fd4ff; --blue-bg:#1d3a5c; --grey:#e0a487;
+  --shadow:0 18px 40px rgba(60,10,0,.5);
+  color-scheme: dark;
+}
+[data-palette='acme'] {
+  --bg:#f4f1ea; --surface:#ffffff; --surface-2:#ebe7dd; --panel:#fbf9f5; --hero:#e4dfd2;
+  --fg:#16150f; --muted:#5c5a51; --faint:#8a877c;
+  --line:#d9d4c8; --line-strong:#bdb7a8;
+  --accent:#e01e0b; --accent-dim:#b81909; --accent-fg:#ffffff;
+  --red:#c71e10; --red-bg:#fbe2de; --orange:#9b5d00; --orange-bg:#fbeed6;
+  --green:#1e7643; --green-bg:#dcf0e3; --blue:#17548f; --blue-bg:#dde9f7; --grey:#6f6c62;
+  --shadow:0 12px 28px rgba(22,21,15,.12);
+  color-scheme: light;
+}
+[data-palette='dark'] {
+  --bg:#16181c; --surface:#1e2126; --surface-2:#282c33; --panel:#101216; --hero:#0a0b0e;
+  --fg:#f0f2f5; --muted:#9aa1ad; --faint:#6a7280;
+  --line:#2c3038; --line-strong:#3b414b;
+  --accent:#1269f5; --accent-dim:#0955cf; --accent-fg:#ffffff;
+  --red:#f4636b; --red-bg:#33191d; --orange:#f0a63c; --orange-bg:#33260f;
+  --green:#34c77b; --green-bg:#122e20; --blue:#56a8ff; --blue-bg:#14263a; --grey:#838b98;
+  --shadow:0 18px 40px rgba(0,0,0,.55);
+  color-scheme: dark;
+}
+
+:root {
+  --display:'Archivo Black','Helvetica Neue','Arial Narrow',Impact,system-ui,sans-serif;
+  --sans:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace;
+  --radius:4px;
+  --swap:120ms;
+  --shell:1280px;
+  --rail:132px;
+}
+@media (prefers-reduced-motion: reduce) { :root { --swap: 0s; } }
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--sans);
+  font-size: 0.94rem;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  transition: background var(--swap) linear, color var(--swap) linear;
+}
+
+::selection { background: var(--accent); color: var(--accent-fg); }
+
+a { color: var(--accent); text-underline-offset: 3px; text-decoration-thickness: 1px; }
+a:hover { color: var(--accent-dim); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+
+h1, h2, h3 { font-family: var(--display); font-weight: 400; margin: 0; text-wrap: balance; }
+p { margin: 0; }
+ul { margin: 0; padding: 0; list-style: none; }
+
+/* --- The instrument devices ------------------------------------------- */
+
+.kick {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin: 0;
+}
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.pill {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: var(--radius);
+  white-space: nowrap;
+}
+.pill-red { color: var(--red); background: var(--red-bg); }
+.pill-orange { color: var(--orange); background: var(--orange-bg); }
+.pill-green { color: var(--green); background: var(--green-bg); }
+.pill-blue { color: var(--blue); background: var(--blue-bg); }
+.pill-grey { color: var(--fg); background: var(--surface-2); }
+.dash { color: var(--faint); font-family: var(--mono); }
+
+/* --- Shell and section grid -------------------------------------------- */
+
+.wrap { max-width: var(--shell); margin: 0 auto; padding: 0 24px; }
+
+.band { border-top: 1px solid var(--line); }
+/* The header is sticky and two rows tall: an anchor must not land under it. */
+section[id] { scroll-margin-top: 104px; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+.band-inset { background: var(--panel); }
+
+.sec { display: grid; gap: 32px; padding-block: 64px; align-items: start; }
+@media (min-width: 900px) {
+  .sec { grid-template-columns: var(--rail) minmax(0, 1fr); gap: 40px; }
+  .sec-rail { position: sticky; top: 122px; }
+}
+.sec-rail { display: flex; flex-direction: column; gap: 6px; }
+.sec-rail .num {
+  font-family: var(--mono); font-size: 0.72rem; color: var(--accent);
+  letter-spacing: 0.1em;
+}
+.sec-rail .lbl {
+  font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--faint);
+}
+/* Which of the four groups you are in. Repeated on every section on purpose:
+   it is a running header, not an explanation — its job is to say where you
+   are, wherever you happened to land. */
+.sec-rail .grp {
+  font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--faint);
+  padding-bottom: 6px; margin-bottom: 2px; border-bottom: 1px solid var(--line);
+}
+.sec-body { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+
+h2.sech { font-size: clamp(1.4rem, 3vw, 2rem); line-height: 1.1; letter-spacing: -0.01em; }
+.lede { color: var(--muted); max-width: 68ch; font-size: 1rem; }
+.prose { max-width: 70ch; color: var(--muted); }
+.prose strong { color: var(--fg); font-weight: 500; }
+
+/* --- Header: identity row, then the section bar ------------------------- */
+
+.top {
+  position: sticky; top: 0; z-index: 30;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+  transition: background var(--swap) linear;
+}
+.top-head { display: flex; align-items: center; gap: 16px; height: 54px; }
+.lock { display: flex; align-items: center; gap: 10px; margin-right: auto; text-decoration: none; color: var(--fg); }
+.lock:hover { color: var(--fg); }
+.lock svg { color: var(--accent); display: block; flex: none; }
+.lock .word { font-family: var(--display); font-size: 1.05rem; letter-spacing: -0.01em; }
+.lock .tagline {
+  display: none;
+  font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--faint);
+  padding-left: 10px; border-left: 1px solid var(--line-strong);
+}
+@media (min-width: 560px) { .lock .tagline { display: inline; } }
+
+/* The bar scrolls sideways when it does not fit, and SAYS SO: a bar that
+   scrolls without looking like it scrolls hides the sections at its end,
+   which for someone hunting one named section means they do not exist. */
+.navrail { position: relative; border-top: 1px solid var(--line); }
+.navrail::after {
+  content: ''; position: absolute; top: 0; right: 0; bottom: 0; width: 40px;
+  pointer-events: none; opacity: 0;
+  background: linear-gradient(to right, transparent, var(--bg));
+  transition: opacity 120ms linear;
+}
+.navrail[data-overflow='true']::after { opacity: 1; }
+
+.topnav {
+  display: flex; align-items: stretch; gap: 0;
+  overflow-x: auto; scrollbar-width: none; min-width: 0;
+}
+.topnav::-webkit-scrollbar { display: none; }
+.topnav a {
+  display: flex; align-items: center; gap: 7px;
+  padding: 11px 12px; white-space: nowrap;
+  font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--muted); text-decoration: none;
+  border-bottom: 2px solid transparent;
+  min-height: 44px;
+}
+.topnav a:first-child { padding-left: 0; }
+.topnav a:hover { color: var(--fg); }
+.topnav a .n { color: var(--faint); font-size: 0.66rem; }
+.topnav a[aria-current='true'] { color: var(--fg); border-bottom-color: var(--accent); }
+.topnav a[aria-current='true'] .n { color: var(--accent); }
+.topnav .sep { align-self: center; width: 1px; height: 14px; background: var(--line-strong); margin: 0 10px; flex: none; }
+
+.picker { display: flex; align-items: center; gap: 6px; }
+.picker .kick { display: none; }
+@media (min-width: 640px) { .picker .kick { display: block; margin-right: 4px; } }
+.sw {
+  width: 22px; height: 22px; padding: 0; cursor: pointer;
+  border-radius: var(--radius);
+  border: 1px solid var(--line-strong);
+  position: relative;
+}
+.sw[aria-pressed='true'] { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sw i { position: absolute; inset: 4px 4px auto auto; width: 8px; height: 8px; display: block; }
+
+/* --- Hero -------------------------------------------------------------- */
+
+.hero { padding-block: 72px 56px; display: flex; flex-direction: column; gap: 26px; }
+.hero h1 {
+  font-size: clamp(2.1rem, 5.4vw, 3.6rem);
+  line-height: 1.02;
+  letter-spacing: -0.015em;
+  max-width: 19ch;
+}
+.hero h1 em { font-style: normal; color: var(--accent); }
+.hero-sub { max-width: 62ch; font-size: 1.06rem; color: var(--muted); }
+.hero-sub b { color: var(--fg); font-weight: 500; }
+
+.hero-cta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.term {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--hero); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 10px 12px;
+  font-family: var(--mono); font-size: 0.82rem; color: var(--fg);
+  overflow-x: auto;
+}
+.term .cue { color: var(--accent); user-select: none; }
+.term code { white-space: nowrap; }
+.copy {
+  font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase;
+  background: var(--accent); color: var(--accent-fg); border: 0; border-radius: var(--radius);
+  padding: 9px 14px; cursor: pointer; min-height: 36px;
+}
+.copy:hover { background: var(--accent-dim); }
+.textlink {
+  font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted); text-decoration: none; border-bottom: 1px solid var(--line-strong); padding-bottom: 2px;
+}
+.textlink:hover { color: var(--fg); }
+
+.spec {
+  display: flex; flex-wrap: wrap; gap: 0;
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--surface);
+}
+.spec div {
+  padding: 12px 16px; flex: 1 1 150px; border-right: 1px solid var(--line);
+}
+.spec div:last-child { border-right: 0; }
+.spec .v { font-family: var(--mono); font-size: 1.1rem; color: var(--fg); display: block; }
+.spec .k {
+  font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--faint); display: block; margin-top: 2px;
+}
+
+/* --- Panels and grids -------------------------------------------------- */
+
+.grid { display: grid; gap: 16px; }
+.g2 { grid-template-columns: 1fr; }
+.g3 { grid-template-columns: 1fr; }
+@media (min-width: 720px) { .g2 { grid-template-columns: 1fr 1fr; } .g3 { grid-template-columns: 1fr 1fr; } }
+@media (min-width: 1040px) { .g3 { grid-template-columns: repeat(3, 1fr); } }
+
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 18px; display: flex; flex-direction: column; gap: 10px;
+  transition: background var(--swap) linear, border-color var(--swap) linear;
+}
+.card h3 { font-size: 0.86rem; letter-spacing: 0.06em; text-transform: uppercase; }
+.card p { color: var(--muted); font-size: 0.9rem; }
+.card .where {
+  font-family: var(--mono); font-size: 0.68rem; color: var(--faint);
+  margin-top: auto; padding-top: 8px; border-top: 1px solid var(--line);
+}
+
+/* A plain list of rules — no card chrome, hairlines only. */
+.rows { display: flex; flex-direction: column; }
+.rows li {
+  display: grid; gap: 4px 20px; padding: 14px 0; border-top: 1px solid var(--line);
+}
+.rows li:first-child { border-top: 0; }
+@media (min-width: 760px) { .rows li { grid-template-columns: 220px minmax(0, 1fr); align-items: baseline; } }
+.rows .t { font-family: var(--mono); font-size: 0.78rem; color: var(--fg); letter-spacing: 0.02em; }
+.rows .d { color: var(--muted); font-size: 0.9rem; }
+.rows .d b { color: var(--fg); font-weight: 500; }
+
+/* --- The pipeline chain ------------------------------------------------ */
+
+.chain { display: flex; flex-direction: column; gap: 10px; }
+.chain-line { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; }
+.step {
+  flex: 1 1 150px; min-width: 0;
+  background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--radius);
+  padding: 12px; display: flex; flex-direction: column; gap: 5px;
+}
+.step .id { font-family: var(--mono); font-size: 0.66rem; color: var(--accent); letter-spacing: 0.1em; }
+.step .nm { font-size: 0.82rem; color: var(--fg); font-weight: 500; }
+.step .no { font-size: 0.78rem; color: var(--muted); line-height: 1.45; }
+.errbox {
+  border: 1px dashed var(--line-strong); border-radius: var(--radius);
+  padding: 12px; background: var(--panel);
+  display: flex; flex-direction: column; gap: 5px;
+}
+
+/* --- Tables ------------------------------------------------------------ */
+
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.86rem; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tbody tr:last-child td { border-bottom: 0; }
+th {
+  font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--faint); font-weight: 400; background: var(--panel); white-space: nowrap;
+}
+td.m { font-family: var(--mono); font-size: 0.78rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
+td .sub { color: var(--muted); }
+
+/* --- Measured figures -------------------------------------------------- */
+
+.figs { display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+@media (min-width: 720px) { .figs { grid-template-columns: 1fr 1fr; } }
+@media (min-width: 1040px) { .figs { grid-template-columns: repeat(4, 1fr); } }
+.fig { background: var(--surface); padding: 16px; display: flex; flex-direction: column; gap: 4px; }
+.fig .n { font-family: var(--mono); font-size: 1.6rem; line-height: 1.1; color: var(--fg); font-variant-numeric: tabular-nums; }
+.fig .l { font-size: 0.82rem; color: var(--fg); }
+.fig .c { font-size: 0.78rem; color: var(--faint); }
+
+/* --- Quote / thesis ---------------------------------------------------- */
+
+.thesis {
+  border-left: 3px solid var(--accent); padding: 4px 0 4px 20px;
+  font-family: var(--display); font-size: clamp(1.15rem, 2.6vw, 1.6rem);
+  line-height: 1.25; letter-spacing: -0.005em; max-width: 26ch;
+}
+
+/* --- Code block -------------------------------------------------------- */
+
+pre {
+  margin: 0; background: var(--hero); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 0.8rem;
+  color: var(--fg); line-height: 1.65;
+}
+pre .c { color: var(--faint); }
+pre .a { color: var(--accent); }
+
+/* --- The contents map --------------------------------------------------- */
+
+.map { display: grid; gap: 20px; }
+@media (min-width: 700px) { .map { grid-template-columns: 1fr 1fr; } }
+@media (min-width: 1040px) { .map { grid-template-columns: repeat(4, 1fr); } }
+.map-grp { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.map-grp h3 {
+  font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase;
+  padding-bottom: 8px; border-bottom: 1px solid var(--line-strong);
+}
+.map-grp h3 span { color: var(--accent); font-family: var(--mono); font-size: 0.72rem; margin-right: 8px; }
+.map-grp ol { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.map-grp a { display: block; text-decoration: none; color: var(--fg); }
+.map-grp a:hover { color: var(--accent); }
+.map-grp a .t { display: block; font-size: 0.9rem; font-weight: 500; }
+.map-grp a .t::before {
+  content: attr(data-n) ' · '; font-family: var(--mono); font-size: 0.72rem;
+  color: var(--faint); font-weight: 400;
+}
+.map-grp a .d { display: block; font-size: 0.82rem; color: var(--muted); }
+.map-grp a:hover .d { color: var(--muted); }
+
+/* --- Folds -------------------------------------------------------------- */
+
+/* What EXPLAINS folds; what REPORTS never does. A fold also says what is
+   inside, so you never open one to find out whether it was worth opening. */
+.fold { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.fold > summary {
+  cursor: pointer; list-style: none; padding: 12px 14px;
+  display: flex; align-items: baseline; gap: 12px;
+  font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--fg); min-height: 44px;
+}
+.fold > summary::-webkit-details-marker { display: none; }
+.fold > summary::before {
+  content: '+'; color: var(--accent); font-size: 0.9rem; line-height: 1; flex: none;
+}
+.fold[open] > summary::before { content: '−'; }
+.fold > summary .hint { margin-left: auto; color: var(--faint); text-transform: none; letter-spacing: 0.04em; }
+.fold > summary:hover { color: var(--accent); }
+.fold-body { padding: 0 14px 14px; display: flex; flex-direction: column; gap: 16px; }
+.fold-body > .tablewrap { border-left: 0; border-right: 0; border-radius: 0; }
+
+/* --- Back to top -------------------------------------------------------- */
+
+.totop {
+  font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--muted); text-decoration: none;
+}
+.totop:hover { color: var(--accent); }
+
+/* --- Screenshots ------------------------------------------------------- */
+
+.shot { margin: 0; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.shot img {
+  display: block; width: 100%; height: auto;
+  border: 1px solid var(--line-strong); border-radius: var(--radius);
+  background: var(--hero);
+}
+.shot figcaption { font-size: 0.84rem; color: var(--muted); max-width: 78ch; }
+.shot figcaption b { color: var(--fg); font-weight: 500; }
+.shot figcaption em { font-style: italic; }
+.hero .shot { margin-top: 6px; }
+
+/* --- Footer ------------------------------------------------------------ */
+
+.foot { padding-block: 40px 56px; display: flex; flex-direction: column; gap: 14px; }
+.foot .row { display: flex; flex-wrap: wrap; gap: 16px; align-items: baseline; justify-content: space-between; }
+.foot p { color: var(--faint); font-size: 0.82rem; max-width: 70ch; }
+.heb { font-size: 1rem; color: var(--muted); }
+</style>
+
+<header class="top">
+  <div class="wrap top-head">
+    <a class="lock" href="#top" aria-label="MENATER — top of page">
+      <svg width="22" height="22" viewBox="0 0 32 32" fill="currentColor" aria-hidden="true">
+        <rect x="0" y="5" width="4" height="22"></rect>
+        <rect x="7" y="5" width="4" height="22"></rect>
+        <rect x="14" y="21" width="4" height="6"></rect>
+        <rect x="21" y="5" width="4" height="22"></rect>
+        <rect x="28" y="5" width="4" height="22"></rect>
+      </svg>
+      <span class="word">MENATER</span>
+      <span class="tagline">Security operations</span>
+    </a>
+    <div class="picker" id="picker">
+      <p class="kick">Theme</p>
+    </div>
+  </div>
+
+  <!-- The section bar mirrors the console's own: ten entries, four groups,
+       hairline separators and NO group titles — a second navigation level
+       gives back exactly what the grouping just saved (CLARITY.md § 10). -->
+  <div class="navrail">
+    <nav class="wrap topnav" id="topnav" aria-label="Sections of this page">
+      <a href="#premise"><span class="n">01</span>Premise</a>
+      <a href="#halves"><span class="n">02</span>Two halves</a>
+      <a href="#console"><span class="n">03</span>The console</a>
+      <span class="sep" aria-hidden="true"></span>
+      <a href="#pipeline"><span class="n">04</span>Pipeline</a>
+      <a href="#ingest"><span class="n">05</span>Ingestion</a>
+      <span class="sep" aria-hidden="true"></span>
+      <a href="#refuses"><span class="n">06</span>Refusals</a>
+      <a href="#measured"><span class="n">07</span>Measured</a>
+      <a href="#design"><span class="n">08</span>Design</a>
+      <span class="sep" aria-hidden="true"></span>
+      <a href="#install"><span class="n">09</span>Install</a>
+      <a href="#notyet"><span class="n">10</span>Not yet</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+  <!-- ===================== HERO ===================== -->
+  <section class="wrap hero">
+    <p class="kick">Self-hosted SOC triage console · LLM in the loop, human on the trigger</p>
+    <h1>MENATER watches in the present, and says what it <em>cannot see</em>.</h1>
+    <p class="hero-sub">
+      A security console in two halves. The <b>SOC</b> triages what has already happened —
+      an alert is already an incident. <b>VulnPipe</b> reads what is about to — a flaw in the
+      code, before it ships. One application, one origin, one lock.
+    </p>
+
+    <div class="hero-cta">
+      <div class="term">
+        <span class="cue" aria-hidden="true">$</span>
+        <code id="cmd">docker compose up -d --build</code>
+      </div>
+      <button class="copy" id="copy" type="button">Copy</button>
+      <a class="textlink" href="#refuses">What it refuses to do →</a>
+    </div>
+
+    <div class="spec">
+      <div><span class="v">3</span><span class="k">containers</span></div>
+      <div><span class="v">1</span><span class="k">published port</span></div>
+      <div><span class="v">6</span><span class="k">pipeline stages</span></div>
+      <div><span class="v">4</span><span class="k">executable actions</span></div>
+      <div><span class="v">1,277</span><span class="k">tests passing</span></div>
+    </div>
+
+    <!--SHOT:01-queue-->
+  </section>
+
+  <!-- ===================== CONTENTS ===================== -->
+  <section class="band band-inset" id="contents">
+    <div class="wrap sec">
+      <div class="sec-rail">
+        <span class="grp">Map</span>
+        <span class="num">00</span>
+        <span class="lbl">Contents</span>
+      </div>
+      <div class="sec-body">
+        <h2 class="sech">What is on this page.</h2>
+        <p class="lede">
+          Ten sections in four groups, in reading order. Nothing below depends on what
+          precedes it, so start wherever your question is.
+        </p>
+
+        <nav class="map" aria-label="Contents">
+          <div class="map-grp">
+            <h3><span>A</span>What it is</h3>
+            <ol>
+              <li><a href="#premise"><span class="t" data-n="01">Premise</span><span class="d">Why an LLM in a SOC needs a shorter leash, not a longer one.</span></a></li>
+              <li><a href="#halves"><span class="t" data-n="02">Two halves</span><span class="d">The SOC triages what happened; VulnPipe reads what is about to.</span></a></li>
+              <li><a href="#console"><span class="t" data-n="03">The console</span><span class="d">Ten tabs, and the two screens you work in most.</span></a></li>
+            </ol>
+          </div>
+          <div class="map-grp">
+            <h3><span>B</span>How it works</h3>
+            <ol>
+              <li><a href="#pipeline"><span class="t" data-n="04">Pipeline</span><span class="d">Six workflows, typed at every handoff, journalled to Postgres.</span></a></li>
+              <li><a href="#ingest"><span class="t" data-n="05">Ingestion</span><span class="d">Push, pull, and why the default uses both.</span></a></li>
+            </ol>
+          </div>
+          <div class="map-grp">
+            <h3><span>C</span>What holds</h3>
+            <ol>
+              <li><a href="#refuses"><span class="t" data-n="06">Refusals</span><span class="d">Four closed catalogues, and the one that matters most.</span></a></li>
+              <li><a href="#measured"><span class="t" data-n="07">Measured</span><span class="d">Load, deduplication and audit numbers, with their conditions.</span></a></li>
+              <li><a href="#design"><span class="t" data-n="08">Design</span><span class="d">Six themes, and contrast checked by a test rather than by eye.</span></a></li>
+            </ol>
+          </div>
+          <div class="map-grp">
+            <h3><span>D</span>Getting it</h3>
+            <ol>
+              <li><a href="#install"><span class="t" data-n="09">Install</span><span class="d">Three commands, then the four things it refuses to choose for you.</span></a></li>
+              <li><a href="#notyet"><span class="t" data-n="10">Not yet</span><span class="d">What it does not do, said here rather than discovered later.</span></a></li>
+            </ol>
+          </div>
+        </nav>
+      </div>
+    </div>
+  </section>
+  <!-- ===================== 01 · PREMISE ===================== -->
+  <section class="band" id="premise">
+    <div class="wrap sec">
+      <div class="sec-rail">
+        <span class="grp">A · What it is</span>
+        <span class="num">01</span>
+        <span class="lbl">Premise</span>
+      </div>
+      <div class="sec-body">
+        <h2 class="sech">Every other console sells automated confidence. This one sells legible restraint.</h2>
+        <p class="lede">
+          An LLM triaging security alerts is reading text an attacker composed. So the question
+          is not how much the model can decide — it is what the system does when the model,
+          the data, or the network is wrong. Four rules answer that, and they are enforced in
+          code rather than promised in a slide.
+        </p>
+
+        <div class="grid g2">
+          <article class="card">
+            <h3>Never fill a gap with a default</h3>
+            <p>
+              A missing value is shown as missing — <span class="dash">—</span>, never <span class="mono">0</span>,
+              never <span class="mono">N/A</span>, never a guess. And rejecting an alert because a field is absent is
+              the same mistake in its harshest form: it replaces the alert with nothing.
+            </p>
+            <p class="where">The two-tier alert contract</p>
+          </article>
+
+          <article class="card">
+            <h3>Silence is never consent</h3>
+            <p>
+              An approval request that times out executes nothing — it escalates. Missing
+              configuration cannot enable execution either: shadow mode is the default, and only
+              the exact string <span class="mono">false</span> turns it off.
+            </p>
+            <p class="where">The approval flow · shadow mode</p>
+          </article>
+
+          <article class="card">
+            <h3>A failure must never show green</h3>
+            <p>
+              A chain that ran and passed zero items is <span class="pill pill-red">Broken</span>, not
+              <span class="pill pill-green">Done</span>. A verdict of <em>clean</em> requires at least one
+              intelligence source that actually answered — nobody looking is
+              <span class="pill pill-grey">Not asked</span>, which is a different sentence.
+            </p>
+            <p class="where">The Tracking tab exists only for this</p>
+          </article>
+
+          <article class="card">
+            <h3>No irreversible action without a human</h3>
+            <p>
+              The action catalogue is closed at four entries. Nothing else is implementable —
+              not even behind an approval — and no tuning rule can reach it. The console has a
+              database; it executes no security action on its own.
+            </p>
+            <p class="where">server/engine/transforms/domain.ts</p>
+          </article>
+        </div>
+
+        <!--SHOT:05-lookup-->
+
+        <p class="thesis">Nothing here is invented, and the console tells you what it does not know.</p>
+      </div>
+    </div>
+  </section>
+  <!-- ===================== 02 · TWO HALVES ===================== -->
+  <section class="band band-inset" id="halves">
+    <div class="wrap sec">
+      <div class="sec-rail">
+        <span class="grp">A · What it is</span>
+        <span class="num">02</span>
+        <span class="lbl">Two halves</span>
+      </div>
+      <div class="sec-body">
+        <h2 class="sech">One interface, two tenses.</h2>
+        <div class="grid g2">
+          <article class="card">
+            <h3>SOC — what has happened</h3>
+            <p>
+              Alerts arrive from a SIEM, get normalised against a two-tier contract, deduplicated,
+              enriched from threat-intelligence sources, put to a model, and routed. Every run is
+              written to a hash-chained audit log. Shadow mode records the decision and executes
+              nothing until a team has measured its own disagreement rate.
+            </p>
+            <p class="where">Postgres · six workflows · built-in engine</p>
+          </article>
+          <article class="card">
+            <h3>VulnPipe — what is about to</h3>
+            <p>
+              Code analysis on the same screen. Tree-sitter indexes routes and call graphs, a
+              deterministic scanner and a local model score each address, and only the grey zone
+              — a confidence between 0.4 and 0.7 — costs an arbitration call. Every finding carries
+              a plain-language summary: what can happen, and how to fix it.
+            </p>
+            <p class="where">IDOR · XSS · SQLi · security misconfiguration</p>
+          </article>
+        </div>
+        <!--SHOT:06-code-->
+
+        <p class="prose">
+          <strong>Merged: the interface.</strong> One build, one lock, one theme.
+          <strong>Not merged: the engines.</strong> The analyser stays a service of its own, because
+          pulling tree-sitter and the model SDKs into an API that has exactly one production
+          dependency would buy nothing.
+        </p>
+      </div>
+    </div>
+  </section>
+  <!-- ===================== 03 · THE CONSOLE ===================== -->
+  <section class="band" id="console">
+    <div class="wrap sec">
+      <div class="sec-rail">
+        <span class="grp">A · What it is</span>
+        <span class="num">03</span>
+        <span class="lbl">The console</span>
+      </div>
+      <div class="sec-body">
+        <h2 class="sech">Ten tabs, in four groups.</h2>
+        <p class="lede">
+          Grouped rather than trimmed: ten identical buttons cost a decision, and the remedy for
+          that is categorisation — not a second navigation level, which gives back what the
+          grouping just saved.
+        </p>
+
+        <details class="fold">
+          <summary>The ten tabs, one line each <span class="hint">10 tabs · Alerts to Settings</span></summary>
+          <div class="fold-body">
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr><th scope="col">Tab</th><th scope="col">What is on it</th></tr>
+            </thead>
+            <tbody>
+              <tr><td class="m">Alerts</td><td>The triage queue and the incident card. Five columns, eight facts — severity lives inside <em>Alert</em>, confidence inside <em>AI decision</em>, because a confidence of 0.58 means nothing without the verdict it qualifies. Every observable carries a jump into Lookup with the question already asked.</td></tr>
+              <tr><td class="m">Code</td><td>Run a code analysis and read the report. Mounted on first open and kept mounted — changing tab during a scan does not cut it.</td></tr>
+              <tr><td class="m">Ingestion</td><td>How alerts get in: the delivery architecture, the sources on each transport, and the pipeline as it runs — graph, per-step effect, editable variables.</td></tr>
+              <tr><td class="m">Rules</td><td>Tuning rules, with a dry run that answers <em>which rule would match this alert</em> without touching the pipeline. Eight templates ship disabled and unowned.</td></tr>
+              <tr><td class="m">Tracking</td><td>The unreduced view: broken chains, orphan runs, searchable log, replay. Expected orphans — the diagnostic probe — are listed and never counted, or the tab blinks after every connectivity test.</td></tr>
+              <tr><td class="m">Metrics</td><td>The two rates, never conflated.</td></tr>
+              <tr><td class="m">Health</td><td>Connectivity diagnostic and nine test-alert scenarios, one per path rather than per story: no destination, with a hash, malformed, duplicate.</td></tr>
+              <tr><td class="m">Lookup</td><td>Manual threat intelligence on one value — IP, domain, URL, hash, e-mail — plus a breached-password check whose hash never leaves the browser. Defanged input (<span class="mono">1.2.3[.]4</span>, <span class="mono">hxxp://</span>) is an accepted format, and both forms are shown.</td></tr>
+              <tr><td class="m">Guide</td><td>Seventeen sections, searchable — and the search reads the glossary too, because the product's own default is called <em>shadow mode</em> in the docs and <em>watch-only</em> in the text.</td></tr>
+              <tr><td class="m">Settings</td><td>Eight areas, a setup checklist naming what is still missing, and an MCP install page that builds the config block from the address you reached the console on.</td></tr>
+            </tbody>
+          </table>
+        </div>
+          </div>
+        </details>
+
+        <!--SHOT:03-tracking-->
+
+        <div class="grid g2">
+          <article class="card">
+            <h3>An assistant that cannot act</h3>
+            <p>
+              A docked panel that answers questions about <em>this</em> installation — "why is this
+              still waiting?", "what is left to configure?" — following you across tabs with a typed
+              page context, so "this alert" needs nothing typed. Four model providers, one key each.
+              Nothing is persisted: storing threads would create a fourth copy of alert content
+              outside the audit chain.
+            </p>
+            <p class="where">Each answer shows what it looked up</p>
+          </article>
+          <article class="card">
+            <h3>Open it to your own agent</h3>
+            <p>
+              The same seven getters, plus the reference tools, are exposed over MCP:
+              <span class="mono">14 tools, 8 prompts, 9 resources</span>, all read-only, off by default.
+              The prompts matter more than they look — a client that sees ten tool names sees ten
+              getters and no reason to use them.
+            </p>
+            <p class="where">Bearer token compared in constant time · Origin validated</p>
+          </article>
+        </div>
+      </div>
+    </div>
+  </section>
+  <!-- ===================== 04 · PIPELINE ===================== -->
+  <section class="band band-inset" id="pipeline">
+    <div class="wrap sec">
+      <div class="sec-rail">
+        <span class="grp">B · How it works</span>
+        <span class="num">04</span>
+        <span class="lbl">Pipeline</span>
+      </div>
+      <div class="sec-body">
+        <h2 class="sech">Six workflows, typed at every handoff.</h2>
+        <p class="lede">
+          MENATER runs its own engine. No n8n, no workflow platform, no second product that has
+          to be reachable for an alert to be triaged — so a workflow cannot be half-deployed,
+          renamed in an editor, or left unpublished. The console reads its own run journal.
+        </p>
+
+        <div class="chain">
+          <div class="chain-line">
+            <div class="step">
+              <span class="id">01</span>
+              <span class="nm">Ingestion</span>
+              <span class="no">Validates identity fields, deduplicates, and answers the sender what actually happened — 400, 200 already seen, or 202 accepted.</span>
+            </div>
+            <div class="step">
+              <span class="id">02</span>
+              <span class="nm">Enrichment</span>
+              <span class="no">Reputation, geolocation, ATT&amp;CK tagging. A source with no key is <em>not asked</em>, and the model has to name it.</span>
+            </div>
+            <div class="step">
+              <span class="id">03</span>
+              <span class="nm">AI Decision</span>
+              <span class="no">The verdict, its confidence, and its reasoning. With no model key: <span class="mono">needs_human</span>, confidence 0. Fail-safe, never fail-open.</span>
+            </div>
+            <div class="step">
+              <span class="id">04</span>
+              <span class="nm">Action / Routing</span>
+              <span class="no">Approval requested in Slack or Discord. Below the notification threshold, nobody is asked — so nothing waits, and it escalates.</span>
+            </div>
+            <div class="step">
+              <span class="id">05</span>
+              <span class="nm">Audit Log</span>
+              <span class="no">One append-only row, sealed into a hash chain under an advisory lock. Immutable by design.</span>
+            </div>
+          </div>
+          <div class="errbox">
+            <span class="id mono" style="color: var(--red); font-size: 0.66rem; letter-spacing: 0.1em;">06 · ERROR HANDLER</span>
+            <span class="no" style="color: var(--muted); font-size: 0.82rem;">
+              Declared as the native error workflow on the other five, and called only from their failure
+              branches — never in the normal sequence. No failure is ever silent: every branch logs, notifies, or both.
+            </span>
+          </div>
+        </div>
+
+        <details class="fold">
+          <summary>What that costs the engine <span class="hint">3 consequences</span></summary>
+          <div class="fold-body">
+            <ul class="rows">
+          <li>
+            <span class="t">A junction waits</span>
+            <span class="d">A node with several upstreams does not start when one has answered. Enrichment would otherwise assemble a third of its sources — <b>with no error, no trace, and a plausible result.</b></span>
+          </li>
+          <li>
+            <span class="t">Retry, then a named failure</span>
+            <span class="d">Every external call retries with exponential backoff and full jitter, honouring a suggested <span class="mono">Retry-After</span> as a floor. A route that was not analysed is not a healthy route.</span>
+          </li>
+          <li>
+            <span class="t">The unreduced view</span>
+            <span class="d">The queue stitches runs into cases; two failure shapes disappear in that reduction. The Tracking tab shows them unreduced — broken chains, runs attached to no alert, a searchable log, and replay that <b>refuses</b> when the original payload is unknown.</span>
+          </li>
+        </ul>
+          </div>
+        </details>
+      </div>
+    </div>
+  </section>
+  <!-- ===================== 05 · INGESTION ===================== -->
+  <section class="band" id="ingest">
+    <div class="wrap sec">
+      <div class="sec-rail">
+        <span class="grp">B · How it works</span>
+        <span class="num">05</span>
+        <span class="lbl">Ingestion</span>
+      </div>
+      <div class="sec-body">
+        <h2 class="sech">Push and pull fail differently, so the default uses both.</h2>
+        <p class="lede">
+          A <span class="mono">critical</span> contained four minutes late was not contained; a
+          <span class="mono">low</span> triaged four minutes late is still a low. So the hybrid policy
+          sends P1 and P2 down the webhook and polls P3 and P4 — and an alert whose severity did not
+          survive normalisation takes the fast lane, because quietly parking something that might be
+          a critical is the failure this product exists to make impossible.
+        </p>
+
+        <!--SHOT:02-ingestion-->
+
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr><th scope="col">Tier</th><th scope="col">Fields</th><th scope="col">Rule</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="m">Identity</td>
+                <td class="m"><span class="mono">alert_id · rule_name · severity · timestamp · raw_log</span></td>
+                <td>Required. Missing means rejected — <b>and the rejection names the fields.</b></td>
+              </tr>
+              <tr>
+                <td class="m">Observables</td>
+                <td class="m"><span class="mono">source_ip · dest_ip · user · host · process · file_path · url</span></td>
+                <td>Optional. Absent stays absent: <span class="mono">null</span>, never an empty string, never invented. Most real detections carry no destination address.</td>
+              </tr>
+              <tr>
+                <td class="m">Extensions</td>
+                <td class="m">everything else</td>
+                <td>Kept whole, on the case and in the audit row. Nothing your tool sends is discarded.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <details class="fold">
+          <summary>The four rules the transport obeys <span class="hint">4 rules</span></summary>
+          <div class="fold-body">
+            <ul class="rows">
+          <li>
+            <span class="t">Nothing is refused for taking the wrong lane</span>
+            <span class="d">A P4 on the webhook is accepted and triaged; the reply carries a block saying which transport the policy expected. Dropping a detection over a routing preference replaces it with nothing.</span>
+          </li>
+          <li>
+            <span class="t">The cursor moves onto delivered data only</span>
+            <span class="d">Not onto data we read, and never after an empty or failed poll — a source that is down looks exactly like a source where nothing happened. With no cursor at all the poll looks back further than the gap between two polls, so consecutive windows always overlap.</span>
+          </li>
+          <li>
+            <span class="t">A poll that placed nothing is a failed poll</span>
+            <span class="d">The HTTP call succeeding is not the question. It says how many alerts it read, how many it placed, and names the cause when those differ.</span>
+          </li>
+          <li>
+            <span class="t">The route decides the mapping</span>
+            <span class="d">Alerts arrive at <span class="mono">POST /api/ingest/&lt;source&gt;</span> — never the payload, so a sender cannot claim to be something else. The Wazuh integration maps nothing: it forwards the alert as written and the console translates.</span>
+          </li>
+        </ul>
+          </div>
+        </details>
+      </div>
+    </div>
+  </section>
+  <!-- ===================== 06 · REFUSALS ===================== -->
+  <section class="band band-inset" id="refuses">
+    <div class="wrap sec">
+      <div class="sec-rail">
+        <span class="grp">C · What holds</span>
+        <span class="num">06</span>
+        <span class="lbl">Refusals</span>
+      </div>
+      <div class="sec-body">
+        <h2 class="sech">The list of things it will not do is the feature.</h2>
+        <p class="lede">
+          Four closed catalogues, each closed for the same reason: an operator points this console
+          at attacker-composed text all day, and an open list is an instruction away from being
+          someone else's.
+        </p>
+
+        <!--SHOT:04-case-->
+
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr><th scope="col">Catalogue</th><th scope="col">Size</th><th scope="col">What being closed prevents</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="m">Actions</td>
+                <td class="m">4</td>
+                <td><span class="mono">isolate_host_temporary</span> (TTL, auto-revert), <span class="mono">ticket</span>, <span class="mono">escalate</span>, <span class="mono">auto_close</span>. <span class="sub">Isolation refuses to run when it has no host to name: an action whose target is unknown is not an action.</span></td>
+              </tr>
+              <tr>
+                <td class="m">Assistant tools</td>
+                <td class="m">7 getters</td>
+                <td>The in-console assistant can read the queue, an alert, a chain, the rules, the metrics, health and setup state — and write nothing. <span class="sub">An injected instruction arrives at a model holding seven getters. That is the layer that holds; the fencing and the system prompt come after it.</span></td>
+              </tr>
+              <tr>
+                <td class="m">Credentials</td>
+                <td class="m">named list</td>
+                <td>Both key stores accept only names on a fixed list. <span class="sub">An arbitrary name would turn the settings endpoint into a way to inject any environment variable into the process, <span class="mono">PATH</span> included.</span></td>
+              </tr>
+              <tr>
+                <td class="m">Intel providers</td>
+                <td class="m">7 sources</td>
+                <td>The lookup endpoint takes a value and a kind — never a URL. <span class="sub">A route that fetched what it was handed would be a request forgery with a button on it.</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="grid g3">
+          <article class="card">
+            <h3>Shadow mode by default</h3>
+            <p>
+              Decisions are recorded, none are executed, until the false-positive rate has been
+              measured over at least 50 alerts. The gate is
+              <span class="mono">human_disagreement_rate</span> — the share of decisions a human
+              rejected — not the share the model called false positive. One measures correctness;
+              the other measures distribution.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Untrusted text is fenced, never deleted</h3>
+            <p>
+              Log content travels inside markers carrying a per-request nonce, so a log cannot
+              forge a closing tag for a marker that did not exist when it was written. Nothing is
+              stripped: rewriting evidence is the same mistake as filling a gap with a default.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Tuning rules have limits</h3>
+            <p>
+              A team can declare what is normal here — the authorised scanner, the backup window.
+              The console refuses a permanent allow keyed on one identity field alone, a suppression
+              with no expiry, and any rule with no owner or no reason.
+            </p>
+          </article>
+        </div>
+      </div>
+    </div>
+  </section>
+  <!-- ===================== 07 · MEASURED ===================== -->
+  <section class="band" id="measured">
+    <div class="wrap sec">
+      <div class="sec-rail">
+        <span class="grp">C · What holds</span>
+        <span class="num">07</span>
+        <span class="lbl">Measured</span>
+      </div>
+      <div class="sec-body">
+        <h2 class="sech">Numbers, with the conditions they were taken under.</h2>
+        <p class="lede">
+          Run against <span class="mono">docker compose up</span> — Postgres, console, code analysis,
+          and nothing else. These are a QA pass on one machine, not a published benchmark; the point
+          is that they are reproducible and that the conditions are stated.
+        </p>
+
+        <div class="figs">
+          <div class="fig">
+            <span class="n">400 / 400</span>
+            <span class="l">alerts accepted</span>
+            <span class="c">50 concurrent · ~134 alerts/s · p95 424 ms · every chain settled, nothing left running</span>
+          </div>
+          <div class="fig">
+            <span class="n">1 of 12</span>
+            <span class="l">duplicates accepted</span>
+            <span class="c">12 simultaneous copies of one alert id → 1 accepted, 11 already seen, zero errors</span>
+          </div>
+          <div class="fig">
+            <span class="n">0</span>
+            <span class="l">broken links in the audit chain</span>
+            <span class="c">~500 rows written at 40-way concurrency after the sealing fix; re-verified across 2,644 rows</span>
+          </div>
+          <div class="fig">
+            <span class="n">1,277</span>
+            <span class="l">tests passing</span>
+            <span class="c">912 console · 365 code analysis · typecheck clean</span>
+          </div>
+        </div>
+
+        <p class="prose">
+          <strong>Eight defects were found by that pass and fixed</strong>, three worth naming: the
+          entry point told senders their <em>refused</em> alerts had been accepted; the deduplication
+          insert was not race-safe and answered 500 under a burst; and the audit verifier reported
+          broken links on healthy rows, because row ids were allocated outside the sealing lock.
+          A verifier that cries wolf is one an auditor stops believing — which would hide a real
+          deletion in the noise.
+        </p>
+      </div>
+    </div>
+  </section>
+  <!-- ===================== 08 · DESIGN ===================== -->
+  <section class="band band-inset" id="design">
+    <div class="wrap sec">
+      <div class="sec-rail">
+        <span class="grp">C · What holds</span>
+        <span class="num">08</span>
+        <span class="lbl">Design</span>
+      </div>
+      <div class="sec-body">
+        <h2 class="sech">Six themes. Contrast is tooled, never judged by eye.</h2>
+        <p class="lede">
+          Every theme redefines the entire palette — inheriting three tokens produces an accident
+          invisible on review. A test computes the WCAG ratios and <b>refuses</b> a palette:
+          4.5:1 for text on every surface, for text laid on the accent, and for the risk colours
+          inside their own pills. It caught a failure red at 2.5:1, on the screen that depends on
+          red most.
+        </p>
+        <p class="prose">
+          The switch in the header is not a mock-up: it repaints this page with the console's six
+          real palettes, from the same token set. <strong>Colour never carries meaning alone</strong> —
+          every risk colour is paired with a word.
+        </p>
+        <div class="grid g3">
+          <article class="card">
+            <h3>One accent, one job</h3>
+            <p>
+              The accent designates exactly one thing: <em>a human is blocked here</em>, and the primary
+              action. Red says critical or failed, orange worth a look, green handled. A red button
+              would teach an analyst to ignore red on the one screen where red saves time.
+            </p>
+          </article>
+          <article class="card">
+            <h3>The mark is the first principle</h3>
+            <p>
+              Five ticks, the middle one a stub rather than a full bar — a missing value keeping its
+              place instead of being omitted. Absence sits at the centre, so the mark stays symmetric:
+              the gap is the composition, not a defect in it.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Density is a feature</h3>
+            <p>
+              The triage table is meant to show forty rows. Mono means <em>this string came from the
+              machine, and it is exact</em>; prose about a value is sans, the value is mono. An analyst
+              scrolling is an analyst who has lost the overview.
+            </p>
+          </article>
+        </div>
+      </div>
+    </div>
+  </section>
+  <!-- ===================== 09 · INSTALL ===================== -->
+  <section class="band" id="install">
+    <div class="wrap sec">
+      <div class="sec-rail">
+        <span class="grp">D · Getting it</span>
+        <span class="num">09</span>
+        <span class="lbl">Install</span>
+      </div>
+      <div class="sec-body">
+        <h2 class="sech">Three commands, on any host.</h2>
+        <p class="lede">
+          Docker is the normal installation mode, not an option. No Node to install, no Postgres to
+          configure, no schema to apply by hand, no third machine. The database and the analyser are
+          reachable only from the compose network — a second entry point would be a lock protecting
+          half the application.
+        </p>
+
+<pre><code><span class="c"># fill in the two passwords</span>
+cp .env.example .env
+
+<span class="c"># postgres + console + code analysis</span>
+docker compose up -d --build
+
+<span class="a">→ http://localhost:4400</span></code></pre>
+
+        <p class="prose">
+          <strong>The stack comes up in three minutes and triages nothing.</strong> That is not a
+          fault: each of the four things below is a choice the console refuses to make for you, and
+          the checklist at the top of Settings tracks all four until they are done.
+        </p>
+
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr><th scope="col">#</th><th scope="col">What</th><th scope="col">If you skip it</th></tr>
+            </thead>
+            <tbody>
+              <tr><td class="m">1</td><td>A shared ingestion secret</td><td>The endpoint stays <b>closed</b> whatever mode you pick — here an empty secret closes the door rather than opening it.</td></tr>
+              <tr><td class="m">2</td><td>Open the door: ingestion mode <span class="mono">Primary</span></td><td>Every alert is refused.</td></tr>
+              <tr><td class="m">3</td><td>A model key</td><td>Every alert takes the fail-safe verdict: <span class="mono">needs_human</span>, confidence 0. Nothing is lost; nothing is triaged.</td></tr>
+              <tr><td class="m">4</td><td>A log source</td><td>No alerts arrive.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!--SHOT:07-health-->
+
+        <p class="prose">
+          Enrichment keys and chat notifications are optional. A missing enrichment source is shown
+          as <span class="pill pill-grey">Unavailable</span> rather than filled in. One profile is off
+          by default — <span class="mono">--profile tunnel</span> — because a service you do not know
+          you started is a service you are not watching, and that one opens a door to the Internet.
+        </p>
+      </div>
+    </div>
+  </section>
+  <!-- ===================== 10 · NOT YET ===================== -->
+  <section class="band band-inset" id="notyet">
+    <div class="wrap sec">
+      <div class="sec-rail">
+        <span class="grp">D · Getting it</span>
+        <span class="num">10</span>
+        <span class="lbl">Not yet</span>
+      </div>
+      <div class="sec-body">
+        <h2 class="sech">What it does not do.</h2>
+        <p class="lede">
+          Stated here for the same reason the console states it: a page that only lists what works
+          is a green that was never earned.
+        </p>
+        <ul class="rows">
+          <li>
+            <span class="t">The two halves do not talk</span>
+            <span class="d">A code scan creates no case in the triage queue, and an alert triggers no scan. The merge is currently visual — one interface, one lock, one build — and closing that gap is the priority that outranks the others.</span>
+          </li>
+          <li>
+            <span class="t">The lock identifies nobody</span>
+            <span class="d">Access is a single password. It protects access; the approver's identity stays self-declared, and the audit row says exactly that rather than implying an identity it does not have.</span>
+          </li>
+          <li>
+            <span class="t">Autonomy is gated on measurement</span>
+            <span class="d">Leaving shadow mode is not a switch to flip early. It waits on a disagreement rate measured over real alerts that went through the real guardrails — comparing a case the pipeline did not produce yields disagreements that are not disagreements.</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </section>
+  <!-- ===================== FOOTER ===================== -->
+  <footer class="band band-inset">
+    <div class="wrap foot">
+      <div class="row">
+        <div>
+          <p class="kick">MENATER · <span class="heb" lang="he" dir="rtl">מנטר</span> · present tense of <em>lenater</em>, to monitor</p>
+        </div>
+        <p class="kick">Self-hosted · Docker · Postgres · English throughout</p>
+        <a class="totop" href="#top">↑ Back to top</a>
+      </div>
+      <p>
+        Named after an action in progress, not a technology: the console shows a state, never a
+        finished report. It watches; a human acts.
+      </p>
+    </div>
+  </footer>
+</main>
+
+<script>
+(function () {
+  var THEMES = [
+    { id: 'grayed', name: 'Grayed — slate and acid green', bg: '#232830', accent: '#c3f53c' },
+    { id: 'punk',   name: 'Punk — khaki and red',          bg: '#3b3d2a', accent: '#c31f1b' },
+    { id: 'blued',  name: 'Blued — electric blue and lime', bg: '#1f31c4', accent: '#c8f24b' },
+    { id: 'attck',  name: 'Attck — incandescent orange',   bg: '#7a1c08', accent: '#ffdd1c' },
+    { id: 'acme',   name: 'Acme — cream paper, printer red (light)', bg: '#f4f1ea', accent: '#e01e0b' },
+    { id: 'dark',   name: 'Dark — near-black and application blue', bg: '#16181c', accent: '#1269f5' }
+  ];
+
+  var root = document.documentElement;
+  var picker = document.getElementById('picker');
+  var buttons = [];
+
+  function apply(id) {
+    root.setAttribute('data-palette', id);
+    buttons.forEach(function (b) {
+      b.setAttribute('aria-pressed', String(b.dataset.id === id));
+    });
+    try { localStorage.setItem('menater.site.theme', id); } catch (e) { /* private mode */ }
+  }
+
+  THEMES.forEach(function (t) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'sw';
+    b.dataset.id = t.id;
+    b.title = t.name;
+    b.setAttribute('aria-label', 'Theme: ' + t.name);
+    b.setAttribute('aria-pressed', 'false');
+    b.style.background = t.bg;
+    var dot = document.createElement('i');
+    dot.style.background = t.accent;
+    b.appendChild(dot);
+    b.addEventListener('click', function () { apply(t.id); });
+    picker.appendChild(b);
+    buttons.push(b);
+  });
+
+  var saved = null;
+  try { saved = localStorage.getItem('menater.site.theme'); } catch (e) { saved = null; }
+  var known = THEMES.some(function (t) { return t.id === saved; });
+  apply(known ? saved : 'grayed');
+
+  /* ------------------------------------------------------------------
+     The section bar says where you are, and says when it has more in it.
+     Both are the same defect if left out: a section you cannot see is a
+     section that does not exist for the person hunting it.
+     ------------------------------------------------------------------ */
+  var nav = document.getElementById('topnav');
+  var rail = nav.parentElement;
+  var links = [...nav.querySelectorAll('a')];
+  var targets = links
+    .map(function (a) { return { a: a, el: document.querySelector(a.getAttribute('href')) }; })
+    .filter(function (t) { return t.el; });
+
+  function markOverflow() {
+    // A bar that scrolls without looking like it scrolls hides its own end.
+    var more = nav.scrollWidth - nav.clientWidth - nav.scrollLeft > 8;
+    rail.setAttribute('data-overflow', String(more));
+  }
+  nav.addEventListener('scroll', markOverflow, { passive: true });
+  window.addEventListener('resize', markOverflow);
+  markOverflow();
+
+  function spy() {
+    // The current section is the last one whose top has passed the header.
+    var line = 120;
+    var current = targets[0];
+    targets.forEach(function (t) {
+      if (t.el.getBoundingClientRect().top <= line) current = t;
+    });
+    links.forEach(function (a) { a.removeAttribute('aria-current'); });
+    if (current && window.scrollY > 40) {
+      current.a.setAttribute('aria-current', 'true');
+      // Keep the active entry reachable when the bar is scrolled sideways.
+      var r = current.a.getBoundingClientRect();
+      var nr = nav.getBoundingClientRect();
+      if (r.left < nr.left || r.right > nr.right) {
+        nav.scrollLeft += r.left - nr.left - 24;
+        markOverflow();
+      }
+    }
+  }
+  var ticking = false;
+  window.addEventListener('scroll', function () {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(function () { spy(); ticking = false; });
+  }, { passive: true });
+  spy();
+
+  var copy = document.getElementById('copy');
+  var cmd = document.getElementById('cmd');
+  copy.addEventListener('click', function () {
+    var text = cmd.textContent;
+    var done = function () {
+      copy.textContent = 'Copied';
+      setTimeout(function () { copy.textContent = 'Copy'; }, 1600);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { copy.textContent = 'Select it'; });
+    } else {
+      copy.textContent = 'Select it';
+    }
+  });
+})();
+</script>

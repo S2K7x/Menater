@@ -1,0 +1,1567 @@
+/*
+ * ============================================================================
+ * VULNPIPE — SYSTEME VISUEL (section de la console MENATER)
+ *
+ * Cette feuille ne definit plus ni tokens ni globales de document : la console
+ * porte les memes (`src/styles.css`, palette identique au token pres). Ce qui
+ * reste ici est ce qui appartient a VulnPipe seul, et tout ce qui visait un
+ * element nu — h1, p, table, input — est cadre sous `.vp-embed`, le conteneur
+ * de la section. Sans ce cadrage, la typographie de la landing page VulnPipe
+ * (h1 jusqu'a 4rem) s'appliquerait aux titres de la file de triage.
+ *
+ * Les trois regles d'origine restent en vigueur :
+ *   1. un seul accent par ecran ;
+ *   2. rouge et orange reserves aux verdicts de securite ;
+ *   3. theme sombre unique, couleurs explicites.
+ * ============================================================================
+ */
+
+/* All heading typography: tight capitals, never mixed case. */
+.vp-embed h1, .vp-embed h2, .vp-embed h3 {
+  font-family: var(--display);
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+  line-height: 1.05;
+  margin: 0 0 12px;
+  font-weight: 900;
+}
+
+/*
+ * Cale sur les titres de la console — MEME ECHELLE A TROIS NIVEAUX.
+ *
+ * Les 4 rem d'origine etaient ceux d'une page d'accueil produit ; ramenes a
+ * 1.9 rem ils restaient ceux d'un TITRE DE PAGE, poses sur chaque section.
+ * Cet onglet en empilait quatre — « ce que vous voulez verifier », « comment
+ * on s'y prend », « votre rapport », « ce que ca a coute » — tous de la taille
+ * du « CODE ANALYSIS » de l'en-tete juste au-dessus. Quatre pages dans une.
+ *
+ * Le niveau 1 appartient a l'en-tete d'onglet, qui est commun a la console ;
+ * ici il ne reste que le niveau 2 (une section) et le niveau 3 (un bloc dans
+ * une section). Ce qui doit etre fort sur cet ecran n'est pas un mot, c'est le
+ * BOUTON : le lanceur porte le seul accent de la page.
+ */
+.vp-embed h1 { font-size: clamp(1.4rem, 3vw, 1.9rem); }
+.vp-embed h2 { font-size: 1rem; letter-spacing: 0.06em; line-height: 1.3; }
+.vp-embed h3 { font-size: 0.86rem; letter-spacing: 0.06em; }
+
+.vp-embed p { margin: 0 0 12px; }
+.vp-embed a { color: var(--accent); }
+
+.vp-embed code { font-family: var(--mono); }
+
+/* Technical label: spaced small capitals, in grey. Used to name a category
+   without ever competing with a heading. */
+.vp-kicker {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--faint);
+  display: block;
+  margin-bottom: 10px;
+}
+
+/* --- Cadre de la section -------------------------------------------------
+ *
+ * `.vp-embed` remplace l'ancien `.vp-app`. Plus de largeur maximale ni de
+ * marge auto : la coquille MENATER (`.soc-app`) les porte deja, et les
+ * empiler donnerait une section deux fois plus etroite que la file de triage
+ * juste au-dessus.
+ */
+.vp-embed { padding-bottom: 40px; }
+
+/* Note de bas de section : l'ancien pied de page produit, sans le logo. */
+.vp-section-note {
+  margin-top: 40px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+  color: var(--faint);
+  font-size: 0.86rem;
+}
+
+/* --- Bandeau d'ouverture -------------------------------------------------- */
+
+.vp-hero {
+  position: relative;
+  background: var(--hero);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 48px 32px 32px;
+  margin-bottom: 32px;
+  overflow: hidden;
+}
+
+/* Dot grid: gives the ground some material with no image to load. */
+.vp-hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(var(--line-strong) 1px, transparent 1px);
+  background-size: 26px 26px;
+  opacity: 0.28;
+  pointer-events: none;
+}
+
+.vp-hero > * { position: relative; z-index: 1; }
+
+.vp-hero h1 { max-width: 15ch; }
+.vp-hero h1 em { font-style: normal; color: var(--accent); }
+
+/*
+ * Le bandeau ne porte plus que le rail : son titre est parti dans l'en-tete
+ * d'onglet. Les 48 px de marge haute et les 40 px au-dessus du rail avaient
+ * ete calcules SOUS un titre qui n'existe plus — quatre-vingt-huit pixels de
+ * gris vide ouvraient l'onglet.
+ */
+.vp-hero-rail { padding: 20px 20px 16px; margin-bottom: 16px; }
+.vp-hero-rail .vp-steprail { margin-top: 0; border-top: none; }
+
+.vp-hero-lede {
+  color: var(--muted);
+  max-width: 56ch;
+  font-size: 1.02rem;
+}
+
+/* Step rail: the pipeline, shown as a numbered path. */
+.vp-steprail {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0;
+  margin-top: 40px;
+  border-top: 1px solid var(--line);
+}
+
+.vp-steprail-item {
+  padding: 16px 16px 16px;
+  border-right: 1px solid var(--line);
+  position: relative;
+}
+
+.vp-steprail-item:last-child { border-right: none; }
+
+.vp-steprail-icon { display: block; margin-bottom: 12px; color: var(--muted); }
+.vp-steprail-item.vp-current .vp-steprail-icon { color: var(--accent-fg); }
+
+.vp-steprail-label {
+  font-weight: 700;
+  font-size: 0.86rem;
+  line-height: 1.3;
+  display: block;
+}
+
+.vp-steprail-num {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--faint);
+  margin-top: 10px;
+  display: block;
+}
+
+/* The current step is the only green thing in the band. */
+.vp-steprail-item.vp-current {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+/* Secondary text laid ON the accent: it follows `--accent-fg`, not the page
+   ground. It used to be `rgba(23, 27, 33, .65)` — the original theme's
+   charcoal hardcoded, so unreadable as soon as the accent goes dark. */
+.vp-steprail-item.vp-current .vp-steprail-num {
+  color: color-mix(in srgb, var(--accent-fg) 68%, transparent);
+}
+
+.vp-steprail-item.vp-done .vp-steprail-label { color: var(--muted); }
+
+.vp-embed section, .vp-launcher, .vp-estimate, .vp-live, .vp-usage, .vp-progress-section {
+  margin-bottom: 32px;
+}
+
+/* --- Formulaire ----------------------------------------------------------- */
+
+.vp-launcher,
+.vp-estimate,
+.vp-live,
+.vp-usage,
+.vp-report,
+.vp-providers,
+.vp-progress-section,
+.vp-pipeline-explainer {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  /* 20 px comme `.soc-panel` : les deux moities de l'application se suivent
+     dans la meme colonne, et deux respirations differentes se lisent comme
+     deux applications. */
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.vp-embed label { display: block; margin-bottom: 6px; }
+.vp-embed label strong { font-size: 0.94rem; }
+
+.vp-field-help {
+  display: block;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 400;
+  line-height: 1.55;
+  margin-top: 4px;
+}
+
+/* `select` and `number` were left to native rendering: on a charcoal ground,
+   a white system dropdown clashes and makes the screen look unfinished. They
+   now follow the same treatment as the text fields. */
+.vp-embed input[type='text'], .vp-embed input[type='number'], .vp-embed input[type='password'], .vp-embed input:not([type]), .vp-embed select {
+  width: 100%;
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  color: var(--fg);
+  font-family: var(--mono);
+  font-size: 0.94rem;
+  padding: 12px 12px;
+  margin-bottom: 16px;
+}
+
+.vp-embed input:focus-visible, .vp-embed button:focus-visible, .vp-embed [role='tab']:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.vp-embed input::placeholder { color: var(--faint); }
+
+.vp-embed select {
+  appearance: none;
+  cursor: pointer;
+  /* Chevron drawn as a background: a "▾" character would inherit the system
+     font, like the emoji we have just removed. */
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 20px) 55%, calc(100% - 14px) 55%;
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+  padding-right: 40px;
+}
+
+.vp-embed select option { background: var(--panel); color: var(--fg); }
+
+.vp-field-error {
+  color: var(--red);
+  font-size: 0.86rem;
+  margin: -12px 0 16px;
+}
+
+.vp-target-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.vp-target-tab {
+  flex: 1 1 150px;
+  /* The icon and the label are two boxes since the move to SVG: without
+     `gap`, they touch. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.vp-target-tab:hover:not(:disabled) { color: var(--fg); border-color: var(--line-strong); }
+
+.vp-target-tab-active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-weight: 700;
+}
+
+.vp-mode {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin: 0 0 16px;
+}
+
+.vp-mode legend {
+  padding: 0 8px;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.vp-radio {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 10px 0;
+  cursor: pointer;
+}
+
+.vp-radio input { margin-top: 4px; accent-color: var(--accent); }
+
+/* --- Boutons -------------------------------------------------------------- */
+
+.vp-primary {
+  background: var(--accent);
+  color: var(--accent-fg);
+  border: none;
+  border-radius: var(--radius);
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 700;
+  padding: 16px 24px;
+  cursor: pointer;
+}
+
+.vp-primary:hover:not(:disabled) { background: var(--accent-dim); }
+.vp-primary:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.vp-secondary {
+  background: none;
+  color: var(--fg);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 16px 24px;
+  cursor: pointer;
+}
+
+.vp-secondary:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+
+/* --- Bandeaux ------------------------------------------------------------- */
+
+.vp-banner {
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  font-size: 0.94rem;
+  border-left: 3px solid var(--line-strong);
+  background: var(--panel);
+}
+
+.vp-banner-error { border-left-color: var(--red); background: var(--red-bg); }
+.vp-banner-warn { border-left-color: var(--orange); background: var(--orange-bg); }
+.vp-banner-info { border-left-color: var(--accent); }
+
+/* --- Devis ---------------------------------------------------------------- */
+
+.vp-estimate { border-color: var(--accent); }
+
+.vp-estimate-summary {
+  font-size: 1.02rem;
+  line-height: 1.65;
+  margin-bottom: 24px;
+  max-width: 72ch;
+}
+
+/*
+ * Number cards.
+ *
+ * Shared hairlines rather than detached cards: that is what gives the tight
+ * grid of the reference design. One card only carries the green — the one that
+ * decides, the time.
+ */
+.vp-estimate-figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 2px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  margin: 0 0 16px;
+  overflow: hidden;
+}
+
+.vp-figure { background: var(--panel); padding: 16px 16px; }
+
+.vp-figure dt {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.vp-figure dd {
+  margin: 8px 0 0;
+  font-family: var(--display);
+  font-size: 1.7rem;
+  line-height: 1;
+}
+
+.vp-figure-primary { background: var(--accent); }
+.vp-figure-primary dt { color: color-mix(in srgb, var(--accent-fg) 68%, transparent); }
+.vp-figure-primary dd { color: var(--accent-fg); }
+.vp-figure-primary .vp-figure-hint { color: color-mix(in srgb, var(--accent-fg) 68%, transparent); }
+
+.vp-figure dd.vp-unknown { font-size: 1.02rem; color: var(--muted); }
+
+.vp-figure-hint {
+  display: block;
+  margin-top: 8px;
+  font-size: 0.78rem;
+  color: var(--faint);
+  line-height: 1.4;
+}
+
+.vp-estimate-target {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+
+.vp-estimate-detail button,
+.vp-step-details button,
+.vp-usage-detail > button,
+.vp-link {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 0;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.vp-assumptions {
+  margin: 12px 0 0;
+  padding-left: 16px;
+  font-size: 0.86rem;
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.vp-estimate-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+/* --- Suivi en direct ------------------------------------------------------ */
+
+.vp-live-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.vp-live-head h2 { display: flex; align-items: center; gap: 12px; margin: 0; }
+
+.vp-live-clock {
+  font-family: var(--display);
+  font-size: 1.7rem;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Point qui bat : la seule chose qui bouge quand un appel dure vingt
+   secondes. Sans lui, une analyse lente est indistinguable d'une panne. */
+.vp-pulse {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: vp-pulse 1.4s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes vp-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.3; transform: scale(0.7); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vp-pulse { animation: none; }
+  .vp-live-bar > span { transition: none; }
+}
+
+.vp-live-current { margin: 8px 0 0; color: var(--muted); font-size: 0.86rem; }
+
+.vp-live-current code, .vp-live-route {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  padding: 2px 8px;
+  border-radius: var(--radius);
+  color: var(--fg);
+}
+
+.vp-live-progress { margin: 24px 0 6px; }
+
+.vp-live-bar {
+  height: 6px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+
+.vp-live-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.4s ease;
+}
+
+.vp-live-progress-label {
+  display: block;
+  margin-top: 8px;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  color: var(--faint);
+  text-transform: uppercase;
+}
+
+.vp-live-counters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 2px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  list-style: none;
+  padding: 0;
+  margin: 24px 0;
+}
+
+.vp-live-counters li { background: var(--panel); padding: 16px 12px; text-align: center; }
+
+.vp-live-counters strong {
+  display: block;
+  font-family: var(--display);
+  font-size: 1.7rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+
+.vp-live-counters span {
+  font-size: 0.72rem;
+  color: var(--faint);
+  line-height: 1.35;
+  display: block;
+}
+
+.vp-live-counters .vp-zone-alert strong { color: var(--red); }
+.vp-live-counters .vp-zone-grey strong { color: var(--orange); }
+.vp-live-counters .vp-zone-safe strong { color: var(--green); }
+
+.vp-live-feed {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 380px;
+  overflow-y: auto;
+  border-top: 1px solid var(--line);
+}
+
+.vp-live-feed li {
+  display: flex;
+  gap: 12px;
+  padding: 16px 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+.vp-live-feed li:last-child { border-bottom: none; }
+
+.vp-live-feed p {
+  margin: 6px 0 0;
+  font-size: 0.86rem;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.vp-live-icon { flex-shrink: 0; }
+
+.vp-live-zone {
+  margin-left: 10px;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+
+.vp-live-feed .vp-zone-alert .vp-live-zone { color: var(--red); }
+.vp-live-feed .vp-zone-grey .vp-live-zone { color: var(--orange); }
+.vp-live-feed .vp-zone-safe .vp-live-zone { color: var(--green); }
+.vp-live-feed .vp-zone-failed .vp-live-zone { color: var(--grey); }
+
+.vp-live-waiting { color: var(--faint); font-size: 0.86rem; font-style: italic; }
+
+/* --- Timeline ------------------------------------------------------------- */
+
+.vp-timeline { list-style: none; padding: 0; margin: 0; counter-reset: vp-step; }
+
+.vp-timeline-step {
+  border-left: 2px solid var(--line);
+  padding: 0 0 24px 24px;
+  position: relative;
+  counter-increment: vp-step;
+}
+
+.vp-timeline-step:last-child { padding-bottom: 0; }
+
+/* Numbered badge, like the 01-04 markers of the reference design. */
+.vp-timeline-step::before {
+  content: '0' counter(vp-step);
+  position: absolute;
+  left: -15px;
+  top: 0;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  color: var(--faint);
+}
+
+.vp-timeline-step.vp-current { border-left-color: var(--accent); }
+.vp-timeline-step.vp-current::before {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+  font-weight: 700;
+}
+.vp-timeline-step.vp-failed { border-left-color: var(--red); }
+.vp-timeline-step.vp-done { border-left-color: var(--line-strong); }
+
+.vp-timeline-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.vp-step-label { font-family: var(--display); text-transform: uppercase; font-size: 0.94rem; }
+.vp-step-message { color: var(--muted); font-size: 0.94rem; margin: 0 0 8px; }
+.vp-timeline-empty { color: var(--faint); font-style: italic; }
+
+.vp-progress { display: flex; align-items: center; gap: 12px; margin: 8px 0; }
+.vp-progress progress { flex: 1; height: 5px; accent-color: var(--accent); }
+.vp-progress span { font-family: var(--mono); font-size: 0.72rem; color: var(--faint); }
+
+.vp-step-details ul, .vp-explain { font-size: 0.86rem; color: var(--muted); }
+.vp-step-details ul { padding-left: 16px; }
+
+.vp-explain {
+  border-left: 2px solid var(--accent);
+  padding: 10px 0 10px 12px;
+  margin: 10px 0;
+}
+.vp-explain-analogy { color: var(--faint); font-style: italic; }
+
+/* --- Report and severity -------------------------------------------------- */
+
+.vp-finding {
+  border: 1px solid var(--line);
+  border-left-width: 3px;
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 12px;
+  background: var(--panel);
+}
+
+.vp-finding.vp-critical, .vp-finding.vp-high { border-left-color: var(--red); }
+.vp-finding.vp-medium { border-left-color: var(--orange); }
+.vp-finding.vp-low, .vp-finding.vp-info { border-left-color: var(--grey); }
+
+.vp-finding-route {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  color: var(--accent);
+}
+
+.vp-vuln-name { font-weight: 700; }
+.vp-vuln-gloss { color: var(--muted); font-size: 0.86rem; }
+
+.vp-notice {
+  border-left: 3px solid var(--orange);
+  background: var(--orange-bg);
+  padding: 12px 12px;
+  font-size: 0.86rem;
+  margin: 12px 0;
+}
+
+/* --- Consommation --------------------------------------------------------- */
+
+.vp-usage-highlights {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 2px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  list-style: none;
+  padding: 0;
+  margin: 16px 0;
+}
+
+.vp-usage-highlights li { background: var(--panel); padding: 16px; text-align: center; }
+
+.vp-usage-value {
+  display: block;
+  font-family: var(--display);
+  font-size: 1.45rem;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+
+.vp-usage-label { font-size: 0.72rem; color: var(--faint); }
+
+.vp-embed table { width: 100%; border-collapse: collapse; font-size: 0.86rem; margin-top: 12px; }
+
+.vp-embed th, .vp-embed td {
+  text-align: left;
+  padding: 10px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.vp-embed th {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+  font-weight: 400;
+}
+
+@media (max-width: 640px) {
+  .vp-hero { padding: 32px 16px 16px; }
+  .vp-launcher, .vp-estimate, .vp-live, .vp-usage, .vp-progress-section, .vp-pipeline-explainer {
+    padding: 16px;
+  }
+  .vp-steprail-item { border-right: none; border-bottom: 1px solid var(--line); }
+}
+
+/* ==========================================================================
+ * ICONS
+ *
+ * One set of strokes, monochrome, taking the colour of the text around it.
+ * That is what replaces the emoji: an icon's colour is decided here, by the
+ * context, never by the system font.
+ * ========================================================================== */
+
+.vp-icon {
+  flex-shrink: 0;
+  vertical-align: -0.16em;
+}
+
+/* Step states are the only place where an icon carries meaning on its own:
+   it is therefore entitled to a colour, unlike the rest of the set. */
+.vp-status { display: inline-flex; color: var(--faint); }
+.vp-timeline-step.vp-done .vp-status { color: var(--green); }
+.vp-timeline-step.vp-failed .vp-status { color: var(--red); }
+.vp-timeline-step.vp-running .vp-status { color: var(--accent); }
+.vp-timeline-step.vp-skipped .vp-status { color: var(--grey); }
+
+.vp-step-icon { display: inline-flex; color: var(--muted); }
+.vp-timeline-step.vp-current .vp-step-icon { color: var(--accent); }
+
+.vp-live-feed .vp-zone-alert .vp-live-icon { color: var(--red); }
+.vp-live-feed .vp-zone-grey .vp-live-icon { color: var(--orange); }
+.vp-live-feed .vp-zone-safe .vp-live-icon { color: var(--green); }
+.vp-live-feed .vp-zone-failed .vp-live-icon { color: var(--grey); }
+.vp-live-icon { display: inline-flex; }
+
+.vp-explain-analogy { display: flex; gap: 8px; align-items: baseline; }
+.vp-notice { display: flex; gap: 10px; align-items: baseline; }
+
+/* A button carrying an icon aligns both on the same baseline. */
+.vp-primary, .vp-secondary { display: inline-flex; align-items: center; gap: 10px; }
+.vp-card > .vp-icon { color: var(--accent); }
+
+/* The three tones serve confidence bands only: same rule as the verdicts —
+   red and orange never decorate. */
+.vp-card.vp-tone-green { border-left: 3px solid var(--green); }
+.vp-card.vp-tone-orange { border-left: 3px solid var(--orange); }
+.vp-card.vp-tone-red { border-left: 3px solid var(--red); }
+.vp-card.vp-tone-green .vp-card-range { color: var(--green); }
+.vp-card.vp-tone-orange .vp-card-range { color: var(--orange); }
+.vp-card.vp-tone-red .vp-card-range { color: var(--red); }
+
+.vp-diagram { width: 100%; min-width: 720px; height: auto; color: var(--line-strong); }
+.vp-diagram-zones { min-width: 520px; }
+
+.vp-dgm-node rect {
+  fill: var(--panel);
+  stroke: var(--line-strong);
+  stroke-width: 1;
+}
+
+.vp-dgm-input rect { fill: var(--surface); }
+.vp-dgm-paid rect { stroke: var(--accent); }
+.vp-dgm-output rect { fill: var(--surface-2); }
+
+.vp-dgm-title {
+  fill: var(--fg);
+  font-family: var(--display);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.vp-dgm-note { fill: var(--muted); font-family: var(--sans); font-size: 11px; }
+.vp-dgm-paid .vp-dgm-title { fill: var(--accent); }
+
+.vp-dgm-zone { fill: none; stroke: var(--line); stroke-dasharray: 3 4; }
+.vp-dgm-zone-paid { stroke: var(--accent-dim); }
+
+.vp-dgm-zonelabel {
+  fill: var(--faint);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.vp-dgm-zonelabel-paid { fill: var(--accent-dim); }
+
+.vp-dgm-arrow { stroke: var(--line-strong); stroke-width: 1.4; color: var(--line-strong); }
+.vp-dgm-edge { font-family: var(--mono); font-size: 10px; fill: var(--faint); }
+.vp-dgm-edge-paid { fill: var(--accent-dim); }
+.vp-dgm-axis { stroke: var(--line); stroke-width: 1; }
+.vp-dgm-range { fill: var(--faint); font-family: var(--mono); font-size: 11px; }
+
+.vp-dgm-zoneband.vp-tone-green rect { fill: var(--green-bg); stroke: var(--green); }
+.vp-dgm-zoneband.vp-tone-orange rect { fill: var(--orange-bg); stroke: var(--orange); }
+.vp-dgm-zoneband.vp-tone-red rect { fill: var(--red-bg); stroke: var(--red); }
+.vp-dgm-zoneband rect { stroke-width: 1; }
+
+/* --- Cost funnel ----------------------------------------------------------- */
+
+.vp-funnel { list-style: none; padding: 0; margin: 0 0 24px; }
+
+.vp-funnel li {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-bottom: none;
+  overflow: hidden;
+}
+
+.vp-funnel li:last-child { border-bottom: 1px solid var(--line); }
+
+.vp-funnel-bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--surface);
+  border-right: 2px solid var(--line-strong);
+}
+
+/* Accent veil: derived from `--accent`, never copied out. The frozen value
+   `rgba(195, 245, 60, …)` stayed green on the other five themes. */
+.vp-funnel-last .vp-funnel-bar {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-right-color: var(--accent);
+}
+
+.vp-funnel-text { position: relative; flex: 1; }
+.vp-funnel-text strong { display: block; font-size: 0.94rem; }
+.vp-funnel-text span { color: var(--faint); font-size: 0.78rem; }
+
+.vp-funnel-share {
+  position: relative;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.vp-funnel-last .vp-funnel-share { color: var(--accent); }
+
+.vp-settings-block {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 24px 24px;
+  margin-bottom: 16px;
+}
+
+/* The "engines" block reuses the existing component as-is, which already
+   carries its own frame: we neutralise it to avoid the box-in-a-box. */
+.vp-settings-block .vp-providers {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+
+.vp-settings-block h3 { margin-bottom: 6px; }
+
+.vp-settings-subhead {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin: 24px 0 6px;
+  font-weight: 400;
+}
+
+/* A setting's scope: server (commits the analysis) or browser (my screen). */
+.vp-scope {
+  position: absolute;
+  top: 16px;
+  right: 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.vp-scope-server { color: var(--accent-dim); }
+
+.vp-setting { margin: 16px 0; }
+.vp-setting select, .vp-setting input[type='number'] { margin-top: 8px; }
+.vp-setting-text strong { display: block; }
+
+.vp-switch {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.vp-switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+
+.vp-switch-track {
+  flex-shrink: 0;
+  width: 38px;
+  height: 21px;
+  margin-top: 2px;
+  border: 1px solid var(--line-strong);
+  /* Documented exception to the 4px radius: a capsule IS the signifier for a
+     switch. A square switch reads as a checkbox, which does something else. */
+  border-radius: 999px;
+  background: var(--panel);
+  display: block;
+  position: relative;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.vp-switch-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+
+.vp-switch input:checked + .vp-switch-track { background: var(--accent); border-color: var(--accent); }
+.vp-switch input:checked + .vp-switch-track .vp-switch-knob { transform: translateX(17px); background: var(--accent-fg); }
+.vp-switch input:focus-visible + .vp-switch-track { outline: 2px solid var(--accent); outline-offset: 2px; }
+.vp-switch input:disabled + .vp-switch-track { opacity: 0.45; }
+
+.vp-inline-field { display: flex; align-items: center; gap: 8px; }
+.vp-inline-field input { width: 120px; }
+.vp-unit { font-family: var(--mono); color: var(--muted); }
+.vp-field-note { color: var(--accent); }
+
+.vp-remembered {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+
+.vp-remembered code { color: var(--fg); }
+
+.vp-threshold-list, .vp-key-list { list-style: none; padding: 0; margin: 10px 0 0; }
+
+.vp-threshold-list li, .vp-key-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-bottom: none;
+  font-size: 0.86rem;
+}
+
+.vp-threshold-list li:last-child, .vp-key-list li:last-child { border-bottom: 1px solid var(--line); }
+.vp-threshold-list code { font-size: 0.78rem; min-width: 92px; color: var(--muted); }
+.vp-threshold-list .vp-tone-green code { color: var(--green); }
+.vp-threshold-list .vp-tone-orange code { color: var(--orange); }
+.vp-threshold-list .vp-tone-red code { color: var(--red); }
+
+.vp-key-list li { color: var(--faint); }
+.vp-key-list strong { min-width: 190px; color: var(--muted); }
+.vp-key-list .vp-icon { color: var(--faint); }
+.vp-key-list li.vp-key-ready { color: var(--muted); }
+.vp-key-list li.vp-key-ready strong { color: var(--fg); }
+.vp-key-list li.vp-key-ready .vp-icon { color: var(--accent); }
+
+.vp-health {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+
+.vp-health-online .vp-icon { color: var(--green); }
+.vp-health-offline { color: var(--red); }
+.vp-health-offline .vp-icon { color: var(--red); }
+
+.vp-provider-warning { display: flex; gap: 8px; align-items: baseline; }
+
+@media (max-width: 640px) {
+  .vp-scope { position: static; display: flex; margin-bottom: 12px; }
+  .vp-settings-block { padding: 16px; }
+  .vp-key-list strong { min-width: 0; }
+  .vp-key-list li, .vp-threshold-list li { flex-wrap: wrap; }
+}
+
+/* --- "AI engine" block -----------------------------------------------------
+ *
+ * It had never had styles of its own: the labels ran into their explanation
+ * ("Vulnerability searchRuns on every route"). The defect was invisible as
+ * long as the page contained nothing but this block.
+ * -------------------------------------------------------------------------- */
+
+.vp-provider-block {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin: 16px 0;
+  background: var(--panel);
+}
+
+.vp-provider-block > label { display: block; margin-bottom: 10px; }
+.vp-provider-block > label strong { display: block; font-size: 1.02rem; }
+
+.vp-provider-desc, .vp-provider-hint {
+  display: block;
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.55;
+  margin-top: 4px;
+}
+
+.vp-provider-hint { color: var(--faint); margin: 8px 0 0; }
+
+.vp-provider-model-label {
+  display: block;
+  margin: 16px 0 6px;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.vp-provider-block input { margin-bottom: 0; }
+
+.vp-provider-warning {
+  color: var(--orange);
+  font-size: 0.86rem;
+  margin: 10px 0 0;
+}
+
+.vp-providers > button {
+  background: var(--accent);
+  color: var(--accent-fg);
+  border: none;
+  border-radius: var(--radius);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  padding: 12px 24px;
+  cursor: pointer;
+}
+
+.vp-providers > button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* --- Cache forget button --------------------------------------------------
+ *
+ * Prefixed class, checked free before it was written: see the `.vp-scope` /
+ * `.soc-sources` / `.soc-field span` traps in CLAUDE.md.
+ *
+ * Deliberately UNDERSTATED (outline, no solid fill): it is a gesture nobody
+ * makes by accident, but it destroys nothing irreplaceable — it costs calls on
+ * the next scan, not data. Treating it as a red deletion would overstate the
+ * stakes; treating it as the page's primary action would invite it.
+ */
+.vp-cache-forget {
+  background: transparent;
+  color: var(--fg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  padding: 12px 16px;
+  margin-top: 10px;
+  cursor: pointer;
+}
+
+.vp-cache-forget:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.vp-cache-forget:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* --- Pipeline explanation -------------------------------------------------
+ *
+ * The list had never had styles of its own: the number, the icon and the title
+ * touched, and the `ol`'s native marker duplicated the number shown.
+ * -------------------------------------------------------------------------- */
+
+.vp-pipeline-intro { color: var(--muted); max-width: 74ch; }
+
+.vp-pipeline-steps {
+  list-style: none;
+  padding: 0;
+  margin: 24px 0 0;
+  counter-reset: vp-pipeline;
+}
+
+/* Le trait separateur est desormais celui du pli lui-meme : le garder ici en
+   doublerait un sur deux. */
+.vp-pipeline-step { padding: 0; }
+
+/* Porte par le `<summary>` d'un pli : `inline-flex`, sinon le chevron du pli
+   et le numero de l'etape partent sur deux lignes. */
+.vp-pipeline-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.vp-pipeline-head strong {
+  font-family: var(--display);
+  text-transform: uppercase;
+  font-size: 0.94rem;
+  letter-spacing: 0.01em;
+}
+
+.vp-pipeline-number {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  color: var(--faint);
+}
+
+.vp-pipeline-step.vp-current .vp-pipeline-number {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+}
+
+.vp-pipeline-now {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.vp-pipeline-cost {
+  margin-top: 24px;
+  border-left: 3px solid var(--accent);
+  background: var(--panel);
+  padding: 0 16px;
+}
+
+/* Le pli occupe deja le bloc : son propre trait haut ferait doublon avec la
+   barre d'accent qui borde l'encadre. */
+.vp-pipeline-cost .soc-fold { border-top: none; }
+.vp-pipeline-cost p { color: var(--muted); font-size: 0.94rem; margin: 0; }
+
+.vp-landing-steps .vp-explain-why { color: var(--muted); font-size: 0.94rem; max-width: 82ch; }
+.vp-landing-steps .vp-explain-analogy { color: var(--faint); font-style: italic; font-size: 0.86rem; margin: 0; }
+
+/* ---------------------------------------------------------------------------
+   An actionable finding: the code at fault, and what to do about it.
+
+   The code block is deliberately plain — no syntax highlighting. The only
+   element brought forward is THE OFFENDING LINE: it is the one piece of
+   information the reader must find without looking for it. Full highlighting
+   would put every line at the same level of attention.
+--------------------------------------------------------------------------- */
+
+.vp-code {
+  margin: 16px 0 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.vp-code-caption {
+  padding: 8px 12px;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.vp-code-pre {
+  margin: 0;
+  padding: 8px 0;
+  /* The code overflows horizontally rather than breaking the layout. */
+  overflow-x: auto;
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+.vp-code-line {
+  display: flex;
+  gap: 12px;
+  padding: 0 12px;
+  white-space: pre;
+}
+
+.vp-code-line-faulty {
+  background: var(--red-bg);
+  /* Colour alone is not enough: a rail carries the same information for
+     anyone who does not distinguish reds. */
+  box-shadow: inset 3px 0 0 var(--red);
+}
+
+.vp-code-number {
+  min-width: 2.5ch;
+  text-align: right;
+  color: var(--faint);
+  user-select: none;
+}
+
+.vp-code-line-faulty .vp-code-number { color: var(--red); font-weight: 700; }
+.vp-code-text { color: var(--fg); }
+
+.vp-code-note,
+.vp-code-missing {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.vp-code-note { padding: 0 12px 8px; }
+
+.vp-finding-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px 16px;
+  margin-top: 16px;
+}
+
+.vp-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--fg);
+  font-size: 0.86rem;
+  font-family: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.vp-action:hover { border-color: var(--accent); color: var(--accent); }
+.vp-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* `align-items: flex-start`: without it the button stretches across the whole
+   column and takes on the look of a banner rather than an action. */
+.vp-fix-prompt {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  max-width: 46ch;
+}
+
+.vp-select {
+  padding: 6px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 0.94rem;
+}
+
+.vp-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Report export: two gestures, copy and download, in the header. */
+.vp-report-export {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.vp-report-export-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+
+/* ---------------------------------------------------------------------------
+   A finding's status.
+
+   A dismissed finding is FADED, never removed: it stays readable and can be
+   picked up again. Hiding it would amount to offering a way to make a problem
+   disappear from the screen without having dealt with it.
+--------------------------------------------------------------------------- */
+
+.vp-finding-aside { opacity: 0.62; }
+.vp-finding-aside:hover, .vp-finding-aside:focus-within { opacity: 1; }
+
+.vp-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line);
+  font-size: 0.86rem;
+}
+
+.vp-status-current { color: var(--muted); }
+.vp-status-current strong { color: var(--fg); }
+.vp-status-choices { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.vp-status-choice {
+  padding: 4px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.vp-status-choice:hover { border-color: var(--accent); color: var(--accent); }
+.vp-status-choice:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.vp-status-note {
+  flex-basis: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.vp-status-form { flex-basis: 100%; display: flex; flex-direction: column; gap: 6px; }
+
+.vp-status-textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 0.94rem;
+  resize: vertical;
+}
+
+.vp-status-textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.vp-status-form-actions { display: flex; gap: 10px; align-items: center; }
+.vp-status-stale { margin: 12px 0 0; }
+
+.vp-status-summary {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.vp-status-rate { margin: 4px 0 6px; font-size: 1.02rem; color: var(--fg); }
+
+
+/* --- Engine key entry ----------------------------------------------------- */
+
+.vp-key-editor { margin-top: 4px; }
+
+.vp-key-row { margin-bottom: 4px; }
+
+.vp-key-row > label {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 8px;
+  font-size: 0.94rem;
+}
+
+/* The variable's name stays visible: it is what you look for when comparing
+   against a `.env` or a docker-compose already written elsewhere. */
+.vp-key-var {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--faint);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 2px 6px;
+}
+
+.vp-badge {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--faint);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 4px 10px;
+}
+
+.vp-badge-ok { color: var(--accent); border-color: var(--accent); }
+
+/* `min-width: 0` on the field: without it a flex item refuses to become
+   narrower than its content and the row overflows on mobile. */
+.vp-key-input { display: flex; align-items: flex-start; gap: 12px; }
+.vp-key-input input { min-width: 0; margin-bottom: 6px; }
+.vp-key-input .vp-link { flex: none; padding-top: 12px; }
+
+.vp-key-row .vp-field-help { margin: 0 0 16px; }
+
+.vp-key-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.vp-key-actions .vp-field-help { margin: 0; }
+
+@media (max-width: 640px) {
+  /* 16px: below that, iOS zooms in on its own at focus and the user ends up
+     scrolling a page they no longer recognise. */
+  .vp-embed input[type='password'] { font-size: 16px; }
+  .vp-key-input { flex-direction: column; gap: 0; }
+  /* Stacked, the link becomes a row of its own: it needs its own 44 px touch
+     target and some air before the help text, or the two read as one block. */
+  .vp-key-input .vp-link {
+    padding: 12px 0;
+    min-height: 44px;
+    align-self: flex-start;
+  }
+}
+
+/* ==========================================================================
+ * « AUCUNE FAILLE TROUVEE », ECRIT PLUTOT QUE LAISSE VIDE
+ *
+ * Un rapport vide etait une ligne de gris en italique, centree. Elle se lit
+ * comme une panne — et quand elle ne se lit pas comme une panne, elle se lit
+ * comme une PREUVE, ce qu'elle n'est pas. L'ecran a donc le poids d'un
+ * resultat : un titre, ce qui a ete lu, et les reserves qui bornent la phrase.
+ *
+ * Le vert n'est pris QUE quand la couverture est complete. Une couverture
+ * partielle passe a l'orange et change le titre : sur un ecran de securite,
+ * la couleur est lue avant les mots, et un vert pose sur un trou est un
+ * mensonge qui ne demande aucun effort de lecture.
+ * ========================================================================== */
+
+.vp-nothing {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line-strong);
+  background: var(--panel);
+  padding: 20px;
+}
+/*
+ * Trois tons, et le vert se MERITE. Il ne dit pas « rien trouve », il dit
+ * « tout a ete lu et rien trouve » : pose sur une couverture partielle ou
+ * inconnue, il rassurerait sur un trou. Le gris est le ton du non-determine —
+ * le meme que celui du diagnostic de l'autre moitie du produit.
+ */
+.vp-nothing-clear { border-left-color: var(--green); }
+.vp-nothing-partial { border-left-color: var(--orange); }
+
+.vp-nothing h3 { display: flex; align-items: center; gap: 10px; margin: 0 0 8px; }
+.vp-nothing h3 .vp-icon, .vp-nothing h3 svg { color: var(--faint); flex: none; }
+.vp-nothing-clear h3 .vp-icon, .vp-nothing-clear h3 svg { color: var(--green); }
+.vp-nothing-partial h3 .vp-icon, .vp-nothing-partial h3 svg { color: var(--orange); }
+
+.vp-nothing-lede { color: var(--muted); max-width: 74ch; }
+
+/* Les faits de couverture : une liste de constats, pas une phrase. On les
+   compte d'un coup d'oeil, ce qui est le geste qu'on fait devant un vide. */
+.vp-nothing-facts {
+  list-style: none; margin: 0 0 16px; padding: 0;
+  display: flex; flex-wrap: wrap; gap: 8px;
+}
+.vp-nothing-facts li {
+  border: 1px solid var(--line-strong); padding: 6px 10px;
+  font-family: var(--mono); font-size: 0.78rem; color: var(--fg);
+}
+
+.vp-nothing-caveat {
+  display: flex; gap: 10px; align-items: baseline;
+  border-left: 2px solid var(--orange); padding-left: 10px;
+  color: var(--muted); font-size: 0.86rem; margin: 0 0 12px;
+}
+.vp-nothing-caveat .vp-icon, .vp-nothing-caveat svg { color: var(--orange); flex: none; }
+.vp-nothing-caveat strong { color: var(--fg); }
+
+.vp-nothing-dismissed { border-top: 1px solid var(--line); padding-top: 8px; }
+.vp-nothing-dismissed p { color: var(--muted); font-size: 0.86rem; margin: 0; }
+.vp-nothing-dismissed .vp-nothing-facts { margin-bottom: 0; }
+
+/*
+ * Le badge de portee — « applique sur le serveur » / « garde dans votre
+ * navigateur » — passe sur le PLI de sa section. Il y dit, sans qu'on ouvre,
+ * ce que changer ce bloc affectera : la meme information que la barre de
+ * sous-navigation des Reglages annonce sur chacun de ses onglets.
+ *
+ * `position: static` : la regle de base le place en absolu dans le coin du
+ * bloc, ou il recouvrirait le resume du pli.
+ */
+.soc-fold-hint .vp-scope { position: static; top: auto; right: auto; }
+
+/* Une etiquette de champ et son disque « i », sur la meme ligne. Sans ca
+   l'etiquette est `display: block` et le disque tombe a la ligne suivante. */
+.vp-label-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.vp-label-row label { margin-bottom: 0; }

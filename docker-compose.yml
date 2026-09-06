@@ -1,0 +1,173 @@
+# =============================================================================
+# MENATER — la pile complete, autonome, sur n'importe quel hote.
+# =============================================================================
+#     docker compose up -d --build
+#     → http://localhost:4400
+#
+# Three services, and that is the whole stack: the database, the console
+# (interface + API + workflow engine), and the code analysis. Nothing else is
+# required — no external service, no third machine.
+#
+# ---------------------------------------------------------------------------
+# ONE OPTIONAL PROFILE, INACTIVE BY DEFAULT
+#
+#     --profile tunnel   exposes the console on the Internet through
+#                        Cloudflare. Only turn it on after setting an ingestion
+#                        secret: the service refuses to start without one.
+#
+# It is inactive by default because a service you do not know you started is a
+# service nobody watches — and this one opens a door onto the Internet.
+#
+# ---------------------------------------------------------------------------
+# CE QUI N'EST PAS DANS CE FICHIER
+#
+# Aucun secret. Ils viennent tous de `.env`, qui est gitignore. Un mot de passe
+# ecrit ici partirait dans le depot, et un `docker compose config` l'afficherait
+# a qui le demande.
+# =============================================================================
+
+name: menater
+
+services:
+  # ---------------------------------------------------------------------------
+  # Base de donnees : journal d'execution, audit, deduplication, variables.
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-menater}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is missing — copy .env.example to .env}
+      POSTGRES_DB: ${POSTGRES_DB:-menater}
+      # Lu par `01-role-and-dedup.sql` pour poser le mot de passe du role
+      # applicatif. Passe par l'environnement, jamais dans le SQL : le mettre
+      # dans une requete l'inscrirait dans le journal de Postgres.
+      MENATER_DB_PASSWORD: ${MENATER_DB_PASSWORD:?MENATER_DB_PASSWORD is missing — copy .env.example to .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # Le schema s'applique AU PREMIER DEMARRAGE, dans l'ordre alphabetique.
+      # En lecture seule : un conteneur ne doit pas pouvoir reecrire le schema
+      # qu'on lui donne a appliquer.
+      - ./sql:/docker-entrypoint-initdb.d/sql:ro
+      - ./docker/init-db.sh:/docker-entrypoint-initdb.d/00-init.sh:ro
+    # PAS DE PORT PUBLIE. La base n'est joignable que par les autres services
+    # de ce reseau. L'exposer sur l'hote la rendrait joignable depuis tout le
+    # reseau local, pour un besoin que seul le developpement a.
+    networks: [menater]
+    healthcheck:
+      # `-h 127.0.0.1` FORCE une verification TCP. Pendant l'initialisation,
+      # Postgres n'ecoute que sur son socket local : une sonde sans `-h`
+      # repondrait « pret » avant que le schema soit applique, et la console
+      # demarrerait sur une base sans tables.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U ${POSTGRES_USER:-menater} -d ${POSTGRES_DB:-menater}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 45s
+
+  # ---------------------------------------------------------------------------
+  # Console : interface, API, et le moteur de workflow.
+  # ---------------------------------------------------------------------------
+  console:
+    build:
+      context: ./dashboard
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      MENATER_API_PORT: 4400
+      MENATER_CONFIG: /data/config.json
+      MENATER_UI_ROOT: /app/dist
+      # Coordonnees de la base, POUR LE MOTEUR DE WORKFLOW INTEGRE.
+      # Sans elles, la console retombe sur `localhost` — c'est-a-dire son
+      # propre conteneur, ou rien n'ecoute : chaque alerte ingeree perd son
+      # execution en `ECONNREFUSED`, et cela ne se voit nulle part dans
+      # l'interface. Le moteur se connecte avec le role applicatif `n8n_soc`
+      # (nomme ainsi par l'histoire du projet ; c'est le role de l'application),
+      # pas avec le superutilisateur.
+      MENATER_DB_HOST: postgres
+      MENATER_DB_PORT: 5432
+      MENATER_DB_NAME: ${POSTGRES_DB:-menater}
+      MENATER_DB_USER: n8n_soc
+      MENATER_DB_PASSWORD: ${MENATER_DB_PASSWORD:?MENATER_DB_PASSWORD is required (see .env.example)}
+      # Adresse du service d'analyse, sur le reseau interne.
+      VULNPIPE_API_URL: http://vulnpipe:4319
+      # Cles d'enrichissement et du modele, resolues au moment de l'appel.
+      OPENROUTER_APIKEY: ${OPENROUTER_API_KEY:-}
+      SLACK_BOTTOKEN: ${SLACK_BOT_TOKEN:-}
+      SHODAN_APIKEY: ${SHODAN_API_KEY:-}
+      ABUSEIPDB_APIKEY: ${ABUSEIPDB_API_KEY:-}
+      VIRUSTOTAL_APIKEY: ${VIRUSTOTAL_API_KEY:-}
+      # Manual lookup only (Lookup tab). The pipeline never asks it anything.
+      HIBP_APIKEY: ${HIBP_API_KEY:-}
+    volumes:
+      # `config.json` porte le mot de passe de la console, le secret
+      # d'ingestion et le jeton du tunnel. Dans un volume, donc il survit a un
+      # redeploiement — sinon chaque `up --build` redemanderait tout.
+      - console-config:/data
+    ports:
+      - "${MENATER_PORT:-4400}:4400"
+    networks: [menater]
+
+  # ---------------------------------------------------------------------------
+  # Analyse de code.
+  # ---------------------------------------------------------------------------
+  vulnpipe:
+    build:
+      context: ./VulnPipe
+    restart: unless-stopped
+    environment:
+      VULNPIPE_API_PORT: 4319
+      VULNPIPE_KEYSTORE: /data/.vulnpipe/keys.json
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+    volumes:
+      # Etat de VulnPipe. Le volume porte le nom des cles pour raison
+      # historique, mais il tient aussi les CACHES DE VERDICTS depuis qu'ils
+      # survivent au redemarrage : c'est ce qui rend leur economie reelle,
+      # sinon chaque `docker compose restart` la remettait a zero. Le renommer
+      # ferait perdre les cles des installations existantes au premier
+      # redeploiement — le nom reste, le commentaire dit ce qu'il contient.
+      # Le chemin vient de VULNPIPE_KEYSTORE : le cache suit le magasin de
+      # cles, pour qu'il n'y ait qu'un seul dossier d'etat a sauvegarder.
+      - vulnpipe-keys:/data
+      # Le code a analyser, monte en LECTURE SEULE : un analyseur de
+      # vulnerabilites n'a aucune raison de pouvoir modifier ce qu'il lit.
+      - ${MENATER_SCAN_ROOT:-./}:/scan:ro
+    # Pas de port publie : la console relaie `/api/vulnpipe/*`. L'exposer
+    # donnerait un second point d'entree, hors du verrou d'acces.
+    networks: [menater]
+
+  # ---------------------------------------------------------------------------
+  # Tunnel Cloudflare — PROFIL `tunnel`.
+  # ---------------------------------------------------------------------------
+  cloudflared:
+    profiles: [tunnel]
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    depends_on: [console]
+    # Le jeton passe par l'ENVIRONNEMENT, pas par la ligne de commande : `ps`
+    # et `docker inspect` montrent la commande a qui les lance.
+    #
+    # `:-` ET NON `:?`, ce qui est contre-intuitif. Compose interpole TOUTES
+    # les variables du fichier, y compris celles des services dont le profil
+    # est inactif : un `:?` ici empecherait la pile par defaut de demarrer chez
+    # quiconque n'utilise pas de tunnel. Sans jeton, c'est `cloudflared` qui
+    # refuse — et lui seul, sans entrainer les autres services.
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    command: tunnel --no-autoupdate run
+    networks: [menater]
+
+networks:
+  menater:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  console-config:
+  # Cles ET caches de verdicts de VulnPipe. Voir le service `vulnpipe`.
+  vulnpipe-keys:

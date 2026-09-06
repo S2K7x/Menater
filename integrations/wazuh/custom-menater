@@ -1,0 +1,150 @@
+#!/usr/bin/env python3
+"""
+Wazuh -> MENATER integrator.
+
+Copy this file to /var/ossec/integrations/custom-menater on the Wazuh manager.
+It is the ONLY file you need; see README.md next to it for the four commands.
+
+==============================================================================
+WHAT THIS SCRIPT DELIBERATELY DOES NOT DO
+
+IT DOES NOT MAP FIELDS. It forwards the Wazuh alert exactly as Wazuh wrote it,
+and MENATER's `wazuh` mapping does the rest. Every integrator that maps fields
+in the script turns "add a log source" into "write and maintain a parser on a
+production security appliance", and leaves the mapping unversioned, untested
+and invisible from the console. The mapping belongs in the product.
+
+IT HAS NO DEPENDENCIES. Standard library only -- no `requests`. The Wazuh
+manager ships its own embedded Python, and telling an operator to pip-install
+into it is how integrations break on upgrade.
+
+IT NEVER RAISES. The integrator runs this inside the Wazuh manager's own
+process tree. A traceback here is noise in a security appliance's logs at best;
+at worst it is a crash loop on every alert. Failures are logged and swallowed,
+and the exit code is always 0.
+==============================================================================
+"""
+
+import json
+import os
+import ssl
+import sys
+import time
+import urllib.error
+import urllib.request
+
+LOG_FILE = "/var/ossec/logs/integrations.log"
+TIMEOUT_SECONDS = 10
+
+# Two retries, widely spaced. The console may be restarting, or the tunnel may
+# be reconnecting. Beyond that we give up rather than queue: Wazuh already
+# holds the alert in alerts.json, and that is the copy that matters.
+RETRY_DELAYS = (2, 6)
+
+
+def log(message):
+    """Append one line. Never raises -- a failed log must not lose the alert."""
+    line = "%s menater: %s\n" % (time.strftime("%Y-%m-%d %H:%M:%S"), message)
+    try:
+        with open(LOG_FILE, "a") as handle:
+            handle.write(line)
+    except Exception:
+        # Wazuh redirects stderr to its own log; if even that fails there is
+        # nothing sensible left to do, and crashing would be worse.
+        try:
+            sys.stderr.write(line)
+        except Exception:
+            pass
+
+
+def post(url, token, payload, insecure):
+    """POST once. Returns (ok, description)."""
+    body = json.dumps(payload).encode("utf-8")
+    request = urllib.request.Request(url, data=body, method="POST")
+    request.add_header("Content-Type", "application/json")
+    # The shared secret travels in the header MENATER expects, never in the
+    # URL: a query string lands in proxy logs and in browser history.
+    request.add_header("X-SOC-Token", token)
+
+    context = None
+    if insecure:
+        # Only when MENATER_INSECURE=1 is set explicitly, for a lab running a
+        # self-signed certificate. Never the default: the shared secret and the
+        # alert both travel in this request.
+        context = ssl.create_default_context()
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+
+    try:
+        with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS, context=context) as response:
+            return True, "HTTP %s" % response.status
+    except urllib.error.HTTPError as err:
+        # MENATER answers with a reason in the body; quoting it is the whole
+        # difference between "it does not work" and a fixable message.
+        try:
+            detail = err.read().decode("utf-8", "replace")[:400]
+        except Exception:
+            detail = ""
+        return False, "HTTP %s %s" % (err.code, detail)
+    except Exception as err:
+        return False, "%s: %s" % (type(err).__name__, err)
+
+
+def main():
+    # argv[1] alert file, argv[2] api key, argv[3] hook url, argv[4] debug.
+    # Wazuh passes empty strings for the ones ossec.conf did not set.
+    if len(sys.argv) < 4:
+        log("called with %d arguments, expected at least 4 -- check the "
+            "<integration> block in ossec.conf" % len(sys.argv))
+        return
+
+    alert_file, token, hook_url = sys.argv[1], sys.argv[2], sys.argv[3]
+    debug = len(sys.argv) > 4 and sys.argv[4] not in ("", "0", "no")
+
+    if not hook_url:
+        log("no <hook_url> configured -- nothing to send to")
+        return
+    if not token:
+        # MENATER refuses an unauthenticated alert, so this would fail on every
+        # single one. Saying so once, here, beats a wall of 401s.
+        log("no <api_key> configured -- MENATER requires the shared secret "
+            "from Settings -> Ingestion, and will answer 401 without it")
+        return
+
+    try:
+        with open(alert_file) as handle:
+            alert = json.load(handle)
+    except Exception as err:
+        log("cannot read alert file %s: %s" % (alert_file, err))
+        return
+
+    insecure = os.environ.get("MENATER_INSECURE") == "1"
+    rule = alert.get("rule") or {}
+    label = "rule %s level %s" % (rule.get("id", "?"), rule.get("level", "?"))
+
+    attempts = 1 + len(RETRY_DELAYS)
+    for attempt in range(attempts):
+        ok, detail = post(hook_url, token, alert, insecure)
+        if ok:
+            if debug:
+                log("sent %s (%s)" % (label, detail))
+            return
+        # A rejection is OUR bug, not a transport problem: retrying an alert
+        # MENATER has already understood and refused would just repeat it.
+        if detail.startswith("HTTP 4"):
+            log("refused %s -- %s" % (label, detail))
+            return
+        if attempt < len(RETRY_DELAYS):
+            time.sleep(RETRY_DELAYS[attempt])
+
+    log("giving up on %s after %d attempts -- %s" % (label, attempts, detail))
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as err:
+        # The last net. Nothing this script does is worth destabilising the
+        # Wazuh manager for.
+        log("unhandled error: %s: %s" % (type(err).__name__, err))
+    sys.exit(0)

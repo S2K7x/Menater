@@ -1,0 +1,669 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="MENATER brand and design reference: palette, type, mark, components, voice.">
+<title>MENATER Brand Sheet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;700&display=swap">
+<style>
+/* ==========================================================================
+   PAGE TOKENS — dark-first, because the brand palette IS `grayed`.
+   Light = the product's own `acme` theme, so the page proves the system.
+   ========================================================================== */
+:root{
+  --p-bg:#232830; --p-surface:#2b313a; --p-panel:#1f242b; --p-hero:#171b21;
+  --p-fg:#f2f4f7; --p-muted:#98a2b3; --p-faint:#757f8c;
+  --p-line:#3d4550; --p-line-strong:#4d5663;
+  --p-accent:#c3f53c; --p-accent-fg:#171b21;
+  --p-red:#ff6b6b; --p-red-bg:#3a2226;
+  --p-orange:#ffb020; --p-orange-bg:#382c18;
+  --p-green:#6ee7a0; --p-green-bg:#1d3329;
+  --p-shadow:0 18px 40px rgba(0,0,0,.35);
+  --display:'Archivo Black','Helvetica Neue','Arial Narrow',Impact,system-ui,sans-serif;
+  --sans:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,'SF Mono',Menlo,monospace;
+  --r:4px;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme:light){
+  :root:not([data-theme="dark"]){
+    --p-bg:#f4f1ea; --p-surface:#ffffff; --p-panel:#fbf9f5; --p-hero:#e4dfd2;
+    --p-fg:#16150f; --p-muted:#5c5a51; --p-faint:#8a877c;
+    --p-line:#d9d4c8; --p-line-strong:#bdb7a8;
+    --p-accent:#e01e0b; --p-accent-fg:#ffffff;
+    --p-red:#c71e10; --p-red-bg:#fbe2de;
+    --p-orange:#9b5d00; --p-orange-bg:#fbeed6;
+    --p-green:#1e7643; --p-green-bg:#dcf0e3;
+    --p-shadow:0 12px 28px rgba(22,21,15,.12);
+    color-scheme:light;
+  }
+}
+:root[data-theme="light"]{
+  --p-bg:#f4f1ea; --p-surface:#ffffff; --p-panel:#fbf9f5; --p-hero:#e4dfd2;
+  --p-fg:#16150f; --p-muted:#5c5a51; --p-faint:#8a877c;
+  --p-line:#d9d4c8; --p-line-strong:#bdb7a8;
+  --p-accent:#e01e0b; --p-accent-fg:#ffffff;
+  --p-red:#c71e10; --p-red-bg:#fbe2de;
+  --p-orange:#9b5d00; --p-orange-bg:#fbeed6;
+  --p-green:#1e7643; --p-green-bg:#dcf0e3;
+  --p-shadow:0 12px 28px rgba(22,21,15,.12);
+  color-scheme:light;
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--p-bg); color:var(--p-fg);
+  font-family:var(--sans); font-size:15px; line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1080px; margin:0 auto; padding:0 24px 96px}
+
+/* --- type ---------------------------------------------------------------- */
+h1,h2,h3{font-family:var(--display); text-transform:uppercase; font-weight:900;
+  letter-spacing:-.01em; line-height:1.05; margin:0; text-wrap:balance}
+h1{font-size:clamp(2.6rem,9vw,5.2rem); letter-spacing:-.02em}
+h2{font-size:clamp(1.3rem,2.6vw,1.9rem)}
+h3{font-size:1.02rem; letter-spacing:.02em}
+p{margin:0; max-width:66ch}
+a{color:var(--p-accent)}
+a:focus-visible,button:focus-visible{outline:2px solid var(--p-accent); outline-offset:3px}
+.kicker{font-family:var(--mono); font-size:.68rem; letter-spacing:.22em;
+  text-transform:uppercase; color:var(--p-faint)}
+.mono{font-family:var(--mono)}
+.lede{font-size:1.05rem; color:var(--p-muted)}
+
+/* --- section scaffolding ------------------------------------------------- */
+section{border-top:1px solid var(--p-line); padding-top:22px; margin-top:56px;
+  display:grid; grid-template-columns:96px 1fr; gap:28px; align-items:start}
+.sec-n{font-family:var(--mono); font-size:.68rem; letter-spacing:.18em;
+  color:var(--p-faint); text-transform:uppercase; padding-top:5px}
+.sec-body{display:flex; flex-direction:column; gap:20px; min-width:0}
+@media (max-width:720px){
+  section{grid-template-columns:1fr; gap:14px}
+  .sec-n{padding-top:0}
+}
+
+/* --- header -------------------------------------------------------------- */
+header{padding:64px 0 8px; display:flex; flex-direction:column; gap:26px}
+.lockup{display:flex; align-items:center; gap:20px; flex-wrap:wrap}
+.mark{flex:none; color:var(--p-accent)}
+.mark svg{display:block}
+.heb{font-size:1.9rem; color:var(--p-faint); line-height:1; direction:rtl}
+.rule-row{display:flex; gap:10px; align-items:center; color:var(--p-faint)}
+.rule-row hr{flex:1; border:0; border-top:1px solid var(--p-line); margin:0}
+
+/* --- generic pieces ------------------------------------------------------ */
+.panel{background:var(--p-surface); border:1px solid var(--p-line);
+  border-radius:var(--r); padding:16px}
+.inset{background:var(--p-hero); border-radius:var(--r); padding:14px 16px;
+  font-family:var(--mono); font-size:.78rem; color:var(--p-fg);
+  overflow-x:auto; white-space:pre-wrap}
+.grid{display:grid; gap:12px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
+
+table{width:100%; border-collapse:collapse; font-size:.86rem}
+.tw{overflow-x:auto}
+th{text-align:left; font-family:var(--mono); font-size:.66rem; font-weight:400;
+  letter-spacing:.14em; text-transform:uppercase; color:var(--p-faint);
+  padding:0 12px 8px 0; border-bottom:1px solid var(--p-line); white-space:nowrap}
+td{padding:9px 12px 9px 0; border-bottom:1px solid var(--p-line);
+  vertical-align:top; color:var(--p-muted)}
+td:first-child{color:var(--p-fg)}
+td.num{font-family:var(--mono); font-variant-numeric:tabular-nums; color:var(--p-fg)}
+
+/* --- swatches ------------------------------------------------------------ */
+.sw{border:1px solid var(--p-line); border-radius:var(--r); overflow:hidden}
+.sw-chip{height:64px}
+.sw-meta{padding:9px 10px; background:var(--p-panel);
+  display:flex; flex-direction:column; gap:2px}
+.sw-name{font-family:var(--mono); font-size:.72rem; color:var(--p-fg)}
+.sw-role{font-size:.74rem; color:var(--p-faint); line-height:1.35}
+.sw-hex{font-family:var(--mono); font-size:.66rem; color:var(--p-muted);
+  letter-spacing:.04em; text-transform:uppercase}
+
+/* --- pills / components -------------------------------------------------- */
+.pill{display:inline-block; font-family:var(--mono); font-size:.66rem;
+  letter-spacing:.1em; text-transform:uppercase; padding:3px 8px;
+  border-radius:2px}
+.p-crit{color:var(--p-red); background:var(--p-red-bg)}
+.p-warn{color:var(--p-orange); background:var(--p-orange-bg)}
+.p-ok{color:var(--p-green); background:var(--p-green-bg)}
+.p-wait{color:var(--p-accent-fg); background:var(--p-accent)}
+.btn{font-family:var(--mono); font-size:.72rem; letter-spacing:.1em;
+  text-transform:uppercase; padding:9px 14px; border-radius:var(--r);
+  border:1px solid var(--p-accent); background:var(--p-accent);
+  color:var(--p-accent-fg); cursor:pointer}
+.btn-2{background:transparent; color:var(--p-fg); border-color:var(--p-line-strong)}
+.missing{font-family:var(--mono); color:var(--p-faint)}
+.bar{height:5px; background:var(--p-hero); border-radius:2px; overflow:hidden;
+  width:140px}
+.bar span{display:block; height:100%}
+
+/* --- do / don't ---------------------------------------------------------- */
+.dd{display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:12px}
+.dd-col{border:1px solid var(--p-line); border-radius:var(--r); overflow:hidden}
+.dd-h{padding:8px 12px; font-family:var(--mono); font-size:.66rem;
+  letter-spacing:.16em; text-transform:uppercase}
+.dd-do .dd-h{color:var(--p-green); background:var(--p-green-bg)}
+.dd-no .dd-h{color:var(--p-red); background:var(--p-red-bg)}
+.dd ul{margin:0; padding:12px 16px 14px 30px; display:flex;
+  flex-direction:column; gap:8px; font-size:.88rem; color:var(--p-muted)}
+.dd-do li::marker{color:var(--p-green)}
+.dd-no li::marker{color:var(--p-red)}
+
+/* --- theme demo ---------------------------------------------------------- */
+.themebar{display:flex; gap:6px; flex-wrap:wrap}
+.tbtn{font-family:var(--mono); font-size:.66rem; letter-spacing:.14em;
+  text-transform:uppercase; padding:7px 11px; border-radius:var(--r);
+  border:1px solid var(--p-line-strong); background:transparent;
+  color:var(--p-muted); cursor:pointer}
+.tbtn[aria-pressed="true"]{background:var(--p-accent); color:var(--p-accent-fg);
+  border-color:var(--p-accent)}
+
+.demo{border:1px solid var(--d-line); border-radius:var(--r);
+  background:var(--d-bg); padding:16px; display:flex; flex-direction:column; gap:12px}
+.demo-head{display:flex; align-items:baseline; justify-content:space-between; gap:12px}
+.demo-title{font-family:var(--display); text-transform:uppercase;
+  font-size:1.05rem; color:var(--d-fg); letter-spacing:-.01em}
+.demo-kick{font-family:var(--mono); font-size:.62rem; letter-spacing:.22em;
+  text-transform:uppercase; color:var(--d-faint)}
+.demo-rows{display:flex; flex-direction:column; gap:1px; background:var(--d-line)}
+.demo-row{background:var(--d-surface); padding:9px 12px; display:grid;
+  grid-template-columns:1fr auto; gap:10px; align-items:center}
+.demo-id{font-family:var(--mono); font-size:.74rem; color:var(--d-fg)}
+.demo-sub{font-family:var(--mono); font-size:.66rem; color:var(--d-faint)}
+.demo-pill{font-family:var(--mono); font-size:.62rem; letter-spacing:.1em;
+  text-transform:uppercase; padding:3px 8px; border-radius:2px}
+.demo-btn{align-self:flex-start; font-family:var(--mono); font-size:.68rem;
+  letter-spacing:.1em; text-transform:uppercase; padding:8px 13px;
+  border-radius:var(--r); border:0; background:var(--d-accent);
+  color:var(--d-accent-fg)}
+
+[data-demo="grayed"]{--d-bg:#232830;--d-surface:#2b313a;--d-fg:#f2f4f7;--d-faint:#757f8c;
+  --d-line:#3d4550;--d-accent:#c3f53c;--d-accent-fg:#171b21;--d-red:#ff6b6b;--d-red-bg:#3a2226;
+  --d-orange:#ffb020;--d-orange-bg:#382c18;--d-green:#6ee7a0;--d-green-bg:#1d3329}
+[data-demo="punk"]{--d-bg:#3b3d2a;--d-surface:#45472f;--d-fg:#f5e7bd;--d-faint:#9d9672;
+  --d-line:#565839;--d-accent:#c31f1b;--d-accent-fg:#f5e7bd;--d-red:#ff997c;--d-red-bg:#4a2a1f;
+  --d-orange:#f0b429;--d-orange-bg:#47381a;--d-green:#b7d44a;--d-green-bg:#35401f}
+[data-demo="blued"]{--d-bg:#1f31c4;--d-surface:#2739d6;--d-fg:#ffffff;--d-faint:#909ff5;
+  --d-line:#3d50e0;--d-accent:#c8f24b;--d-accent-fg:#16249b;--d-red:#ffb2a8;--d-red-bg:#3a2a92;
+  --d-orange:#ffcf5c;--d-orange-bg:#35318f;--d-green:#c8f24b;--d-green-bg:#23408c}
+[data-demo="attck"]{--d-bg:#7a1c08;--d-surface:#8f2410;--d-fg:#fff3e4;--d-faint:#e0a58a;
+  --d-line:#b03a1c;--d-accent:#ffdd1c;--d-accent-fg:#5e1406;--d-red:#ffa796;--d-red-bg:#6d1a08;
+  --d-orange:#ffdd1c;--d-orange-bg:#6b2a08;--d-green:#9ce5a8;--d-green-bg:#2f4a1c}
+[data-demo="acme"]{--d-bg:#f4f1ea;--d-surface:#ffffff;--d-fg:#16150f;--d-faint:#8a877c;
+  --d-line:#d9d4c8;--d-accent:#e01e0b;--d-accent-fg:#ffffff;--d-red:#c71e10;--d-red-bg:#fbe2de;
+  --d-orange:#9b5d00;--d-orange-bg:#fbeed6;--d-green:#1e7643;--d-green-bg:#dcf0e3}
+[data-demo="dark"]{--d-bg:#16181c;--d-surface:#1e2126;--d-fg:#f0f2f5;--d-faint:#6a7280;
+  --d-line:#2c3038;--d-accent:#1269f5;--d-accent-fg:#ffffff;--d-red:#f4636b;--d-red-bg:#33191d;
+  --d-orange:#f0a63c;--d-orange-bg:#33260f;--d-green:#34c77b;--d-green-bg:#122e20}
+
+/* --- type specimen ------------------------------------------------------- */
+.spec{border:1px solid var(--p-line); border-radius:var(--r); overflow:hidden}
+.spec-row{padding:14px 16px; border-bottom:1px solid var(--p-line);
+  display:flex; align-items:baseline; gap:16px; flex-wrap:wrap}
+.spec-row:last-child{border-bottom:0}
+.spec-tag{font-family:var(--mono); font-size:.62rem; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--p-faint); width:96px; flex:none}
+.spec-d{font-family:var(--display); text-transform:uppercase; font-size:2.1rem;
+  line-height:1; letter-spacing:-.02em}
+.spec-s{font-family:var(--sans); font-size:1rem}
+.spec-m{font-family:var(--mono); font-size:.85rem}
+
+/* --- scale strip --------------------------------------------------------- */
+.scale{display:flex; align-items:flex-end; gap:10px; flex-wrap:wrap}
+.scale div{display:flex; flex-direction:column; align-items:center; gap:6px}
+.scale i{display:block; background:var(--p-accent); width:22px; border-radius:1px}
+.scale span{font-family:var(--mono); font-size:.62rem; color:var(--p-faint)}
+
+.foot{margin-top:64px; border-top:1px solid var(--p-line); padding-top:20px;
+  display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap;
+  font-family:var(--mono); font-size:.7rem; color:var(--p-faint);
+  letter-spacing:.06em; text-transform:uppercase}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="kicker">Brand &amp; design reference · v1 · September 2026</div>
+  <div class="lockup">
+    <span class="mark"><svg width="54" height="54" viewBox="0 0 32 32" fill="currentColor"
+      role="img" aria-label="MENATER mark: five ticks, the middle one a stub"><rect x="0" y="5" width="4" height="22"/><rect x="7" y="5" width="4" height="22"/><rect x="14" y="21" width="4" height="6"/><rect x="21" y="5" width="4" height="22"/><rect x="28" y="5" width="4" height="22"/></svg></span>
+    <h1>MENATER</h1>
+    <div class="heb" lang="he">מנטר</div>
+  </div>
+  <p class="lede"><strong style="color:var(--p-fg)">MENATER watches in the present, and says what it cannot see.</strong>
+  From the Hebrew <span lang="he">מנטר</span> — <em>menater</em>, the present tense of <em>lenater</em>, to monitor.
+  The product is not named after a technology. It is named after an action in progress.</p>
+  <div class="rule-row"><span class="kicker">The rules below are the ones already in the code</span><hr></div>
+</header>
+
+<!-- 1 ==================================================================== -->
+<section>
+  <div class="sec-n">§1<br>The name</div>
+  <div class="sec-body">
+    <h2>A verb, not a noun</h2>
+    <p>Because the name is a verb in the present tense, three things follow, and they are not decoration:
+    the brand speaks in the <strong>active voice</strong>; the console shows a <strong>state</strong>, never a finished report;
+    and it is an act of <strong>watching</strong>, not of deciding — which is exactly the security model. It watches, a human acts.</p>
+    <div class="tw"><table>
+      <tr><th>Write</th><th>Never</th><th>Why</th></tr>
+      <tr><td class="mono">MENATER</td><td class="mono" style="color:var(--p-red)">MenaTer · Menater.io</td><td>Full caps as the product; sentence case only inside prose where caps would shout</td></tr>
+      <tr><td class="mono">menater.theme</td><td class="mono" style="color:var(--p-red)">menater as a brand</td><td>Lowercase belongs to code identifiers only — storage keys, <span class="mono">menater://</span> resources, the npm scope</td></tr>
+      <tr><td lang="he">מנטר</td><td class="mono" style="color:var(--p-red)">as a logo</td><td>A signature, used once and small. Hebrew is right-to-left: it breaks any horizontal lockup it is dropped into</td></tr>
+    </table></div>
+  </div>
+</section>
+
+<!-- 2 ==================================================================== -->
+<section>
+  <div class="sec-n">§2<br>The idea</div>
+  <div class="sec-body">
+    <h2>Legible restraint</h2>
+    <p>Every competitor sells automated confidence. MENATER sells the opposite, and the product already argues it in
+    five separate places in the code:</p>
+    <div class="tw"><table>
+      <tr><th>The product rule</th><th>Where it lives</th></tr>
+      <tr><td>Never fill a gap with a default. Missing data is shown as missing</td><td>The two-tier alert contract</td></tr>
+      <tr><td>Silence is never consent — an approval timeout executes nothing</td><td>The approval flow</td></tr>
+      <tr><td>No irreversible action without an explicit human act</td><td>The closed action catalogue</td></tr>
+      <tr><td>A failure must never show green</td><td>The Tracking tab exists only for this</td></tr>
+      <tr><td>The assistant cannot act, only read</td><td>Seven getters, no writes</td></tr>
+    </table></div>
+    <p><strong style="color:var(--p-fg)">So the design has to carry that, or the design is lying about the product.</strong>
+    Four consequences: show absence as a designed state; never reassure by default; look measured, not marketed;
+    reward a second look.</p>
+  </div>
+</section>
+
+<!-- 3 ==================================================================== -->
+<section>
+  <div class="sec-n">§5<br>Colour</div>
+  <div class="sec-body">
+    <h2>Five rules, in priority order</h2>
+    <div class="grid g2">
+      <div class="panel"><h3 style="color:var(--p-accent)">1 · One accent per screen</h3>
+        <p style="font-size:.88rem;color:var(--p-muted);margin-top:8px">The acid green designates exactly one thing at a time. Two accents means neither is one.</p></div>
+      <div class="panel"><h3 style="color:var(--p-red)">2 · Red and orange are not decorative</h3>
+        <p style="font-size:.88rem;color:var(--p-muted);margin-top:8px">Colour is processed pre-attentively — before reading. It is the fastest channel the interface has, and the easiest to spend on nothing. A red button teaches an analyst to ignore red.</p></div>
+      <div class="panel"><h3>3 · The palette is a variable, the roles are fixed</h3>
+        <p style="font-size:.88rem;color:var(--p-muted);margin-top:8px">No rule outside <span class="mono">themes.css</span> knows a theme's name. A hardcoded colour will follow none of the six.</p></div>
+      <div class="panel"><h3>4 · Only “waiting for a human” carries the accent</h3>
+        <p style="font-size:.88rem;color:var(--p-muted);margin-top:8px">The one state where the system is blocked and someone must act. Everything else uses the risk palette.</p></div>
+      <div class="panel" style="grid-column:1/-1"><h3>5 · Colour never carries meaning alone</h3>
+        <p style="font-size:.88rem;color:var(--p-muted);margin-top:8px">WCAG&nbsp;1.4.1. Every risk colour is paired with a word, and usually a shape — a pill, an inset bar, an icon.</p></div>
+    </div>
+
+    <h3 style="margin-top:14px">The brand palette — <span class="mono" style="text-transform:none">grayed</span></h3>
+    <div class="grid g3" id="swatches"></div>
+
+    <h3 style="margin-top:14px">Contrast is tooled, never judged by eye</h3>
+    <p style="font-size:.9rem;color:var(--p-muted)">Measured ratios, computed from the tokens above. <span class="mono">themes.test.ts</span> refuses a palette that misses them —
+    it caught Attck's failure red at <span class="mono">2.5:1</span>, on the screen that depends on red most.</p>
+    <div class="tw"><table>
+      <tr><th>Pair</th><th>Ratio</th><th>Floor</th></tr>
+      <tr><td>Body text on the ground</td><td class="num">13.44:1</td><td>4.5</td></tr>
+      <tr><td>Body text on a panel</td><td class="num">11.89:1</td><td>4.5</td></tr>
+      <tr><td>Label on the accent</td><td class="num">13.53:1</td><td>4.5</td></tr>
+      <tr><td>Critical red inside its own pill</td><td class="num">5.27:1</td><td>4.5</td></tr>
+      <tr><td>Warning orange inside its own pill</td><td class="num">7.45:1</td><td>4.5</td></tr>
+      <tr><td>Secondary mention on a panel</td><td class="num">5.09:1</td><td>3.0</td></tr>
+      <tr><td>Tertiary label on a panel</td><td class="num">3.23:1</td><td>3.0</td></tr>
+    </table></div>
+    <p style="font-size:.9rem;color:var(--p-muted)"><strong style="color:var(--p-fg)">A palette lifted straight from a poster gives ravishing, unreadable pastels.</strong>
+    A reference image is lit and composed; its colours laid down as interface surfaces carry nothing. Lower the values, keep the hue.</p>
+  </div>
+</section>
+
+<!-- 4 ==================================================================== -->
+<section>
+  <div class="sec-n">§5b<br>Themes</div>
+  <div class="sec-body">
+    <h2>Six palettes, one set of roles</h2>
+    <p>Proof of rule 3. Nothing below changes but the tokens — no layout, no class, no rule knows which theme is on.
+    <strong style="color:var(--p-fg)">The brand's own palette is <span class="mono">grayed</span>;</strong> the other five are the user's choice, not the brand's.</p>
+    <div class="themebar" id="themebar" role="group" aria-label="Preview a console theme"></div>
+    <div class="demo" id="demo" data-demo="grayed">
+      <div class="demo-head">
+        <div class="demo-title">Triage queue</div>
+        <div class="demo-kick" id="demo-name">grayed</div>
+      </div>
+      <div class="demo-rows">
+        <div class="demo-row">
+          <div><div class="demo-id">alert-4417 · lateral movement</div><div class="demo-sub">host WKS-114 · 3 of 5 sources answered</div></div>
+          <div class="demo-pill" style="color:var(--d-accent-fg);background:var(--d-accent)">needs human</div>
+        </div>
+        <div class="demo-row">
+          <div><div class="demo-id">alert-4416 · credential access</div><div class="demo-sub">host — · source_ip 91.203.4.18</div></div>
+          <div class="demo-pill" style="color:var(--d-red);background:var(--d-red-bg)">critical</div>
+        </div>
+        <div class="demo-row">
+          <div><div class="demo-id">alert-4415 · dns tunnelling</div><div class="demo-sub">chain broken at 02 → 03 · passed 0 items</div></div>
+          <div class="demo-pill" style="color:var(--d-orange);background:var(--d-orange-bg)">look</div>
+        </div>
+        <div class="demo-row">
+          <div><div class="demo-id">alert-4414 · impossible travel</div><div class="demo-sub">shadow mode · recorded, not executed</div></div>
+          <div class="demo-pill" style="color:var(--d-green);background:var(--d-green-bg)">closed</div>
+        </div>
+      </div>
+      <button class="demo-btn" type="button">Approve isolation</button>
+    </div>
+    <p style="font-size:.88rem;color:var(--p-muted)">Note the second row: <span class="mono">host —</span>. That em dash is the brand.
+    Most real detections carry no host, and the console says so instead of inventing one.</p>
+  </div>
+</section>
+
+<!-- 5 ==================================================================== -->
+<section>
+  <div class="sec-n">§6<br>Type</div>
+  <div class="sec-body">
+    <h2>Three faces, three jobs, no fourth</h2>
+    <div class="spec">
+      <div class="spec-row"><div class="spec-tag">Display</div>
+        <div><div class="spec-d">Needs human</div>
+        <div class="sw-hex" style="margin-top:6px">Archivo Black · uppercase · tracking −0.01em · headings and kickers</div></div></div>
+      <div class="spec-row"><div class="spec-tag">Body</div>
+        <div><div class="spec-s">An approval timeout executes nothing.</div>
+        <div class="sw-hex" style="margin-top:6px">Inter 400 / 500 / 700 · prose, labels, help text</div></div></div>
+      <div class="spec-row"><div class="spec-tag">Data</div>
+        <div><div class="spec-m">alert-4417 · sha256:9f2c…b81e · 2026-09-03T04:12:07Z</div>
+        <div class="sw-hex" style="margin-top:6px">ui-monospace · every value produced by the system</div></div></div>
+    </div>
+    <p><strong style="color:var(--p-fg)">The monospace rule is semantic, not decorative.</strong> Mono means:
+    <em>this string came from the machine, and it is exact.</em> Prose <em>about</em> a value is sans; the value is mono.
+    That is why a fourth typeface would cost something — NN/g classes font variation that carries no meaning as
+    extraneous cognitive load, a tax levied on an analyst scanning forty rows.</p>
+    <p style="font-size:.9rem;color:var(--p-muted)">Fonts load from Google Fonts and <strong style="color:var(--p-fg)">fall back to system faces when the network is absent</strong> —
+    a console on an isolated network must not lose its hierarchy because a CDN is unreachable. That is why the display
+    fallback stack is condensed and heavy, not a default sans.</p>
+    <div class="tw"><table>
+      <tr><th>Step</th><th>Size</th><th>Use</th></tr>
+      <tr><td>h1</td><td class="num">clamp(1.8, 4vw, 2.8rem)</td><td>Page title</td></tr>
+      <tr><td>h2</td><td class="num">clamp(1.3, 2.6vw, 1.9rem)</td><td>Section</td></tr>
+      <tr><td>h3</td><td class="num">1.02rem</td><td>Block</td></tr>
+      <tr><td>body</td><td class="num">0.94rem (15px)</td><td>Prose</td></tr>
+      <tr><td>display</td><td class="num">1.7rem</td><td>Big numbers</td></tr>
+      <tr><td>logo</td><td class="num">1.45rem</td><td>The wordmark</td></tr>
+      <tr><td>dense</td><td class="num">0.86rem</td><td>Table cells</td></tr>
+      <tr><td>secondary</td><td class="num">0.78rem</td><td>Sub-labels</td></tr>
+      <tr><td>data</td><td class="num">0.72rem</td><td>Mono in tables</td></tr>
+      <tr><td>micro</td><td class="num">0.66rem</td><td>Pills, kickers</td></tr>
+    </table></div>
+    <p class="mono" style="font-size:.78rem;color:var(--p-faint)">Eight rem steps plus the two clamps. That is the whole scale.</p>
+    <p style="font-size:.9rem;color:var(--p-muted)">Two exceptions stay in <span class="mono">px</span>, on purpose:
+    <strong style="color:var(--p-fg)">16&nbsp;px on form inputs</strong> — below that, iOS zooms the page on focus and the
+    user is left scrolling a layout they no longer recognise — and the <strong style="color:var(--p-fg)">SVG label sizes</strong>
+    on the workflow graph and the analysis diagrams, which are user units on a fixed drawing canvas, not page text.</p>
+  </div>
+</section>
+
+<!-- 6 ==================================================================== -->
+<section>
+  <div class="sec-n">§7<br>Space</div>
+  <div class="sec-body">
+    <h2>2 px base, one radius</h2>
+    <div class="scale" id="scale"></div>
+    <p>Then <span class="mono">24 · 32 · 40 · 48 · 64 · 80</span> for layout. Nothing else.
+    The scale is 2&nbsp;px-based rather than the more fashionable 4&nbsp;px because it was
+    <strong style="color:var(--p-fg)">derived from the code, not imposed on it</strong> — <span class="mono">6</span> and
+    <span class="mono">10</span> were already the two most common values in the sheet, and forcing fifty two-pixel shifts
+    across screens nobody would re-review is a cost with no reader on the other end. What the scale removes is the
+    genuinely rogue values: <span class="mono">1 · 3 · 5 · 9 · 14 · 18 · 22</span>.</p>
+    <p>Radius is <span class="mono">--radius: 4px</span>, plus <span class="mono">50%</span> for a dot; nothing between.
+    <strong style="color:var(--p-fg)">Large radii are the loudest “consumer app” signal there is,</strong> and this product is not one.
+    One exception: the switch track keeps a full capsule, because that shape <em>is</em> the signifier for a switch —
+    a square one reads as a checkbox, which does something else.</p>
+    <p>Borders before shadows: a 1 px hairline separates, and the shadow is reserved for what actually floats —
+    the assistant panel, a dialog, the sticky save bar. Panels do not float.</p>
+    <p><strong style="color:var(--p-fg)">Density is a feature.</strong> The triage table is meant to show forty rows.
+    Do not give it room to breathe — an analyst scrolling is an analyst who has lost the overview.</p>
+  </div>
+</section>
+
+<!-- 7 ==================================================================== -->
+<section>
+  <div class="sec-n">§8<br>Parts</div>
+  <div class="sec-body">
+    <h2>The fixed contracts</h2>
+    <div class="grid g2">
+      <div class="panel"><div class="kicker" style="margin-bottom:10px">Risk pills</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <span class="pill p-crit">critical</span><span class="pill p-warn">look</span>
+          <span class="pill p-ok">closed</span><span class="pill p-wait">needs human</span></div>
+        <p style="font-size:.82rem;color:var(--p-faint);margin-top:10px">Always carries a word. Only the last one is the accent.</p></div>
+      <div class="panel"><div class="kicker" style="margin-bottom:10px">Missing value</div>
+        <div style="font-size:1.4rem" class="missing">—</div>
+        <p style="font-size:.82rem;color:var(--p-faint);margin-top:6px">Never <span class="mono">0</span>, never <span class="mono">N/A</span>, never an empty cell, never a guess.</p></div>
+      <div class="panel"><div class="kicker" style="margin-bottom:10px">Confidence</div>
+        <div style="display:flex;flex-direction:column;gap:7px">
+          <div class="bar"><span style="width:82%;background:var(--p-green)"></span></div>
+          <div class="bar"><span style="width:44%;background:var(--p-orange)"></span></div>
+          <div class="bar"><span style="width:0%;background:var(--p-red)"></span></div></div>
+        <p style="font-size:.82rem;color:var(--p-faint);margin-top:10px">Length is the pre-attentive channel; colour only confirms it.</p></div>
+      <div class="panel"><div class="kicker" style="margin-bottom:10px">Actions</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn" type="button">Approve</button>
+          <button class="btn btn-2" type="button">Isolate host</button></div>
+        <p style="font-size:.82rem;color:var(--p-faint);margin-top:10px">One primary per screen. A destructive action is <em>not</em> red-buttoned — it is a plain button with a confirmation.</p></div>
+    </div>
+    <div class="kicker">Inset — anything quoted verbatim from the machine</div>
+    <div class="inset">Sep 03 04:12:07 WKS-114 sshd[2214]: Failed password for invalid user admin from 91.203.4.18 port 55214 ssh2
+host:      —   (not observed)
+verdict:   needs_human   confidence 0.00   shadow_mode true</div>
+  </div>
+</section>
+
+
+<!-- MARK ================================================================== -->
+<section>
+  <div class="sec-n">§10<br>Mark</div>
+  <div class="sec-body">
+    <h2>The register</h2>
+    <p>Five ticks, and the middle one is a stub rather than a full bar &mdash; the product's first
+    principle drawn literally: <strong style="color:var(--p-fg)">a missing value keeps its place instead
+    of being omitted.</strong> Absence sits at the centre, so the mark stays symmetric: the gap is the
+    composition, not a defect in it.</p>
+    <div class="grid g3">
+      <div class="panel" style="align-items:center;display:flex;justify-content:center;background:var(--p-hero)">
+        <span class="mark"><svg width="76" height="76" viewBox="0 0 32 32" fill="currentColor" aria-hidden="true"><rect x="0" y="5" width="4" height="22"/><rect x="7" y="5" width="4" height="22"/><rect x="14" y="21" width="4" height="6"/><rect x="21" y="5" width="4" height="22"/><rect x="28" y="5" width="4" height="22"/></svg></span>
+      </div>
+      <div class="panel" style="align-items:center;display:flex;justify-content:center;background:var(--p-fg);color:var(--p-bg)">
+        <span style="color:currentColor"><svg width="76" height="76" viewBox="0 0 32 32" fill="currentColor" aria-hidden="true"><rect x="0" y="5" width="4" height="22"/><rect x="7" y="5" width="4" height="22"/><rect x="14" y="21" width="4" height="6"/><rect x="21" y="5" width="4" height="22"/><rect x="28" y="5" width="4" height="22"/></svg></span>
+      </div>
+      <div class="panel" style="align-items:center;display:flex;gap:18px;justify-content:center;background:var(--p-hero)">
+        <span class="mark"><svg width="32" height="32" viewBox="0 0 32 32" fill="currentColor" aria-hidden="true"><rect x="0" y="5" width="4" height="22"/><rect x="7" y="5" width="4" height="22"/><rect x="14" y="21" width="4" height="6"/><rect x="21" y="5" width="4" height="22"/><rect x="28" y="5" width="4" height="22"/></svg></span>
+        <span class="mark"><svg width="16" height="16" viewBox="0 0 32 32" fill="currentColor" aria-hidden="true"><rect x="0" y="5" width="4" height="22"/><rect x="7" y="5" width="4" height="22"/><rect x="14" y="21" width="4" height="6"/><rect x="21" y="5" width="4" height="22"/><rect x="28" y="5" width="4" height="22"/></svg></span>
+      </div>
+    </div>
+    <div class="tw"><table>
+      <tr><th>The choice</th><th>The reason</th></tr>
+      <tr><td>Angular, never rounded</td><td>Circular shapes activate softness; angular ones activate hardness and durability, and read as more premium</td></tr>
+      <tr><td>Symmetric</td><td>Asymmetry raises perceived <em>excitement</em>, and pays only for brands whose personality is excitement. This one's is competence</td></tr>
+      <tr><td>Describes the method, never the threat</td><td>Descriptive logos raise brand evaluations &mdash; but the effect <em>reverses</em> for categories carrying negative associations, and security is one</td></tr>
+      <tr><td>No colour of its own</td><td><span class="mono">fill="currentColor"</span>, and the CSS sets <span class="mono">color: var(--accent)</span>. One file follows all six themes</td></tr>
+    </table></div>
+    <p style="font-size:.9rem;color:var(--p-muted)">The geometry exists once, in <span class="mono">MARK_BARS</span>
+    (<span class="mono">src/components/Mark.tsx</span>). The component renders it and
+    <span class="mono">theme/favicon.ts</span> builds the tab icon from the same array, so the mark and its own
+    favicon cannot become two different drawings. <strong style="color:var(--p-fg)">The tab icon follows the theme
+    too</strong> &mdash; it is the one surface CSS cannot reach. Placement is settled: top left, clickable;
+    89% better recall than on the right.</p>
+  </div>
+</section>
+
+<!-- 8 ==================================================================== -->
+<section>
+  <div class="sec-n">§4<br>Voice</div>
+  <div class="sec-body">
+    <h2>Name the thing, then the consequence</h2>
+    <div class="dd">
+      <div class="dd-col dd-do"><div class="dd-h">Write this</div><ul>
+        <li>It refuses to run: no host to isolate</li>
+        <li>Nothing new for 5 minutes, outside an approval wait</li>
+        <li>3 of 5 sources answered</li>
+        <li>This log appears to contain an injection attempt</li>
+        <li>Shadow mode: decisions are recorded, none are executed</li>
+        <li>The database is unreachable (ECONNREFUSED)</li>
+      </ul></div>
+      <div class="dd-col dd-no"><div class="dd-h">Not this</div><ul>
+        <li>Action failed</li>
+        <li>Stalled ⚠️</li>
+        <li>Clean</li>
+        <li>Suspicious content detected!</li>
+        <li>Safe mode enabled</li>
+        <li>Oops — something went wrong</li>
+      </ul></div>
+    </div>
+    <p>No exclamation marks, no emoji in product surfaces, no “Oops”. A triage console interrupts people at 3 a.m.;
+    cheerfulness reads as not understanding the situation. And <strong style="color:var(--p-fg)">never say a thing is
+    fine when nobody looked</strong> — <em>Not asked</em> is a different sentence from <em>nothing found</em>, and that
+    difference is the whole product.</p>
+  </div>
+</section>
+
+<!-- 9 ==================================================================== -->
+<section>
+  <div class="sec-n">§12<br>Never</div>
+  <div class="sec-body">
+    <h2>The anti-generic list</h2>
+    <p>NN/g's 2026 finding is that polish has stopped being a quality signal: audiences now ask whether a person cared
+    enough to design it themselves. These are the tells that answer <em>no</em>.</p>
+    <div class="grid g3" id="never"></div>
+    <div class="panel" style="border-color:var(--p-accent)">
+      <h3 style="color:var(--p-accent)">And the positive form, which matters more</h3>
+      <p style="margin-top:8px;font-size:.92rem;color:var(--p-muted)">
+      <strong style="color:var(--p-fg)">Leave the decision visible.</strong> The comments in <span class="mono">themes.css</span>
+      that explain why Attck's red was lowered, why <span class="mono">--hero</span> is an inset rather than an inversion,
+      why Punk's accent was darkened — that is the evidence a person was here. It is currently readable only by someone who
+      opens the CSS. Surface it: a shown decision is worth more than a claim of quality.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 10 =================================================================== -->
+<section>
+  <div class="sec-n">§14<br>Drift</div>
+  <div class="sec-body">
+    <h2>Closed</h2>
+    <p>Kept as the record of what was wrong and how it was closed — a drift fixed silently is a drift that comes back.
+    Measured across <span class="mono">src/styles.css</span> and <span class="mono">src/vulnpipe/styles.css</span>.</p>
+    <div class="tw"><table>
+      <tr><th>Drift</th><th>Was</th><th>Now</th></tr>
+      <tr><td>Type sizes</td><td class="num" style="color:var(--p-orange)">32 values</td><td class="num" style="color:var(--p-green)">8 rem steps</td></tr>
+      <tr><td>Spacing</td><td class="num" style="color:var(--p-orange)">1 3 5 9 14 18 22 26 28 30 34 38 46 60</td><td class="num" style="color:var(--p-green)">the 2px scale</td></tr>
+      <tr><td>Radius</td><td class="num" style="color:var(--p-orange)">11 values</td><td class="num" style="color:var(--p-green)">--radius · 50% · capsule</td></tr>
+      <tr><td>CSS comments</td><td class="num" style="color:var(--p-orange)">258 lines of French</td><td class="num" style="color:var(--p-green)">English</td></tr>
+      <tr><td><span class="mono">index.html</span></td><td class="num" style="color:var(--p-orange)">lang="fr"</td><td class="num" style="color:var(--p-green)">lang="en"</td></tr>
+    </table></div>
+    <p>None of these was a bug — the console worked throughout. All of them were the same defect: a variation that
+    carries no meaning, which is the definition of extraneous cognitive load. It was closed
+    <strong style="color:var(--p-fg)">in one pass rather than opportunistically,</strong> so the next hardcoded value is
+    immediately visible as an error.</p>
+    <div class="inset">npm run typecheck   clean
+npm run test        775 passed · 1 skipped · 0 failed
+npm run build       clean</div>
+  </div>
+</section>
+
+<div class="foot">
+  <div>MENATER · <span lang="he">מנטר</span> · brand sheet v1</div>
+  <div>Full reference: DESIGN.md</div>
+</div>
+</div>
+
+<script>
+(function(){
+  var SW = [
+    ["--bg","#232830","The page ground"],
+    ["--surface","#2b313a","Panels"],
+    ["--panel","#1f242b","A panel set back"],
+    ["--hero","#171b21","An inset — one step further from the text, never an inversion"],
+    ["--fg","#f2f4f7","Body text"],
+    ["--muted","#98a2b3","Secondary mentions"],
+    ["--faint","#757f8c","Labels, kickers"],
+    ["--line","#3d4550","Hairlines"],
+    ["--accent","#c3f53c","Waiting for a human. Primary action. Links"],
+    ["--red","#ff6b6b","Critical or failed"],
+    ["--orange","#ffb020","Worth a look"],
+    ["--green","#6ee7a0","Handled"]
+  ];
+  var sw = document.getElementById('swatches');
+  SW.forEach(function(s){
+    var d = document.createElement('div');
+    d.className = 'sw';
+    var chip = document.createElement('div');
+    chip.className = 'sw-chip'; chip.style.background = s[1];
+    var meta = document.createElement('div');
+    meta.className = 'sw-meta';
+    meta.innerHTML = '<div class="sw-name"></div><div class="sw-hex"></div><div class="sw-role"></div>';
+    meta.querySelector('.sw-name').textContent = s[0];
+    meta.querySelector('.sw-hex').textContent = s[1];
+    meta.querySelector('.sw-role').textContent = s[2];
+    d.appendChild(chip); d.appendChild(meta); sw.appendChild(d);
+  });
+
+  var THEMES = ['grayed','punk','blued','attck','acme','dark'];
+  var bar = document.getElementById('themebar');
+  var demo = document.getElementById('demo');
+  var name = document.getElementById('demo-name');
+  THEMES.forEach(function(t){
+    var b = document.createElement('button');
+    b.className = 'tbtn'; b.type = 'button'; b.textContent = t;
+    b.setAttribute('aria-pressed', String(t === 'grayed'));
+    b.addEventListener('click', function(){
+      demo.setAttribute('data-demo', t);
+      name.textContent = t;
+      Array.prototype.forEach.call(bar.children, function(c){
+        c.setAttribute('aria-pressed', String(c === b));
+      });
+    });
+    bar.appendChild(b);
+  });
+
+  var STEPS = [2,4,6,8,10,12,16,24];
+  var sc = document.getElementById('scale');
+  STEPS.forEach(function(n){
+    var d = document.createElement('div');
+    d.innerHTML = '<i></i><span></span>';
+    d.querySelector('i').style.height = (n * 2.4) + 'px';
+    d.querySelector('span').textContent = n;
+    sc.appendChild(d);
+  });
+
+  var NEVER = [
+    "Purple-to-blue gradients. Any gradient on a surface",
+    "Glassmorphism, blur, translucent panels over content",
+    "Radii above 8 px on anything that is not a dot",
+    "Emoji as icons, in product surfaces or headings",
+    "A hero section with a floating 3D shape",
+    "Seamless · powerful · effortless · AI-powered",
+    "Fake dashboards and fabricated metrics in screenshots",
+    "Green as a resting state — a green that was never earned",
+    "More than one accent on a screen",
+    "A colour carrying meaning with no word beside it",
+    "Decorative animation on load",
+    "Stock photography of any kind"
+  ];
+  var nv = document.getElementById('never');
+  NEVER.forEach(function(t){
+    var d = document.createElement('div');
+    d.className = 'panel';
+    d.style.padding = '12px 14px';
+    d.style.fontSize = '.86rem';
+    d.style.color = 'var(--p-muted)';
+    d.style.borderLeft = '2px solid var(--p-red)';
+    d.textContent = t;
+    nv.appendChild(d);
+  });
+})();
+</script>
+
+</body>
+</html>

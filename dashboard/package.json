@@ -1,0 +1,36 @@
+{
+  "name": "menater-console",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "MENATER \u2014 console unifiee : triage SOC (pipeline AI SOC Mini) et VulnPipe, l'analyse de vulnerabilites du code, dans la meme application web.",
+  "scripts": {
+    "serve": "node --experimental-strip-types scripts/start.ts soc",
+    "serve:vulnpipe": "node --experimental-strip-types scripts/start.ts code",
+    "web": "vite",
+    "dev": "concurrently -n soc,code,web -c blue,magenta,green \"npm:serve\" \"npm:serve:vulnpipe\" \"npm:web\"",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "tunnel": "node --experimental-strip-types scripts/tunnel.ts"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.4",
+    "@types/node": "^26.2.0",
+    "@types/pg": "^8.23.1",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.0.5",
+    "concurrently": "^10.0.5",
+    "jsdom": "^30.0.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "typescript": "^5.9.2",
+    "vite": "^8.2.1",
+    "vitest": "^4.1.10"
+  },
+  "dependencies": {
+    "pg": "^8.23.0"
+  }
+}

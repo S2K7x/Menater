@@ -1,0 +1,10 @@
+node_modules/
+.DS_Store
+dist/
+*.log
+
+# Secrets de la pile Docker. `.env.example` est le modèle versionné.
+.env
+
+# Python bytecode from the integration scripts
+__pycache__/

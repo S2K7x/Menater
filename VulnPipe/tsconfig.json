@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    // DOM ajouté pour l'app web ; le code serveur ne s'en sert pas.
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    "jsx": "react-jsx",
+    "strict": true,
+    // LE GARDE-FOU MANQUAIT DU CÔTÉ QUI EN A LE PLUS BESOIN.
+    //
+    // Ce service tourne sous `node --experimental-strip-types`, qui RETIRE les
+    // types sans compiler : une « parameter property »
+    // (`constructor(private readonly x: T)`) passe `tsc` et vitest, et fait
+    // échouer le démarrage. Le piège est dans la table de CLAUDE.md, la
+    // console l'interdit depuis longtemps — ici il ne l'était pas, et il a
+    // été refait. Le typecheck est le bon endroit pour l'attraper : les tests
+    // ne le peuvent pas, seule une exécution réelle le révélait.
+    "erasableSyntaxOnly": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "allowJs": false
+  },
+  // `web/` a ete supprime : l'interface vit dans la console MENATER.
+  "include": ["src/**/*.ts", "scripts/**/*.ts"],
+  "exclude": ["node_modules", "**/__fixtures__/**"]
+}

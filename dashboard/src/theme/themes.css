@@ -1,0 +1,280 @@
+/**
+ * The console's six themes.
+ *
+ * ============================================================================
+ * WHY THE PALETTE LIVES HERE AND NOT IN TYPESCRIPT
+ *
+ * A static stylesheet applies BEFORE React's first render. Composing the same
+ * colours in JavaScript would have shown the slate theme for a fraction of a
+ * second before replacing it — the classic flash, all the more visible because
+ * one of these themes is light.
+ *
+ * A small script in `index.html` sets `data-theme` on `<html>` before the page
+ * paints anything; these rules do the rest.
+ *
+ * ============================================================================
+ * WHAT A THEME MUST REDEFINE — ALL OF IT, NO EXCEPTION
+ *
+ * Every block redefines the ENTIRE palette, never a subset. Inheriting three
+ * tokens from the slate theme produces accidents that are invisible on review:
+ * a dark `--faint` left on a light background becomes unreadable, and nobody
+ * notices until they land on the screen concerned.
+ *
+ * `--accent-fg` is the trap: it is the text laid ON the accent. It follows the
+ * accent's contrast, not the background's. A dark accent (Punk) wants it
+ * light, a bright accent (Blued, Attck) wants it dark.
+ *
+ * ============================================================================
+ * `--hero` IS AN INSET SURFACE, NOT AN INVERTED ONE
+ *
+ * Wording corrected after a real defect. `--hero` was described as "the most
+ * contrasted background", which led to setting it near-black on the light
+ * theme — where it then equals `--fg` exactly. Result: black text on a black
+ * ground, in EIGHT places in the application (code blocks, connection strings,
+ * inset panels), all invisible when reading the CSS.
+ *
+ * Its real role is a recess: one step FURTHER from the text than `--panel`, in
+ * the same direction as the rest of the theme. Dark on a dark theme, light on
+ * a light theme. A test now checks that `--fg` stays readable on it.
+ * ============================================================================
+ */
+
+/* ==========================================================================
+   1. GRAYED — the historic theme. Slate and acid green.
+   ========================================================================== */
+:root,
+[data-theme='grayed'] {
+  --bg: #232830;
+  --surface: #2b313a;
+  --surface-2: #333a45;
+  --panel: #1f242b;
+  --hero: #171b21;
+
+  --fg: #f2f4f7;
+  --muted: #98a2b3;
+  /* Lifted from #6b7480: on a panel (`--surface`), the historic value fell
+     to 2.77:1. An original defect of the console, revealed by tooling the
+     contrast for the five new themes. */
+  --faint: #757f8c;
+
+  --line: #3d4550;
+  --line-strong: #4d5663;
+
+  --accent: #c3f53c;
+  --accent-dim: #9dc72a;
+  --accent-fg: #171b21;
+
+  --red: #ff6b6b;
+  --red-bg: #3a2226;
+  --orange: #ffb020;
+  --orange-bg: #382c18;
+  --green: #6ee7a0;
+  --green-bg: #1d3329;
+  --blue: #7cc4ff;
+  --blue-bg: #1b2b3a;
+  --grey: #8d97a5;
+
+  --shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+}
+
+/* ==========================================================================
+   2. PUNK — military khaki, corporate red, cream typography.
+   Red is the ACCENT here, so it is the colour of NORMAL states. `--red` is
+   shifted towards a light vermilion: without that, an error would no longer
+   be distinguishable from an ordinary button.
+   ========================================================================== */
+[data-theme='punk'] {
+  --bg: #3b3d2a;
+  --surface: #45472f;
+  --surface-2: #515338;
+  --panel: #33351f;
+  --hero: #24261a;
+
+  --fg: #f5e7bd;
+  --muted: #bfb389;
+  --faint: #9d9672;
+
+  --line: #565839;
+  --line-strong: #6d6f47;
+
+  /* Red darkened from the original poster (#e0231f): on that red, a
+     button's cream label fell to 3.85:1, below the readable floor. A
+     contrast test now refuses it. */
+  --accent: #c31f1b;
+  --accent-dim: #a01916;
+  --accent-fg: #f5e7bd;
+
+  --red: #ff997c;
+  --red-bg: #4a2a1f;
+  --orange: #f0b429;
+  --orange-bg: #47381a;
+  --green: #b7d44a;
+  --green-bg: #35401f;
+  --blue: #9fc3c9;
+  --blue-bg: #29383a;
+  --grey: #a99f7c;
+
+  --shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+}
+
+/* ==========================================================================
+   3. BLUED — saturated electric blue, lime green.
+   The ground IS a bright colour: surfaces rise in lightness instead of
+   falling, or the panels would disappear into the blue.
+   ========================================================================== */
+[data-theme='blued'] {
+  /* The original poster's blue (#2f45e6 as a surface) was too light to carry
+     the risk palette: the failure red fell to 3.3:1 on it, unreadable on the
+     screen that depends on it most — the triage queue. The ground came down
+     one step; the hue is untouched. */
+  --bg: #1f31c4;
+  --surface: #2739d6;
+  --surface-2: #3548e6;
+  --panel: #182699;
+  --hero: #111c78;
+
+  --fg: #ffffff;
+  --muted: #b9c4ff;
+  --faint: #909ff5;
+
+  --line: #3d50e0;
+  --line-strong: #5568f5;
+
+  --accent: #c8f24b;
+  --accent-dim: #a5cc33;
+  --accent-fg: #16249b;
+
+  --red: #ffb2a8;
+  --red-bg: #3a2a92;
+  --orange: #ffcf5c;
+  --orange-bg: #35318f;
+  --green: #c8f24b;
+  --green-bg: #23408c;
+  --blue: #a8e5ff;
+  --blue-bg: #1e3bb4;
+  --grey: #9fabf0;
+
+  --shadow: 0 18px 40px rgba(10, 20, 100, 0.5);
+}
+
+/* ==========================================================================
+   4. ATTCK — incandescent orange, signal yellow.
+   The yellow accent is very light: `--accent-fg` must be dark, or a white
+   label on a yellow button falls below the readable floor.
+   ========================================================================== */
+[data-theme='attck'] {
+  /* The original poster is a lit 3D render; laid down as interface surfaces
+     unchanged (#c23412), it carried NOTHING: failure red at 2.5:1, grey at
+     2.6:1. The values come down one step and the depth inverts — panels are
+     DARKER than the ground, as on the image's navigation band. The
+     incandescent hue is kept. */
+  --bg: #7a1c08;
+  --surface: #8f2410;
+  --surface-2: #a32d15;
+  --panel: #5e1406;
+  --hero: #3d0d03;
+
+  --fg: #fff3e4;
+  --muted: #f5bfa0;
+  /* Lightened: on this saturated orange ground the original value (#d99070)
+     fell to 2.7:1 — secondary mentions became undecipherable. */
+  --faint: #e0a58a;
+
+  --line: #b03a1c;
+  --line-strong: #d04f28;
+
+  --accent: #ffdd1c;
+  --accent-dim: #d9b800;
+  --accent-fg: #5e1406;
+
+  --red: #ffa796;
+  --red-bg: #6d1a08;
+  --orange: #ffdd1c;
+  --orange-bg: #6b2a08;
+  --green: #9ce5a8;
+  --green-bg: #2f4a1c;
+  --blue: #7fd4ff;
+  --blue-bg: #1d3a5c;
+  --grey: #e0a487;
+
+  --shadow: 0 18px 40px rgba(60, 10, 0, 0.5);
+}
+
+/* ==========================================================================
+   5. ACME — the LIGHT theme. Cream paper, printer's red, black ink.
+   No role inverts: `--hero` stays a recess, so a darker paper — never ink.
+   See the file header.
+   ========================================================================== */
+[data-theme='acme'] {
+  --bg: #f4f1ea;
+  --surface: #ffffff;
+  --surface-2: #ebe7dd;
+  --panel: #fbf9f5;
+  /* Inset paper, NOT ink: `--hero` carries `--fg` text. It used to be
+     #16150f, which is exactly `--fg` — a contrast of 1.00:1. */
+  --hero: #e4dfd2;
+
+  --fg: #16150f;
+  --muted: #5c5a51;
+  --faint: #8a877c;
+
+  --line: #d9d4c8;
+  --line-strong: #bdb7a8;
+
+  /* Darkened: the original bright red (#f4321f) could not carry readable
+     white text (3.95:1). That is the light-theme trap — there the accent
+     serves as a button GROUND, not only as a heading colour. */
+  --accent: #e01e0b;
+  --accent-dim: #b81909;
+  --accent-fg: #ffffff;
+
+  --red: #c71e10;
+  --red-bg: #fbe2de;
+  --orange: #9b5d00;
+  --orange-bg: #fbeed6;
+  --green: #1e7643;
+  --green-bg: #dcf0e3;
+  --blue: #17548f;
+  --blue-bg: #dde9f7;
+  --grey: #6f6c62;
+
+  /* A markedly more discreet shadow: on a light ground, the dark theme's
+     shadow reads as dirt rather than as relief. */
+  --shadow: 0 12px 28px rgba(22, 21, 15, 0.12);
+}
+
+/* ==========================================================================
+   6. DARK — near-black grey, application blue. The most neutral of the six.
+   ========================================================================== */
+[data-theme='dark'] {
+  --bg: #16181c;
+  --surface: #1e2126;
+  --surface-2: #282c33;
+  --panel: #101216;
+  --hero: #0a0b0e;
+
+  --fg: #f0f2f5;
+  --muted: #9aa1ad;
+  --faint: #6a7280;
+
+  --line: #2c3038;
+  --line-strong: #3b414b;
+
+  /* Darkened: the original application blue (#2f7cf6) carried white poorly
+     (3.94:1). Same cause as on Acme. */
+  --accent: #1269f5;
+  --accent-dim: #0955cf;
+  --accent-fg: #ffffff;
+
+  --red: #f4636b;
+  --red-bg: #33191d;
+  --orange: #f0a63c;
+  --orange-bg: #33260f;
+  --green: #34c77b;
+  --green-bg: #122e20;
+  --blue: #56a8ff;
+  --blue-bg: #14263a;
+  --grey: #838b98;
+
+  --shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
+}

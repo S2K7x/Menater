@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MENATER — Security Operations</title>
+    <!--
+      Title and description are deliberately plain. The product is English-only
+      now, so `lang` is fixed here rather than set at runtime by the language
+      provider; the i18n catalogue machinery is kept because it is what keeps
+      user-facing strings out of components, not because a second locale is
+      coming back.
+    -->
+    <meta
+      name="description"
+      content="MENATER — security operations console: alert triage, human approvals, audit trail, and code vulnerability analysis."
+    />
+    <!--
+      The same condensed heavy weight as VulnPipe: it is what carries the
+      visual register. Falls back to system faces when the network is absent —
+      a console on an isolated network must not lose its hierarchy because a
+      CDN is unreachable, which is why the display fallback stack is condensed
+      and heavy rather than a default sans.
+    -->
+    <!--
+      The slate mark, shown between the first paint and React mounting. From
+      then on `theme/favicon.ts` repaints it in the chosen theme's palette —
+      the tab is the one surface the CSS tokens cannot reach. A test keeps this
+      file and the generated one in step.
+    -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <!--
+      Theme set BEFORE the first paint.
+      This script deliberately duplicates `src/theme/context.tsx`: it runs
+      before any module, so it can import nothing. Leaving it to React would
+      have shown the page in slate grey for a fraction of a second before
+      switching — plainly visible on the light theme. A full `try` because
+      `localStorage` can throw (strict private browsing, a partitioned iframe);
+      in that case we simply keep the default theme.
+    -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('menater.theme');
+          if (['grayed', 'punk', 'blued', 'attck', 'acme', 'dark'].indexOf(t) === -1) t = 'grayed';
+          document.documentElement.setAttribute('data-theme', t);
+          document.documentElement.style.colorScheme = t === 'acme' ? 'light' : 'dark';
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'grayed');
+        }
+      })();
+    </script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

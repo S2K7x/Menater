@@ -1,0 +1,169 @@
+{
+  "channel": "#soc-approvals",
+  "text": "Approbation requise — ALT-2026-0821-0093 — isolate_host_temporary",
+  "blocks": [
+    {
+      "type": "header",
+      "text": {
+        "type": "plain_text",
+        "text": ":lock: Approbation requise — action SOC",
+        "emoji": true
+      }
+    },
+    {
+      "type": "context",
+      "elements": [
+        {
+          "type": "mrkdwn",
+          "text": "*ALT-2026-0821-0093* • `Multiple failed SSH logins followed by successful auth` • severite `high` • 185.220.101.47 → 10.12.4.31 • _shadow_mode desactive : cette action sera reellement executee_"
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "fields": [
+        {
+          "type": "mrkdwn",
+          "text": "*Verdict IA*\n`true_positive`"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Confidence*\n`0.83` _(brute 0.91)_"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Action proposee*\n`isolate_host_temporary`"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Origine*\n`claude`"
+        }
+      ]
+    },
+    {
+      "type": "divider"
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*:dart: INTENT — ce que le systeme propose de faire*\nIsoler temporairement 10.12.4.31 du reseau pendant 60 minutes (quarantaine reseau, la machine reste allumee et accessible en console)."
+      }
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*:mag: DATA LINEAGE — sur quoi la decision se base*\n• `enrichment.abuseipdb.abuse_confidence_score`\n• `enrichment.abuseipdb.distinct_reporters`\n• `enrichment.shodan.tags`\n\n_Statut des sources :_\n• *shodan* : `ok`\n• *abuseipdb* : `ok`\n• *vt* : `unavailable`"
+      }
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*:boom: BLAST RADIUS — impact si execute*\nLa machine 10.12.4.31 perd toute connectivite reseau pendant 60 min : sessions utilisateur coupees, services heberges injoignables, sauvegardes et supervision en echec sur cet hote. Aucun autre hote impacte. Aucune donnee touchee."
+      }
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*:leftwards_arrow_with_hook: ROLLBACK PLAN — comment annuler*\nReversion automatique a expiration du TTL de 60 min sans intervention. Reversion manuelle immediate : POST http://mock-edr.soc.local/api/isolate/revert avec alert_id=ALT-2026-0821-0093 (effet < 30 s)."
+      }
+    },
+    {
+      "type": "divider"
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*:speech_balloon: Raisonnement du modele*\n>The source IP is a Tor exit node with an AbuseIPDB score of 92 across 141 distinct reporters, and the rule describes a successful auth after repeated failures. VirusTotal was unavailable, so no file-level corroboration was possible."
+      }
+    },
+    {
+      "type": "context",
+      "elements": [
+        {
+          "type": "mrkdwn",
+          "text": ":warning: *Approbation demandee car :* action de confinement proposee (isolate_host_temporary) ; confidence 0.83 < 0.85\n:shield: *Guardrails appliques :* confidence plafonnee a 0.85 (enrichment degrade: vt)"
+        }
+      ]
+    },
+    {
+      "type": "input",
+      "optional": true,
+      "block_id": "reason_block",
+      "label": {
+        "type": "plain_text",
+        "text": "Motif (obligatoire en cas de rejet)",
+        "emoji": true
+      },
+      "element": {
+        "type": "plain_text_input",
+        "action_id": "reason_input",
+        "multiline": true,
+        "placeholder": {
+          "type": "plain_text",
+          "text": "Ce qui vous fait approuver ou rejeter…"
+        }
+      }
+    },
+    {
+      "type": "actions",
+      "block_id": "soc_approval_actions",
+      "elements": [
+        {
+          "type": "button",
+          "action_id": "soc_approve",
+          "style": "primary",
+          "text": {
+            "type": "plain_text",
+            "text": "Approuver",
+            "emoji": true
+          },
+          "value": "{\"resume_url\":\"http://10.100.102.100:5678/webhook-waiting/8f3c1e02-...\",\"alert_id\":\"ALT-2026-0821-0093\",\"action\":\"isolate_host_temporary\",\"decision\":\"approve\"}",
+          "confirm": {
+            "title": {
+              "type": "plain_text",
+              "text": "Challenge — confirmez"
+            },
+            "text": {
+              "type": "mrkdwn",
+              "text": "Confirmer : Isoler temporairement 10.12.4.31 du reseau pendant 60 minutes (quarantaine reseau, la machine reste allumee et accessible en console).\n\nVous engagez votre nom sur cette action. Elle sera tracee dans l audit log avec votre identite Slack."
+            },
+            "confirm": {
+              "type": "plain_text",
+              "text": "Je confirme, executer"
+            },
+            "deny": {
+              "type": "plain_text",
+              "text": "Annuler"
+            },
+            "style": "danger"
+          }
+        },
+        {
+          "type": "button",
+          "action_id": "soc_reject",
+          "style": "danger",
+          "text": {
+            "type": "plain_text",
+            "text": "Rejeter",
+            "emoji": true
+          },
+          "value": "{\"resume_url\":\"http://10.100.102.100:5678/webhook-waiting/8f3c1e02-...\",\"alert_id\":\"ALT-2026-0821-0093\",\"action\":\"isolate_host_temporary\",\"decision\":\"reject\"}"
+        }
+      ]
+    },
+    {
+      "type": "context",
+      "elements": [
+        {
+          "type": "mrkdwn",
+          "text": ":hourglass_flowing_sand: Sans reponse sous 30 minutes, aucune action ne sera executee et l alerte sera escaladee vers #soc-escalation."
+        }
+      ]
+    }
+  ]
+}

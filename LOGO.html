@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="MENATER logo routes: six candidate marks scored against the design literature.">
+<title>MENATER Logo Routes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;700&display=swap">
+<style>
+/* Dark-first: the brand palette IS `grayed`. Light = the product's own `acme`. */
+:root{
+  --p-bg:#232830; --p-surface:#2b313a; --p-panel:#1f242b; --p-hero:#171b21;
+  --p-fg:#f2f4f7; --p-muted:#98a2b3; --p-faint:#757f8c;
+  --p-line:#3d4550; --p-line-strong:#4d5663;
+  --p-accent:#c3f53c; --p-accent-fg:#171b21;
+  --p-red:#ff6b6b; --p-red-bg:#3a2226;
+  --p-orange:#ffb020; --p-orange-bg:#382c18;
+  --p-green:#6ee7a0; --p-green-bg:#1d3329;
+  --display:'Archivo Black','Helvetica Neue','Arial Narrow',Impact,system-ui,sans-serif;
+  --sans:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,'SF Mono',Menlo,monospace;
+  --r:4px; color-scheme:dark;
+}
+@media (prefers-color-scheme:light){
+  :root:not([data-theme="dark"]){
+    --p-bg:#f4f1ea; --p-surface:#ffffff; --p-panel:#fbf9f5; --p-hero:#e4dfd2;
+    --p-fg:#16150f; --p-muted:#5c5a51; --p-faint:#8a877c;
+    --p-line:#d9d4c8; --p-line-strong:#bdb7a8;
+    --p-accent:#e01e0b; --p-accent-fg:#ffffff;
+    --p-red:#c71e10; --p-red-bg:#fbe2de;
+    --p-orange:#9b5d00; --p-orange-bg:#fbeed6;
+    --p-green:#1e7643; --p-green-bg:#dcf0e3;
+    color-scheme:light;
+  }
+}
+:root[data-theme="light"]{
+  --p-bg:#f4f1ea; --p-surface:#ffffff; --p-panel:#fbf9f5; --p-hero:#e4dfd2;
+  --p-fg:#16150f; --p-muted:#5c5a51; --p-faint:#8a877c;
+  --p-line:#d9d4c8; --p-line-strong:#bdb7a8;
+  --p-accent:#e01e0b; --p-accent-fg:#ffffff;
+  --p-red:#c71e10; --p-red-bg:#fbe2de;
+  --p-orange:#9b5d00; --p-orange-bg:#fbeed6;
+  --p-green:#1e7643; --p-green-bg:#dcf0e3;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+body{margin:0; background:var(--p-bg); color:var(--p-fg); font-family:var(--sans);
+  font-size:15px; line-height:1.6; -webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px; margin:0 auto; padding:0 24px 96px}
+h1,h2,h3{font-family:var(--display); text-transform:uppercase; font-weight:900;
+  letter-spacing:-.01em; line-height:1.05; margin:0; text-wrap:balance}
+h1{font-size:clamp(2.2rem,7vw,4rem); letter-spacing:-.02em}
+h2{font-size:clamp(1.25rem,2.4vw,1.7rem)}
+h3{font-size:1.02rem; letter-spacing:.02em}
+p{margin:0; max-width:68ch}
+a{color:var(--p-accent)}
+a:focus-visible,button:focus-visible{outline:2px solid var(--p-accent); outline-offset:3px}
+.kicker{font-family:var(--mono); font-size:.68rem; letter-spacing:.22em;
+  text-transform:uppercase; color:var(--p-faint)}
+.mono{font-family:var(--mono)}
+.lede{font-size:1.05rem; color:var(--p-muted)}
+
+header{padding:56px 0 8px; display:flex; flex-direction:column; gap:22px}
+.rule{border:0; border-top:1px solid var(--p-line); margin:0}
+
+/* --- research strip ------------------------------------------------------ */
+.findings{display:grid; gap:10px; grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
+.find{border:1px solid var(--p-line); border-radius:var(--r); padding:14px;
+  background:var(--p-surface); display:flex; flex-direction:column; gap:6px}
+.find b{font-family:var(--mono); font-size:.66rem; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--p-faint); font-weight:400}
+.find span{font-size:.88rem; color:var(--p-muted)}
+.find em{color:var(--p-fg); font-style:normal; font-weight:700}
+
+/* --- routes -------------------------------------------------------------- */
+.route{border-top:1px solid var(--p-line); padding-top:24px; margin-top:44px;
+  display:flex; flex-direction:column; gap:18px}
+.route-head{display:flex; align-items:baseline; gap:14px; flex-wrap:wrap}
+.route-n{font-family:var(--mono); font-size:.68rem; letter-spacing:.18em;
+  color:var(--p-faint); text-transform:uppercase}
+.verdict{font-family:var(--mono); font-size:.62rem; letter-spacing:.12em;
+  text-transform:uppercase; padding:3px 8px; border-radius:2px; margin-left:auto}
+.v-keep{color:var(--p-green); background:var(--p-green-bg)}
+.v-maybe{color:var(--p-orange); background:var(--p-orange-bg)}
+.v-drop{color:var(--p-red); background:var(--p-red-bg)}
+
+.strip{display:flex; gap:14px; flex-wrap:wrap; align-items:stretch}
+.cell{border:1px solid var(--p-line); border-radius:var(--r); background:var(--p-hero);
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:10px; padding:16px; min-width:104px}
+.cell.on-accent{background:var(--p-accent); color:var(--p-accent-fg); border-color:var(--p-accent)}
+.cell.on-fg{background:var(--p-fg); color:var(--p-bg); border-color:var(--p-fg)}
+.cell .sz{font-family:var(--mono); font-size:.6rem; letter-spacing:.12em;
+  color:var(--p-faint); text-transform:uppercase}
+.cell.on-accent .sz{color:var(--p-accent-fg); opacity:.7}
+.cell.on-fg .sz{color:var(--p-bg); opacity:.7}
+.mk{display:block; color:var(--p-accent)}
+.cell.on-accent .mk,.cell.on-fg .mk{color:currentColor}
+.sizes{display:flex; align-items:flex-end; gap:18px; padding:16px;
+  border:1px solid var(--p-line); border-radius:var(--r); background:var(--p-hero)}
+.sizes figure{margin:0; display:flex; flex-direction:column; align-items:center; gap:8px}
+.sizes figcaption{font-family:var(--mono); font-size:.6rem; color:var(--p-faint)}
+
+.lock{display:flex; align-items:center; gap:14px; padding:16px 18px;
+  border:1px solid var(--p-line); border-radius:var(--r); background:var(--p-surface)}
+.lock .word{font-family:var(--display); text-transform:uppercase; font-size:1.7rem;
+  letter-spacing:-.02em; line-height:1}
+.lock .heb{font-size:1.1rem; color:var(--p-faint); direction:rtl; line-height:1}
+
+.score{width:100%; border-collapse:collapse; font-size:.84rem}
+.score th{text-align:left; font-family:var(--mono); font-size:.62rem; font-weight:400;
+  letter-spacing:.14em; text-transform:uppercase; color:var(--p-faint);
+  padding:0 12px 7px 0; border-bottom:1px solid var(--p-line); white-space:nowrap}
+.score td{padding:8px 12px 8px 0; border-bottom:1px solid var(--p-line); color:var(--p-muted)}
+.score td:first-child{color:var(--p-fg); white-space:nowrap}
+.yes{color:var(--p-green)} .no{color:var(--p-red)} .part{color:var(--p-orange)}
+.tw{overflow-x:auto}
+
+.never{display:grid; gap:10px; grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.never div{border:1px solid var(--p-line); border-left:2px solid var(--p-red);
+  border-radius:var(--r); padding:11px 13px; font-size:.86rem; color:var(--p-muted);
+  background:var(--p-surface)}
+.foot{margin-top:56px; border-top:1px solid var(--p-line); padding-top:18px;
+  font-family:var(--mono); font-size:.7rem; color:var(--p-faint);
+  letter-spacing:.06em; text-transform:uppercase;
+  display:flex; justify-content:space-between; gap:14px; flex-wrap:wrap}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute;overflow:hidden" aria-hidden="true">
+  <!-- 1 · FRAME — registration marks around a thing being watched -->
+  <symbol id="m-frame" viewBox="0 0 32 32">
+    <g fill="currentColor">
+      <rect x="1" y="1" width="11" height="3"/><rect x="1" y="1" width="3" height="11"/>
+      <rect x="20" y="1" width="11" height="3"/><rect x="28" y="1" width="3" height="11"/>
+      <rect x="1" y="28" width="11" height="3"/><rect x="1" y="20" width="3" height="11"/>
+      <rect x="20" y="28" width="11" height="3"/><rect x="28" y="20" width="3" height="11"/>
+      <rect x="13" y="13" width="6" height="6"/>
+    </g>
+  </symbol>
+  <!-- 2 · REGISTER — five ticks, the middle one is a stub: its place is kept -->
+  <symbol id="m-register" viewBox="0 0 32 32">
+    <g fill="currentColor">
+      <rect x="0" y="5" width="4" height="22"/>
+      <rect x="7" y="5" width="4" height="22"/>
+      <rect x="14" y="21" width="4" height="6"/>
+      <rect x="21" y="5" width="4" height="22"/>
+      <rect x="28" y="5" width="4" height="22"/>
+    </g>
+  </symbol>
+  <!-- 3 · PROMPT — a cursor held between brackets: watching, in the present -->
+  <symbol id="m-prompt" viewBox="0 0 32 32">
+    <g fill="currentColor">
+      <rect x="1" y="3" width="8" height="3"/><rect x="1" y="3" width="3" height="26"/>
+      <rect x="1" y="26" width="8" height="3"/>
+      <rect x="23" y="3" width="8" height="3"/><rect x="28" y="3" width="3" height="26"/>
+      <rect x="23" y="26" width="8" height="3"/>
+      <rect x="13" y="8" width="6" height="16"/>
+    </g>
+  </symbol>
+  <!-- 4 · CUT CORNER — the incumbent. Angular, but asymmetric -->
+  <symbol id="m-cut" viewBox="0 0 32 32">
+    <path fill="currentColor" d="M0 0 H32 V19 L19 32 H0 Z"/>
+  </symbol>
+  <!-- 5 · HALVES — what has happened, and what is about to -->
+  <symbol id="m-halves" viewBox="0 0 32 32">
+    <path fill="currentColor" d="M0 0 H32 L0 32 Z"/>
+    <path fill="none" stroke="currentColor" stroke-width="3" d="M31.5 1.5 V30.5 H2.5 Z"/>
+  </symbol>
+  <!-- 6 · CHAIN — the audit chain, its last link still open -->
+  <symbol id="m-chain" viewBox="0 0 32 32">
+    <g fill="currentColor">
+      <rect x="0" y="11" width="10" height="10"/>
+      <rect x="11" y="11" width="10" height="10"/>
+      <path d="M22 11h10v10H22V11zm2.5 2.5v5h5v-5h-5z"/>
+    </g>
+  </symbol>
+</svg>
+
+<div class="wrap">
+
+<header>
+  <div class="kicker">MENATER · Identity · Six routes, tested against the literature</div>
+  <h1>The mark</h1>
+  <p class="lede" style="color:var(--p-fg)"><strong>Decided: Route&nbsp;2, the Register.</strong>
+  It is in the application &mdash; header and sign-in lockups, and the browser tab, which repaints
+  itself in whichever of the six themes is chosen. The record of the other five is kept below, because
+  a rejected option is part of the decision.</p>
+  <p class="lede">Six candidates for the symbol that sits beside the wordmark. Each is drawn on the same
+  32&nbsp;unit grid, shown at the four sizes that decide it, and scored against what the research
+  actually says — not against taste. <strong style="color:var(--p-fg)">The wordmark is the logo;
+  the mark earns the right to travel alone only once people recognise it.</strong></p>
+  <hr class="rule">
+</header>
+
+<section style="margin-top:32px;display:flex;flex-direction:column;gap:18px">
+  <h2>What the evidence constrains</h2>
+  <div class="findings">
+    <div class="find"><b>Shape</b><span><em>Angular, not circular.</em> Circular logos activate softness;
+      angular ones activate hardness and durability, and read as more premium.</span></div>
+    <div class="find"><b>Descriptiveness</b><span><em>Describe the method, never the threat.</em>
+      Descriptive logos raise brand evaluations — but the effect <em>reverses</em> for categories carrying
+      negative associations. Security is one.</span></div>
+    <div class="find"><b>Recognition</b><span><em>Natural, harmonious, moderately elaborate.</em>
+      195 logos, 13 characteristics. Pure geometric abstraction scores worse on true recognition and
+      worse on false recognition.</span></div>
+    <div class="find"><b>Symmetry</b><span><em>Symmetric here.</em> Asymmetry raises perceived excitement
+      and pays only for brands whose personality is excitement. MENATER's is competence and restraint.</span></div>
+    <div class="find"><b>Solo use</b><span><em>Not yet.</em> Only three icons are universally understood —
+      home, print, search. Everything else needs the word beside it.</span></div>
+    <div class="find"><b>Placement</b><span><em>Top left, clickable.</em> 89% better brand recall than on
+      the right; 6× more likely to get someone home in one click than centred.</span></div>
+  </div>
+</section>
+
+<!-- ROUTE 1 -->
+<article class="route">
+  <div class="route-head"><span class="route-n">Route 1</span><h2>Frame</h2>
+    <span class="verdict v-maybe">Runner-up</span></div>
+  <p>Registration marks around something held in view. It describes <strong style="color:var(--p-fg)">the
+  act the name means</strong> — <span lang="he">מנטר</span>, watching, in the present — and it describes it
+  without drawing a threat, which is the one thing the descriptiveness research says to avoid here.
+  Four-fold symmetric, entirely angular, and <em>natural</em> in Henderson &amp; Cote's sense: crop marks and
+  viewfinders are things people have seen. The centre block is the observed thing; the frame never claims
+  to know what it is.</p>
+  <div class="strip">
+    <div class="cell"><svg class="mk" width="88" height="88"><use href="#m-frame"/></svg><span class="sz">Accent</span></div>
+    <div class="cell on-fg"><svg class="mk" width="88" height="88"><use href="#m-frame"/></svg><span class="sz">Reversed</span></div>
+    <div class="cell on-accent"><svg class="mk" width="88" height="88"><use href="#m-frame"/></svg><span class="sz">Knocked out</span></div>
+    <div class="sizes">
+      <figure><svg class="mk" width="32" height="32"><use href="#m-frame"/></svg><figcaption>32</figcaption></figure>
+      <figure><svg class="mk" width="24" height="24"><use href="#m-frame"/></svg><figcaption>24</figcaption></figure>
+      <figure><svg class="mk" width="16" height="16"><use href="#m-frame"/></svg><figcaption>16 · favicon</figcaption></figure>
+    </div>
+  </div>
+  <div class="lock"><svg class="mk" width="40" height="40"><use href="#m-frame"/></svg>
+    <span class="word">MENATER</span><span class="heb" lang="he">מנטר</span></div>
+</article>
+
+<!-- ROUTE 2 -->
+<article class="route">
+  <div class="route-head"><span class="route-n">Route 2</span><h2>Register</h2>
+    <span class="verdict v-keep">Chosen · shipped</span></div>
+  <p>Five ticks, and the middle one is a stub rather than a full bar. It is the product's first principle
+  drawn literally: <strong style="color:var(--p-fg)">a missing value keeps its place instead of being
+  omitted.</strong> Absence sits at the centre, so the mark stays symmetric — the gap is the composition,
+  not a defect in it. Reads as a scale, a signal, a row of records; angular throughout; and it is the only
+  route here that a viewer can be <em>told</em> the meaning of once and never forget.</p>
+  <div class="strip">
+    <div class="cell"><svg class="mk" width="88" height="88"><use href="#m-register"/></svg><span class="sz">Accent</span></div>
+    <div class="cell on-fg"><svg class="mk" width="88" height="88"><use href="#m-register"/></svg><span class="sz">Reversed</span></div>
+    <div class="cell on-accent"><svg class="mk" width="88" height="88"><use href="#m-register"/></svg><span class="sz">Knocked out</span></div>
+    <div class="sizes">
+      <figure><svg class="mk" width="32" height="32"><use href="#m-register"/></svg><figcaption>32</figcaption></figure>
+      <figure><svg class="mk" width="24" height="24"><use href="#m-register"/></svg><figcaption>24</figcaption></figure>
+      <figure><svg class="mk" width="16" height="16"><use href="#m-register"/></svg><figcaption>16 · favicon</figcaption></figure>
+    </div>
+  </div>
+  <div class="lock"><svg class="mk" width="40" height="40"><use href="#m-register"/></svg>
+    <span class="word">MENATER</span><span class="heb" lang="he">מנטר</span></div>
+</article>
+
+<!-- ROUTE 3 -->
+<article class="route">
+  <div class="route-head"><span class="route-n">Route 3</span><h2>Prompt</h2>
+    <span class="verdict v-maybe">Strong, with one risk</span></div>
+  <p>A cursor held between two brackets. The name is a verb in the present tense, and a cursor is the one
+  glyph that means <em>right now, and waiting</em> — which is also the console's only accent-bearing state,
+  <span class="mono">needs&nbsp;human</span>. Symmetric, angular, and maximally natural for this audience.
+  <strong style="color:var(--p-fg)">The risk is category sameness:</strong> brackets and cursors are the
+  most-used shorthand in developer tooling, so it identifies the field faster than it identifies the
+  product.</p>
+  <div class="strip">
+    <div class="cell"><svg class="mk" width="88" height="88"><use href="#m-prompt"/></svg><span class="sz">Accent</span></div>
+    <div class="cell on-fg"><svg class="mk" width="88" height="88"><use href="#m-prompt"/></svg><span class="sz">Reversed</span></div>
+    <div class="cell on-accent"><svg class="mk" width="88" height="88"><use href="#m-prompt"/></svg><span class="sz">Knocked out</span></div>
+    <div class="sizes">
+      <figure><svg class="mk" width="32" height="32"><use href="#m-prompt"/></svg><figcaption>32</figcaption></figure>
+      <figure><svg class="mk" width="24" height="24"><use href="#m-prompt"/></svg><figcaption>24</figcaption></figure>
+      <figure><svg class="mk" width="16" height="16"><use href="#m-prompt"/></svg><figcaption>16 · favicon</figcaption></figure>
+    </div>
+  </div>
+  <div class="lock"><svg class="mk" width="40" height="40"><use href="#m-prompt"/></svg>
+    <span class="word">MENATER</span><span class="heb" lang="he">מנטר</span></div>
+</article>
+
+<!-- ROUTE 4 -->
+<article class="route">
+  <div class="route-head"><span class="route-n">Route 4</span><h2>Cut corner</h2>
+    <span class="verdict v-drop">No longer recommended</span></div>
+  <p>The incumbent, kept here because a rejected option is part of the decision. A solid square with one
+  corner removed — the missing field, drawn. It is angular, it survives 16&nbsp;px better than anything
+  else here, and it is the simplest to reproduce. But it is <strong style="color:var(--p-fg)">asymmetric,
+  and asymmetry only pays for brands whose personality is excitement</strong>; MENATER's is competence.
+  And on its own it is pure geometry — it depicts nothing, which is the weakest position for a brand nobody
+  has met yet. Route&nbsp;2 keeps the same idea and fixes both problems.</p>
+  <div class="strip">
+    <div class="cell"><svg class="mk" width="88" height="88"><use href="#m-cut"/></svg><span class="sz">Accent</span></div>
+    <div class="cell on-fg"><svg class="mk" width="88" height="88"><use href="#m-cut"/></svg><span class="sz">Reversed</span></div>
+    <div class="cell on-accent"><svg class="mk" width="88" height="88"><use href="#m-cut"/></svg><span class="sz">Knocked out</span></div>
+    <div class="sizes">
+      <figure><svg class="mk" width="32" height="32"><use href="#m-cut"/></svg><figcaption>32</figcaption></figure>
+      <figure><svg class="mk" width="24" height="24"><use href="#m-cut"/></svg><figcaption>24</figcaption></figure>
+      <figure><svg class="mk" width="16" height="16"><use href="#m-cut"/></svg><figcaption>16 · favicon</figcaption></figure>
+    </div>
+  </div>
+  <div class="lock"><svg class="mk" width="40" height="40"><use href="#m-cut"/></svg>
+    <span class="word">MENATER</span><span class="heb" lang="he">מנטר</span></div>
+</article>
+
+<!-- ROUTE 5 -->
+<article class="route">
+  <div class="route-head"><span class="route-n">Route 5</span><h2>Halves</h2>
+    <span class="verdict v-maybe">Right idea, wrong scale</span></div>
+  <p>The product's actual structure: one triangle solid for what <em>has happened</em> — the SOC, where an
+  alert is already an incident — and one drawn in outline for what <em>is about to</em>, the flaw still in
+  the code. It is the only route that says there are two halves, and it is the truest description of the
+  thing. <strong style="color:var(--p-fg)">It also loses its whole point at 16&nbsp;px</strong>, where the
+  outline half fills in and the mark collapses to a square. A logo that only works large is a logo that does
+  not work.</p>
+  <div class="strip">
+    <div class="cell"><svg class="mk" width="88" height="88"><use href="#m-halves"/></svg><span class="sz">Accent</span></div>
+    <div class="cell on-fg"><svg class="mk" width="88" height="88"><use href="#m-halves"/></svg><span class="sz">Reversed</span></div>
+    <div class="cell on-accent"><svg class="mk" width="88" height="88"><use href="#m-halves"/></svg><span class="sz">Knocked out</span></div>
+    <div class="sizes">
+      <figure><svg class="mk" width="32" height="32"><use href="#m-halves"/></svg><figcaption>32</figcaption></figure>
+      <figure><svg class="mk" width="24" height="24"><use href="#m-halves"/></svg><figcaption>24</figcaption></figure>
+      <figure><svg class="mk" width="16" height="16"><use href="#m-halves"/></svg><figcaption>16 · favicon</figcaption></figure>
+    </div>
+  </div>
+  <div class="lock"><svg class="mk" width="40" height="40"><use href="#m-halves"/></svg>
+    <span class="word">MENATER</span><span class="heb" lang="he">מנטר</span></div>
+</article>
+
+<!-- ROUTE 6 -->
+<article class="route">
+  <div class="route-head"><span class="route-n">Route 6</span><h2>Chain</h2>
+    <span class="verdict v-maybe">Precise, and easily misread</span></div>
+  <p>Three links of the hash-chained audit log, the last one still open — the record is written, and the
+  present entry is not closed yet. Angular, symmetric in its rhythm, and descriptive of the mechanism the
+  product is proudest of. Two costs: <strong style="color:var(--p-fg)">a chain of blocks reads as
+  "blockchain"</strong> to a large share of the audience, which is an association nobody chose; and the open
+  link's 1&nbsp;px stroke is the first thing to disappear at favicon size.</p>
+  <div class="strip">
+    <div class="cell"><svg class="mk" width="88" height="88"><use href="#m-chain"/></svg><span class="sz">Accent</span></div>
+    <div class="cell on-fg"><svg class="mk" width="88" height="88"><use href="#m-chain"/></svg><span class="sz">Reversed</span></div>
+    <div class="cell on-accent"><svg class="mk" width="88" height="88"><use href="#m-chain"/></svg><span class="sz">Knocked out</span></div>
+    <div class="sizes">
+      <figure><svg class="mk" width="32" height="32"><use href="#m-chain"/></svg><figcaption>32</figcaption></figure>
+      <figure><svg class="mk" width="24" height="24"><use href="#m-chain"/></svg><figcaption>24</figcaption></figure>
+      <figure><svg class="mk" width="16" height="16"><use href="#m-chain"/></svg><figcaption>16 · favicon</figcaption></figure>
+    </div>
+  </div>
+  <div class="lock"><svg class="mk" width="40" height="40"><use href="#m-chain"/></svg>
+    <span class="word">MENATER</span><span class="heb" lang="he">מנטר</span></div>
+</article>
+
+<!-- SCORECARD -->
+<article class="route">
+  <div class="route-head"><span class="route-n">Scorecard</span><h2>Scored against the evidence</h2></div>
+  <div class="tw"><table class="score">
+    <tr><th>Route</th><th>Angular</th><th>Symmetric</th><th>Describes</th><th>Survives 16px</th><th>The cost</th></tr>
+    <tr><td>1 · Frame</td><td class="yes">yes</td><td class="yes">4-fold</td><td class="yes">the act of watching</td><td class="yes">yes</td><td>Reads as a crop mark before it reads as a brand</td></tr>
+    <tr><td>2 · Register</td><td class="yes">yes</td><td class="yes">mirror</td><td class="yes">missing stays missing</td><td class="yes">yes</td><td>Needs telling once; obvious forever after</td></tr>
+    <tr><td>3 · Prompt</td><td class="yes">yes</td><td class="yes">mirror</td><td class="part">the present tense</td><td class="yes">yes</td><td>Identifies the field faster than the product</td></tr>
+    <tr><td>4 · Cut corner</td><td class="yes">yes</td><td class="no">no</td><td class="no">nothing</td><td class="yes">best</td><td>Asymmetry buys excitement, which is off-personality</td></tr>
+    <tr><td>5 · Halves</td><td class="yes">yes</td><td class="part">diagonal</td><td class="yes">the two halves</td><td class="no">no</td><td>Collapses to a plain square when small</td></tr>
+    <tr><td>6 · Chain</td><td class="yes">yes</td><td class="part">rhythmic</td><td class="yes">the audit chain</td><td class="part">partly</td><td>Reads as blockchain to many</td></tr>
+  </table></div>
+</article>
+
+<!-- WORDMARK -->
+<article class="route">
+  <div class="route-head"><span class="route-n">Constant</span><h2>The wordmark does not change</h2></div>
+  <p>Whichever mark wins, <strong style="color:var(--p-fg)">MENATER set in Archivo Black, uppercase,
+  tracking −0.01em, is the logo.</strong> It is legible at every size, it needs no explanation, and it is
+  the only element that will be recognised before the brand is known. Clear space is the cap-height of the
+  M on all four sides; minimum width for the lockup is 88&nbsp;px, and below that the mark goes alone.</p>
+  <div class="lock" style="justify-content:center;padding:34px 24px">
+    <span class="word" style="font-size:clamp(2rem,6vw,3.4rem)">MENATER</span>
+  </div>
+  <p><span lang="he">מנטר</span> appears once, small, as an origin note — on an About screen, the brand page,
+  the repository README. It is a signature, never part of the lockup: it would be unreadable to most of the
+  audience, and Hebrew is right-to-left, which breaks any horizontal lockup it is dropped into.</p>
+</article>
+
+<!-- NEVER -->
+<article class="route">
+  <div class="route-head"><span class="route-n">Refused</span><h2>What this mark will never be</h2></div>
+  <p>Not a matter of taste. Descriptive logos help — <em>except</em> where the category carries negative
+  associations, where the effect reverses. Security is exactly such a category, so
+  <strong style="color:var(--p-fg)">drawing the threat makes the logo descriptive in the direction that
+  costs you.</strong></p>
+  <div class="never">
+    <div>A shield</div><div>A padlock, open or closed</div><div>A skull, a bug, a fishhook</div>
+    <div>An eye</div><div>A brick wall or a flame</div><div>A hooded figure</div>
+    <div>A globe with arcs across it</div><div>A hexagon grid</div>
+    <div>A gradient, or any two-colour blend</div><div>A 3D bevel, a shine, a drop shadow</div>
+    <div>Anything with text inside the mark</div><div>Anything that needs colour to be read</div>
+  </div>
+</article>
+
+<div class="foot">
+  <div>MENATER · <span lang="he">מנטר</span> · logo routes</div>
+  <div>Full reference: DESIGN.md §10</div>
+</div>
+</div>
+
+</body>
+</html>

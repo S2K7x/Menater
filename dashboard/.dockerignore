@@ -1,0 +1,12 @@
+# Ce qui n'a rien à faire dans le contexte de construction.
+#
+# `config.json` EN PREMIER : il porte le mot de passe de la console, le secret
+# d'ingestion et le jeton du tunnel. Le laisser entrer le figerait dans une
+# couche d'image — lisible par quiconque récupère l'image, et impossible à
+# retirer après coup.
+config.json
+node_modules
+dist
+.git
+*.log
+.env
