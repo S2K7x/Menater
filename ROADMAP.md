@@ -70,11 +70,49 @@ application. Until it is done, the merge is visual.
 |---|---|---|
 | **J0.1** | **A scan creates a case in the queue** — a confirmed critical flaw becomes an alert in the triage queue, with its card, its audit and its human approval | A flaw in the code stops being a report you close; it enters the circuit that gets it handled |
 | **J0.2** | **An alert triggers a scan** — an alert whose ATT&CK technique points at a class of flaw (injection, access control) offers to analyse the repository of the service concerned | Bring the incident next to the defect that made it possible, while you have it in front of you |
-| **J0.3** | **Service ↔ repository inventory** — the table that makes J0.1 and J0.2 possible | Without it neither link means anything: nothing says which repository runs on `10.12.4.31` |
+| ~~**J0.3**~~ ✅ | ~~**Service ↔ repository inventory**~~ — `server/inventory.ts`, a Settings sub-tab, resolved onto every case in `snapshot.ts`. Exact matching only, ambiguity refused at the save, and the incident card names the code running on the machine it is about — with a jump that opens the Code tab on that target | Without it neither link means anything: nothing said which repository runs on `10.12.4.31` |
 | **J0.4** | **Unified "what threatens this system" view** — one screen stacking, for one asset, its alerts and its flaws | The question the user actually asks, which neither tab answers alone |
 
 > **Order:** J0.3 before J0.1 and J0.2. Guessing the repository from an IP
 > address would be exactly the kind of invented default that § 8 forbids.
+
+### J0.3 ✅ — the table, and the first thing it makes possible
+
+**What it is.** A list an operator fills in: a service name, the hostnames and
+addresses their alerts carry for it, and the folder or repository URL that runs
+there. Stored in `config.json` under `inventory.entries`, validated by
+`normalizeInventory`, and applied to every case — live or sample — in the one
+funnel every snapshot passes through.
+
+**Three decisions, and each of them is a refusal.**
+
+| Decision | Why the other answer was worse |
+|---|---|
+| **Exact matching, nothing else** | No CIDR, no suffix rule, no `web-01` ≈ `web-01.corp.lan`. A guessed repository sends somebody to read the wrong code while an incident is open — § 8's invented default, in the place it costs most |
+| **An ambiguity is refused, not resolved** | One identifier under two entries would force the resolver to pick, and "the first one" is a coin toss dressed as an answer. The save is refused naming the identifier, so the store cannot hold a question |
+| **It resolves, it never acts** | The card's button fills the launcher in. Nothing is estimated, nothing is scanned, until a human launches it. Starting a scan because an alert arrived would be spending money on a target read out of a settings file |
+
+**What `null` means, and what it must not look like.** A case with no match
+means *the inventory says nothing about this machine*, never *this machine runs
+no code*. So the card shows nothing at all rather than "not listed": an install
+that has not filled the table in would otherwise carry a line nobody can act on
+at the top of every incident.
+
+**What it does NOT do, and is honest to say so:**
+
+- **No scan creates a case, and no alert starts a scan.** J0.1 and J0.2 are
+  still open. This is their prerequisite plus the smallest honest consumer —
+  the same move the Lookup tab made in the other direction.
+- **The assistant and the MCP catalogue do not read it.** The field is on
+  `AlertCase`, so `get_alert` could expose it in a line; it was left out of
+  this pass rather than widening a change that touches the fenced surface.
+- **Nothing suggests entries.** The console will not propose a mapping from
+  what it has seen — that is the guess the whole design refuses. An inventory
+  that fills itself in is a research question, not a feature.
+- **No CIDR ranges.** Deliberate for now, and the one extension worth
+  considering later: a range is still a declaration, not a resemblance. It
+  would need its own ambiguity rule (two overlapping ranges), which is exactly
+  what the exact-match version avoids having to solve.
 
 ---
 

@@ -250,6 +250,9 @@ These cost time; they are written down so they do not cost it again.
 | **`payload.workflows[0].nodes` with no guard** | Harmless while the graph was its own tab and the API always returned six workflows. It became a whole-tab crash the moment that panel turned into a section of Ingestion: an empty list took the delivery policy and the source catalogue down with it. An empty list is a state, not an impossibility |
 | **A modifier that resets everything EXCEPT the font — fourth recurrence** | `.soc-check-field > span` neutralised the capitals, the tracking, the size and the colour of `.soc-field span`, and not `font-family` — so all **five** checkbox explanations in Settings rendered as monospace prose. Mono is semantic here: it means *this string came from the machine, and it is exact*. A sentence explaining what watch-only mode does is neither, and the reader pays a font switch that carries no meaning. Exactly the omission the `.soc-help` rule documents two hundred lines below, in the one place it had not been applied. Second half of the fix: the two rules were tied at (0,1,1) and this one won only by sitting 166 lines further down — `.soc-field.soc-check-field > span` (0,2,1) wins by SPECIFICITY, which the next edit to the sheet cannot silently change |
 | **A name that outlives the thing it named** | n8n left with W-final and four surfaces went on naming it, all of them reading as working software: the Health tab's engine card (a hardcoded literal — the only user-facing string on that screen outside the catalogue, so the typed catalogue could not refuse it: it was never *asked* anything), a Settings banner promising *"restart n8n"* over pipeline variables the engine re-reads on every run, a Guide entry documenting a third ingestion mode that no longer exists, and three *"open in n8n"* links whose `href` was always `''`. **A stale name is the cheapest thing to carry and the most expensive thing to believe** — and three of the four are screens whose whole job is to say what is true right now. The Settings one is the mirror of the defect this product refuses everywhere else: a change that HAD applied, reported as one that had not. `n8n-removed.test.ts` walks the catalogue, calls the functions too, and fails on any user-facing string naming it |
+| **A controlled field that NORMALISES on every keystroke** | The inventory's identifiers are one per line, so the first draft split the textarea on every change and joined the list back into `value`. Splitting drops empty lines — which is right on the way out, and fatal while typing: the newline is removed the instant it is typed, Enter appears to do nothing, and a machine's SECOND address can never be entered. The field silently refuses the only thing it exists for. Same family as `setDraft(null)` then `blur()`: the state a controlled input shows must be what the typist typed, and the tidying belongs at the boundary — here, once, in `fromInventoryDraft` on save. The dirty check compares the CONVERTED value, so a trailing newline is not an unsaved change |
+| **A LIST stored as a `config.json` section** | `merge()` walks the sections of the default config and does `{ ...base[section], ...patch[section] }`. `typeof [] === 'object'`, so an array section is spread INDEX BY INDEX: saving `[a]` over `[a, b]` yields `{"0":a,"1":b}` — the entry that was just deleted survives, at the index the shorter list no longer covers, and the section stops being an array at all. Measured on the real function before writing the feature. The service inventory is therefore `{ entries: [...] }`, one level down, where the spread replaces the whole key. Any future list-shaped setting owes the same wrapper, and the test that proves it is the one that REMOVES an entry — a test that only adds passes either way |
+| **`defaultPath` on a component that is never unmounted** | The Code tab is mounted on its first visit and kept mounted, because unmounting would cut a running scan. `ScanLauncher` takes its target as an INITIAL value and owns the field afterwards — which is what lets someone edit it — so handing it a second repository from a second alert does nothing: the tab opens with a path in the box and it is the previous alert's. Silent, and plausible enough to be believed. Fixed by re-keying on the jump counter (`key={prefill?.n}`), not by an effect writing into the field: a child's effect runs before the provider's, the ordering trap this table already carries twice. The counter is the same device `intelPrefill` uses so that asking the SAME question twice still re-runs it |
 | **A rule appended at the end of the stylesheet** | `.soc-panel { padding }` and `.soc-info { position: relative }` were written at the bottom, after the `@media (max-width: 760px)` block. Same specificity, later source order — so both silently **cancelled the mobile overrides**, and the popover positioned itself against a parent it should not have had. A stylesheet with media queries in the middle has no "end": a new rule goes next to the one it modifies, not after everything |
 
 ---
@@ -274,7 +277,7 @@ no internal tabs, no separate settings. The console has ten tabs:
 | Health | Connectivity diagnostic, injection of a test alert (nine scenarios) |
 | Lookup | Manual threat-intel on one value — IP, domain, URL, hash, email — plus the Pwned Passwords check |
 | Guide | Documentation of every feature: seventeen sections in four groups, searchable — the search also reads the glossary |
-| Settings | Eight areas in sub-tabs, including credentials, log sources, the code-analysis engines and the assistant |
+| Settings | Nine areas in sub-tabs, including credentials, log sources, the **service inventory**, the code-analysis engines and the assistant |
 
 **The Tracking tab shows what the stitching hides.** The queue stitches runs by
 `alert_id` to display cases; two failures disappear in that reduction, and both
@@ -307,8 +310,34 @@ dependency — would have imported tree-sitter and the LLM SDKs for no gain.
 service, interface). If the analysis service is absent, the section shows a
 **503 with the command to run**, not an `ECONNREFUSED`.
 
-What remains: the two flows do not talk yet. A scan creates no case in the
-triage queue, and an alert triggers no scan.
+What remains: the two flows do not talk *automatically* yet. A scan creates no
+case in the triage queue, and no alert starts a scan on its own.
+
+**What does connect them is the service inventory (J0.3).** `server/inventory.ts`
+plus a Settings sub-tab: a table an operator fills in, mapping the hostnames
+and addresses their alerts carry to the folder or repository that runs there.
+The console resolves it onto every case in `snapshot.ts`, so an incident card
+names the code running on the machine it is about, and hands that target to
+the Code tab with one click.
+
+Three rules hold it up, and they are the reason it is a table and not a
+heuristic:
+
+- **Matching is exact.** A hostname or an address, compared case-insensitively
+  after trimming, and nothing else — no CIDR, no suffix rule, no resemblance. A
+  guessed repository sends somebody to read the wrong code while an incident is
+  open, which is § 8's invented default in the worst possible place.
+- **An ambiguity is refused at the door.** One identifier under two entries is
+  a question, and the save is refused naming the identifier rather than the
+  resolver picking a side. So there is no tie-break to get wrong.
+- **It resolves, it never acts.** The jump fills the launcher in. Nothing is
+  estimated and nothing is scanned until a human launches it — a scan is spent
+  money, started from a string in a settings file.
+
+`repository: null` on a case means *the inventory says nothing about this
+machine*, never *this machine runs no code*, and the card prints the first by
+showing nothing at all: an install that has not filled the table in must not
+carry a line nobody can act on at the top of every incident.
 
 ### The in-console assistant
 
@@ -442,11 +471,13 @@ in the vocabulary the rest of the console already uses.
 
 **It writes nothing.** No case, no rule, no audit row, nothing on disk; the
 session history lives in the browser tab and dies with it. A scan still creates
-no case and an alert still triggers no scan — that is J0, and this tab
+no case and no alert starts a scan on its own — that is J0, and this tab
 deliberately did not invent a second path into the pipeline. What it does do is
 the smallest honest version of the two halves talking: **every observable on an
 incident card carries a jump that opens the tab with the question already
-asked.**
+asked.** J0.3's repository jump is the same move in the other direction, and
+it is built on the same rule: it opens a screen with a question filled in, it
+answers nothing by itself.
 
 ---
 
@@ -743,7 +774,7 @@ npm run serve:vulnpipe # code analysis engine alone
 npm run tunnel         # Cloudflare tunnel to the alert entry point
                        # (refuses to start without a shared secret)
 npm run typecheck
-npm run test           # 913 tests
+npm run test           # 953 tests
 npm run build
 
 # VulnPipe has its own suite

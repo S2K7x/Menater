@@ -82,7 +82,19 @@ function StepRail({ currentStep }: { currentStep: StepName | null }) {
   );
 }
 
-export function VulnPipeSection() {
+/**
+ * A target handed over by another tab (J0.3), with the click that sent it.
+ *
+ * The counter is what makes a SECOND jump work. This section stays mounted
+ * once opened — cutting it would kill a running scan — so the launcher below
+ * would otherwise keep the target it was first rendered with.
+ */
+export interface ScanPrefill {
+  target: string;
+  n: number;
+}
+
+export function VulnPipeSection({ prefill = null }: { prefill?: ScanPrefill | null }) {
   const { state, estimate, confirm, cancelEstimate, reset } = useScan();
   const { t, c } = useI18n();
   const { preferences, update } = usePreferences();
@@ -130,14 +142,28 @@ export function VulnPipeSection() {
 
       {(state.phase === 'idle' || state.phase === 'estimating') && (
         <>
+          {/*
+            RE-KEYED BY THE PREFILL, NOT DRIVEN BY AN EFFECT. `defaultPath` is
+            an initial value: the launcher owns its field afterwards, which is
+            what lets someone edit it. Remounting is therefore the honest way
+            to hand it a new target, and it costs nothing — the form holds no
+            state worth keeping at the moment somebody asks for another one.
+            An effect writing into the field would also run after the child's
+            own, the ordering trap this codebase has already paid for.
+          */}
           <ScanLauncher
+            key={prefill?.n ?? 0}
             onLaunch={(input) => {
               if (preferences.rememberTarget) update({ lastTarget: input.target });
               estimate(input);
             }}
             busy={busy}
-            defaultPath={preferences.rememberTarget ? preferences.lastTarget : ''}
-            defaultKind={preferences.defaultKind}
+            defaultPath={prefill?.target ?? (preferences.rememberTarget ? preferences.lastTarget : '')}
+            // A repository URL under the "folder" tab would be explained by
+            // help text about folders. The tabs constrain nothing — the server
+            // recognises the form on its own — so this only picks which
+            // example is shown.
+            defaultKind={prefill && /^https?:\/\//i.test(prefill.target) ? 'github' : preferences.defaultKind}
             defaultMode={preferences.defaultMode}
           />
           {state.phase === 'estimating' && (

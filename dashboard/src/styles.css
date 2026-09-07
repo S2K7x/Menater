@@ -434,6 +434,29 @@ code, .soc-mono { font-family: var(--mono); }
 }
 .soc-case-meta b { color: var(--muted); font-weight: 400; }
 
+/* J0.3 — the repository that runs on this machine, under the case meta line.
+   Written HERE, next to the rules it sits with, and not at the end of the
+   sheet: this file has media queries in the middle, so a rule appended at the
+   bottom silently outranks the mobile overrides it should obey. */
+.soc-inv-match {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  margin: 10px 0 0; font-family: var(--mono); font-size: 0.78rem; color: var(--faint);
+}
+.soc-inv-match b { color: var(--muted); font-weight: 400; }
+.soc-inv-service { color: var(--fg); }
+.soc-inv-target {
+  font-family: var(--mono); color: var(--muted);
+  background: var(--hero); padding: 2px 6px; border-radius: var(--radius);
+  max-width: 100%; overflow-wrap: anywhere;
+}
+.soc-inv-jump {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 8px; font-family: var(--mono); font-size: 0.72rem;
+  background: transparent; border: 1px solid var(--line); border-radius: var(--radius);
+  color: var(--muted); cursor: pointer;
+}
+.soc-inv-jump:hover { color: var(--accent); border-color: var(--accent); }
+
 .soc-block { margin-bottom: 24px; }
 .soc-block h3 { margin-bottom: 10px; }
 
@@ -1017,6 +1040,10 @@ code, .soc-mono { font-family: var(--mono); }
 
   /* Incident card: the metadata becomes a list rather than a row. */
   .soc-case-meta { flex-direction: column; gap: 6px; }
+  /* Same on the repository line, and a 44 px target on its button — a path
+     and a service name will not sit side by side at 375 px. */
+  .soc-inv-match { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .soc-inv-jump { min-height: 44px; }
   .soc-sources { grid-template-columns: 1fr; }
   .soc-health-grid { grid-template-columns: 1fr; }
 
@@ -1781,8 +1808,23 @@ code, .soc-mono { font-family: var(--mono); }
 }
 .soc-rule-cond button { align-self: center; }
 
+/* J0.3 — one row of the service inventory, shaped like a tuning-rule
+   condition above: the same repeated-editor problem, so the same answer
+   rather than a second one to learn. Placed here and not at the end of the
+   sheet, so the narrow-screen override below still wins. */
+.soc-inv-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1.4fr) auto;
+  gap: 12px; align-items: start;
+  padding: 12px; margin-bottom: 10px;
+  background: var(--hero); border: 1px solid var(--line);
+}
+.soc-inv-row .soc-field { margin: 0; }
+.soc-inv-row textarea { font-family: var(--mono); resize: vertical; }
+.soc-inv-remove { align-self: center; flex: none; }
+
 @media (max-width: 760px) {
   .soc-rule-cond { grid-template-columns: minmax(0, 1fr); }
+  .soc-inv-row { grid-template-columns: minmax(0, 1fr); }
   .soc-rule-list li { flex-direction: column; }
   .soc-rule-actions { width: 100%; }
   .soc-rule-template { flex-direction: column; }

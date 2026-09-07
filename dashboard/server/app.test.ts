@@ -207,3 +207,53 @@ describe('manual lookup', () => {
     expect((await call('POST', '/api/intel/providers')).status).toBe(404);
   });
 });
+
+/* ==========================================================================
+ * J0.3 — the service inventory, through the settings route
+ *
+ * `saveConfig` writes whatever shape reaches it, so the check has to be on
+ * the way IN. Two answers matter here and they are different failures: a
+ * malformed list must come back named rather than as a 500, and a list sent
+ * in the wrong wrapper must be REFUSED rather than merged into nothing —
+ * `merge` would spread a bare array over the stored section and change
+ * nothing, which is a save that reports success and applies none of it.
+ * ========================================================================== */
+
+describe('service inventory', () => {
+  const entry = {
+    service: 'orders-api',
+    identifiers: ['web-01'],
+    repository: '/srv/src/orders-api',
+  };
+
+  it('stores a well-formed list and gives it back', async () => {
+    const r = await call('PUT', '/api/settings', { body: { inventory: { entries: [entry] } } });
+    expect(r.status).toBe(200);
+    expect(parsed(r).settings.inventory.entries).toEqual([entry]);
+  });
+
+  it('refuses a duplicate identifier, and the reply says which one', async () => {
+    const r = await call('PUT', '/api/settings', {
+      body: {
+        inventory: {
+          entries: [entry, { ...entry, service: 'billing-api', repository: '/srv/billing' }],
+        },
+      },
+    });
+    expect(r.status).toBe(400);
+    expect(parsed(r).error).toContain('web-01');
+    expect(parsed(r).problems[0].field).toBe('inventory.1.identifiers');
+  });
+
+  it('refuses a list sent without its wrapper instead of ignoring it', async () => {
+    const r = await call('PUT', '/api/settings', { body: { inventory: [entry] } });
+    expect(r.status).toBe(400);
+    expect(parsed(r).error).toContain('entries');
+  });
+
+  it('leaves the stored list alone when a save does not mention it', async () => {
+    await call('PUT', '/api/settings', { body: { inventory: { entries: [entry] } } });
+    const r = await call('PUT', '/api/settings', { body: { console: { refreshSeconds: 30 } } });
+    expect(parsed(r).settings.inventory.entries).toEqual([entry]);
+  });
+});

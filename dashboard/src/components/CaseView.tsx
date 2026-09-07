@@ -244,12 +244,18 @@ function Observable({
 }
 
 export function CaseView({
-  alertCase, onRefresh, onLookUp,
+  alertCase, onRefresh, onLookUp, onAnalyse,
 }: {
   alertCase: AlertCase;
   onRefresh: () => void;
   /** Absent in tests and anywhere the Lookup tab is not reachable. */
   onLookUp?: (observable: string) => void;
+  /**
+   * Carries a repository to the Code tab, target already filled in. Absent for
+   * the same reason `onLookUp` is — and it PREPARES a scan, it never starts
+   * one: an analysis is spent money, and it stays a human's click.
+   */
+  onAnalyse?: (repository: string) => void;
 }) {
   const { c: dict } = useI18n();
   const v = dict.caseView;
@@ -291,6 +297,41 @@ export function CaseView({
                 <b>{v.dwell}</b> {humanDuration(c.dwell_ms)}
               </span>
             </div>
+
+            {/*
+              J0.3 — the code that runs on this machine.
+
+              SHOWN ONLY WHEN THERE IS A MATCH, unlike the observables above.
+              An absent observable is a fact about the DETECTION and has to be
+              visible; an absent inventory entry is a fact about our own
+              configuration, and printing "not listed" on every card of an
+              install that has not filled the table in would put a line nobody
+              can act on at the top of every incident.
+
+              It always says what matched. "This alert is about repository X"
+              is only checkable next to the value that produced it.
+            */}
+            {c.repository ? (
+              <p className="soc-inv-match">
+                <b>{v.repository.title}</b>
+                <span className="soc-inv-service">{c.repository.service}</span>
+                <code className="soc-inv-target">{c.repository.repository}</code>
+                <span className="soc-inv-why">
+                  {v.repository.matchedOn[c.repository.matched_on]} · {c.repository.matched_value}
+                </span>
+                {onAnalyse ? (
+                  <button
+                    type="button"
+                    className="soc-inv-jump"
+                    onClick={() => onAnalyse(c.repository!.repository)}
+                    title={v.repository.analyseHint}
+                  >
+                    <Icon name="code" size={12} />
+                    {v.repository.analyse}
+                  </button>
+                ) : null}
+              </p>
+            ) : null}
           </div>
 
           {c.attack.length > 0 ? (

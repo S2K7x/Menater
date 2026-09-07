@@ -38,7 +38,7 @@ import { ThemePicker } from '../theme/ThemePicker.tsx';
 import {
   CredentialsPanel, SetupChecklist, checklistOf,
 } from './SettingsSetup.tsx';
-import type { CredentialStatus } from '../lib/types.ts';
+import type { CredentialStatus, InventoryEntry } from '../lib/types.ts';
 
 type Draft = {
   authEnabled: boolean;
@@ -57,6 +57,8 @@ type Draft = {
    * the same reason every other secret is.
    */
   assistant: { enabled: boolean; provider: string; model: string; maxSteps: number; mcpEnabled: boolean };
+  /** J0.3 — the service ↔ repository table, edited as a whole and saved whole. */
+  inventory: InventoryDraft[];
 };
 
 /**
@@ -221,7 +223,84 @@ function TestButton({
  * d'abord (sans elle rien ne s'affiche), le pipeline avant la console (l'un
  * engage des actions de sécurité, l'autre le confort de lecture).
  */
-type SettingsSection = 'access' | 'database' | 'pipeline' | 'console' | 'ingestion' | 'credentials' | 'assistant' | 'mcp' | 'code';
+type SettingsSection = 'access' | 'database' | 'pipeline' | 'console' | 'ingestion' | 'inventory' | 'credentials' | 'assistant' | 'mcp' | 'code';
+
+/**
+ * J0.3 — one row of the service inventory, as the form holds it.
+ *
+ * The identifiers are edited as TEXT, one per line: a list of inputs with its
+ * own add and remove buttons, nested inside a list that already has them, is
+ * two levels of the same widget for something people paste out of a
+ * spreadsheet column.
+ *
+ * AND THE TEXT IS WHAT THE DRAFT STORES, not the split list. Splitting on
+ * every keystroke and joining the result back into the textarea makes the
+ * field fight the typist: an empty line is dropped the instant it is typed, so
+ * pressing Enter does nothing and a second identifier can never be added. The
+ * conversion happens once, on the way out.
+ */
+type InventoryDraft = { service: string; identifiers: string; repository: string };
+
+const toInventoryDraft = (e: InventoryEntry): InventoryDraft =>
+  ({ service: e.service, identifiers: e.identifiers.join('\n'), repository: e.repository });
+
+/** Blank lines are dropped HERE and only here — everyone ends a list with one. */
+const fromInventoryDraft = (d: InventoryDraft): InventoryEntry => ({
+  service: d.service.trim(),
+  identifiers: d.identifiers.split('\n').map((s) => s.trim()).filter((s) => s !== ''),
+  repository: d.repository.trim(),
+});
+
+function InventoryRow({
+  entry, index, onChange, onRemove,
+}: {
+  entry: InventoryDraft;
+  index: number;
+  onChange: (next: InventoryDraft) => void;
+  onRemove: () => void;
+}) {
+  const { c } = useI18n();
+  const iv = c.settings.inventory;
+  const id = (field: string) => `soc-inv-${index}-${field}`;
+  return (
+    <div className="soc-inv-row">
+      <div className="soc-field">
+        <label htmlFor={id('service')}>{iv.service}</label>
+        <input
+          id={id('service')}
+          value={entry.service}
+          onChange={(e) => onChange({ ...entry, service: e.target.value })}
+        />
+        {/* `.soc-field span` is (0,1,1): a bare class never beats it, and this
+            project has paid for that four times. Name the element. */}
+        <span className="soc-help">{iv.serviceHelp}</span>
+      </div>
+      <div className="soc-field">
+        <label htmlFor={id('ids')}>{iv.identifiers}</label>
+        <textarea
+          id={id('ids')}
+          rows={3}
+          value={entry.identifiers}
+          placeholder={iv.identifiersPlaceholder}
+          onChange={(e) => onChange({ ...entry, identifiers: e.target.value })}
+        />
+        <span className="soc-help">{iv.identifiersHelp}</span>
+      </div>
+      <div className="soc-field">
+        <label htmlFor={id('repo')}>{iv.repository}</label>
+        <input
+          id={id('repo')}
+          value={entry.repository}
+          onChange={(e) => onChange({ ...entry, repository: e.target.value })}
+        />
+        <span className="soc-help">{iv.repositoryHelp}</span>
+      </div>
+      <button type="button" className="soc-secondary soc-inv-remove" onClick={onRemove}>
+        {iv.remove(entry.service)}
+      </button>
+    </div>
+  );
+}
 
 export function SettingsPage({
   onChanged,
@@ -275,6 +354,7 @@ export function SettingsPage({
         maxSteps: p.settings.assistant.maxSteps,
         mcpEnabled: p.settings.assistant.mcpEnabled,
       },
+      inventory: p.settings.inventory.entries.map(toInventoryDraft),
       webhookMode: p.settings.webhook.mode,
       webhookSecret: '',
       tunnelToken: '',
@@ -313,6 +393,10 @@ export function SettingsPage({
         pipeline: draft.pipeline,
         webhook: { mode: draft.webhookMode, secret: draft.webhookSecret },
         tunnel: { token: draft.tunnelToken, hostname: draft.tunnelHostname },
+        // Wrapped, and not sent as a bare array: `config.json`'s merge spreads
+        // a section, so a list stored directly would keep the entries a save
+        // removed. See `server/inventory.ts`.
+        inventory: { entries: draft.inventory.map(fromInventoryDraft) },
       });
       hydrate(p);
       setSaved(true);
@@ -391,7 +475,11 @@ export function SettingsPage({
     draft.assistant.provider !== s.assistant.provider ||
     draft.assistant.model !== s.assistant.model ||
     draft.assistant.maxSteps !== s.assistant.maxSteps ||
-    draft.assistant.mcpEnabled !== s.assistant.mcpEnabled;
+    draft.assistant.mcpEnabled !== s.assistant.mcpEnabled ||
+    // Compared on what a save would SEND: a trailing newline in the textarea
+    // is not an unsaved change, and flagging it as one lights a warning that
+    // never goes out.
+    JSON.stringify(draft.inventory.map(fromInventoryDraft)) !== JSON.stringify(s.inventory.entries);
 
   /**
    * The provider currently selected, resolved against the SERVER's catalogue.
@@ -408,6 +496,10 @@ export function SettingsPage({
     { id: 'pipeline', label: st.pipeline.title, icon: 'shield', hint: st.effects.restart },
     { id: 'console', label: st.console.title, icon: 'sliders', hint: st.effects.immediate },
     { id: 'ingestion', label: st.ingestion.title, icon: 'chain', hint: st.effects.immediate },
+    // Next to Ingestion, and before the keys: both answer "what does this
+    // console know about my estate", and this one is read the moment an alert
+    // lands rather than at install time.
+    { id: 'inventory', label: st.inventory.title, icon: 'code', hint: st.effects.immediate },
     { id: 'credentials', label: st.credentials.title, icon: 'lock', hint: st.effects.immediate },
     { id: 'assistant', label: st.assistantSection.title, icon: 'chat', hint: st.effects.immediate },
     { id: 'mcp', label: c.mcp.title, icon: 'chain', hint: st.effects.immediate },
@@ -990,6 +1082,66 @@ export function SettingsPage({
 
           <CopyBlock label={st.ingestion.launch} text="npm run tunnel" />
         </Fold>
+      </section>
+      </SectionPanel>
+
+      {/* ---------------- Service inventory (J0.3) ---------------- */}
+      <SectionPanel id="inventory" active={section === 'inventory'}>
+      <section className="soc-panel">
+        <div className="soc-panel-head">
+          <div>
+            <span className="soc-kicker">{st.inventory.kicker}</span>
+            <h2>{st.inventory.title}</h2>
+          </div>
+          <Effect kind="immediate" />
+        </div>
+        <p className="soc-muted">{st.inventory.lede}</p>
+
+        {/* THE EXACT-MATCH RULE STAYS IN THE CLEAR, not behind the circled
+            "i". Someone who types a CIDR range here and sees nothing happen
+            concludes the feature is broken; that sentence is the difference
+            between a limitation and a bug. */}
+        <div className="soc-banner soc-banner-info">
+          <Icon name="alert" size={16} />
+          <p>{st.inventory.exactOnly}</p>
+        </div>
+
+        {draft.inventory.length === 0 ? (
+          <p className="soc-empty">{st.inventory.empty}</p>
+        ) : (
+          <>
+            <p className="soc-faint">{st.inventory.count(draft.inventory.length)}</p>
+            {draft.inventory.map((row, i) => (
+              <InventoryRow
+                // Positional key, deliberately: an entry has no id, and the
+                // service name is exactly what someone is editing when they
+                // type — keying on it would remount the field on every
+                // keystroke and take the caret with it.
+                key={i}
+                entry={row}
+                index={i}
+                onChange={(next) => set({
+                  inventory: draft.inventory.map((e, j) => (j === i ? next : e)),
+                })}
+                onRemove={() => set({
+                  inventory: draft.inventory.filter((_, j) => j !== i),
+                })}
+              />
+            ))}
+          </>
+        )}
+
+        <div className="soc-actions">
+          <button
+            type="button"
+            className="soc-secondary"
+            onClick={() => set({
+              inventory: [...draft.inventory, { service: '', identifiers: '', repository: '' }],
+            })}
+          >
+            {st.inventory.add}
+          </button>
+        </div>
       </section>
       </SectionPanel>
 

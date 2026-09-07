@@ -27,11 +27,16 @@ import { tagAttack } from './engine/attack.ts';
 const now = Date.now();
 const at = (minutesAgo: number) => new Date(now - minutesAgo * 60_000).toISOString();
 
-function build(partial: Omit<AlertCase, 'attack' | 'dwell_ms' | 'extensions'>): AlertCase {
+function build(partial: Omit<AlertCase, 'attack' | 'dwell_ms' | 'extensions' | 'repository'>): AlertCase {
   const stages = partial.stages;
   const last = stages[stages.length - 1];
   return {
     ...partial,
+    // Left null here rather than filled in: the sample set must not claim a
+    // repository nobody declared. `snapshot.ts` resolves it against the real
+    // inventory afterwards, so a sample host an operator DID list still
+    // matches — the demonstration then shows the operator's own estate.
+    repository: null,
     // The sample set carries no vendor fields: inventing some would put
     // invented data on a screen whose whole job is to show what was really
     // observed.

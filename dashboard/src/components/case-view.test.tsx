@@ -97,3 +97,61 @@ describe("l'identité de l'alerte est lisible sans dépliage", () => {
     ).toBeTruthy();
   });
 });
+
+/**
+ * J0.3 — the card names the code that runs on this machine.
+ *
+ * Two failures are possible here and neither raises an error:
+ *
+ *   - saying WHICH repository without saying WHAT matched, which makes the
+ *     claim uncheckable at the moment it matters most;
+ *   - printing "not in the inventory" on a card of an install that has not
+ *     filled the table in, which puts a line nobody can act on at the top of
+ *     every incident.
+ */
+describe('the code that runs on the machine', () => {
+  const withRepo = () =>
+    kase({
+      repository: {
+        service: 'orders-api',
+        repository: '/srv/src/orders-api',
+        matched_on: 'host',
+        matched_value: 'srv-bastion-01',
+      },
+    });
+
+  it('names the service, the target, and what matched', () => {
+    render(<CaseView alertCase={withRepo()} onRefresh={() => {}} />);
+    expect(screen.getByText('orders-api')).toBeTruthy();
+    expect(screen.getByText('/srv/src/orders-api')).toBeTruthy();
+    // The value that matched sits in the SAME sentence as the field that
+    // matched: "matched on the host" alone would not say on which host, and
+    // the hostname alone is already elsewhere on the card.
+    expect(screen.getByText(/matched on the host/).textContent).toContain('srv-bastion-01');
+  });
+
+  it('says NOTHING when the inventory knows nothing about the machine', () => {
+    render(<CaseView alertCase={kase({ repository: null })} onRefresh={() => {}} />);
+    expect(screen.queryByText('Code running here')).toBeNull();
+  });
+
+  it('hands the repository over, and starts no scan', () => {
+    const asked: string[] = [];
+    render(
+      <CaseView alertCase={withRepo()} onRefresh={() => {}} onAnalyse={(r) => asked.push(r)} />,
+    );
+    const button = screen.getByRole('button', { name: /Analyse this code/ });
+    button.click();
+    // The button PREPARES an analysis. Launching one is spending money, and it
+    // stays the operator's click on the Code tab.
+    expect(asked).toEqual(['/srv/src/orders-api']);
+  });
+
+  it('keeps the information when there is nowhere to jump to', () => {
+    // Same rule as the Lookup jump above it: the fact is worth showing even
+    // where the destination tab is not reachable.
+    render(<CaseView alertCase={withRepo()} onRefresh={() => {}} />);
+    expect(screen.getByText('/srv/src/orders-api')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Analyse this code/ })).toBeNull();
+  });
+});
