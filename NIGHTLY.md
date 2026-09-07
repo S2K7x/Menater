@@ -153,7 +153,7 @@ Repository constraints already paid for more than once:
 - The console API has exactly ONE production dependency (`pg`). Do not add one.
   On the VulnPipe side, justify any dependency in the PR.
 - Before writing a CSS class name, check it is free (`grep`). Prefixes in use:
-  `soc-`, `vp-`, `soc-ai-`, `soc-ing-`, `soc-intel-`.
+  `soc-`, `vp-`, `soc-ai-`, `soc-ing-`, `soc-intel-`, `soc-inv-`.
 - No hardcoded colour: everything goes through the six themes' tokens.
 
 ## Step 4 — The verification gate

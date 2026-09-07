@@ -305,6 +305,19 @@ export interface ConsoleDictionary {
     destination: string;
     /** The machine the alert is about — the target an isolation would name. */
     host: string;
+    /**
+     * J0.3 — the code that runs on that machine, when the service inventory
+     * names it. Shown only when there IS a match: an install that has not
+     * filled the table in would otherwise carry "not in the inventory" on
+     * every card, which is noise on the screen that must stay readable.
+     */
+    repository: {
+      title: string;
+      matchedOn: Record<'host' | 'dest_ip' | 'source_ip', string>;
+      /** Says what the button does BEFORE it is pressed: it starts nothing. */
+      analyse: string;
+      analyseHint: string;
+    };
     state: string;
     dwell: string;
     attack: string;
@@ -642,6 +655,32 @@ export interface ConsoleDictionary {
       hostname: string;
       hostnameHelp: string;
       launch: string;
+    };
+
+    /**
+     * J0.3 — the service ↔ repository table.
+     *
+     * The strings say twice, in two places, that the matching is EXACT. That
+     * is not duplication for its own sake: someone typing `10.12.4.0/24` into
+     * the identifiers field and getting silence would conclude the feature is
+     * broken, and the field is where they need to read it.
+     */
+    inventory: {
+      kicker: string;
+      title: string;
+      lede: string;
+      exactOnly: string;
+      empty: string;
+      count: (n: number) => string;
+      add: string;
+      remove: (service: string) => string;
+      service: string;
+      serviceHelp: string;
+      identifiers: string;
+      identifiersHelp: string;
+      identifiersPlaceholder: string;
+      repository: string;
+      repositoryHelp: string;
     };
 
     /**
@@ -1388,6 +1427,17 @@ const EN: ConsoleDictionary = {
     source: 'Source',
     destination: 'Destination',
     host: 'Host',
+    repository: {
+      title: 'Code running here',
+      matchedOn: {
+        host: 'matched on the host',
+        dest_ip: 'matched on the destination address',
+        source_ip: 'matched on the source address',
+      },
+      analyse: 'Analyse this code',
+      analyseHint:
+        'Opens the Code tab with this target already filled in. Nothing is scanned until you launch it.',
+    },
     state: 'State',
     dwell: 'Time taken',
     attack: 'MITRE ATT&CK techniques',
@@ -1900,6 +1950,32 @@ const EN: ConsoleDictionary = {
       hostnameHelp:
         'Used to build the approval links sent to Slack. Without it, those links only work from the local network.',
       launch: 'Start the tunnel',
+    },
+    inventory: {
+      kicker: 'Assets and code',
+      title: 'Service inventory',
+      lede:
+        'Which repository runs on which machine. An alert about a machine listed here '
+        + 'carries a link to its code, so an incident and the defect behind it can be read '
+        + 'side by side.',
+      exactOnly:
+        'Matching is exact: a hostname or an address, written as the alert carries it. '
+        + 'No ranges, no wildcards, no “close enough” — a guessed repository would send '
+        + 'you to read the wrong code while an incident is open.',
+      empty: 'Nothing listed yet. Alerts are triaged exactly as before; they just carry no link to any code.',
+      count: (n) => `${n} service${n > 1 ? 's' : ''} listed`,
+      add: 'Add a service',
+      remove: (service) => `Remove ${service || 'this entry'}`,
+      service: 'Service',
+      serviceHelp: 'What your team calls it. This is the name the incident card shows.',
+      identifiers: 'Hostnames and addresses',
+      identifiersHelp:
+        'One per line, exactly as your alerts spell them — the agent name, the machine name, its addresses. '
+        + 'A value listed twice across the table is refused: one machine, one repository.',
+      identifiersPlaceholder: 'web-01\n10.12.4.31',
+      repository: 'Code to analyse',
+      repositoryHelp:
+        'A folder on this server, a single file, or a repository URL — the same three forms the Code tab accepts.',
     },
     checklist: {
       title: 'Before the pipeline can decide',
@@ -2793,6 +2869,10 @@ const EN: ConsoleDictionary = {
             term: 'The report',
             text: 'Every finding is explained in plain language: what can happen, and which direction to fix it. The technical detail stays available, folded away.',
           },
+          {
+            term: 'An alert can fill the target in for you',
+            text: 'If the service inventory in Settings says which repository runs on the machine an alert is about, the incident card carries a link here with the target already filled in. It only fills the box: nothing is estimated and nothing is scanned until you launch it.',
+          },
         ],
       },
       {
@@ -2814,6 +2894,11 @@ const EN: ConsoleDictionary = {
             term: 'Log sources',
             text:
               'The Ingestion sub-tab. The endpoint, the install commands and the configuration block are GENERATED from the address you reached the console on — not retyped from a README, where you copy \u201clocalhost\u201d onto another machine and then debug it for an hour.',
+          },
+          {
+            term: 'Service inventory',
+            text:
+              'Which repository runs on which machine. An alert about a machine listed there carries a link to its code, so an incident and the defect behind it can be read side by side. Matching is exact — a hostname or an address, spelled as your alerts spell it. Nothing is guessed from a resemblance or an address range: a guessed repository would send you to read the wrong code while an incident is open.',
           },
           {
             term: 'Applies to the next alert',

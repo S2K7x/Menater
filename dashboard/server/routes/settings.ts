@@ -12,6 +12,7 @@ import {
 import {
   connectionString, getConfig, hashPassword,
   publicView, saveConfig } from '../config.ts';
+import { normalizeInventory } from '../inventory.ts';
 import { tcpProbe } from '../probes.ts';
 import type { Ctx } from './context.ts';
 
@@ -40,6 +41,30 @@ export async function settingsRoutes(c: Ctx): Promise<boolean> {
       if (body?.auth?.enabled === true && !body?.auth?.hash && getConfig().auth.hash === '') {
         return json(res, 400, {
           error: am.passwordFirst });
+      }
+
+      /**
+       * J0.3 — the inventory is checked BEFORE it is stored.
+       *
+       * `saveConfig` would happily write whatever shape arrives, and the
+       * console would then show a table it cannot resolve — the "the API
+       * trusted the shape of its body" trap, on a list this time. The caller
+       * gets the reason and the field, not a 500 carrying an internal
+       * message.
+       */
+      if (body?.inventory !== undefined) {
+        // A BARE ARRAY IS REFUSED, not ignored. `merge` would spread it over
+        // the stored section and change nothing at all — a save that reports
+        // success and applies none of what was sent.
+        const shape = body.inventory;
+        const problems = (shape === null || typeof shape !== 'object' || Array.isArray(shape))
+          ? [{ field: 'inventory', detail: 'Send the list as { "entries": [ … ] }.' }]
+          : normalizeInventory(shape.entries).problems;
+        if (problems.length > 0) {
+          return json(res, 400, {
+            error: am.inventoryRefused(problems.map((p) => `${p.field}: ${p.detail}`)),
+            problems });
+        }
       }
 
       saveConfig(body);

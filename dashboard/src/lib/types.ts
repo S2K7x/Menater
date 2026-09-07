@@ -192,6 +192,45 @@ export interface AlertCase {
   attack: AttackTag[];
   /** Temps entre la reception et la derniere etape connue. Le MTTR du cas. */
   dwell_ms: number | null;
+  /**
+   * J0.3 — the code that runs on the machine this alert is about, when the
+   * service inventory names it.
+   *
+   * `null` means the inventory says nothing about this machine — NOT that the
+   * machine runs no code. The card prints the first and must never print the
+   * second. Resolved by the console from a table an operator filled in, never
+   * guessed from an address: see `server/inventory.ts`.
+   */
+  repository: CaseRepository | null;
+}
+
+/**
+ * One machine, or one service, and the code it runs.
+ *
+ * Declared here rather than beside the resolver because both halves read it:
+ * the server validates and matches (`server/inventory.ts`), the Settings page
+ * edits it. The console's convention is that a shared shape lives in
+ * `src/lib/types.ts` and the server imports it.
+ */
+export interface InventoryEntry {
+  /** What the team calls it. Shown on the incident card. */
+  service: string;
+  /** The exact hostnames and addresses it answers on. Compared, never parsed. */
+  identifiers: string[];
+  /** What to hand the code analysis: a folder, a file, or a repository URL. */
+  repository: string;
+}
+
+/** What the inventory answered for a case, and what made it answer. */
+export interface CaseRepository {
+  service: string;
+  repository: string;
+  /**
+   * Which observable matched. Always shown: "this alert is about repository X"
+   * is only checkable when it also says which value produced the match.
+   */
+  matched_on: 'host' | 'dest_ip' | 'source_ip';
+  matched_value: string;
 }
 
 export interface Metrics {
@@ -301,6 +340,12 @@ export interface Settings {
     mcpEnabled: boolean;
     mcpTokenSet: boolean;
   };
+  /**
+   * J0.3 — the service ↔ repository table. No secret in it: a folder path and
+   * a repository URL are what an operator types into the launcher by hand, and
+   * the incident card has to show them or its match cannot be checked.
+   */
+  inventory: { entries: InventoryEntry[] };
   meta: {
     config_path: string;
     config_exists: boolean;

@@ -191,6 +191,14 @@ export function App() {
    * click on the same observable would change no state and look broken.
    */
   const [intelPrefill, setIntelPrefill] = useState<{ value: string; n: number } | null>(null);
+  /**
+   * The target the Code tab should open on, from an incident card (J0.3).
+   *
+   * Same counter trick as `intelPrefill`, and it earns it twice over here: the
+   * Code tab stays MOUNTED once opened, so a launcher already on screen would
+   * keep the field it was rendered with. The counter re-keys it.
+   */
+  const [codePrefill, setCodePrefill] = useState<{ target: string; n: number } | null>(null);
   const [snapshot, setSnapshot] = useState<ConsoleSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
@@ -376,6 +384,21 @@ export function App() {
   };
 
   /**
+   * From an alert to the code that runs on the machine it is about (J0.3).
+   *
+   * The other half of the pair above, and the first thing in this console that
+   * carries something from the SOC side to the analysis side. It fills the
+   * launcher in and stops there — a scan costs money and is a human's click,
+   * so nothing is estimated and nothing is started.
+   */
+  const analyse = (repository: string) => {
+    setCodePrefill((prev) => ({ target: repository, n: (prev?.n ?? 0) + 1 }));
+    setCodeMounted(true);
+    setDocsSection(null);
+    setTab('code');
+  };
+
+  /**
    * « Comment ca marche ? » : on ouvre le Guide SUR la section qui explique
    * l'onglet qu'on quitte. Un lien d'aide qui atterrit en haut d'une page de
    * huit sections repliees ne repond a rien.
@@ -493,7 +516,7 @@ export function App() {
           />
           <SectionBoundary>
             <Suspense fallback={<p className="soc-empty">{c.common.loading}</p>}>
-              <VulnPipeSection />
+              <VulnPipeSection prefill={codePrefill} />
             </Suspense>
           </SectionBoundary>
         </main>
@@ -550,7 +573,12 @@ export function App() {
                   >
                     <Icon name="queue" size={14} /> {c.queue.back}
                   </button>
-                  <CaseView alertCase={selectedCase} onRefresh={() => void load(true)} onLookUp={lookUp} />
+                  <CaseView
+                    alertCase={selectedCase}
+                    onRefresh={() => void load(true)}
+                    onLookUp={lookUp}
+                    onAnalyse={analyse}
+                  />
                 </>
               ) : (
                 <AlertQueue cases={cases} selectedId={selected} onSelect={setSelected} />

@@ -1,5 +1,103 @@
 # Journal des nuits
 
+*Entries from 2026-09-07 onward are in English, per `NIGHTLY.md`: everything
+written in this repository is English. The French entries below are kept as
+they were — they are memory about live code, and rewriting them would lose it.*
+
+## 2026-09-07 — Monday · Feature
+
+**Subject**: J0.3, the service ↔ repository inventory — the table that says
+which code runs on the machine an alert is about, plus the one consumer that
+makes it real: the incident card names it and hands it to the Code tab.
+
+**Result**: PR opened (branch `claude/nightly-2026-09-07-service-inventory`).
+
+**Why this subject**: Monday is the feature night and the roadmap says J0
+outranks everything, with J0.3 explicitly ordered before J0.1 and J0.2. The
+suite was green on the default branch first (913 tests, typecheck clean), so
+the calendar rule did not preempt it. No nightly PR was open.
+
+**What I learned**:
+
+- **`config.json`'s `merge()` cannot hold a list.** It walks the sections of
+  the default config and does `{ ...base[section], ...patch[section] }`.
+  `typeof [] === 'object'`, so an array section is spread INDEX BY INDEX.
+  Measured on the real function before writing a line of the feature:
+  saving `[a]` over `[a, b]` yields `{"0":a,"1":b}` — the deleted entry
+  survives and the section stops being an array. The inventory is therefore
+  `{ entries: [...] }`, one level down, where the spread replaces the key. The
+  test that proves it is the one that REMOVES an entry; a test that only adds
+  passes either way. Any future list-shaped setting owes the same wrapper.
+- **A jump into a tab that is never unmounted needs a key, not an effect.** The
+  Code tab stays mounted once opened (unmounting would cut a running scan) and
+  `ScanLauncher` takes its target as an INITIAL value, owning the field
+  afterwards. So a second alert handing it a second repository changed nothing:
+  the tab opened with the previous alert's path in the box, silently and
+  plausibly. `key={prefill?.n}` fixes it; an effect writing into the field
+  would have re-run the child-before-provider ordering trap this codebase
+  already has in its table. Verified by removing the key and watching the test
+  go red.
+- **A controlled field must not normalise on every keystroke.** The first draft
+  of the identifiers textarea split on `\n` and joined the list back into
+  `value`. Splitting drops blank lines, which is right on the way out and fatal
+  while typing: the newline vanished the instant it was typed, so a machine's
+  SECOND address could never be entered — the field silently refused the only
+  thing it exists for. Found by re-reading my own diff, not by a test; the test
+  came after and was verified red against the old handler. The draft holds raw
+  text now and converts once, on save. The dirty check compares the CONVERTED
+  value, otherwise a trailing newline would light a permanent "unsaved changes".
+- **Rendering the Settings screen with rows in it found the bug above.** An
+  inventory editor with no entries is a heading and a button. `CLARITY.md` is
+  right about this and it cost nothing to obey: the fixture test that mounts it
+  with two services is the same test that now pins the save payload.
+- **`AlertCase.source_ip` / `dest_ip` carry `—` for "not recorded"** while
+  `host` carries `null`. Anything matching on those three has to treat the dash
+  as absent, or one inventory entry named `—` becomes a wildcard for every
+  alert with no address.
+
+**Do not redo**:
+
+- **Do not add CIDR ranges, suffix rules or "looks close enough" matching**
+  without reopening the reasoning in `server/inventory.ts`'s header. A guessed
+  repository sends an analyst to read the wrong code while an incident is open.
+  A range is still a declaration rather than a resemblance, so it is the one
+  extension worth considering — but it needs its own ambiguity rule (two
+  overlapping ranges), which is exactly what exact matching avoids having to
+  solve.
+- **Do not make the resolver pick between two entries claiming one machine.**
+  The save is refused naming the identifier instead, so the store cannot hold
+  the ambiguity and the resolver never needs a tie-break.
+- **Ruled out: making the card say "not in the inventory" when there is no
+  match.** It is true, and it would put a line nobody can act on at the top of
+  every incident on an install that has not filled the table in. Absence is
+  shown by showing nothing here, because the absence is a fact about our
+  configuration and not about the detection — unlike the observables above it,
+  which keep their dash.
+- **Ruled out for tonight: exposing the field to the assistant and the MCP
+  catalogue.** `alertRow` / `alertDetail` pick their fields explicitly, so
+  nothing leaked by accident; adding it is a one-line follow-up that touches
+  the fenced surface, and it did not belong in a PR that already spans server,
+  settings and two tabs.
+- **Ruled out: a Postgres table for the inventory.** `sql/` only runs on a
+  database's first start, so a new table means a manual `psql` on every
+  existing stack — and this is operator-declared configuration, not pipeline
+  evidence: it decides nothing irreversible and needs no audit history.
+
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 953 passed | 1 skipped (913 before, +40 new; nothing skipped or weakened)
+npm run build       # dist built, 472 kB / 140 kB gzip
+```
+Two of the new tests were checked RED before the fix they cover: the Code-tab
+prefill (key removed → "is REPLACED when a second alert sends another one"
+fails) and the identifiers textarea (collapsing handler restored → "accepts a
+second identifier typed on a new line" fails). `VulnPipe/` was not touched, so
+its suite was not run. No model key and no database in this environment, and
+nothing here needs either: the resolver is pure, and the route tests drive
+`handleRequest` against a scratch `config.json`.
+
 ## 2026-08-19
 
 **Sujet** : le scanner IDOR déterministe pouvait encore classer une route

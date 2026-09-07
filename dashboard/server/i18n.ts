@@ -156,6 +156,8 @@ export interface ServerMessages {
     tooManyAttempts: (seconds: number) => string;
     wrongPassword: string;
     passwordFirst: string;
+    /** Says WHAT is wrong with the inventory, never just "invalid". */
+    inventoryRefused: (problems: string[]) => string;
     urlMissing: string;
     keyMissing: string;
     keyRefused: string;
@@ -367,6 +369,9 @@ const EN: ServerMessages = {
     tooManyAttempts: (seconds) => `Too many attempts. Try again in ${seconds} s.`,
     wrongPassword: 'Wrong password.',
     passwordFirst: 'Set a password before turning the lock on, or the console becomes unreachable.',
+    // The whole list, not the first problem: fixing a pasted inventory one
+    // round trip per line is how somebody gives up on the screen.
+    inventoryRefused: (problems) => `Service inventory not saved. ${problems.join(' ')}`,
     urlMissing: 'Instance address missing.',
     keyMissing: 'Access key missing.',
     keyRefused: 'Access key refused (401).',

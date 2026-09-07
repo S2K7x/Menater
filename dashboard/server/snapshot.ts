@@ -28,6 +28,7 @@ import { getEngineStore } from './runtime.ts';
 import { demoCases } from './demo.ts';
 import { messages, type Locale } from './i18n.ts';
 import { connectionString, getConfig } from './config.ts';
+import { resolveRepository } from './inventory.ts';
 import { PIPELINE_WORKFLOWS } from './engine/workflows/pipeline.ts';
 import { ROUTING_WORKFLOWS } from './engine/workflows/routing.ts';
 import type {
@@ -286,10 +287,33 @@ export function invalidate(): void {
   inFlight = null;
 }
 
+/**
+ * J0.3 — the service inventory, applied to every case.
+ *
+ * DONE HERE AND NOWHERE ELSE. `buildCases` reads the engine's journal and has
+ * no business reading `config.json`; the demonstration set is built without a
+ * repository for the same reason. This is the one funnel every case passes
+ * through, live or sample, so one call covers both — and one call is what
+ * keeps the console from showing a repository on the queue and none on the
+ * card.
+ *
+ * The inventory is read from the CACHED config, so a save costs nothing; and
+ * `saveConfig` already calls `invalidate()`, which is what makes an edited
+ * inventory visible on the next refresh instead of up to fifteen seconds
+ * later.
+ */
+function withRepositories(snap: ConsoleSnapshot): ConsoleSnapshot {
+  const entries = getConfig().inventory.entries;
+  if (entries.length === 0) return snap;
+  snap.cases = snap.cases.map((c) => ({ ...c, repository: resolveRepository(c, entries) }));
+  return snap;
+}
+
 /** Rebuilds, sharing the work with concurrent callers. */
 function rebuild(locale: Locale, key: string): Promise<ConsoleSnapshot> {
   if (inFlight && inFlight.key === key) return inFlight.promise;
   const promise = buildSnapshot(locale)
+    .then(withRepositories)
     .then((snap) => {
       cache = { at: Date.now(), key, snapshot: snap };
       return snap;

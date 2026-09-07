@@ -260,6 +260,9 @@ function blankCase(alertId: string, receivedAt: string): AlertCase {
     errors: [],
     attack: [],
     dwell_ms: null,
+    // Not the journal's business: the inventory is console configuration, and
+    // it is attached where the snapshot is assembled. `cases.ts` reads runs.
+    repository: null,
   };
 }
 

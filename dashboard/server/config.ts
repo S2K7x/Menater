@@ -32,6 +32,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { defaultPolicy, type IngestionPolicy } from './ingest/policy.ts';
+import { readInventory } from './inventory.ts';
+import type { InventoryEntry } from '../src/lib/types.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -161,6 +163,20 @@ export interface AppConfig {
     errorSystemicThreshold: number;
     errorSuppressMinutes: number;
   };
+
+  /**
+   * J0.3 — which repository runs on which machine. See `inventory.ts`.
+   *
+   * WRAPPED IN AN OBJECT, AND THAT IS NOT DECORATION. `merge` below spreads
+   * one level of sections: `{ ...base[section], ...patch[section] }`. An array
+   * stored directly as a section would meet `typeof [] === 'object'`, be
+   * spread into `{ "0": …, "1": … }`, and — worse — a patch REMOVING an entry
+   * would keep the old one at the index the shorter list no longer covers.
+   * Deleting a machine from the inventory would silently not happen. With the
+   * list one level down, the spread replaces the whole `entries` key, which is
+   * the semantics a list wants.
+   */
+  inventory: { entries: InventoryEntry[] };
 }
 
 /** Paths of the fields that must never be sent back to the browser. */
@@ -282,6 +298,10 @@ function defaults(): AppConfig {
       errorSystemicThreshold: 5,
       errorSuppressMinutes: 30,
     },
+    // Empty, and it has to stay empty: this table is what somebody knows about
+    // their own estate. A sample entry here would be a machine the console
+    // claims to know and nobody owns.
+    inventory: { entries: [] },
   };
 }
 
@@ -294,6 +314,19 @@ function merge(base: AppConfig, patch: any): AppConfig {
     }
   }
   return out as AppConfig;
+}
+
+/**
+ * The stored inventory, re-read through its own validation.
+ *
+ * A hand-edited `config.json` must not be able to put a shape the resolver
+ * cannot read in front of an operator — and it must not be able to stop the
+ * console from starting either, which is why `readInventory` drops and logs
+ * rather than throwing.
+ */
+function sanitizeInventory(c: AppConfig): AppConfig {
+  c.inventory = { entries: readInventory(c.inventory?.entries) };
+  return c;
 }
 
 let cached: AppConfig | null = null;
@@ -311,7 +344,7 @@ export function getConfig(): AppConfig {
       stored = {};
     }
   }
-  cached = applyEnvOverrides(migrateVariables(merge(defaults(), stored)));
+  cached = sanitizeInventory(applyEnvOverrides(migrateVariables(merge(defaults(), stored))));
   return cached;
 }
 
@@ -413,6 +446,11 @@ export function saveConfig(patch: any): AppConfig {
   // of. `chat.ts` substitutes `provider.defaultModel` when this is empty.
   next.assistant.model = String(next.assistant.model ?? '').trim();
   next.assistant.provider = String(next.assistant.provider || '').trim() || 'openrouter';
+  // The settings route refuses a malformed inventory with the reason, so what
+  // arrives here is already clean. This is the second lock: `saveConfig` is
+  // exported, and a caller that skipped the route must not be able to write a
+  // shape the resolver cannot read.
+  sanitizeInventory(next);
 
   writeFileSync(CONFIG_PATH, JSON.stringify(next, null, 2), { mode: 0o600 });
   try {
@@ -438,6 +476,10 @@ export function publicView() {
     ingestion: c.ingestion,
     tunnel: { hostname: c.tunnel.hostname, tokenSet: c.tunnel.token !== '' },
     console: c.console,
+    // No secret in here either: a folder path and a repository URL are what
+    // an operator types into the launcher by hand, and the card has to show
+    // them or the match cannot be checked.
+    inventory: c.inventory,
     auth: { enabled: c.auth.enabled, passwordSet: c.auth.hash !== '' },
     database: { ...c.database, password: undefined, passwordSet: c.database.password !== '' },
     pipeline: c.pipeline,
