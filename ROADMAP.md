@@ -1123,6 +1123,65 @@ X1 through X14 are delivered.
 
 ---
 
+---
+
+## 3 ter. The presentation site — P
+
+*`site/` — the page at menater.vercel.app. One source, a build script, no
+framework, no dependency. It is the first thing anyone sees of this product,
+and until now it was written for someone who already knew what a SOC is.*
+
+**The defect it had.** 3 147 words in the clear, ten numbered sections plus a
+table of contents, seven full-width screenshots and four group headings — a
+reference manual with a hero on top. Every sentence in it was true and most
+were worth keeping; that is exactly what made it unreadable. The measured
+comparison, on the vendors this product sits beside: Dropzone and Prophet run
+30–100 words per section and put a visual where the mechanism is. Landing
+pages written at a 5th-to-7th grade reading level convert at 12.9 %, against
+2.1 % for professional prose — a gap attributable to copy simplicity alone.
+This page was on the wrong side of it.
+
+**The rule this section adds, and it is the same one the console already
+obeys:** *what EXPLAINS folds, what REPORTS does not.* CLARITY.md § 10 wrote
+it for the console's screens. The site is a screen. Nothing is deleted —
+folded text stays in the DOM, keyboard-reachable and findable by Ctrl-F —
+because "one click away" and "erased" look identical on a screenshot and are
+nothing alike for someone searching.
+
+| # | Item | Why |
+|---|---|---|
+| **P1** | ~~**Six sections, not ten plus a map**~~ ✅ | A table of contents for a page you scroll is a second navigation level that gives back what the ordering already bought. The four group headings went with it |
+| **P2** | ~~**~1 100 words in the clear, the rest folded**~~ ✅ | The cut is by ROLE, not by length: a claim, a number, a refusal and a consequence stay on screen; a mechanism, a rationale and a table of detail go behind a fold that says how much is inside |
+| **P3** | ~~**A drawn pipeline, with the human gate in it**~~ ✅ | The thing this product is is a five-stage flow with a person standing in the middle of it, and the page described that in prose. Built in HTML and CSS rather than SVG so it reflows on a phone, repaints in all six palettes, and can be translated |
+| **P4** | ~~**"Code scanning", never "VulnPipe"**~~ ✅ | A second product name on the page makes a reader ask which of the two they are being sold. It is one feature of one console, and the page now says so. The engine keeps its directory name; the *interface* has not called it that since the merge |
+| **P5** | ~~**English and French, chosen by the reader**~~ ✅ | See below |
+| **P6** | ~~**Three screenshots in the clear, four in a fold**~~ ✅ | Seven full-width captioned figures is seven stops. The four that document a screen rather than making a point are behind one fold that names them |
+
+### P5 — two languages, and the cheapest correct way to do it
+
+The console is English-only and stays that way (§ 2 quater). The *site* is
+not the console: it is read by people deciding whether to look at the console
+at all, and the reason it is read in English is that nobody offered anything
+else.
+
+Three implementations were on the table, and the choice is the one that adds
+no runtime:
+
+| Approach | Why not |
+|---|---|
+| `data-i18n` + `fetch('fr.json')` at load | The page arrives in English and repaints — a flash of the wrong language on every visit, and a page that is empty to a crawler and to a reader with no JavaScript |
+| A framework with an i18n plugin | A build system, a dependency tree and a node_modules for a page with no state |
+| **Two static files from one source** ✅ | `build.py` already renders one source into two outputs. Rendering it into four (EN and FR, each in an inlined and a file-ref form) is the same loop with one more variable |
+
+So: `data-i18n="key"` marks a translatable element, the English **stays in the
+HTML** where the diff is readable, and `site/i18n/fr.json` holds the French
+against the same keys. The build fails on a key present on one side only —
+the typed-catalogue rule this product applies to `console.ts`, applied to a
+page. `/` is English, `/fr` is French, each carries `hreflang` and its own
+`lang` attribute, and the switcher is two links that preserve the anchor you
+were reading. No cookie, no header sniffing, no redirect: a URL somebody
+shares opens in the language they shared it in.
+
 ## 4. The two engines
 
 ### S — SOC pipeline

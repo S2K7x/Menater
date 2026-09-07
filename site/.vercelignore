@@ -1,9 +1,12 @@
 # The generator and its inputs are not the site.
-# `index.html` plus `shots/` and `favicon.svg` are what gets served; everything
-# below is how they are produced, or the variant meant for a host that blocks
-# external images. Shipping them would put a 2.4 MB duplicate of the page and a
-# build script on a public URL for nothing.
+# `index.html`, `fr/index.html`, `shots/` and `favicon.svg` are what gets
+# served; everything below is how they are produced, or the variant meant for
+# a host that blocks external images. Shipping them would put two 2.4 MB
+# duplicates of the page, the build script and the catalogues on a public URL
+# for nothing.
 build.sh
 build.py
 page.src.html
 page.html
+page.fr.html
+i18n/
