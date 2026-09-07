@@ -1,5 +1,19 @@
-<title data-i18n="meta.title">MENATER — AI alert triage you stay in control of</title>
-<meta name="description" data-i18n-content="meta.description" content="Self-hosted security console: an AI reads your alerts and proposes a verdict, a human approves every action, and every step is written down. Docker, three containers, open source.">
+<!doctype html>
+<html lang="fr" data-palette="grayed">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="fr_FR">
+<meta property="og:description" content="Console de sécurité auto-hébergée : une IA lit vos alertes et propose un verdict, un humain approuve chaque action, et chaque étape est consignée. Docker, trois conteneurs, open source.">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="alternate" hreflang="en" href="https://menater.vercel.app/">
+<link rel="alternate" hreflang="fr" href="https://menater.vercel.app/fr">
+<link rel="alternate" hreflang="x-default" href="https://menater.vercel.app/">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>img{max-width:100%}[hidden]{display:none!important}</style>
+<title>MENATER — le tri d'alertes par IA dont vous gardez le contrôle</title>
+<meta name="description" content="Console de sécurité auto-hébergée : une IA lit vos alertes et propose un verdict, un humain approuve chaque action, et chaque étape est consignée. Docker, trois conteneurs, open source.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;700&display=swap">
@@ -611,9 +625,12 @@ pre .a { color: var(--accent); }
 /* --- A gallery of the screens that document rather than argue ----------- */
 .gallery { display: flex; flex-direction: column; gap: 26px; }
 </style>
+<meta property="og:title" content="MENATER">
+</head>
+<body>
 <header class="top">
   <div class="wrap top-head">
-    <a class="lock" href="#top" data-i18n-aria-label="a11y.toTop" aria-label="MENATER — top of page">
+    <a class="lock" href="#top" aria-label="MENATER — haut de page">
       <svg width="22" height="22" viewBox="0 0 32 32" fill="currentColor" aria-hidden="true">
         <rect x="0" y="5" width="4" height="22"></rect>
         <rect x="7" y="5" width="4" height="22"></rect>
@@ -622,10 +639,13 @@ pre .a { color: var(--accent); }
         <rect x="28" y="5" width="4" height="22"></rect>
       </svg>
       <span class="word">MENATER</span>
-      <span class="tagline" data-i18n="header.tagline">Security operations</span>
+      <span class="tagline">Sécurité opérationnelle</span>
     </a>
 
-    <!--LANGS-->
+    <div class="langs">
+      <a href="/" hreflang="en" lang="en" title="English" aria-label="English" data-lang-link data-href="/"><span class="l-long">English</span><span class="l-short">EN</span></a>
+      <span aria-current="true" lang="fr" title="Français"><span class="l-long">Français</span><span class="l-short">FR</span></span>
+      </div>
 
     <a class="ghlink" href="https://github.com/S2K7x/Menater" target="_blank" rel="noopener noreferrer">
       <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
@@ -642,7 +662,7 @@ pre .a { color: var(--accent); }
       <span>GitHub</span>
     </a>
     <div class="picker" id="picker">
-      <p class="kick" data-i18n="header.theme">Theme</p>
+      <p class="kick">Thème</p>
     </div>
   </div>
 
@@ -650,13 +670,13 @@ pre .a { color: var(--accent); }
        to open with was a second navigation level for a page you scroll: it
        gave back exactly what the ordering already bought (CLARITY.md § 10). -->
   <div class="navrail">
-    <nav class="wrap topnav" id="topnav" data-i18n-aria-label="a11y.sections" aria-label="Sections of this page">
-      <a href="#why"><span class="n">01</span><span data-i18n="nav.why">Why</span></a>
-      <a href="#how"><span class="n">02</span><span data-i18n="nav.how">How it works</span></a>
-      <a href="#screens"><span class="n">03</span><span data-i18n="nav.screens">What you get</span></a>
-      <a href="#guardrails"><span class="n">04</span><span data-i18n="nav.guardrails">Guardrails</span></a>
-      <a href="#install"><span class="n">05</span><span data-i18n="nav.install">Install</span></a>
-      <a href="#limits"><span class="n">06</span><span data-i18n="nav.limits">Limits</span></a>
+    <nav class="wrap topnav" id="topnav" aria-label="Sections de cette page">
+      <a href="#why"><span class="n">01</span><span>Pourquoi</span></a>
+      <a href="#how"><span class="n">02</span><span>Comment ça marche</span></a>
+      <a href="#screens"><span class="n">03</span><span>Ce que vous obtenez</span></a>
+      <a href="#guardrails"><span class="n">04</span><span>Garde-fous</span></a>
+      <a href="#install"><span class="n">05</span><span>Installation</span></a>
+      <a href="#limits"><span class="n">06</span><span>Limites</span></a>
     </nav>
   </div>
 </header>
@@ -664,30 +684,30 @@ pre .a { color: var(--accent); }
 <main id="top">
   <!-- ===================== HERO ===================== -->
   <section class="wrap hero">
-    <p class="kick" data-i18n="hero.kick">Self-hosted · open source · runs on your own machine</p>
-    <h1 data-i18n="hero.title">Your alerts, triaged by AI. <em>Nothing runs</em> without you.</h1>
-    <p class="hero-sub" data-i18n="hero.sub">
-      MENATER reads the security alerts your tools raise, works out which ones matter, and hands
-      you the few that need a decision. <b>It proposes. You approve. Everything is written down.</b>
-    </p>
+    <p class="kick">Auto-hébergé · open source · tourne sur votre propre machine</p>
+    <h1>Vos alertes, triées par IA. <em>Rien ne s'exécute</em> sans vous.</h1>
+    <p class="hero-sub">MENATER lit les alertes de sécurité que vos outils remontent, détermine lesquelles comptent, et ne vous présente que celles qui demandent une décision. <b>Il propose. Vous approuvez. Tout est consigné.</b></p>
 
     <div class="hero-cta">
       <div class="term">
         <span class="cue" aria-hidden="true">$</span>
         <code id="cmd">docker compose up -d --build</code>
       </div>
-      <button class="copy" id="copy" type="button" data-i18n="hero.copy">Copy</button>
-      <a class="textlink" href="#how" data-i18n="hero.link">See how it works →</a>
+      <button class="copy" id="copy" type="button">Copier</button>
+      <a class="textlink" href="#how">Voir comment ça marche →</a>
     </div>
 
     <div class="spec">
-      <div><span class="v">3</span><span class="k" data-i18n="spec.containers">containers</span></div>
-      <div><span class="v">1</span><span class="k" data-i18n="spec.command">command to install</span></div>
-      <div><span class="v">0</span><span class="k" data-i18n="spec.actions">actions without a human</span></div>
-      <div><span class="v">1,278</span><span class="k" data-i18n="spec.tests">tests passing</span></div>
+      <div><span class="v">3</span><span class="k">conteneurs</span></div>
+      <div><span class="v">1</span><span class="k">commande pour installer</span></div>
+      <div><span class="v">0</span><span class="k">action sans un humain</span></div>
+      <div><span class="v">1,278</span><span class="k">tests au vert</span></div>
     </div>
 
-    <!--SHOT:01-queue-->
+    <figure class="shot">
+  <img data-shot="01-queue" src="/shots/01-queue.png" alt="La file de tri MENATER : deux alertes en attente d'un humain en tête, puis les dossiers clos, chaque ligne portant gravité, verdict, confiance et temps écoulé." width="2880" height="1800" loading="eager" decoding="async">
+  <figcaption>La file de tri. Ce qui attend un humain remonte en tête et porte l'accent — la seule couleur réservée à <em>quelqu'un doit agir</em>. Capture réelle : cette installation n'a pas de clé de modèle, d'où le <span class="mono">verdict de repli</span> sur chaque ligne.</figcaption>
+</figure>
   </section>
 
   <!-- ===================== 01 · WHY ===================== -->
@@ -695,41 +715,36 @@ pre .a { color: var(--accent); }
     <div class="wrap sec">
       <div class="sec-rail">
         <span class="num">01</span>
-        <span class="lbl" data-i18n="nav.why">Why</span>
+        <span class="lbl">Pourquoi</span>
       </div>
       <div class="sec-body">
-        <h2 class="sech" data-i18n="why.h">An AI that decides alone is an AI reading text an attacker wrote.</h2>
-        <p class="lede" data-i18n="why.lede">
-          Security tools raise far more alerts than anyone can read, so triaging them automatically
-          is not really optional. But an alert is text an attacker composed, and a model that can
-          both read it and act on it can be told what to do by it. MENATER separates those two
-          powers: the model reads and proposes, a human holds the trigger.
-        </p>
+        <h2 class="sech">Une IA qui décide seule est une IA qui lit un texte écrit par l'attaquant.</h2>
+        <p class="lede">Les outils de sécurité remontent bien plus d'alertes que personne ne peut en lire : trier automatiquement n'est donc pas vraiment une option. Mais une alerte est un texte composé par un attaquant, et un modèle qui peut à la fois le lire et agir dessus peut se faire dicter la suite. MENATER sépare ces deux pouvoirs : le modèle lit et propose, un humain garde la détente.</p>
 
-        <p class="thesis" data-i18n="why.thesis">It says what it cannot see, instead of filling the gap.</p>
+        <p class="thesis">Il dit ce qu'il ne voit pas, au lieu de combler le trou.</p>
 
         <details class="fold">
           <summary>
-            <span data-i18n="why.fold.s">The four rules that follow from it</span>
-            <span class="hint" data-i18n="why.fold.h">4 rules · enforced in code</span>
+            <span>Les quatre règles qui en découlent</span>
+            <span class="hint">4 règles · appliquées dans le code</span>
           </summary>
           <div class="fold-body">
             <ul class="rows">
               <li>
-                <span class="t" data-i18n="why.r1.t">Never fill a gap with a default</span>
-                <span class="d" data-i18n="why.r1.d">A missing value is shown as missing — <span class="dash">—</span>, never <span class="mono">0</span>, never <span class="mono">N/A</span>, never a guess. And rejecting an alert because a field is absent is the same mistake in its harshest form: <b>it replaces the alert with nothing.</b></span>
+                <span class="t">Ne jamais combler un trou par une valeur par défaut</span>
+                <span class="d">Une valeur absente est affichée comme absente — <span class="dash">—</span>, jamais <span class="mono">0</span>, jamais <span class="mono">N/A</span>, jamais une supposition. Et rejeter une alerte parce qu'un champ manque est la même erreur sous sa forme la plus dure : <b>cela remplace l'alerte par rien du tout.</b></span>
               </li>
               <li>
-                <span class="t" data-i18n="why.r2.t">Silence is never consent</span>
-                <span class="d" data-i18n="why.r2.d">An approval request that times out executes nothing — it escalates. Missing configuration cannot enable execution either: watch-only mode is the default, and only the exact word <span class="mono">false</span> turns it off.</span>
+                <span class="t">Le silence ne vaut jamais accord</span>
+                <span class="d">Une demande d'approbation qui expire n'exécute rien — elle escalade. Une configuration absente ne peut pas non plus autoriser une exécution : le mode observation est celui par défaut, et seul le mot exact <span class="mono">false</span> le désactive.</span>
               </li>
               <li>
-                <span class="t" data-i18n="why.r3.t">A failure must never show green</span>
-                <span class="d" data-i18n="why.r3.d">A chain that ran and passed zero items is <span class="pill pill-red">Broken</span>, not <span class="pill pill-green">Done</span>. A verdict of <em>clean</em> requires at least one intelligence source that actually answered — nobody looking is <span class="pill pill-grey">Not asked</span>, which is a different sentence.</span>
+                <span class="t">Une panne ne doit jamais s'afficher en vert</span>
+                <span class="d">Une chaîne qui s'est exécutée en ne transmettant aucun élément est <span class="pill pill-red">Rompue</span>, pas <span class="pill pill-green">Terminée</span>. Un verdict <em>sain</em> exige au moins une source de renseignement qui a réellement répondu — personne n'a regardé se dit <span class="pill pill-grey">Pas interrogée</span>, ce qui est une autre phrase.</span>
               </li>
               <li>
-                <span class="t" data-i18n="why.r4.t">No irreversible action without a human</span>
-                <span class="d" data-i18n="why.r4.d">The list of things the console can execute is closed at four entries. Nothing else is implementable — not even behind an approval — and no tuning rule can reach it.</span>
+                <span class="t">Aucune action irréversible sans un humain</span>
+                <span class="d">La liste de ce que la console peut exécuter est fermée à quatre entrées. Rien d'autre n'est implémentable — pas même derrière une approbation — et aucune règle de réglage ne peut l'atteindre.</span>
               </li>
             </ul>
           </div>
@@ -743,92 +758,79 @@ pre .a { color: var(--accent); }
     <div class="wrap sec">
       <div class="sec-rail">
         <span class="num">02</span>
-        <span class="lbl" data-i18n="nav.how">How it works</span>
+        <span class="lbl">Comment ça marche</span>
       </div>
       <div class="sec-body">
-        <h2 class="sech" data-i18n="how.h">An alert comes in. Five steps later, you decide.</h2>
-        <p class="lede" data-i18n="how.lede">
-          The same five steps run for every alert, in the same order, and each one writes down what
-          it did. Step four is a person — and nothing past it happens without them.
-        </p>
+        <h2 class="sech">Une alerte arrive. Cinq étapes plus tard, vous décidez.</h2>
+        <p class="lede">Les mêmes cinq étapes se déroulent pour chaque alerte, dans le même ordre, et chacune consigne ce qu'elle a fait. La quatrième, c'est une personne — et rien au-delà n'a lieu sans elle.</p>
 
         <div class="flow">
           <ol class="flow-track">
             <li class="flow-node">
-              <span class="fn-n" data-i18n="flow.1.n">Step 1</span>
-              <span class="fn-t" data-i18n="flow.1.t">An alert arrives</span>
-              <span class="fn-d" data-i18n="flow.1.d">From your SIEM, by webhook or by polling. Checked, and deduplicated so the same alert is never triaged twice.</span>
+              <span class="fn-n">Étape 1</span>
+              <span class="fn-t">Une alerte arrive</span>
+              <span class="fn-d">Depuis votre SIEM, par webhook ou par interrogation régulière. Vérifiée, et dédoublonnée pour qu'une même alerte ne soit jamais triée deux fois.</span>
             </li>
             <li class="flow-node">
-              <span class="fn-n" data-i18n="flow.2.n">Step 2</span>
-              <span class="fn-t" data-i18n="flow.2.t">Context is gathered</span>
-              <span class="fn-d" data-i18n="flow.2.d">Is this address known bad? Has this password leaked? A source with no key is marked <em>not asked</em>, never guessed.</span>
+              <span class="fn-n">Étape 2</span>
+              <span class="fn-t">Le contexte est rassemblé</span>
+              <span class="fn-d">Cette adresse est-elle connue comme malveillante ? Ce mot de passe a-t-il fuité ? Une source sans clé est marquée <em>pas interrogée</em>, jamais devinée.</span>
             </li>
             <li class="flow-node">
-              <span class="fn-n" data-i18n="flow.3.n">Step 3</span>
-              <span class="fn-t" data-i18n="flow.3.t">The AI proposes</span>
-              <span class="fn-d" data-i18n="flow.3.d">A verdict, a confidence score, and the reasoning behind both. A proposal — never an order.</span>
+              <span class="fn-n">Étape 3</span>
+              <span class="fn-t">L'IA propose</span>
+              <span class="fn-d">Un verdict, un niveau de confiance, et le raisonnement derrière les deux. Une proposition — jamais un ordre.</span>
             </li>
             <li class="flow-node flow-gate">
-              <span class="fn-n" data-i18n="flow.4.n">Step 4</span>
-              <span class="fn-you" data-i18n="flow.4.you">You</span>
-              <span class="fn-t" data-i18n="flow.4.t">You decide</span>
-              <span class="fn-d" data-i18n="flow.4.d">The proposal reaches you in the console, and on Slack or Discord if you want it there. Until you answer, nothing runs.</span>
+              <span class="fn-n">Étape 4</span>
+              <span class="fn-you">Vous</span>
+              <span class="fn-t">Vous décidez</span>
+              <span class="fn-d">La proposition vous parvient dans la console, et sur Slack ou Discord si vous le souhaitez. Tant que vous n'avez pas répondu, rien ne s'exécute.</span>
             </li>
             <li class="flow-node">
-              <span class="fn-n" data-i18n="flow.5.n">Step 5</span>
-              <span class="fn-t" data-i18n="flow.5.t">It is written down</span>
-              <span class="fn-d" data-i18n="flow.5.d">One row in a log that can be added to and never edited, sealed to the row before it. Tampering shows.</span>
+              <span class="fn-n">Étape 5</span>
+              <span class="fn-t">C'est consigné</span>
+              <span class="fn-d">Une ligne dans un journal auquel on ajoute et que l'on ne modifie jamais, scellée à celle qui la précède. Une falsification se voit.</span>
             </li>
           </ol>
 
           <ul class="flow-outcomes">
             <li>
-              <span class="o-k ok-green" data-i18n="flow.o1.k">You approve</span>
-              <span class="o-v" data-i18n="flow.o1.v">The one action you approved runs, and only that one.</span>
+              <span class="o-k ok-green">Vous approuvez</span>
+              <span class="o-v">L'action que vous avez approuvée s'exécute, et elle seule.</span>
             </li>
             <li>
-              <span class="o-k ok-grey" data-i18n="flow.o2.k">You refuse</span>
-              <span class="o-v" data-i18n="flow.o2.v">Nothing runs. The refusal is recorded, and it is what measures the AI.</span>
+              <span class="o-k ok-grey">Vous refusez</span>
+              <span class="o-v">Rien ne s'exécute. Le refus est consigné, et c'est lui qui mesure l'IA.</span>
             </li>
             <li>
-              <span class="o-k ok-orange" data-i18n="flow.o3.k">You do not answer</span>
-              <span class="o-v" data-i18n="flow.o3.v">Nothing runs. It escalates to a human instead of timing out quietly.</span>
+              <span class="o-k ok-orange">Vous ne répondez pas</span>
+              <span class="o-v">Rien ne s'exécute. L'alerte escalade vers un humain, au lieu d'expirer en silence.</span>
             </li>
           </ul>
 
-          <p class="flow-note" data-i18n="flow.note">
-            <b>Out of the box, step 4 never even fires.</b> The console starts in watch-only mode: it
-            records what it would have proposed and executes nothing at all, until your team has
-            looked at enough real alerts to trust it.
-          </p>
+          <p class="flow-note"><b>À l'installation, l'étape 4 ne se déclenche même pas.</b> La console démarre en mode observation : elle consigne ce qu'elle aurait proposé et n'exécute strictement rien, jusqu'à ce que votre équipe ait vu passer assez d'alertes réelles pour lui faire confiance.</p>
         </div>
 
         <details class="fold">
           <summary>
-            <span data-i18n="how.fold.s">What the engine underneath actually does</span>
-            <span class="hint" data-i18n="how.fold.h">6 workflows · typed handoffs</span>
+            <span>Ce que fait réellement le moteur en dessous</span>
+            <span class="hint">6 workflows · échanges typés</span>
           </summary>
           <div class="fold-body">
-            <p class="prose" data-i18n="how.fold.p">
-              MENATER runs its own engine. There is no workflow platform to install and no second
-              product that has to be reachable for an alert to be triaged — so a workflow cannot be
-              half-deployed, renamed in an editor, or left unpublished. The five steps above are
-              five workflows with a fixed, typed input and output; a sixth is the error handler,
-              declared on the other five and called only from their failure branches.
-            </p>
+            <p class="prose">MENATER exécute son propre moteur. Il n'y a aucune plateforme de workflows à installer et aucun second produit qui devrait être joignable pour qu'une alerte soit triée — un workflow ne peut donc pas être à moitié déployé, renommé dans un éditeur, ou laissé non publié. Les cinq étapes ci-dessus sont cinq workflows aux entrées et sorties fixes et typées ; un sixième est le gestionnaire d'erreurs, déclaré sur les cinq autres et appelé seulement depuis leurs branches d'échec.</p>
             <ul class="rows">
               <li>
-                <span class="t" data-i18n="how.f1.t">A junction waits</span>
-                <span class="d" data-i18n="how.f1.d">A step with several inputs does not start when one of them has answered. Enrichment would otherwise assemble a third of its sources — <b>with no error, no trace, and a plausible result.</b></span>
+                <span class="t">Une jonction attend</span>
+                <span class="d">Une étape à plusieurs entrées ne démarre pas dès que l'une d'elles a répondu. L'enrichissement assemblerait sinon un tiers de ses sources — <b>sans erreur, sans trace, et avec un résultat plausible.</b></span>
               </li>
               <li>
-                <span class="t" data-i18n="how.f2.t">Retry, then a named failure</span>
-                <span class="d" data-i18n="how.f2.d">Every external call retries with backoff, honouring a suggested wait as a floor rather than undercutting it. When it still fails, it fails by name: a source that was not asked is not a source that said nothing.</span>
+                <span class="t">Réessayer, puis échouer en le nommant</span>
+                <span class="d">Chaque appel externe réessaie avec un délai croissant, en respectant l'attente suggérée comme un plancher plutôt qu'en la raccourcissant. Quand il échoue quand même, il échoue en le nommant : une source qu'on n'a pas pu interroger n'est pas une source qui n'a rien dit.</span>
               </li>
               <li>
-                <span class="t" data-i18n="how.f3.t">The unreduced view</span>
-                <span class="d" data-i18n="how.f3.d">The queue stitches runs into cases, and two kinds of failure disappear in that reduction. A separate screen shows them unreduced — broken chains, runs attached to no alert, a searchable log, and a replay that <b>refuses</b> when the original alert is unknown.</span>
+                <span class="t">La vue non réduite</span>
+                <span class="d">La file recoud les exécutions en dossiers, et deux formes de panne disparaissent dans cette réduction. Un écran séparé les montre telles quelles — chaînes rompues, exécutions rattachées à aucune alerte, journal cherchable, et un rejeu qui <b>refuse</b> quand l'alerte d'origine est inconnue.</span>
               </li>
             </ul>
           </div>
@@ -842,82 +844,84 @@ pre .a { color: var(--accent); }
     <div class="wrap sec">
       <div class="sec-rail">
         <span class="num">03</span>
-        <span class="lbl" data-i18n="nav.screens">What you get</span>
+        <span class="lbl">Ce que vous obtenez</span>
       </div>
       <div class="sec-body">
-        <h2 class="sech" data-i18n="screens.h">Three screens do most of the work.</h2>
-        <p class="lede" data-i18n="screens.lede">
-          One console, one address, one password. There are ten tabs in it, but on an ordinary day
-          you live in three of them.
-        </p>
+        <h2 class="sech">Trois écrans font l'essentiel du travail.</h2>
+        <p class="lede">Une console, une adresse, un mot de passe. Elle contient dix onglets, mais une journée ordinaire se passe dans trois d'entre eux.</p>
 
         <div class="grid g3">
           <article class="card">
-            <h3 data-i18n="screens.c1.h">The queue</h3>
-            <p data-i18n="screens.c1.p">
-              Every alert, most urgent first. Open a row and you get the whole story: what came in,
-              what was found out, what the AI thinks, and what it wants to do.
-            </p>
+            <h3>La file d'alertes</h3>
+            <p>Toutes les alertes, les plus urgentes d'abord. Ouvrez une ligne et vous avez toute l'histoire : ce qui est arrivé, ce qu'on a appris, ce que l'IA en pense, et ce qu'elle veut faire.</p>
           </article>
           <article class="card">
-            <h3 data-i18n="screens.c2.h">Code scanning</h3>
-            <p data-i18n="screens.c2.p">
-              The other half of the console reads your code and looks for the flaws an attacker would
-              use — a folder, a file or a GitHub repository. Each finding says what can happen and
-              how to fix it.
-            </p>
+            <h3>Analyse de code</h3>
+            <p>L'autre moitié de la console lit votre code et y cherche les failles qu'un attaquant utiliserait — un dossier, un fichier ou un dépôt GitHub. Chaque trouvaille dit ce qui peut arriver et comment y remédier.</p>
           </article>
           <article class="card">
-            <h3 data-i18n="screens.c3.h">Lookup</h3>
-            <p data-i18n="screens.c3.p">
-              Paste an address, a domain, a file hash or an e-mail and ask about it directly. The
-              answer always says how many sources actually replied.
-            </p>
+            <h3>Recherche</h3>
+            <p>Collez une adresse, un domaine, une empreinte de fichier ou un e-mail et posez la question directement. La réponse dit toujours combien de sources ont réellement répondu.</p>
           </article>
         </div>
 
-        <!--SHOT:06-code-->
+        <figure class="shot">
+  <img data-shot="06-code" src="/shots/06-code.png" alt="L'onglet Code : une bande en quatre étapes — « lecture de votre code », « recherche de failles », « second avis », « votre rapport » — puis un sélecteur de cible proposant un dossier, un fichier ou un dépôt GitHub, et un choix entre tout le projet et seulement ce qui a changé." width="2880" height="1800" loading="lazy" decoding="async">
+  <figcaption>L'analyse de code. Les quatre étapes sont nommées avant que quoi que ce soit ne démarre, et la question de la portée dit franchement quel choix coûte le plus cher.</figcaption>
+</figure>
 
         <details class="fold">
           <summary>
-            <span data-i18n="screens.fold1.s">The other four screens</span>
-            <span class="hint" data-i18n="screens.fold1.h">4 screenshots</span>
+            <span>Les quatre autres écrans</span>
+            <span class="hint">4 captures d'écran</span>
           </summary>
           <div class="fold-body">
             <div class="gallery">
-              <!--SHOT:02-ingestion-->
-              <!--SHOT:03-tracking-->
-              <!--SHOT:05-lookup-->
-              <!--SHOT:07-health-->
+              <figure class="shot">
+  <img data-shot="02-ingestion" src="/shots/02-ingestion.png" alt="L'onglet Ingestion : trois architectures de livraison côte à côte avec leurs coûts énoncés, l'hybride sélectionnée, et un tableau associant P1 à P4 au webhook ou à l'interrogation régulière avec le délai que chacune implique." width="2880" height="1800" loading="lazy" decoding="async">
+  <figcaption>Choisir une architecture de livraison. Chaque option dit ce qu'elle apporte <em>et</em> ce qu'elle coûte, et le tableau annonce la moitié d'un intervalle d'interrogation — le délai moyen ajouté, pas l'intervalle, parce que c'est ce chiffre-là qu'on met en balance avec une P1.</figcaption>
+</figure>
+              <figure class="shot">
+  <img data-shot="03-tracking" src="/shots/03-tracking.png" alt="L'onglet Suivi : 120 exécutions inspectées, 118 rattachées à une alerte, un avertissement disant que la fenêtre observée est pleine, et trois sous-onglets pour les chaînes de traitement, les exécutions orphelines et le journal." width="2880" height="1800" loading="lazy" decoding="async">
+  <figcaption>La vue non réduite. Elle compte les exécutions que la file n'a pas pu vous montrer, et prévient quand la fenêtre observée est pleine — <em>au-delà, la console ne sait pas</em> — plutôt que de laisser une lecture bornée passer pour une lecture complète.</figcaption>
+</figure>
+              <figure class="shot">
+  <img data-shot="05-lookup" src="/shots/05-lookup.png" alt="L'onglet Recherche après interrogation de 8.8.8.8 : un verdict « rien contre elle », la ligne « 1 source sur 4 a répondu », et deux fiches de source marquées « pas interrogée »." width="2880" height="1800" loading="lazy" decoding="async">
+  <figcaption>Un verdict qui énonce sa propre portée. Une source a répondu, et le panneau le dit à côté du verdict ; les deux sources sans clé sont <b>pas interrogées</b> — une question que personne n'a posée, pas un trou dans ce qu'on sait.</figcaption>
+</figure>
+              <figure class="shot">
+  <img data-shot="07-health" src="/shots/07-health.png" alt="Le résultat du test de connectivité : un bandeau rouge indiquant « au moins un maillon est rompu, 9 vérifications au vert, 5 à surveiller, 1 en échec, 0 indéterminée — en 14 ms », puis les lignes par vérification pour la base de données, le schéma SQL, la clé du modèle de tri et quatre sources d'enrichissement." width="2880" height="1800" loading="lazy" decoding="async">
+  <figcaption>Le test de connectivité sur la même installation. <b>Neuf au vert, cinq à surveiller, une en échec, zéro indéterminée</b> — quatre états, si bien que « en cours de vérification » n'est jamais rapporté comme « rompu ». Chaque ligne nomme la conséquence puis le remède : la clé de modèle manquante annonce que chaque alerte prendra le verdict de repli, et où mettre la clé.</figcaption>
+</figure>
             </div>
           </div>
         </details>
 
         <details class="fold">
           <summary>
-            <span data-i18n="screens.fold2.s">All ten tabs, one line each</span>
-            <span class="hint" data-i18n="screens.fold2.h">10 tabs · Alerts to Settings</span>
+            <span>Les dix onglets, une ligne chacun</span>
+            <span class="hint">10 onglets · d'Alertes à Réglages</span>
           </summary>
           <div class="fold-body">
             <div class="tablewrap">
               <table>
                 <thead>
                   <tr>
-                    <th scope="col" data-i18n="screens.th1">Tab</th>
-                    <th scope="col" data-i18n="screens.th2">What is on it</th>
+                    <th scope="col">Onglet</th>
+                    <th scope="col">Ce qu'on y trouve</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr><td class="m">Alerts</td><td data-i18n="tab.alerts">The queue and the incident card. Every value in an alert carries a jump into Lookup with the question already asked.</td></tr>
-                  <tr><td class="m">Code</td><td data-i18n="tab.code">Run a code scan and read the report. It keeps running while you work in another tab.</td></tr>
-                  <tr><td class="m">Ingestion</td><td data-i18n="tab.ingestion">How alerts get in: the delivery method, the sources on each, and the pipeline as it runs.</td></tr>
-                  <tr><td class="m">Rules</td><td data-i18n="tab.rules">Declare what is normal here — the authorised scanner, the backup window — with a dry run that answers <em>which rule would match this alert</em> without touching anything.</td></tr>
-                  <tr><td class="m">Tracking</td><td data-i18n="tab.tracking">The unreduced view: broken chains, orphan runs, searchable log, replay.</td></tr>
-                  <tr><td class="m">Metrics</td><td data-i18n="tab.metrics">Two rates, never conflated: what the AI called a false positive, and what a human refused.</td></tr>
-                  <tr><td class="m">Health</td><td data-i18n="tab.health">One button that tests every link in the chain, and nine test alerts to send through it.</td></tr>
-                  <tr><td class="m">Lookup</td><td data-i18n="tab.lookup">Threat intelligence on one value, plus a breached-password check whose hash never leaves your browser.</td></tr>
-                  <tr><td class="m">Guide</td><td data-i18n="tab.guide">The documentation, searchable — and the search reads the glossary too, so a word you looked up in the wrong vocabulary still finds its section.</td></tr>
-                  <tr><td class="m">Settings</td><td data-i18n="tab.settings">Keys, sources, engines — and a checklist naming everything still missing before an alert can be triaged.</td></tr>
+                  <tr><td class="m">Alerts</td><td>La file et la fiche d'incident. Chaque valeur d'une alerte porte un raccourci vers Recherche avec la question déjà posée.</td></tr>
+                  <tr><td class="m">Code</td><td>Lancer une analyse de code et lire le rapport. Elle continue de tourner pendant que vous travaillez dans un autre onglet.</td></tr>
+                  <tr><td class="m">Ingestion</td><td>Comment les alertes entrent : le mode de livraison, les sources sur chacun, et le pipeline tel qu'il s'exécute.</td></tr>
+                  <tr><td class="m">Rules</td><td>Déclarez ce qui est normal chez vous — le scanner autorisé, la fenêtre de sauvegarde — avec un essai à blanc qui répond <em>quelle règle correspondrait à cette alerte</em> sans rien toucher.</td></tr>
+                  <tr><td class="m">Tracking</td><td>La vue non réduite : chaînes rompues, exécutions orphelines, journal cherchable, rejeu.</td></tr>
+                  <tr><td class="m">Metrics</td><td>Deux taux, jamais confondus : ce que l'IA a qualifié de faux positif, et ce qu'un humain a refusé.</td></tr>
+                  <tr><td class="m">Health</td><td>Un bouton qui teste chaque maillon de la chaîne, et neuf alertes de test à y faire passer.</td></tr>
+                  <tr><td class="m">Lookup</td><td>Du renseignement sur une valeur, plus une vérification de mot de passe compromis dont l'empreinte ne quitte jamais votre navigateur.</td></tr>
+                  <tr><td class="m">Guide</td><td>La documentation, cherchable — et la recherche lit aussi le glossaire, si bien qu'un mot cherché dans le mauvais vocabulaire trouve quand même sa section.</td></tr>
+                  <tr><td class="m">Settings</td><td>Clés, sources, moteurs — et une liste de contrôle nommant tout ce qui manque encore avant qu'une alerte puisse être triée.</td></tr>
                 </tbody>
               </table>
             </div>
@@ -926,17 +930,11 @@ pre .a { color: var(--accent); }
 
         <details class="fold">
           <summary>
-            <span data-i18n="screens.fold3.s">Six themes, and why the switch at the top is not a gimmick</span>
-            <span class="hint" data-i18n="screens.fold3.h">6 palettes · contrast tested</span>
+            <span>Six thèmes, et pourquoi le sélecteur en haut n'est pas un gadget</span>
+            <span class="hint">6 palettes · contraste testé</span>
           </summary>
           <div class="fold-body">
-            <p class="prose" data-i18n="screens.fold3.p">
-              The switch in the header repaints this page with the console's six real palettes, from
-              the same tokens. A test computes the WCAG contrast ratios and <b>refuses</b> a palette
-              that falls below them — it caught a failure red at 2.5:1, on the screen that depends
-              on red most. And colour never carries meaning on its own here: every risk colour is
-              paired with a word, so the console still works if you cannot tell them apart.
-            </p>
+            <p class="prose">Le sélecteur dans l'en-tête repeint cette page avec les six vraies palettes de la console, depuis les mêmes jetons de couleur. Un test calcule les rapports de contraste WCAG et <b>refuse</b> une palette qui passe en dessous — il a rattrapé un rouge d'échec à 2,5:1, sur l'écran qui dépend le plus du rouge. Et la couleur ne porte jamais le sens à elle seule ici : chaque couleur de risque est doublée d'un mot, si bien que la console fonctionne encore si vous ne les distinguez pas.</p>
           </div>
         </details>
       </div>
@@ -948,90 +946,66 @@ pre .a { color: var(--accent); }
     <div class="wrap sec">
       <div class="sec-rail">
         <span class="num">04</span>
-        <span class="lbl" data-i18n="nav.guardrails">Guardrails</span>
+        <span class="lbl">Garde-fous</span>
       </div>
       <div class="sec-body">
-        <h2 class="sech" data-i18n="guard.h">The list of things it will not do is the feature.</h2>
-        <p class="lede" data-i18n="guard.lede">
-          Four limits, each one written into the code rather than promised in a slide. They are
-          what makes an AI safe to point at attacker-composed text all day.
-        </p>
+        <h2 class="sech">La liste de ce qu'il refuse de faire, c'est ça la fonctionnalité.</h2>
+        <p class="lede">Quatre limites, chacune écrite dans le code plutôt que promise dans une présentation. C'est ce qui rend une IA sûre à pointer toute la journée sur du texte écrit par un attaquant.</p>
 
         <div class="grid g2">
           <article class="card">
-            <h3 data-i18n="guard.c1.h">It watches before it acts</h3>
-            <p data-i18n="guard.c1.p">
-              A new install executes nothing. It records the decision it would have made, and waits
-              until your team has measured, over real alerts, how often they disagreed with it.
-              That measurement is the gate, not a date.
-            </p>
+            <h3>Il observe avant d'agir</h3>
+            <p>Une installation neuve n'exécute rien. Elle consigne la décision qu'elle aurait prise, et attend que votre équipe ait mesuré, sur de vraies alertes, à quelle fréquence elle n'était pas d'accord. C'est cette mesure qui ouvre la porte, pas une date.</p>
           </article>
           <article class="card">
-            <h3 data-i18n="guard.c2.h">Four actions, and no fifth</h3>
-            <p data-i18n="guard.c2.p">
-              Isolate a machine temporarily — with an expiry and an automatic undo — open a ticket,
-              escalate, or close as a false positive. Nothing else can be added. And isolation
-              refuses to run when it has no machine to name.
-            </p>
+            <h3>Quatre actions, et pas de cinquième</h3>
+            <p>Isoler temporairement une machine — avec expiration et annulation automatique — ouvrir un ticket, escalader, ou clore en faux positif. Rien d'autre ne peut être ajouté. Et l'isolement refuse de s'exécuter quand il n'a aucune machine à nommer.</p>
           </article>
           <article class="card">
-            <h3 data-i18n="guard.c3.h">The chat assistant cannot act</h3>
-            <p data-i18n="guard.c3.p">
-              A panel answers questions about your own installation using seven read-only lookups
-              and nothing else. An instruction hidden in a log arrives at a model that has no way
-              to obey it.
-            </p>
+            <h3>L'assistant ne peut pas agir</h3>
+            <p>Un panneau répond aux questions sur votre installation au moyen de sept consultations en lecture seule, et rien d'autre. Une instruction cachée dans un journal arrive à un modèle qui n'a aucun moyen d'y obéir.</p>
           </article>
           <article class="card">
-            <h3 data-i18n="guard.c4.h">Everything stays on your machine</h3>
-            <p data-i18n="guard.c4.p">
-              Three containers on your own host, one port published. Your alerts go to the model you
-              chose with the key you supplied, and nowhere else. No account, no telemetry, no
-              vendor cloud in the path.
-            </p>
+            <h3>Tout reste sur votre machine</h3>
+            <p>Trois conteneurs sur votre hôte, un seul port publié. Vos alertes vont au modèle que vous avez choisi avec la clé que vous avez fournie, et nulle part ailleurs. Pas de compte, pas de télémétrie, aucun nuage d'éditeur sur le chemin.</p>
           </article>
         </div>
 
-        <!--SHOT:04-case-->
+        <figure class="shot">
+  <img data-shot="04-case" src="/shots/04-case.png" alt="Une fiche d'incident pour une alerte critique de rançongiciel : verdict de repli à confiance 0, quatre étapes de pipeline avec leurs durées, et un bloc d'approbation proposant une escalade." width="2880" height="1800" loading="lazy" decoding="async">
+  <figcaption>Un incident. Le verdict nomme sa propre cause, la destination est <span class="dash">—</span> parce que la détection n'en a consigné aucune, et l'action proposée est derrière <b>Approbation requise</b>. Rien n'a été exécuté.</figcaption>
+</figure>
 
         <div class="figs">
           <div class="fig">
             <span class="n">400 / 400</span>
-            <span class="l" data-i18n="fig1.l">alerts accepted under load</span>
-            <span class="c" data-i18n="fig1.c">50 at once · ~134 per second · every chain settled, nothing left running</span>
+            <span class="l">alertes acceptées en charge</span>
+            <span class="c">50 en parallèle · ~134 par seconde · chaque chaîne réglée, rien laissé en cours</span>
           </div>
           <div class="fig">
             <span class="n">1 of 12</span>
-            <span class="l" data-i18n="fig2.l">duplicates accepted</span>
-            <span class="c" data-i18n="fig2.c">12 simultaneous copies of one alert → 1 accepted, 11 already seen, zero errors</span>
+            <span class="l">doublons acceptés</span>
+            <span class="c">12 copies simultanées d'une même alerte → 1 acceptée, 11 déjà vues, zéro erreur</span>
           </div>
           <div class="fig">
             <span class="n">0</span>
-            <span class="l" data-i18n="fig3.l">broken links in the audit log</span>
-            <span class="c" data-i18n="fig3.c">re-verified across 2,644 rows written under concurrent load</span>
+            <span class="l">maillons rompus dans le journal d'audit</span>
+            <span class="c">revérifié sur 2 644 lignes écrites sous charge concurrente</span>
           </div>
           <div class="fig">
             <span class="n">1,278</span>
-            <span class="l" data-i18n="fig4.l">tests passing</span>
-            <span class="c" data-i18n="fig4.c">913 console · 365 code scanning · type checking clean</span>
+            <span class="l">tests au vert</span>
+            <span class="c">913 console · 365 analyse de code · vérification de types propre</span>
           </div>
         </div>
 
         <details class="fold">
           <summary>
-            <span data-i18n="guard.fold.s">The conditions those numbers were taken under</span>
-            <span class="hint" data-i18n="guard.fold.h">one machine · reproducible</span>
+            <span>Les conditions dans lesquelles ces chiffres ont été relevés</span>
+            <span class="hint">une machine · reproductible</span>
           </summary>
           <div class="fold-body">
-            <p class="prose" data-i18n="guard.fold.p">
-              Run against <span class="mono">docker compose up</span> and nothing else. This is a QA
-              pass on one machine, not a published benchmark; the point is that it is reproducible
-              and that the conditions are stated. <b>It found eight defects, and they were fixed</b> —
-              three worth naming: the entry point told senders their <em>refused</em> alerts had been
-              accepted; the deduplication insert was not safe against a burst and answered an error;
-              and the audit verifier reported broken links on healthy rows. A verifier that cries
-              wolf is one an auditor stops believing, which would hide a real deletion in the noise.
-            </p>
+            <p class="prose">Exécuté contre <span class="mono">docker compose up</span> et rien d'autre. C'est une passe de qualité sur une machine, pas un banc d'essai publié ; ce qui compte est que ce soit reproductible et que les conditions soient dites. <b>Elle a trouvé huit défauts, et ils ont été corrigés</b> — trois méritent d'être nommés : le point d'entrée disait aux émetteurs que leurs alertes <em>refusées</em> avaient été acceptées ; l'insertion de dédoublonnage n'était pas sûre face à une rafale et répondait par une erreur ; et le vérificateur d'audit signalait des maillons rompus sur des lignes saines. Un vérificateur qui crie au loup est un vérificateur qu'un auditeur cesse de croire, ce qui masquerait une vraie suppression dans le bruit.</p>
           </div>
         </details>
       </div>
@@ -1043,51 +1017,41 @@ pre .a { color: var(--accent); }
     <div class="wrap sec">
       <div class="sec-rail">
         <span class="num">05</span>
-        <span class="lbl" data-i18n="nav.install">Install</span>
+        <span class="lbl">Installation</span>
       </div>
       <div class="sec-body">
-        <h2 class="sech" data-i18n="install.h">Two commands, on any host with Docker.</h2>
-        <p class="lede" data-i18n="install.lede">
-          Nothing else to install: no database to configure, no schema to apply by hand, no second
-          machine. The database and the scanner are reachable only from inside the stack.
-        </p>
+        <h2 class="sech">Deux commandes, sur n'importe quel hôte doté de Docker.</h2>
+        <p class="lede">Rien d'autre à installer : pas de base de données à configurer, pas de schéma à appliquer à la main, pas de seconde machine. La base et l'analyseur ne sont joignables que depuis l'intérieur de la pile.</p>
 
-<pre><code><span class="c" data-i18n="install.code.c1"># fill in the two passwords</span>
+<pre><code><span class="c"># renseignez les deux mots de passe</span>
 cp .env.example .env
 
-<span class="c" data-i18n="install.code.c2"># database + console + code scanning</span>
+<span class="c"># base de données + console + analyse de code</span>
 docker compose up -d --build
 
 <span class="a">→ http://localhost:4400</span></code></pre>
 
-        <p class="prose" data-i18n="install.after">
-          <strong>It comes up in three minutes and triages nothing.</strong> That is not a fault:
-          each of the four things below is a choice the console refuses to make for you, and a
-          checklist on the settings page tracks all four until they are done.
-        </p>
+        <p class="prose"><strong>Elle démarre en trois minutes et ne trie rien.</strong> Ce n'est pas un défaut : chacun des quatre points ci-dessous est un choix que la console refuse de faire à votre place, et une liste de contrôle dans les réglages les suit tous les quatre jusqu'à ce qu'ils soient faits.</p>
 
         <div class="tablewrap">
           <table>
             <thead>
               <tr>
                 <th scope="col">#</th>
-                <th scope="col" data-i18n="install.th2">What</th>
-                <th scope="col" data-i18n="install.th3">If you skip it</th>
+                <th scope="col">Quoi</th>
+                <th scope="col">Si vous le sautez</th>
               </tr>
             </thead>
             <tbody>
-              <tr><td class="m">1</td><td data-i18n="install.r1.a">A shared secret for the alert endpoint</td><td data-i18n="install.r1.b">The door stays <b>closed</b>. Here an empty secret closes it rather than opening it.</td></tr>
-              <tr><td class="m">2</td><td data-i18n="install.r2.a">Turning the endpoint on</td><td data-i18n="install.r2.b">Every alert is refused.</td></tr>
-              <tr><td class="m">3</td><td data-i18n="install.r3.a">A key for the AI model</td><td data-i18n="install.r3.b">Every alert lands on a human with a confidence of zero. Nothing is lost; nothing is triaged.</td></tr>
-              <tr><td class="m">4</td><td data-i18n="install.r4.a">A tool to send you alerts</td><td data-i18n="install.r4.b">No alerts arrive.</td></tr>
+              <tr><td class="m">1</td><td>Un secret partagé pour le point d'entrée des alertes</td><td>La porte reste <b>fermée</b>. Ici un secret vide la ferme au lieu de l'ouvrir.</td></tr>
+              <tr><td class="m">2</td><td>Activer le point d'entrée</td><td>Toutes les alertes sont refusées.</td></tr>
+              <tr><td class="m">3</td><td>Une clé pour le modèle d'IA</td><td>Chaque alerte atterrit chez un humain avec une confiance de zéro. Rien n'est perdu ; rien n'est trié.</td></tr>
+              <tr><td class="m">4</td><td>Un outil qui vous envoie des alertes</td><td>Aucune alerte n'arrive.</td></tr>
             </tbody>
           </table>
         </div>
 
-        <p class="prose" data-i18n="install.optional">
-          Threat-intelligence keys and chat notifications are optional — a source with no key shows
-          as <span class="pill pill-grey">Not asked</span> rather than being filled in.
-        </p>
+        <p class="prose">Les clés de renseignement et les notifications de messagerie sont facultatives — une source sans clé s'affiche <span class="pill pill-grey">Pas interrogée</span> plutôt que d'être comblée.</p>
       </div>
     </div>
   </section>
@@ -1097,26 +1061,23 @@ docker compose up -d --build
     <div class="wrap sec">
       <div class="sec-rail">
         <span class="num">06</span>
-        <span class="lbl" data-i18n="nav.limits">Limits</span>
+        <span class="lbl">Limites</span>
       </div>
       <div class="sec-body">
-        <h2 class="sech" data-i18n="limits.h">What it does not do.</h2>
-        <p class="lede" data-i18n="limits.lede">
-          Said here for the same reason the console says it: a page that lists only what works is a
-          green that was never earned.
-        </p>
+        <h2 class="sech">Ce qu'il ne fait pas.</h2>
+        <p class="lede">Dit ici pour la même raison que la console le dit : une page qui n'énumère que ce qui marche est un vert qui n'a pas été gagné.</p>
         <ul class="rows">
           <li>
-            <span class="t" data-i18n="limits.r1.t">The two halves do not talk</span>
-            <span class="d" data-i18n="limits.r1.d">A code scan creates no alert in the queue, and an alert starts no scan. They share an interface and a login; connecting them is the next priority.</span>
+            <span class="t">Les deux moitiés ne se parlent pas</span>
+            <span class="d">Une analyse de code ne crée aucune alerte dans la file, et une alerte ne lance aucune analyse. Elles partagent une interface et une connexion ; les relier est la prochaine priorité.</span>
           </li>
           <li>
-            <span class="t" data-i18n="limits.r2.t">The login identifies nobody</span>
-            <span class="d" data-i18n="limits.r2.d">Access is a single password. It protects the console; it does not tell one approver from another, and the audit row says exactly that rather than implying a name it does not have.</span>
+            <span class="t">La connexion n'identifie personne</span>
+            <span class="d">L'accès est un simple mot de passe. Il protège la console ; il ne distingue pas un approbateur d'un autre, et la ligne d'audit le dit exactement, plutôt que de sous-entendre un nom qu'elle n'a pas.</span>
           </li>
           <li>
-            <span class="t" data-i18n="limits.r3.t">It is a project, not a product</span>
-            <span class="d" data-i18n="limits.r3.d">Self-hosted, open source, no support contract and no company behind it. Read the code before you point it at anything that matters — which is the right thing to do with any of these.</span>
+            <span class="t">C'est un projet, pas un produit</span>
+            <span class="d">Auto-hébergé, open source, sans contrat de support et sans société derrière. Lisez le code avant de le pointer sur quoi que ce soit d'important — ce qui est de toute façon la bonne chose à faire avec n'importe lequel de ces outils.</span>
           </li>
         </ul>
       </div>
@@ -1127,17 +1088,14 @@ docker compose up -d --build
   <footer class="band band-inset">
     <div class="wrap foot">
       <div class="row">
-        <p class="kick" data-i18n="foot.name">MENATER · <span class="heb" lang="he" dir="rtl">מנטר</span> · present tense of <em>lenater</em>, to monitor</p>
-        <p class="kick" data-i18n="foot.stack">Self-hosted · Docker · open source</p>
+        <p class="kick">MENATER · <span class="heb" lang="he" dir="rtl">מנטר</span> · présent du verbe <em>lenater</em>, surveiller</p>
+        <p class="kick">Auto-hébergé · Docker · open source</p>
         <span class="foot-links">
-          <a class="totop" href="https://github.com/S2K7x/Menater" target="_blank" rel="noopener noreferrer" data-i18n="foot.gh">Source on GitHub ↗</a>
-          <a class="totop" href="#top" data-i18n="foot.top">↑ Back to top</a>
+          <a class="totop" href="https://github.com/S2K7x/Menater" target="_blank" rel="noopener noreferrer">Le code sur GitHub ↗</a>
+          <a class="totop" href="#top">↑ Haut de page</a>
         </span>
       </div>
-      <p data-i18n="foot.note">
-        Named after an action in progress, not a technology: the console shows a state, never a
-        finished report. It watches; a human acts.
-      </p>
+      <p>Nommé d'après une action en cours, pas d'après une technologie : la console montre un état, jamais un rapport terminé. Elle surveille ; un humain agit.</p>
     </div>
   </footer>
 </main>
@@ -1146,16 +1104,16 @@ docker compose up -d --build
      here, beside the rest of it; build.py swaps the values for a locale. -->
 <script type="application/json" id="ui-strings">
 {
-  "copy": "Copy",
-  "copied": "Copied",
-  "selectIt": "Select it",
-  "themeOf": "Theme: ",
-  "grayed": "Grayed — slate and acid green",
-  "punk": "Punk — khaki and red",
-  "blued": "Blued — electric blue and lime",
-  "attck": "Attck — incandescent orange",
-  "acme": "Acme — cream paper, printer red (light)",
-  "dark": "Dark — near-black and application blue"
+  "copy": "Copier",
+  "copied": "Copié",
+  "selectIt": "Sélectionnez-le",
+  "themeOf": "Thème : ",
+  "grayed": "Grayed — ardoise et vert acide",
+  "punk": "Punk — kaki et rouge",
+  "blued": "Blued — bleu électrique et citron vert",
+  "attck": "Attck — orange incandescent",
+  "acme": "Acme — papier crème, rouge d'imprimeur (clair)",
+  "dark": "Dark — gris presque noir et bleu applicatif"
 }
 </script>
 
@@ -1285,3 +1243,6 @@ docker compose up -d --build
   });
 })();
 </script>
+
+</body>
+</html>

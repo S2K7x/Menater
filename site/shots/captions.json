@@ -1,37 +1,37 @@
 {
   "01-queue": {
     "alt": "The MENATER triage queue: two alerts waiting on a human at the top, then closed cases, each row carrying severity, verdict, confidence and time taken.",
-    "cap": "The triage queue. Two alerts are waiting on a human, so they rise to the top and carry the accent \u2014 the one colour reserved for <em>the system is blocked and someone must act</em>. Real screenshot of a running stack with no model key configured \u2014 which is why every verdict here reads <span class=\"mono\">fallback verdict</span>.",
+    "cap": "The triage queue. Anything waiting on a human rises to the top and carries the accent — the one colour reserved for <em>someone must act</em>. Real screenshot: this install has no model key, hence the <span class=\"mono\">fallback verdict</span> on every row.",
     "eager": true
   },
   "05-lookup": {
-    "alt": "The Lookup tab after querying 8.8.8.8: a verdict reading \u201cnothing against it\u201d, the line \u201c1 of 4 sources answered\u201d, and two source cards marked \u201cnot asked\u201d.",
-    "cap": "A verdict that states its own scope. One source answered, and the panel says so beside the verdict; the two sources with no key are <b>not asked</b> \u2014 a question nobody put, not a hole in what is known.",
+    "alt": "The Lookup tab after querying 8.8.8.8: a verdict reading “nothing against it”, the line “1 of 4 sources answered”, and two source cards marked “not asked”.",
+    "cap": "A verdict that states its own scope. One source answered, and the panel says so beside the verdict; the two sources with no key are <b>not asked</b> — a question nobody put, not a hole in what is known.",
     "eager": false
   },
   "04-case": {
     "alt": "An incident card for a critical ransomware alert: fallback verdict at confidence 0, four pipeline steps with their timings, and an approval block proposing an escalation.",
-    "cap": "The incident card. The destination is <span class=\"dash\">\u2014</span> because the detection recorded none; the verdict is the fail-safe one and it names its own cause; the proposed action sits behind <b>Approval required</b>. Nothing was executed. Real screenshot of a running stack with no model key configured \u2014 which is why every verdict here reads <span class=\"mono\">fallback verdict</span>.",
+    "cap": "One incident. The verdict names its own cause, the destination is <span class=\"dash\">—</span> because the detection recorded none, and the proposed action sits behind <b>Approval required</b>. Nothing was executed.",
     "eager": false
   },
   "03-tracking": {
     "alt": "The Tracking tab: 120 runs inspected, 118 attached to an alert, a warning that the observed window is full, and three sub-tabs for processing chains, orphan runs and the run log.",
-    "cap": "The unreduced view. It counts the runs the queue could not show you, and warns when the observed window is full \u2014 <em>beyond it, the console does not know</em> \u2014 rather than letting a bounded read look like a complete one.",
+    "cap": "The unreduced view. It counts the runs the queue could not show you, and warns when the observed window is full — <em>beyond it, the console does not know</em> — rather than letting a bounded read look like a complete one.",
     "eager": false
   },
   "02-ingestion": {
     "alt": "The Ingestion tab: three delivery architectures side by side with their costs stated, hybrid selected, and a table mapping P1 to P4 onto webhook or polling with the delay each implies.",
-    "cap": "Choosing a delivery architecture. Each option states what it buys <em>and</em> what it costs, and the lane table quotes half a polling interval \u2014 the average added delay, not the interval, because that is the number a P1 gets weighed against.",
+    "cap": "Choosing a delivery architecture. Each option states what it buys <em>and</em> what it costs, and the lane table quotes half a polling interval — the average added delay, not the interval, because that is the number a P1 gets weighed against.",
     "eager": false
   },
   "06-code": {
-    "alt": "The Code tab: a four-stage strip reading \u201creading your code\u201d, \u201chunting for holes\u201d, \u201csecond opinion\u201d, \u201cyour report\u201d, then a target picker offering a folder, a single file or a GitHub repository, and a choice between the whole project and only what changed.",
-    "cap": "The other half. The four stages are named before anything runs, the target is a folder, a file or a repository, and the scope question \u2014 <b>the whole project</b> or only what changed \u2014 states which one costs more and which one you want the first time.",
+    "alt": "The Code tab: a four-stage strip reading “reading your code”, “hunting for holes”, “second opinion”, “your report”, then a target picker offering a folder, a single file or a GitHub repository, and a choice between the whole project and only what changed.",
+    "cap": "Code scanning. The four stages are named before anything runs, and the scope question says outright which choice costs more.",
     "eager": false
   },
   "07-health": {
-    "alt": "The connectivity test results: a red banner reading \u201cat least one link is broken, 9 checks green, 5 to watch, 1 failing, 0 undetermined \u2014 in 14 ms\u201d, then per-check rows for the database, the SQL schema, the triage model key and four enrichment sources.",
-    "cap": "The connectivity test on the same install. <b>Nine green, five to watch, one failing, zero undetermined</b> \u2014 four states, so \u201cchecking\u201d is never reported as \u201cbroken\u201d. Each line names the consequence and then the fix: the missing model key says every alert will take the fail-safe verdict, and where to put the key.",
+    "alt": "The connectivity test results: a red banner reading “at least one link is broken, 9 checks green, 5 to watch, 1 failing, 0 undetermined — in 14 ms”, then per-check rows for the database, the SQL schema, the triage model key and four enrichment sources.",
+    "cap": "The connectivity test on the same install. <b>Nine green, five to watch, one failing, zero undetermined</b> — four states, so “checking” is never reported as “broken”. Each line names the consequence and then the fix: the missing model key says every alert will take the fail-safe verdict, and where to put the key.",
     "eager": false
   }
 }

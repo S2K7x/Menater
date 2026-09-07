@@ -3,14 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta property="og:title" content="MENATER">
-<meta property="og:description" content="A self-hosted SOC triage console with an LLM in the loop and a human on the trigger.">
 <meta property="og:type" content="website">
+<meta property="og:locale" content="en_US">
+<meta property="og:description" content="Self-hosted security console: an AI reads your alerts and proposes a verdict, a human approves every action, and every step is written down. Docker, three containers, open source.">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="alternate" hreflang="en" href="https://menater.vercel.app/">
+<link rel="alternate" hreflang="fr" href="https://menater.vercel.app/fr">
+<link rel="alternate" hreflang="x-default" href="https://menater.vercel.app/">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <style>img{max-width:100%}[hidden]{display:none!important}</style>
-<title>MENATER</title>
-<meta name="description" content="A self-hosted SOC triage console with an LLM in the loop and a human on the trigger. Shadow mode by default, a closed action catalogue, and a hash-chained audit log.">
+<title>MENATER — AI alert triage you stay in control of</title>
+<meta name="description" content="Self-hosted security console: an AI reads your alerts and proposes a verdict, a human approves every action, and every step is written down. Docker, three containers, open source.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;700&display=swap">
@@ -201,7 +204,11 @@ h2.sech { font-size: clamp(1.4rem, 3vw, 2rem); line-height: 1.1; letter-spacing:
   border-bottom: 1px solid var(--line);
   transition: background var(--swap) linear;
 }
-.top-head { display: flex; align-items: center; gap: 16px; height: 54px; }
+.top-head {
+  display: flex; align-items: center; gap: 10px;
+  min-height: 54px; flex-wrap: wrap; padding-block: 6px;
+}
+@media (min-width: 720px) { .top-head { gap: 16px; flex-wrap: nowrap; padding-block: 0; } }
 .lock { display: flex; align-items: center; gap: 10px; margin-right: auto; text-decoration: none; color: var(--fg); }
 .lock:hover { color: var(--fg); }
 .lock svg { color: var(--accent); display: block; flex: none; }
@@ -488,8 +495,137 @@ pre .a { color: var(--accent); }
 .foot .row { display: flex; flex-wrap: wrap; gap: 16px; align-items: baseline; justify-content: space-between; }
 .foot p { color: var(--faint); font-size: 0.82rem; max-width: 70ch; }
 .heb { font-size: 1rem; color: var(--muted); }
-</style>
 
+/* --- The flow diagram --------------------------------------------------
+   The product IS a five-step flow with a person standing in the middle of
+   it, and the page used to describe that in prose. Drawn in HTML and CSS
+   rather than SVG for three reasons, all of which an SVG would have cost:
+   it reflows into a column on a phone, it repaints in all six palettes
+   because every colour here is a token, and its labels are ordinary text
+   nodes — so they translate, and a screen reader reads it as the ordered
+   list of steps it actually is.
+   ---------------------------------------------------------------------- */
+
+.flow { display: flex; flex-direction: column; gap: 22px; }
+
+.flow-track {
+  display: grid; grid-template-columns: 1fr; gap: 30px 0;
+  margin: 0; padding: 0; list-style: none;
+}
+@media (min-width: 900px) {
+  .flow-track { grid-template-columns: repeat(5, 1fr); gap: 0 34px; }
+}
+
+.flow-node {
+  position: relative;
+  background: var(--surface); border: 1px solid var(--line-strong);
+  border-radius: var(--radius); padding: 14px;
+  display: flex; flex-direction: column; gap: 6px;
+  transition: background var(--swap) linear, border-color var(--swap) linear;
+}
+.flow-node .fn-n {
+  font-family: var(--mono); font-size: 0.64rem; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--faint);
+}
+.flow-node .fn-t { font-size: 0.92rem; color: var(--fg); font-weight: 500; line-height: 1.3; }
+.flow-node .fn-d { font-size: 0.8rem; color: var(--muted); line-height: 1.5; }
+
+/* The connector, and its head. Vertical on a phone, horizontal from 900 px.
+   Both pseudo-elements sit on the node BEFORE the gap they cross, so the
+   last node never draws an arrow into nothing. */
+.flow-node:not(:last-child)::after,
+.flow-node:not(:last-child)::before { content: ''; position: absolute; }
+.flow-node:not(:last-child)::after {
+  left: 50%; top: 100%; width: 1px; height: 30px;
+  background: var(--line-strong); transform: translateX(-0.5px);
+}
+.flow-node:not(:last-child)::before {
+  left: 50%; top: calc(100% + 21px); transform: translateX(-50%);
+  border-left: 4px solid transparent; border-right: 4px solid transparent;
+  border-top: 6px solid var(--line-strong);
+}
+@media (min-width: 900px) {
+  .flow-node:not(:last-child)::after {
+    left: 100%; top: 50%; width: 34px; height: 1px; transform: translateY(-0.5px);
+  }
+  .flow-node:not(:last-child)::before {
+    left: calc(100% + 25px); top: 50%; transform: translateY(-50%);
+    border-top: 4px solid transparent; border-bottom: 4px solid transparent;
+    border-left: 6px solid var(--line-strong); border-right: 0;
+  }
+}
+
+/* The gate is the only node that carries the accent, for the reason the
+   console reserves it: A HUMAN IS BLOCKED HERE. Colour never carries the
+   meaning alone — the word sits on it. */
+.flow-node.flow-gate { border-color: var(--accent); background: var(--panel); }
+.flow-node.flow-gate .fn-n { color: var(--accent); }
+.flow-gate .fn-you {
+  align-self: flex-start;
+  font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.14em;
+  text-transform: uppercase;
+  background: var(--accent); color: var(--accent-fg);
+  padding: 2px 7px; border-radius: var(--radius);
+}
+
+.flow-outcomes {
+  display: grid; gap: 1px; background: var(--line);
+  border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden;
+}
+@media (min-width: 760px) { .flow-outcomes { grid-template-columns: repeat(3, 1fr); } }
+.flow-outcomes li {
+  background: var(--surface); padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.flow-outcomes .o-k {
+  font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase;
+}
+.flow-outcomes .o-v { font-size: 0.84rem; color: var(--muted); }
+.flow-outcomes .ok-green { color: var(--green); }
+/* --grey is a RISK-palette neutral and lands at 3.6-4.4:1 on a panel in four
+   of the six themes. "You refuse" is a label, not a secondary mention, so it
+   takes the plain foreground — which is also the honest reading: neutral is
+   the default outcome, not a third risk state. */
+.flow-outcomes .ok-grey { color: var(--fg); }
+.flow-outcomes .ok-orange { color: var(--orange); }
+
+.flow-note { font-size: 0.84rem; color: var(--faint); max-width: 72ch; }
+.flow-note b { color: var(--fg); font-weight: 500; }
+
+/* --- The language switcher ---------------------------------------------
+   Two links, not a control: `/` is English and `/fr` is French, so the URL
+   is the whole state. Nothing is stored, nothing is sniffed, nothing
+   redirects — a link somebody shares opens in the language they shared it
+   in. Placed top-right, with the language written in its own name.
+   ---------------------------------------------------------------------- */
+.langs { display: flex; align-items: stretch; border: 1px solid var(--line-strong); border-radius: var(--radius); overflow: hidden; }
+/* DIRECT CHILDREN. `.langs span` (0,1,1) also matched the label span NESTED
+   inside the active chip, so `--muted` landed on the accent — between 1.2:1
+   and 2.8:1 depending on the theme. That is the `.soc-field span` trap from
+   CLAUDE.md rebuilt on this page, and it was found by measuring the computed
+   colour in a browser, not by reading the rule. */
+.langs > a, .langs > span {
+  display: flex; align-items: center; padding: 0 10px; min-height: 32px;
+  font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase;
+  text-decoration: none; color: var(--muted);
+}
+.langs > a:not([aria-current='true']):hover { color: var(--fg); background: var(--surface-2); }
+/* Names the ELEMENT as well as the state, so this wins by specificity rather
+   than by sitting further down the sheet — the lesson this table has already
+   recorded four times. */
+.langs > a[aria-current='true'], .langs > span[aria-current='true'] {
+  color: var(--accent-fg); background: var(--accent);
+}
+.langs .l-long { display: none; }
+@media (min-width: 720px) {
+  .langs .l-long { display: inline; }
+  .langs .l-short { display: none; }
+}
+
+/* --- A gallery of the screens that document rather than argue ----------- */
+.gallery { display: flex; flex-direction: column; gap: 26px; }
+</style>
+<meta property="og:title" content="MENATER">
 </head>
 <body>
 <header class="top">
@@ -505,6 +641,12 @@ pre .a { color: var(--accent); }
       <span class="word">MENATER</span>
       <span class="tagline">Security operations</span>
     </a>
+
+    <div class="langs">
+      <span aria-current="true" lang="en" title="English"><span class="l-long">English</span><span class="l-short">EN</span></span>
+      <a href="/fr" hreflang="fr" lang="fr" title="Français" aria-label="Français" data-lang-link data-href="/fr"><span class="l-long">Français</span><span class="l-short">FR</span></a>
+      </div>
+
     <a class="ghlink" href="https://github.com/S2K7x/Menater" target="_blank" rel="noopener noreferrer">
       <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
         <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38
@@ -524,24 +666,17 @@ pre .a { color: var(--accent); }
     </div>
   </div>
 
-  <!-- The section bar mirrors the console's own: ten entries, four groups,
-       hairline separators and NO group titles — a second navigation level
-       gives back exactly what the grouping just saved (CLARITY.md § 10). -->
+  <!-- Six entries and no group titles. The table of contents this page used
+       to open with was a second navigation level for a page you scroll: it
+       gave back exactly what the ordering already bought (CLARITY.md § 10). -->
   <div class="navrail">
     <nav class="wrap topnav" id="topnav" aria-label="Sections of this page">
-      <a href="#premise"><span class="n">01</span>Premise</a>
-      <a href="#halves"><span class="n">02</span>Two halves</a>
-      <a href="#console"><span class="n">03</span>The console</a>
-      <span class="sep" aria-hidden="true"></span>
-      <a href="#pipeline"><span class="n">04</span>Pipeline</a>
-      <a href="#ingest"><span class="n">05</span>Ingestion</a>
-      <span class="sep" aria-hidden="true"></span>
-      <a href="#refuses"><span class="n">06</span>Refusals</a>
-      <a href="#measured"><span class="n">07</span>Measured</a>
-      <a href="#design"><span class="n">08</span>Design</a>
-      <span class="sep" aria-hidden="true"></span>
-      <a href="#install"><span class="n">09</span>Install</a>
-      <a href="#notyet"><span class="n">10</span>Not yet</a>
+      <a href="#why"><span class="n">01</span><span>Why</span></a>
+      <a href="#how"><span class="n">02</span><span>How it works</span></a>
+      <a href="#screens"><span class="n">03</span><span>What you get</span></a>
+      <a href="#guardrails"><span class="n">04</span><span>Guardrails</span></a>
+      <a href="#install"><span class="n">05</span><span>Install</span></a>
+      <a href="#limits"><span class="n">06</span><span>Limits</span></a>
     </nav>
   </div>
 </header>
@@ -549,13 +684,10 @@ pre .a { color: var(--accent); }
 <main id="top">
   <!-- ===================== HERO ===================== -->
   <section class="wrap hero">
-    <p class="kick">Self-hosted SOC triage console · LLM in the loop, human on the trigger</p>
-    <h1>MENATER watches in the present, and says what it <em>cannot see</em>.</h1>
-    <p class="hero-sub">
-      A security console in two halves. The <b>SOC</b> triages what has already happened —
-      an alert is already an incident. <b>VulnPipe</b> reads what is about to — a flaw in the
-      code, before it ships. One application, one origin, one lock.
-    </p>
+    <p class="kick">Self-hosted · open source · runs on your own machine</p>
+    <h1>Your alerts, triaged by AI. <em>Nothing runs</em> without you.</h1>
+    <p class="hero-sub">MENATER reads the security alerts your tools raise, works out which ones matter, and hands
+      you the few that need a decision. <b>It proposes. You approve. Everything is written down.</b></p>
 
     <div class="hero-cta">
       <div class="term">
@@ -563,712 +695,480 @@ pre .a { color: var(--accent); }
         <code id="cmd">docker compose up -d --build</code>
       </div>
       <button class="copy" id="copy" type="button">Copy</button>
-      <a class="textlink" href="#refuses">What it refuses to do →</a>
+      <a class="textlink" href="#how">See how it works →</a>
     </div>
 
     <div class="spec">
       <div><span class="v">3</span><span class="k">containers</span></div>
-      <div><span class="v">1</span><span class="k">published port</span></div>
-      <div><span class="v">6</span><span class="k">pipeline stages</span></div>
-      <div><span class="v">4</span><span class="k">executable actions</span></div>
+      <div><span class="v">1</span><span class="k">command to install</span></div>
+      <div><span class="v">0</span><span class="k">actions without a human</span></div>
       <div><span class="v">1,278</span><span class="k">tests passing</span></div>
     </div>
 
     <figure class="shot">
-  <img data-shot="01-queue" src="shots/01-queue.png" alt="The MENATER triage queue: two alerts waiting on a human at the top, then closed cases, each row carrying severity, verdict, confidence and time taken." width="2880" height="1800" loading="eager" decoding="async">
-  <figcaption>The triage queue. Two alerts are waiting on a human, so they rise to the top and carry the accent — the one colour reserved for <em>the system is blocked and someone must act</em>. Real screenshot of a running stack with no model key configured — which is why every verdict here reads <span class="mono">fallback verdict</span>.</figcaption>
+  <img data-shot="01-queue" src="/shots/01-queue.png" alt="The MENATER triage queue: two alerts waiting on a human at the top, then closed cases, each row carrying severity, verdict, confidence and time taken." width="2880" height="1800" loading="eager" decoding="async">
+  <figcaption>The triage queue. Anything waiting on a human rises to the top and carries the accent — the one colour reserved for <em>someone must act</em>. Real screenshot: this install has no model key, hence the <span class="mono">fallback verdict</span> on every row.</figcaption>
 </figure>
   </section>
 
-  <!-- ===================== CONTENTS ===================== -->
-  <section class="band band-inset" id="contents">
+  <!-- ===================== 01 · WHY ===================== -->
+  <section class="band band-inset" id="why">
     <div class="wrap sec">
       <div class="sec-rail">
-        <span class="grp">Map</span>
-        <span class="num">00</span>
-        <span class="lbl">Contents</span>
-      </div>
-      <div class="sec-body">
-        <h2 class="sech">What is on this page.</h2>
-        <p class="lede">
-          Ten sections in four groups, in reading order. Nothing below depends on what
-          precedes it, so start wherever your question is.
-        </p>
-
-        <nav class="map" aria-label="Contents">
-          <div class="map-grp">
-            <h3><span>A</span>What it is</h3>
-            <ol>
-              <li><a href="#premise"><span class="t" data-n="01">Premise</span><span class="d">Why an LLM in a SOC needs a shorter leash, not a longer one.</span></a></li>
-              <li><a href="#halves"><span class="t" data-n="02">Two halves</span><span class="d">The SOC triages what happened; VulnPipe reads what is about to.</span></a></li>
-              <li><a href="#console"><span class="t" data-n="03">The console</span><span class="d">Ten tabs, and the two screens you work in most.</span></a></li>
-            </ol>
-          </div>
-          <div class="map-grp">
-            <h3><span>B</span>How it works</h3>
-            <ol>
-              <li><a href="#pipeline"><span class="t" data-n="04">Pipeline</span><span class="d">Six workflows, typed at every handoff, journalled to Postgres.</span></a></li>
-              <li><a href="#ingest"><span class="t" data-n="05">Ingestion</span><span class="d">Push, pull, and why the default uses both.</span></a></li>
-            </ol>
-          </div>
-          <div class="map-grp">
-            <h3><span>C</span>What holds</h3>
-            <ol>
-              <li><a href="#refuses"><span class="t" data-n="06">Refusals</span><span class="d">Four closed catalogues, and the one that matters most.</span></a></li>
-              <li><a href="#measured"><span class="t" data-n="07">Measured</span><span class="d">Load, deduplication and audit numbers, with their conditions.</span></a></li>
-              <li><a href="#design"><span class="t" data-n="08">Design</span><span class="d">Six themes, and contrast checked by a test rather than by eye.</span></a></li>
-            </ol>
-          </div>
-          <div class="map-grp">
-            <h3><span>D</span>Getting it</h3>
-            <ol>
-              <li><a href="#install"><span class="t" data-n="09">Install</span><span class="d">Three commands, then the four things it refuses to choose for you.</span></a></li>
-              <li><a href="#notyet"><span class="t" data-n="10">Not yet</span><span class="d">What it does not do, said here rather than discovered later.</span></a></li>
-            </ol>
-          </div>
-        </nav>
-      </div>
-    </div>
-  </section>
-  <!-- ===================== 01 · PREMISE ===================== -->
-  <section class="band" id="premise">
-    <div class="wrap sec">
-      <div class="sec-rail">
-        <span class="grp">A · What it is</span>
         <span class="num">01</span>
-        <span class="lbl">Premise</span>
+        <span class="lbl">Why</span>
       </div>
       <div class="sec-body">
-        <h2 class="sech">Every other console sells automated confidence. This one sells legible restraint.</h2>
-        <p class="lede">
-          An LLM triaging security alerts is reading text an attacker composed. So the question
-          is not how much the model can decide — it is what the system does when the model,
-          the data, or the network is wrong. Four rules answer that, and they are enforced in
-          code rather than promised in a slide.
-        </p>
+        <h2 class="sech">An AI that decides alone is an AI reading text an attacker wrote.</h2>
+        <p class="lede">Security tools raise far more alerts than anyone can read, so triaging them automatically
+          is not really optional. But an alert is text an attacker composed, and a model that can
+          both read it and act on it can be told what to do by it. MENATER separates those two
+          powers: the model reads and proposes, a human holds the trigger.</p>
 
-        <div class="grid g2">
-          <article class="card">
-            <h3>Never fill a gap with a default</h3>
-            <p>
-              A missing value is shown as missing — <span class="dash">—</span>, never <span class="mono">0</span>,
-              never <span class="mono">N/A</span>, never a guess. And rejecting an alert because a field is absent is
-              the same mistake in its harshest form: it replaces the alert with nothing.
-            </p>
-            <p class="where">The two-tier alert contract</p>
-          </article>
+        <p class="thesis">It says what it cannot see, instead of filling the gap.</p>
 
-          <article class="card">
-            <h3>Silence is never consent</h3>
-            <p>
-              An approval request that times out executes nothing — it escalates. Missing
-              configuration cannot enable execution either: shadow mode is the default, and only
-              the exact string <span class="mono">false</span> turns it off.
-            </p>
-            <p class="where">The approval flow · shadow mode</p>
-          </article>
-
-          <article class="card">
-            <h3>A failure must never show green</h3>
-            <p>
-              A chain that ran and passed zero items is <span class="pill pill-red">Broken</span>, not
-              <span class="pill pill-green">Done</span>. A verdict of <em>clean</em> requires at least one
-              intelligence source that actually answered — nobody looking is
-              <span class="pill pill-grey">Not asked</span>, which is a different sentence.
-            </p>
-            <p class="where">The Tracking tab exists only for this</p>
-          </article>
-
-          <article class="card">
-            <h3>No irreversible action without a human</h3>
-            <p>
-              The action catalogue is closed at four entries. Nothing else is implementable —
-              not even behind an approval — and no tuning rule can reach it. The console has a
-              database; it executes no security action on its own.
-            </p>
-            <p class="where">server/engine/transforms/domain.ts</p>
-          </article>
-        </div>
-
-        <figure class="shot">
-  <img data-shot="05-lookup" src="shots/05-lookup.png" alt="The Lookup tab after querying 8.8.8.8: a verdict reading “nothing against it”, the line “1 of 4 sources answered”, and two source cards marked “not asked”." width="2880" height="1800" loading="lazy" decoding="async">
-  <figcaption>A verdict that states its own scope. One source answered, and the panel says so beside the verdict; the two sources with no key are <b>not asked</b> — a question nobody put, not a hole in what is known.</figcaption>
-</figure>
-
-        <p class="thesis">Nothing here is invented, and the console tells you what it does not know.</p>
+        <details class="fold">
+          <summary>
+            <span>The four rules that follow from it</span>
+            <span class="hint">4 rules · enforced in code</span>
+          </summary>
+          <div class="fold-body">
+            <ul class="rows">
+              <li>
+                <span class="t">Never fill a gap with a default</span>
+                <span class="d">A missing value is shown as missing — <span class="dash">—</span>, never <span class="mono">0</span>, never <span class="mono">N/A</span>, never a guess. And rejecting an alert because a field is absent is the same mistake in its harshest form: <b>it replaces the alert with nothing.</b></span>
+              </li>
+              <li>
+                <span class="t">Silence is never consent</span>
+                <span class="d">An approval request that times out executes nothing — it escalates. Missing configuration cannot enable execution either: watch-only mode is the default, and only the exact word <span class="mono">false</span> turns it off.</span>
+              </li>
+              <li>
+                <span class="t">A failure must never show green</span>
+                <span class="d">A chain that ran and passed zero items is <span class="pill pill-red">Broken</span>, not <span class="pill pill-green">Done</span>. A verdict of <em>clean</em> requires at least one intelligence source that actually answered — nobody looking is <span class="pill pill-grey">Not asked</span>, which is a different sentence.</span>
+              </li>
+              <li>
+                <span class="t">No irreversible action without a human</span>
+                <span class="d">The list of things the console can execute is closed at four entries. Nothing else is implementable — not even behind an approval — and no tuning rule can reach it.</span>
+              </li>
+            </ul>
+          </div>
+        </details>
       </div>
     </div>
   </section>
-  <!-- ===================== 02 · TWO HALVES ===================== -->
-  <section class="band band-inset" id="halves">
+
+  <!-- ===================== 02 · HOW IT WORKS ===================== -->
+  <section class="band" id="how">
     <div class="wrap sec">
       <div class="sec-rail">
-        <span class="grp">A · What it is</span>
         <span class="num">02</span>
-        <span class="lbl">Two halves</span>
+        <span class="lbl">How it works</span>
       </div>
       <div class="sec-body">
-        <h2 class="sech">One interface, two tenses.</h2>
-        <div class="grid g2">
-          <article class="card">
-            <h3>SOC — what has happened</h3>
-            <p>
-              Alerts arrive from a SIEM, get normalised against a two-tier contract, deduplicated,
-              enriched from threat-intelligence sources, put to a model, and routed. Every run is
-              written to a hash-chained audit log. Shadow mode records the decision and executes
-              nothing until a team has measured its own disagreement rate.
-            </p>
-            <p class="where">Postgres · six workflows · built-in engine</p>
-          </article>
-          <article class="card">
-            <h3>VulnPipe — what is about to</h3>
-            <p>
-              Code analysis on the same screen. Tree-sitter indexes routes and call graphs, a
-              deterministic scanner and a local model score each address, and only the grey zone
-              — a confidence between 0.4 and 0.7 — costs an arbitration call. Every finding carries
-              a plain-language summary: what can happen, and how to fix it.
-            </p>
-            <p class="where">IDOR · XSS · SQLi · security misconfiguration</p>
-          </article>
-        </div>
-        <figure class="shot">
-  <img data-shot="06-code" src="shots/06-code.png" alt="The Code tab: a four-stage strip reading “reading your code”, “hunting for holes”, “second opinion”, “your report”, then a target picker offering a folder, a single file or a GitHub repository, and a choice between the whole project and only what changed." width="2880" height="1800" loading="lazy" decoding="async">
-  <figcaption>The other half. The four stages are named before anything runs, the target is a folder, a file or a repository, and the scope question — <b>the whole project</b> or only what changed — states which one costs more and which one you want the first time.</figcaption>
-</figure>
+        <h2 class="sech">An alert comes in. Five steps later, you decide.</h2>
+        <p class="lede">The same five steps run for every alert, in the same order, and each one writes down what
+          it did. Step four is a person — and nothing past it happens without them.</p>
 
-        <p class="prose">
-          <strong>Merged: the interface.</strong> One build, one lock, one theme.
-          <strong>Not merged: the engines.</strong> The analyser stays a service of its own, because
-          pulling tree-sitter and the model SDKs into an API that has exactly one production
-          dependency would buy nothing.
-        </p>
+        <div class="flow">
+          <ol class="flow-track">
+            <li class="flow-node">
+              <span class="fn-n">Step 1</span>
+              <span class="fn-t">An alert arrives</span>
+              <span class="fn-d">From your SIEM, by webhook or by polling. Checked, and deduplicated so the same alert is never triaged twice.</span>
+            </li>
+            <li class="flow-node">
+              <span class="fn-n">Step 2</span>
+              <span class="fn-t">Context is gathered</span>
+              <span class="fn-d">Is this address known bad? Has this password leaked? A source with no key is marked <em>not asked</em>, never guessed.</span>
+            </li>
+            <li class="flow-node">
+              <span class="fn-n">Step 3</span>
+              <span class="fn-t">The AI proposes</span>
+              <span class="fn-d">A verdict, a confidence score, and the reasoning behind both. A proposal — never an order.</span>
+            </li>
+            <li class="flow-node flow-gate">
+              <span class="fn-n">Step 4</span>
+              <span class="fn-you">You</span>
+              <span class="fn-t">You decide</span>
+              <span class="fn-d">The proposal reaches you in the console, and on Slack or Discord if you want it there. Until you answer, nothing runs.</span>
+            </li>
+            <li class="flow-node">
+              <span class="fn-n">Step 5</span>
+              <span class="fn-t">It is written down</span>
+              <span class="fn-d">One row in a log that can be added to and never edited, sealed to the row before it. Tampering shows.</span>
+            </li>
+          </ol>
+
+          <ul class="flow-outcomes">
+            <li>
+              <span class="o-k ok-green">You approve</span>
+              <span class="o-v">The one action you approved runs, and only that one.</span>
+            </li>
+            <li>
+              <span class="o-k ok-grey">You refuse</span>
+              <span class="o-v">Nothing runs. The refusal is recorded, and it is what measures the AI.</span>
+            </li>
+            <li>
+              <span class="o-k ok-orange">You do not answer</span>
+              <span class="o-v">Nothing runs. It escalates to a human instead of timing out quietly.</span>
+            </li>
+          </ul>
+
+          <p class="flow-note"><b>Out of the box, step 4 never even fires.</b> The console starts in watch-only mode: it
+            records what it would have proposed and executes nothing at all, until your team has
+            looked at enough real alerts to trust it.</p>
+        </div>
+
+        <details class="fold">
+          <summary>
+            <span>What the engine underneath actually does</span>
+            <span class="hint">6 workflows · typed handoffs</span>
+          </summary>
+          <div class="fold-body">
+            <p class="prose">MENATER runs its own engine. There is no workflow platform to install and no second
+              product that has to be reachable for an alert to be triaged — so a workflow cannot be
+              half-deployed, renamed in an editor, or left unpublished. The five steps above are
+              five workflows with a fixed, typed input and output; a sixth is the error handler,
+              declared on the other five and called only from their failure branches.</p>
+            <ul class="rows">
+              <li>
+                <span class="t">A junction waits</span>
+                <span class="d">A step with several inputs does not start when one of them has answered. Enrichment would otherwise assemble a third of its sources — <b>with no error, no trace, and a plausible result.</b></span>
+              </li>
+              <li>
+                <span class="t">Retry, then a named failure</span>
+                <span class="d">Every external call retries with backoff, honouring a suggested wait as a floor rather than undercutting it. When it still fails, it fails by name: a source that was not asked is not a source that said nothing.</span>
+              </li>
+              <li>
+                <span class="t">The unreduced view</span>
+                <span class="d">The queue stitches runs into cases, and two kinds of failure disappear in that reduction. A separate screen shows them unreduced — broken chains, runs attached to no alert, a searchable log, and a replay that <b>refuses</b> when the original alert is unknown.</span>
+              </li>
+            </ul>
+          </div>
+        </details>
       </div>
     </div>
   </section>
-  <!-- ===================== 03 · THE CONSOLE ===================== -->
-  <section class="band" id="console">
+
+  <!-- ===================== 03 · WHAT YOU GET ===================== -->
+  <section class="band band-inset" id="screens">
     <div class="wrap sec">
       <div class="sec-rail">
-        <span class="grp">A · What it is</span>
         <span class="num">03</span>
-        <span class="lbl">The console</span>
+        <span class="lbl">What you get</span>
       </div>
       <div class="sec-body">
-        <h2 class="sech">Ten tabs, in four groups.</h2>
-        <p class="lede">
-          Grouped rather than trimmed: ten identical buttons cost a decision, and the remedy for
-          that is categorisation — not a second navigation level, which gives back what the
-          grouping just saved.
-        </p>
-
-        <details class="fold">
-          <summary>The ten tabs, one line each <span class="hint">10 tabs · Alerts to Settings</span></summary>
-          <div class="fold-body">
-        <div class="tablewrap">
-          <table>
-            <thead>
-              <tr><th scope="col">Tab</th><th scope="col">What is on it</th></tr>
-            </thead>
-            <tbody>
-              <tr><td class="m">Alerts</td><td>The triage queue and the incident card. Five columns, eight facts — severity lives inside <em>Alert</em>, confidence inside <em>AI decision</em>, because a confidence of 0.58 means nothing without the verdict it qualifies. Every observable carries a jump into Lookup with the question already asked.</td></tr>
-              <tr><td class="m">Code</td><td>Run a code analysis and read the report. Mounted on first open and kept mounted — changing tab during a scan does not cut it.</td></tr>
-              <tr><td class="m">Ingestion</td><td>How alerts get in: the delivery architecture, the sources on each transport, and the pipeline as it runs — graph, per-step effect, editable variables.</td></tr>
-              <tr><td class="m">Rules</td><td>Tuning rules, with a dry run that answers <em>which rule would match this alert</em> without touching the pipeline. Eight templates ship disabled and unowned.</td></tr>
-              <tr><td class="m">Tracking</td><td>The unreduced view: broken chains, orphan runs, searchable log, replay. Expected orphans — the diagnostic probe — are listed and never counted, or the tab blinks after every connectivity test.</td></tr>
-              <tr><td class="m">Metrics</td><td>The two rates, never conflated.</td></tr>
-              <tr><td class="m">Health</td><td>Connectivity diagnostic and nine test-alert scenarios, one per path rather than per story: no destination, with a hash, malformed, duplicate.</td></tr>
-              <tr><td class="m">Lookup</td><td>Manual threat intelligence on one value — IP, domain, URL, hash, e-mail — plus a breached-password check whose hash never leaves the browser. Defanged input (<span class="mono">1.2.3[.]4</span>, <span class="mono">hxxp://</span>) is an accepted format, and both forms are shown.</td></tr>
-              <tr><td class="m">Guide</td><td>Seventeen sections, searchable — and the search reads the glossary too, because the product's own default is called <em>shadow mode</em> in the docs and <em>watch-only</em> in the text.</td></tr>
-              <tr><td class="m">Settings</td><td>Eight areas, a setup checklist naming what is still missing, and an MCP install page that builds the config block from the address you reached the console on.</td></tr>
-            </tbody>
-          </table>
-        </div>
-          </div>
-        </details>
-
-        <figure class="shot">
-  <img data-shot="03-tracking" src="shots/03-tracking.png" alt="The Tracking tab: 120 runs inspected, 118 attached to an alert, a warning that the observed window is full, and three sub-tabs for processing chains, orphan runs and the run log." width="2880" height="1800" loading="lazy" decoding="async">
-  <figcaption>The unreduced view. It counts the runs the queue could not show you, and warns when the observed window is full — <em>beyond it, the console does not know</em> — rather than letting a bounded read look like a complete one.</figcaption>
-</figure>
-
-        <div class="grid g2">
-          <article class="card">
-            <h3>An assistant that cannot act</h3>
-            <p>
-              A docked panel that answers questions about <em>this</em> installation — "why is this
-              still waiting?", "what is left to configure?" — following you across tabs with a typed
-              page context, so "this alert" needs nothing typed. Four model providers, one key each.
-              Nothing is persisted: storing threads would create a fourth copy of alert content
-              outside the audit chain.
-            </p>
-            <p class="where">Each answer shows what it looked up</p>
-          </article>
-          <article class="card">
-            <h3>Open it to your own agent</h3>
-            <p>
-              The same seven getters, plus the reference tools, are exposed over MCP:
-              <span class="mono">14 tools, 8 prompts, 9 resources</span>, all read-only, off by default.
-              The prompts matter more than they look — a client that sees ten tool names sees ten
-              getters and no reason to use them.
-            </p>
-            <p class="where">Bearer token compared in constant time · Origin validated</p>
-          </article>
-        </div>
-      </div>
-    </div>
-  </section>
-  <!-- ===================== 04 · PIPELINE ===================== -->
-  <section class="band band-inset" id="pipeline">
-    <div class="wrap sec">
-      <div class="sec-rail">
-        <span class="grp">B · How it works</span>
-        <span class="num">04</span>
-        <span class="lbl">Pipeline</span>
-      </div>
-      <div class="sec-body">
-        <h2 class="sech">Six workflows, typed at every handoff.</h2>
-        <p class="lede">
-          MENATER runs its own engine. No n8n, no workflow platform, no second product that has
-          to be reachable for an alert to be triaged — so a workflow cannot be half-deployed,
-          renamed in an editor, or left unpublished. The console reads its own run journal.
-        </p>
-
-        <div class="chain">
-          <div class="chain-line">
-            <div class="step">
-              <span class="id">01</span>
-              <span class="nm">Ingestion</span>
-              <span class="no">Validates identity fields, deduplicates, and answers the sender what actually happened — 400, 200 already seen, or 202 accepted.</span>
-            </div>
-            <div class="step">
-              <span class="id">02</span>
-              <span class="nm">Enrichment</span>
-              <span class="no">Reputation, geolocation, ATT&amp;CK tagging. A source with no key is <em>not asked</em>, and the model has to name it.</span>
-            </div>
-            <div class="step">
-              <span class="id">03</span>
-              <span class="nm">AI Decision</span>
-              <span class="no">The verdict, its confidence, and its reasoning. With no model key: <span class="mono">needs_human</span>, confidence 0. Fail-safe, never fail-open.</span>
-            </div>
-            <div class="step">
-              <span class="id">04</span>
-              <span class="nm">Action / Routing</span>
-              <span class="no">Approval requested in Slack or Discord. Below the notification threshold, nobody is asked — so nothing waits, and it escalates.</span>
-            </div>
-            <div class="step">
-              <span class="id">05</span>
-              <span class="nm">Audit Log</span>
-              <span class="no">One append-only row, sealed into a hash chain under an advisory lock. Immutable by design.</span>
-            </div>
-          </div>
-          <div class="errbox">
-            <span class="id mono" style="color: var(--red); font-size: 0.66rem; letter-spacing: 0.1em;">06 · ERROR HANDLER</span>
-            <span class="no" style="color: var(--muted); font-size: 0.82rem;">
-              Declared as the native error workflow on the other five, and called only from their failure
-              branches — never in the normal sequence. No failure is ever silent: every branch logs, notifies, or both.
-            </span>
-          </div>
-        </div>
-
-        <details class="fold">
-          <summary>What that costs the engine <span class="hint">3 consequences</span></summary>
-          <div class="fold-body">
-            <ul class="rows">
-          <li>
-            <span class="t">A junction waits</span>
-            <span class="d">A node with several upstreams does not start when one has answered. Enrichment would otherwise assemble a third of its sources — <b>with no error, no trace, and a plausible result.</b></span>
-          </li>
-          <li>
-            <span class="t">Retry, then a named failure</span>
-            <span class="d">Every external call retries with exponential backoff and full jitter, honouring a suggested <span class="mono">Retry-After</span> as a floor. A route that was not analysed is not a healthy route.</span>
-          </li>
-          <li>
-            <span class="t">The unreduced view</span>
-            <span class="d">The queue stitches runs into cases; two failure shapes disappear in that reduction. The Tracking tab shows them unreduced — broken chains, runs attached to no alert, a searchable log, and replay that <b>refuses</b> when the original payload is unknown.</span>
-          </li>
-        </ul>
-          </div>
-        </details>
-      </div>
-    </div>
-  </section>
-  <!-- ===================== 05 · INGESTION ===================== -->
-  <section class="band" id="ingest">
-    <div class="wrap sec">
-      <div class="sec-rail">
-        <span class="grp">B · How it works</span>
-        <span class="num">05</span>
-        <span class="lbl">Ingestion</span>
-      </div>
-      <div class="sec-body">
-        <h2 class="sech">Push and pull fail differently, so the default uses both.</h2>
-        <p class="lede">
-          A <span class="mono">critical</span> contained four minutes late was not contained; a
-          <span class="mono">low</span> triaged four minutes late is still a low. So the hybrid policy
-          sends P1 and P2 down the webhook and polls P3 and P4 — and an alert whose severity did not
-          survive normalisation takes the fast lane, because quietly parking something that might be
-          a critical is the failure this product exists to make impossible.
-        </p>
-
-        <figure class="shot">
-  <img data-shot="02-ingestion" src="shots/02-ingestion.png" alt="The Ingestion tab: three delivery architectures side by side with their costs stated, hybrid selected, and a table mapping P1 to P4 onto webhook or polling with the delay each implies." width="2880" height="1800" loading="lazy" decoding="async">
-  <figcaption>Choosing a delivery architecture. Each option states what it buys <em>and</em> what it costs, and the lane table quotes half a polling interval — the average added delay, not the interval, because that is the number a P1 gets weighed against.</figcaption>
-</figure>
-
-        <div class="tablewrap">
-          <table>
-            <thead>
-              <tr><th scope="col">Tier</th><th scope="col">Fields</th><th scope="col">Rule</th></tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td class="m">Identity</td>
-                <td class="m"><span class="mono">alert_id · rule_name · severity · timestamp · raw_log</span></td>
-                <td>Required. Missing means rejected — <b>and the rejection names the fields.</b></td>
-              </tr>
-              <tr>
-                <td class="m">Observables</td>
-                <td class="m"><span class="mono">source_ip · dest_ip · user · host · process · file_path · url</span></td>
-                <td>Optional. Absent stays absent: <span class="mono">null</span>, never an empty string, never invented. Most real detections carry no destination address.</td>
-              </tr>
-              <tr>
-                <td class="m">Extensions</td>
-                <td class="m">everything else</td>
-                <td>Kept whole, on the case and in the audit row. Nothing your tool sends is discarded.</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <details class="fold">
-          <summary>The four rules the transport obeys <span class="hint">4 rules</span></summary>
-          <div class="fold-body">
-            <ul class="rows">
-          <li>
-            <span class="t">Nothing is refused for taking the wrong lane</span>
-            <span class="d">A P4 on the webhook is accepted and triaged; the reply carries a block saying which transport the policy expected. Dropping a detection over a routing preference replaces it with nothing.</span>
-          </li>
-          <li>
-            <span class="t">The cursor moves onto delivered data only</span>
-            <span class="d">Not onto data we read, and never after an empty or failed poll — a source that is down looks exactly like a source where nothing happened. With no cursor at all the poll looks back further than the gap between two polls, so consecutive windows always overlap.</span>
-          </li>
-          <li>
-            <span class="t">A poll that placed nothing is a failed poll</span>
-            <span class="d">The HTTP call succeeding is not the question. It says how many alerts it read, how many it placed, and names the cause when those differ.</span>
-          </li>
-          <li>
-            <span class="t">The route decides the mapping</span>
-            <span class="d">Alerts arrive at <span class="mono">POST /api/ingest/&lt;source&gt;</span> — never the payload, so a sender cannot claim to be something else. The Wazuh integration maps nothing: it forwards the alert as written and the console translates.</span>
-          </li>
-        </ul>
-          </div>
-        </details>
-      </div>
-    </div>
-  </section>
-  <!-- ===================== 06 · REFUSALS ===================== -->
-  <section class="band band-inset" id="refuses">
-    <div class="wrap sec">
-      <div class="sec-rail">
-        <span class="grp">C · What holds</span>
-        <span class="num">06</span>
-        <span class="lbl">Refusals</span>
-      </div>
-      <div class="sec-body">
-        <h2 class="sech">The list of things it will not do is the feature.</h2>
-        <p class="lede">
-          Four closed catalogues, each closed for the same reason: an operator points this console
-          at attacker-composed text all day, and an open list is an instruction away from being
-          someone else's.
-        </p>
-
-        <figure class="shot">
-  <img data-shot="04-case" src="shots/04-case.png" alt="An incident card for a critical ransomware alert: fallback verdict at confidence 0, four pipeline steps with their timings, and an approval block proposing an escalation." width="2880" height="1800" loading="lazy" decoding="async">
-  <figcaption>The incident card. The destination is <span class="dash">—</span> because the detection recorded none; the verdict is the fail-safe one and it names its own cause; the proposed action sits behind <b>Approval required</b>. Nothing was executed. Real screenshot of a running stack with no model key configured — which is why every verdict here reads <span class="mono">fallback verdict</span>.</figcaption>
-</figure>
-
-        <div class="tablewrap">
-          <table>
-            <thead>
-              <tr><th scope="col">Catalogue</th><th scope="col">Size</th><th scope="col">What being closed prevents</th></tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td class="m">Actions</td>
-                <td class="m">4</td>
-                <td><span class="mono">isolate_host_temporary</span> (TTL, auto-revert), <span class="mono">ticket</span>, <span class="mono">escalate</span>, <span class="mono">auto_close</span>. <span class="sub">Isolation refuses to run when it has no host to name: an action whose target is unknown is not an action.</span></td>
-              </tr>
-              <tr>
-                <td class="m">Assistant tools</td>
-                <td class="m">7 getters</td>
-                <td>The in-console assistant can read the queue, an alert, a chain, the rules, the metrics, health and setup state — and write nothing. <span class="sub">An injected instruction arrives at a model holding seven getters. That is the layer that holds; the fencing and the system prompt come after it.</span></td>
-              </tr>
-              <tr>
-                <td class="m">Credentials</td>
-                <td class="m">named list</td>
-                <td>Both key stores accept only names on a fixed list. <span class="sub">An arbitrary name would turn the settings endpoint into a way to inject any environment variable into the process, <span class="mono">PATH</span> included.</span></td>
-              </tr>
-              <tr>
-                <td class="m">Intel providers</td>
-                <td class="m">7 sources</td>
-                <td>The lookup endpoint takes a value and a kind — never a URL. <span class="sub">A route that fetched what it was handed would be a request forgery with a button on it.</span></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <h2 class="sech">Three screens do most of the work.</h2>
+        <p class="lede">One console, one address, one password. There are ten tabs in it, but on an ordinary day
+          you live in three of them.</p>
 
         <div class="grid g3">
           <article class="card">
-            <h3>Shadow mode by default</h3>
-            <p>
-              Decisions are recorded, none are executed, until the false-positive rate has been
-              measured over at least 50 alerts. The gate is
-              <span class="mono">human_disagreement_rate</span> — the share of decisions a human
-              rejected — not the share the model called false positive. One measures correctness;
-              the other measures distribution.
-            </p>
+            <h3>The queue</h3>
+            <p>Every alert, most urgent first. Open a row and you get the whole story: what came in,
+              what was found out, what the AI thinks, and what it wants to do.</p>
           </article>
           <article class="card">
-            <h3>Untrusted text is fenced, never deleted</h3>
-            <p>
-              Log content travels inside markers carrying a per-request nonce, so a log cannot
-              forge a closing tag for a marker that did not exist when it was written. Nothing is
-              stripped: rewriting evidence is the same mistake as filling a gap with a default.
-            </p>
+            <h3>Code scanning</h3>
+            <p>The other half of the console reads your code and looks for the flaws an attacker would
+              use — a folder, a file or a GitHub repository. Each finding says what can happen and
+              how to fix it.</p>
           </article>
           <article class="card">
-            <h3>Tuning rules have limits</h3>
-            <p>
-              A team can declare what is normal here — the authorised scanner, the backup window.
-              The console refuses a permanent allow keyed on one identity field alone, a suppression
-              with no expiry, and any rule with no owner or no reason.
-            </p>
+            <h3>Lookup</h3>
+            <p>Paste an address, a domain, a file hash or an e-mail and ask about it directly. The
+              answer always says how many sources actually replied.</p>
           </article>
         </div>
+
+        <figure class="shot">
+  <img data-shot="06-code" src="/shots/06-code.png" alt="The Code tab: a four-stage strip reading “reading your code”, “hunting for holes”, “second opinion”, “your report”, then a target picker offering a folder, a single file or a GitHub repository, and a choice between the whole project and only what changed." width="2880" height="1800" loading="lazy" decoding="async">
+  <figcaption>Code scanning. The four stages are named before anything runs, and the scope question says outright which choice costs more.</figcaption>
+</figure>
+
+        <details class="fold">
+          <summary>
+            <span>The other four screens</span>
+            <span class="hint">4 screenshots</span>
+          </summary>
+          <div class="fold-body">
+            <div class="gallery">
+              <figure class="shot">
+  <img data-shot="02-ingestion" src="/shots/02-ingestion.png" alt="The Ingestion tab: three delivery architectures side by side with their costs stated, hybrid selected, and a table mapping P1 to P4 onto webhook or polling with the delay each implies." width="2880" height="1800" loading="lazy" decoding="async">
+  <figcaption>Choosing a delivery architecture. Each option states what it buys <em>and</em> what it costs, and the lane table quotes half a polling interval — the average added delay, not the interval, because that is the number a P1 gets weighed against.</figcaption>
+</figure>
+              <figure class="shot">
+  <img data-shot="03-tracking" src="/shots/03-tracking.png" alt="The Tracking tab: 120 runs inspected, 118 attached to an alert, a warning that the observed window is full, and three sub-tabs for processing chains, orphan runs and the run log." width="2880" height="1800" loading="lazy" decoding="async">
+  <figcaption>The unreduced view. It counts the runs the queue could not show you, and warns when the observed window is full — <em>beyond it, the console does not know</em> — rather than letting a bounded read look like a complete one.</figcaption>
+</figure>
+              <figure class="shot">
+  <img data-shot="05-lookup" src="/shots/05-lookup.png" alt="The Lookup tab after querying 8.8.8.8: a verdict reading “nothing against it”, the line “1 of 4 sources answered”, and two source cards marked “not asked”." width="2880" height="1800" loading="lazy" decoding="async">
+  <figcaption>A verdict that states its own scope. One source answered, and the panel says so beside the verdict; the two sources with no key are <b>not asked</b> — a question nobody put, not a hole in what is known.</figcaption>
+</figure>
+              <figure class="shot">
+  <img data-shot="07-health" src="/shots/07-health.png" alt="The connectivity test results: a red banner reading “at least one link is broken, 9 checks green, 5 to watch, 1 failing, 0 undetermined — in 14 ms”, then per-check rows for the database, the SQL schema, the triage model key and four enrichment sources." width="2880" height="1800" loading="lazy" decoding="async">
+  <figcaption>The connectivity test on the same install. <b>Nine green, five to watch, one failing, zero undetermined</b> — four states, so “checking” is never reported as “broken”. Each line names the consequence and then the fix: the missing model key says every alert will take the fail-safe verdict, and where to put the key.</figcaption>
+</figure>
+            </div>
+          </div>
+        </details>
+
+        <details class="fold">
+          <summary>
+            <span>All ten tabs, one line each</span>
+            <span class="hint">10 tabs · Alerts to Settings</span>
+          </summary>
+          <div class="fold-body">
+            <div class="tablewrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">Tab</th>
+                    <th scope="col">What is on it</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td class="m">Alerts</td><td>The queue and the incident card. Every value in an alert carries a jump into Lookup with the question already asked.</td></tr>
+                  <tr><td class="m">Code</td><td>Run a code scan and read the report. It keeps running while you work in another tab.</td></tr>
+                  <tr><td class="m">Ingestion</td><td>How alerts get in: the delivery method, the sources on each, and the pipeline as it runs.</td></tr>
+                  <tr><td class="m">Rules</td><td>Declare what is normal here — the authorised scanner, the backup window — with a dry run that answers <em>which rule would match this alert</em> without touching anything.</td></tr>
+                  <tr><td class="m">Tracking</td><td>The unreduced view: broken chains, orphan runs, searchable log, replay.</td></tr>
+                  <tr><td class="m">Metrics</td><td>Two rates, never conflated: what the AI called a false positive, and what a human refused.</td></tr>
+                  <tr><td class="m">Health</td><td>One button that tests every link in the chain, and nine test alerts to send through it.</td></tr>
+                  <tr><td class="m">Lookup</td><td>Threat intelligence on one value, plus a breached-password check whose hash never leaves your browser.</td></tr>
+                  <tr><td class="m">Guide</td><td>The documentation, searchable — and the search reads the glossary too, so a word you looked up in the wrong vocabulary still finds its section.</td></tr>
+                  <tr><td class="m">Settings</td><td>Keys, sources, engines — and a checklist naming everything still missing before an alert can be triaged.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </details>
+
+        <details class="fold">
+          <summary>
+            <span>Six themes, and why the switch at the top is not a gimmick</span>
+            <span class="hint">6 palettes · contrast tested</span>
+          </summary>
+          <div class="fold-body">
+            <p class="prose">The switch in the header repaints this page with the console's six real palettes, from
+              the same tokens. A test computes the WCAG contrast ratios and <b>refuses</b> a palette
+              that falls below them — it caught a failure red at 2.5:1, on the screen that depends
+              on red most. And colour never carries meaning on its own here: every risk colour is
+              paired with a word, so the console still works if you cannot tell them apart.</p>
+          </div>
+        </details>
       </div>
     </div>
   </section>
-  <!-- ===================== 07 · MEASURED ===================== -->
-  <section class="band" id="measured">
+
+  <!-- ===================== 04 · GUARDRAILS ===================== -->
+  <section class="band" id="guardrails">
     <div class="wrap sec">
       <div class="sec-rail">
-        <span class="grp">C · What holds</span>
-        <span class="num">07</span>
-        <span class="lbl">Measured</span>
+        <span class="num">04</span>
+        <span class="lbl">Guardrails</span>
       </div>
       <div class="sec-body">
-        <h2 class="sech">Numbers, with the conditions they were taken under.</h2>
-        <p class="lede">
-          Run against <span class="mono">docker compose up</span> — Postgres, console, code analysis,
-          and nothing else. These are a QA pass on one machine, not a published benchmark; the point
-          is that they are reproducible and that the conditions are stated.
-        </p>
+        <h2 class="sech">The list of things it will not do is the feature.</h2>
+        <p class="lede">Four limits, each one written into the code rather than promised in a slide. They are
+          what makes an AI safe to point at attacker-composed text all day.</p>
+
+        <div class="grid g2">
+          <article class="card">
+            <h3>It watches before it acts</h3>
+            <p>A new install executes nothing. It records the decision it would have made, and waits
+              until your team has measured, over real alerts, how often they disagreed with it.
+              That measurement is the gate, not a date.</p>
+          </article>
+          <article class="card">
+            <h3>Four actions, and no fifth</h3>
+            <p>Isolate a machine temporarily — with an expiry and an automatic undo — open a ticket,
+              escalate, or close as a false positive. Nothing else can be added. And isolation
+              refuses to run when it has no machine to name.</p>
+          </article>
+          <article class="card">
+            <h3>The chat assistant cannot act</h3>
+            <p>A panel answers questions about your own installation using seven read-only lookups
+              and nothing else. An instruction hidden in a log arrives at a model that has no way
+              to obey it.</p>
+          </article>
+          <article class="card">
+            <h3>Everything stays on your machine</h3>
+            <p>Three containers on your own host, one port published. Your alerts go to the model you
+              chose with the key you supplied, and nowhere else. No account, no telemetry, no
+              vendor cloud in the path.</p>
+          </article>
+        </div>
+
+        <figure class="shot">
+  <img data-shot="04-case" src="/shots/04-case.png" alt="An incident card for a critical ransomware alert: fallback verdict at confidence 0, four pipeline steps with their timings, and an approval block proposing an escalation." width="2880" height="1800" loading="lazy" decoding="async">
+  <figcaption>One incident. The verdict names its own cause, the destination is <span class="dash">—</span> because the detection recorded none, and the proposed action sits behind <b>Approval required</b>. Nothing was executed.</figcaption>
+</figure>
 
         <div class="figs">
           <div class="fig">
             <span class="n">400 / 400</span>
-            <span class="l">alerts accepted</span>
-            <span class="c">50 concurrent · ~134 alerts/s · p95 424 ms · every chain settled, nothing left running</span>
+            <span class="l">alerts accepted under load</span>
+            <span class="c">50 at once · ~134 per second · every chain settled, nothing left running</span>
           </div>
           <div class="fig">
             <span class="n">1 of 12</span>
             <span class="l">duplicates accepted</span>
-            <span class="c">12 simultaneous copies of one alert id → 1 accepted, 11 already seen, zero errors</span>
+            <span class="c">12 simultaneous copies of one alert → 1 accepted, 11 already seen, zero errors</span>
           </div>
           <div class="fig">
             <span class="n">0</span>
-            <span class="l">broken links in the audit chain</span>
-            <span class="c">~500 rows written at 40-way concurrency after the sealing fix; re-verified across 2,644 rows</span>
+            <span class="l">broken links in the audit log</span>
+            <span class="c">re-verified across 2,644 rows written under concurrent load</span>
           </div>
           <div class="fig">
             <span class="n">1,278</span>
             <span class="l">tests passing</span>
-            <span class="c">913 console · 365 code analysis · typecheck clean</span>
+            <span class="c">913 console · 365 code scanning · type checking clean</span>
           </div>
         </div>
 
-        <p class="prose">
-          <strong>Eight defects were found by that pass and fixed</strong>, three worth naming: the
-          entry point told senders their <em>refused</em> alerts had been accepted; the deduplication
-          insert was not race-safe and answered 500 under a burst; and the audit verifier reported
-          broken links on healthy rows, because row ids were allocated outside the sealing lock.
-          A verifier that cries wolf is one an auditor stops believing — which would hide a real
-          deletion in the noise.
-        </p>
+        <details class="fold">
+          <summary>
+            <span>The conditions those numbers were taken under</span>
+            <span class="hint">one machine · reproducible</span>
+          </summary>
+          <div class="fold-body">
+            <p class="prose">Run against <span class="mono">docker compose up</span> and nothing else. This is a QA
+              pass on one machine, not a published benchmark; the point is that it is reproducible
+              and that the conditions are stated. <b>It found eight defects, and they were fixed</b> —
+              three worth naming: the entry point told senders their <em>refused</em> alerts had been
+              accepted; the deduplication insert was not safe against a burst and answered an error;
+              and the audit verifier reported broken links on healthy rows. A verifier that cries
+              wolf is one an auditor stops believing, which would hide a real deletion in the noise.</p>
+          </div>
+        </details>
       </div>
     </div>
   </section>
-  <!-- ===================== 08 · DESIGN ===================== -->
-  <section class="band band-inset" id="design">
+
+  <!-- ===================== 05 · INSTALL ===================== -->
+  <section class="band band-inset" id="install">
     <div class="wrap sec">
       <div class="sec-rail">
-        <span class="grp">C · What holds</span>
-        <span class="num">08</span>
-        <span class="lbl">Design</span>
-      </div>
-      <div class="sec-body">
-        <h2 class="sech">Six themes. Contrast is tooled, never judged by eye.</h2>
-        <p class="lede">
-          Every theme redefines the entire palette — inheriting three tokens produces an accident
-          invisible on review. A test computes the WCAG ratios and <b>refuses</b> a palette:
-          4.5:1 for text on every surface, for text laid on the accent, and for the risk colours
-          inside their own pills. It caught a failure red at 2.5:1, on the screen that depends on
-          red most.
-        </p>
-        <p class="prose">
-          The switch in the header is not a mock-up: it repaints this page with the console's six
-          real palettes, from the same token set. <strong>Colour never carries meaning alone</strong> —
-          every risk colour is paired with a word.
-        </p>
-        <div class="grid g3">
-          <article class="card">
-            <h3>One accent, one job</h3>
-            <p>
-              The accent designates exactly one thing: <em>a human is blocked here</em>, and the primary
-              action. Red says critical or failed, orange worth a look, green handled. A red button
-              would teach an analyst to ignore red on the one screen where red saves time.
-            </p>
-          </article>
-          <article class="card">
-            <h3>The mark is the first principle</h3>
-            <p>
-              Five ticks, the middle one a stub rather than a full bar — a missing value keeping its
-              place instead of being omitted. Absence sits at the centre, so the mark stays symmetric:
-              the gap is the composition, not a defect in it.
-            </p>
-          </article>
-          <article class="card">
-            <h3>Density is a feature</h3>
-            <p>
-              The triage table is meant to show forty rows. Mono means <em>this string came from the
-              machine, and it is exact</em>; prose about a value is sans, the value is mono. An analyst
-              scrolling is an analyst who has lost the overview.
-            </p>
-          </article>
-        </div>
-      </div>
-    </div>
-  </section>
-  <!-- ===================== 09 · INSTALL ===================== -->
-  <section class="band" id="install">
-    <div class="wrap sec">
-      <div class="sec-rail">
-        <span class="grp">D · Getting it</span>
-        <span class="num">09</span>
+        <span class="num">05</span>
         <span class="lbl">Install</span>
       </div>
       <div class="sec-body">
-        <h2 class="sech">Three commands, on any host.</h2>
-        <p class="lede">
-          Docker is the normal installation mode, not an option. No Node to install, no Postgres to
-          configure, no schema to apply by hand, no third machine. The database and the analyser are
-          reachable only from the compose network — a second entry point would be a lock protecting
-          half the application.
-        </p>
+        <h2 class="sech">Two commands, on any host with Docker.</h2>
+        <p class="lede">Nothing else to install: no database to configure, no schema to apply by hand, no second
+          machine. The database and the scanner are reachable only from inside the stack.</p>
 
 <pre><code><span class="c"># fill in the two passwords</span>
 cp .env.example .env
 
-<span class="c"># postgres + console + code analysis</span>
+<span class="c"># database + console + code scanning</span>
 docker compose up -d --build
 
 <span class="a">→ http://localhost:4400</span></code></pre>
 
-        <p class="prose">
-          <strong>The stack comes up in three minutes and triages nothing.</strong> That is not a
-          fault: each of the four things below is a choice the console refuses to make for you, and
-          the checklist at the top of Settings tracks all four until they are done.
-        </p>
+        <p class="prose"><strong>It comes up in three minutes and triages nothing.</strong> That is not a fault:
+          each of the four things below is a choice the console refuses to make for you, and a
+          checklist on the settings page tracks all four until they are done.</p>
 
         <div class="tablewrap">
           <table>
             <thead>
-              <tr><th scope="col">#</th><th scope="col">What</th><th scope="col">If you skip it</th></tr>
+              <tr>
+                <th scope="col">#</th>
+                <th scope="col">What</th>
+                <th scope="col">If you skip it</th>
+              </tr>
             </thead>
             <tbody>
-              <tr><td class="m">1</td><td>A shared ingestion secret</td><td>The endpoint stays <b>closed</b> whatever mode you pick — here an empty secret closes the door rather than opening it.</td></tr>
-              <tr><td class="m">2</td><td>Open the door: ingestion mode <span class="mono">Primary</span></td><td>Every alert is refused.</td></tr>
-              <tr><td class="m">3</td><td>A model key</td><td>Every alert takes the fail-safe verdict: <span class="mono">needs_human</span>, confidence 0. Nothing is lost; nothing is triaged.</td></tr>
-              <tr><td class="m">4</td><td>A log source</td><td>No alerts arrive.</td></tr>
+              <tr><td class="m">1</td><td>A shared secret for the alert endpoint</td><td>The door stays <b>closed</b>. Here an empty secret closes it rather than opening it.</td></tr>
+              <tr><td class="m">2</td><td>Turning the endpoint on</td><td>Every alert is refused.</td></tr>
+              <tr><td class="m">3</td><td>A key for the AI model</td><td>Every alert lands on a human with a confidence of zero. Nothing is lost; nothing is triaged.</td></tr>
+              <tr><td class="m">4</td><td>A tool to send you alerts</td><td>No alerts arrive.</td></tr>
             </tbody>
           </table>
         </div>
 
-        <figure class="shot">
-  <img data-shot="07-health" src="shots/07-health.png" alt="The connectivity test results: a red banner reading “at least one link is broken, 9 checks green, 5 to watch, 1 failing, 0 undetermined — in 14 ms”, then per-check rows for the database, the SQL schema, the triage model key and four enrichment sources." width="2880" height="1800" loading="lazy" decoding="async">
-  <figcaption>The connectivity test on the same install. <b>Nine green, five to watch, one failing, zero undetermined</b> — four states, so “checking” is never reported as “broken”. Each line names the consequence and then the fix: the missing model key says every alert will take the fail-safe verdict, and where to put the key.</figcaption>
-</figure>
-
-        <p class="prose">
-          Enrichment keys and chat notifications are optional. A missing enrichment source is shown
-          as <span class="pill pill-grey">Unavailable</span> rather than filled in. One profile is off
-          by default — <span class="mono">--profile tunnel</span> — because a service you do not know
-          you started is a service you are not watching, and that one opens a door to the Internet.
-        </p>
+        <p class="prose">Threat-intelligence keys and chat notifications are optional — a source with no key shows
+          as <span class="pill pill-grey">Not asked</span> rather than being filled in.</p>
       </div>
     </div>
   </section>
-  <!-- ===================== 10 · NOT YET ===================== -->
-  <section class="band band-inset" id="notyet">
+
+  <!-- ===================== 06 · LIMITS ===================== -->
+  <section class="band" id="limits">
     <div class="wrap sec">
       <div class="sec-rail">
-        <span class="grp">D · Getting it</span>
-        <span class="num">10</span>
-        <span class="lbl">Not yet</span>
+        <span class="num">06</span>
+        <span class="lbl">Limits</span>
       </div>
       <div class="sec-body">
         <h2 class="sech">What it does not do.</h2>
-        <p class="lede">
-          Stated here for the same reason the console states it: a page that only lists what works
-          is a green that was never earned.
-        </p>
+        <p class="lede">Said here for the same reason the console says it: a page that lists only what works is a
+          green that was never earned.</p>
         <ul class="rows">
           <li>
             <span class="t">The two halves do not talk</span>
-            <span class="d">A code scan creates no case in the triage queue, and an alert triggers no scan. The merge is currently visual — one interface, one lock, one build — and closing that gap is the priority that outranks the others.</span>
+            <span class="d">A code scan creates no alert in the queue, and an alert starts no scan. They share an interface and a login; connecting them is the next priority.</span>
           </li>
           <li>
-            <span class="t">The lock identifies nobody</span>
-            <span class="d">Access is a single password. It protects access; the approver's identity stays self-declared, and the audit row says exactly that rather than implying an identity it does not have.</span>
+            <span class="t">The login identifies nobody</span>
+            <span class="d">Access is a single password. It protects the console; it does not tell one approver from another, and the audit row says exactly that rather than implying a name it does not have.</span>
           </li>
           <li>
-            <span class="t">Autonomy is gated on measurement</span>
-            <span class="d">Leaving shadow mode is not a switch to flip early. It waits on a disagreement rate measured over real alerts that went through the real guardrails — comparing a case the pipeline did not produce yields disagreements that are not disagreements.</span>
+            <span class="t">It is a project, not a product</span>
+            <span class="d">Self-hosted, open source, no support contract and no company behind it. Read the code before you point it at anything that matters — which is the right thing to do with any of these.</span>
           </li>
         </ul>
       </div>
     </div>
   </section>
+
   <!-- ===================== FOOTER ===================== -->
   <footer class="band band-inset">
     <div class="wrap foot">
       <div class="row">
-        <div>
-          <p class="kick">MENATER · <span class="heb" lang="he" dir="rtl">מנטר</span> · present tense of <em>lenater</em>, to monitor</p>
-        </div>
-        <p class="kick">Self-hosted · Docker · Postgres · English throughout</p>
+        <p class="kick">MENATER · <span class="heb" lang="he" dir="rtl">מנטר</span> · present tense of <em>lenater</em>, to monitor</p>
+        <p class="kick">Self-hosted · Docker · open source</p>
         <span class="foot-links">
           <a class="totop" href="https://github.com/S2K7x/Menater" target="_blank" rel="noopener noreferrer">Source on GitHub ↗</a>
           <a class="totop" href="#top">↑ Back to top</a>
         </span>
       </div>
-      <p>
-        Named after an action in progress, not a technology: the console shows a state, never a
-        finished report. It watches; a human acts.
-      </p>
+      <p>Named after an action in progress, not a technology: the console shows a state, never a
+        finished report. It watches; a human acts.</p>
     </div>
   </footer>
 </main>
 
+<!-- The handful of strings the script writes into the page. English lives
+     here, beside the rest of it; build.py swaps the values for a locale. -->
+<script type="application/json" id="ui-strings">
+{
+  "copy": "Copy",
+  "copied": "Copied",
+  "selectIt": "Select it",
+  "themeOf": "Theme: ",
+  "grayed": "Grayed — slate and acid green",
+  "punk": "Punk — khaki and red",
+  "blued": "Blued — electric blue and lime",
+  "attck": "Attck — incandescent orange",
+  "acme": "Acme — cream paper, printer red (light)",
+  "dark": "Dark — near-black and application blue"
+}
+</script>
+
 <script>
 (function () {
+  var S = JSON.parse(document.getElementById('ui-strings').textContent);
+
   var THEMES = [
-    { id: 'grayed', name: 'Grayed — slate and acid green', bg: '#232830', accent: '#c3f53c' },
-    { id: 'punk',   name: 'Punk — khaki and red',          bg: '#3b3d2a', accent: '#c31f1b' },
-    { id: 'blued',  name: 'Blued — electric blue and lime', bg: '#1f31c4', accent: '#c8f24b' },
-    { id: 'attck',  name: 'Attck — incandescent orange',   bg: '#7a1c08', accent: '#ffdd1c' },
-    { id: 'acme',   name: 'Acme — cream paper, printer red (light)', bg: '#f4f1ea', accent: '#e01e0b' },
-    { id: 'dark',   name: 'Dark — near-black and application blue', bg: '#16181c', accent: '#1269f5' }
+    { id: 'grayed', bg: '#232830', accent: '#c3f53c' },
+    { id: 'punk',   bg: '#3b3d2a', accent: '#c31f1b' },
+    { id: 'blued',  bg: '#1f31c4', accent: '#c8f24b' },
+    { id: 'attck',  bg: '#7a1c08', accent: '#ffdd1c' },
+    { id: 'acme',   bg: '#f4f1ea', accent: '#e01e0b' },
+    { id: 'dark',   bg: '#16181c', accent: '#1269f5' }
   ];
 
   var root = document.documentElement;
@@ -1288,8 +1188,8 @@ docker compose up -d --build
     b.type = 'button';
     b.className = 'sw';
     b.dataset.id = t.id;
-    b.title = t.name;
-    b.setAttribute('aria-label', 'Theme: ' + t.name);
+    b.title = S[t.id];
+    b.setAttribute('aria-label', S.themeOf + S[t.id]);
     b.setAttribute('aria-pressed', 'false');
     b.style.background = t.bg;
     var dot = document.createElement('i');
@@ -1312,7 +1212,7 @@ docker compose up -d --build
      ------------------------------------------------------------------ */
   var nav = document.getElementById('topnav');
   var rail = nav.parentElement;
-  var links = [...nav.querySelectorAll('a')];
+  var links = [].slice.call(nav.querySelectorAll('a'));
   var targets = links
     .map(function (a) { return { a: a, el: document.querySelector(a.getAttribute('href')) }; })
     .filter(function (t) { return t.el; });
@@ -1353,18 +1253,33 @@ docker compose up -d --build
   }, { passive: true });
   spy();
 
+  /* The language links are plain hrefs and work with no script at all.
+     This only carries the anchor across, so switching language does not
+     also send you back to the top of a page you were halfway down. */
+  var langs = document.querySelectorAll('[data-lang-link]');
+  if (langs.length) {
+    var carry = function () {
+      var h = window.location.hash;
+      for (var i = 0; i < langs.length; i++) {
+        langs[i].href = langs[i].getAttribute('data-href') + h;
+      }
+    };
+    window.addEventListener('hashchange', carry);
+    carry();
+  }
+
   var copy = document.getElementById('copy');
   var cmd = document.getElementById('cmd');
   copy.addEventListener('click', function () {
     var text = cmd.textContent;
     var done = function () {
-      copy.textContent = 'Copied';
-      setTimeout(function () { copy.textContent = 'Copy'; }, 1600);
+      copy.textContent = S.copied;
+      setTimeout(function () { copy.textContent = S.copy; }, 1600);
     };
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(done, function () { copy.textContent = 'Select it'; });
+      navigator.clipboard.writeText(text).then(done, function () { copy.textContent = S.selectIt; });
     } else {
-      copy.textContent = 'Select it';
+      copy.textContent = S.selectIt;
     }
   });
 })();
