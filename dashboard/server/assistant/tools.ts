@@ -42,7 +42,7 @@ import { getRuleStore, ruleDb } from '../runtime.ts';
 import { snapshot } from '../snapshot.ts';
 import type { Locale } from '../i18n.ts';
 import type { AlertCase } from '../../src/lib/types.ts';
-import { UNTRUSTED_ALERT_FIELDS, fenceFields, fenced, type Fence } from './sanitize.ts';
+import { UNTRUSTED_ALERT_FIELDS, fenceEnrichment, fenceFields, fenced, type Fence } from './sanitize.ts';
 import type { ToolSpec } from './providers.ts';
 import { GLOSSARY, lookupTerm } from './glossary.ts';
 import { evaluateRules } from '../engine/transforms/tuning.ts';
@@ -153,8 +153,14 @@ function alertDetail(c: AlertCase, fence: Fence, sections: string[] | null = nul
     ...(want('decision') ? { decision: c.decision
       ? fenceFields(fence, c.decision as unknown as Record<string, unknown>, UNTRUSTED_ALERT_FIELDS)
       : null } : {}),
+    /**
+     * `enrichment` is third-party prose about an address the attacker chose —
+     * see `fenceEnrichment`. `enrichment_meta` is not: its source lists are our
+     * own names, `file_hash` is a hex match our regex made on the log, and the
+     * rest are booleans and a timestamp. Fencing it too would dilute the mark.
+     */
     ...(want('enrichment')
-      ? { enrichment: c.enrichment, enrichment_meta: c.enrichment_meta }
+      ? { enrichment: fenceEnrichment(fence, c.enrichment), enrichment_meta: c.enrichment_meta }
       : {}),
     ...(want('approval') ? { approval: c.approval } : {}),
     ...(want('audit') ? { audit: c.audit } : {}),
