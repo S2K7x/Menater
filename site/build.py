@@ -1,107 +1,127 @@
-"""Assemble the presentation page, once per locale and once per delivery form.
+"""Assemble the site: two pages, two languages, from one set of sources.
 
-    page.src.html    the page. English lives here, in the clear, because that
-                     is where a diff is readable. `<!--SHOT:name-->` marks a
-                     screenshot and `<!--LANGS-->` the language switcher.
-    i18n/<loc>.json  the other locales, keyed against the same source.
+    page.src.html    the front page — the short version, no jargon
+    docs.src.html    the documentation — the long one
+    shared.css       one stylesheet, inlined into every output
+    partials/        header, footer and script, shared by both pages
+    i18n/<loc>.json  the other locales, keyed against the same sources
 
-Four outputs, two axes:
+Placeholders a page source may use:
 
-    index.html       English, static host, <img src="/shots/name.png">
-    fr/index.html    French, same
-    page.html        English, published Artifact: screenshots inlined as data
-    page.fr.html     URIs, because an Artifact's CSP blocks external images
+    <!--HEADER-->        the identity row (logo, languages, cross-link, theme)
+    <!--CROSSLINK-->     inside the header: the OTHER page, per locale
+    <!--LANGS-->         inside the header: the other language, same page
+    <!--FOOTER-->        the footer
+    <!--SCRIPT-->        the shared script and its string table
+    <!--SHOT:name-->     a screenshot, captioned from shots/captions.json
 
-The catalogue is TYPED in the sense the console's is: a key on one side only
-fails the build, and it fails naming the keys. A page half-translated at run
-time is the defect this whole approach exists to avoid — so it is caught here,
-on the machine of whoever added the string, and never on a reader's screen.
+The catalogue is TYPED in the sense the console's is: a key present on one
+side only fails the build, and it fails naming the keys. A page half
+translated at run time is the defect this whole approach exists to avoid — so
+it is caught here, on the machine of whoever added the string, and never on a
+reader's screen.
+
+Only the front page gets an "inlined" variant (`page*.html`), for pasting into
+a host that blocks external images. The documentation does not: it would add
+two more 2.4 MB copies of the screenshots to the repository for a use nobody
+has.
 """
 import base64, json, pathlib, re, sys
 
 ROOT = pathlib.Path(__file__).parent
-SRC = ROOT / 'page.src.html'
 DEFAULT = 'en'
 
-# The site is offered in these; `en` is the source, so it has no file.
 LOCALES = {
-    'en': {'name': 'English', 'og': 'en_US', 'path': '/',
-           'file': 'index.html', 'artifact': 'page.html'},
-    'fr': {'name': 'Français', 'og': 'fr_FR', 'path': '/fr',
-           'file': 'fr/index.html', 'artifact': 'page.fr.html'},
+    'en': {'name': 'English', 'og': 'en_US', 'dir': ''},
+    'fr': {'name': 'Français', 'og': 'fr_FR', 'dir': 'fr/'},
 }
 
+# `url` is what the language switcher and the cross-link point at; `cross`
+# names the other page, so the header link is never a guess.
+PAGES = {
+    'landing': {'src': 'page.src.html', 'out': 'index.html', 'url': '',
+                'cross': 'docs', 'inline': 'page%s.html'},
+    'docs':    {'src': 'docs.src.html', 'out': 'docs/index.html', 'url': 'docs',
+                'cross': 'landing', 'inline': None},
+}
+
+SITE = 'https://menater.vercel.app'
 ATTRS = ('content', 'alt', 'title', 'placeholder', 'aria-label')
 
+
+def url_of(page, loc):
+    """`/`, `/fr`, `/docs`, `/fr/docs` — assembled the same way every time, so
+    the switcher on the docs page cannot quietly send you to the front one."""
+    u = '/' + LOCALES[loc]['dir'] + PAGES[page]['url']
+    # `/fr/` would answer with a redirect to `/fr` under trailingSlash:false.
+    # A redirect on the header's own navigation is a wasted round trip.
+    return u.rstrip('/') or '/'
+
+
 # --------------------------------------------------------------------------
-# Reading the source: which strings are translatable, and where they sit.
+# Reading a source: which strings are translatable, and where they sit.
 # --------------------------------------------------------------------------
 
+def _open_tag_end(src, at):
+    return src.index('>', at) + 1
+
+
 def _element_span(src, at):
-    """Given an index inside an open tag, return (open_start, inner_start,
-    inner_end, close_end) for that element, counting nested same-name tags."""
+    """Given an index inside an open tag, return (inner_start, inner_end) for
+    that element, counting nested tags of the same name."""
     open_start = src.rindex('<', 0, at)
     name = re.match(r'<([a-zA-Z][\w-]*)', src[open_start:]).group(1)
-    inner_start = src.index('>', at) + 1
+    inner_start = _open_tag_end(src, at)
     depth, i = 1, inner_start
     open_re = re.compile(r'<%s[\s>]' % re.escape(name), re.I)
     close = '</%s>' % name
     while depth:
-        nxt_close = src.find(close, i)
-        if nxt_close < 0:
+        nxt = src.find(close, i)
+        if nxt < 0:
             raise SystemExit('unclosed <%s> around: %s' % (name, src[open_start:open_start + 80]))
-        m = open_re.search(src, i, nxt_close)
+        m = open_re.search(src, i, nxt)
         if m:
             depth += 1
             i = m.end()
         else:
             depth -= 1
-            i = nxt_close + len(close)
-    return open_start, inner_start, nxt_close, i
+            i = nxt + len(close)
+    return inner_start, nxt
 
 
-def read_source():
-    """-> (source text, {key: english}, [(kind, key, start, end)] slices)."""
-    src = SRC.read_text()
-    en, slices = {}, []
+def scan(src, en, where):
+    """Collect this source's translatable strings into `en` and return the
+    slices to replace, sorted by position."""
+    slices = []
+
+    def claim(key, text):
+        # One key may dress several elements — a nav entry and the heading it
+        # points at are the same string, and two keys would let them drift.
+        # Two DIFFERENT texts under one key is the real conflict.
+        if en.get(key, text) != text:
+            raise SystemExit('%s: key %r carries two different strings' % (where, key))
+        en[key] = text
 
     for m in re.finditer(r'data-i18n="([\w.\-]+)"', src):
-        key = m.group(1)
-        _, inner_start, inner_end, _ = _element_span(src, m.start())
-        text = src[inner_start:inner_end].strip()
-        # One key may dress several elements — a nav entry and the running
-        # label of the section it points at are the same string, and giving
-        # them two keys would let them drift. Two DIFFERENT texts under one
-        # key is the real conflict, and that still fails.
-        if en.get(key, text) != text:
-            raise SystemExit('key %s used for two different strings' % key)
-        en[key] = text
-        slices.append(('text', key, inner_start, inner_end))
+        a, b = _element_span(src, m.start())
+        claim(m.group(1), src[a:b].strip())
+        slices.append((m.group(1), a, b))
 
     for attr in ATTRS:
         for m in re.finditer(r'data-i18n-%s="([\w.\-]+)"' % re.escape(attr), src):
-            key = m.group(1)
-            # Only the OPEN TAG is needed here, which is what lets this work
-            # on a void element: <meta> has no closing tag to look for.
+            # Only the OPEN TAG is needed, which is what lets this work on a
+            # void element: <meta> has no closing tag to look for.
             open_start = src.rindex('<', 0, m.start())
-            tag = src[open_start:src.index('>', m.start()) + 1]
+            tag = src[open_start:_open_tag_end(src, m.start())]
             v = re.search(r'(?<![\w-])%s="([^"]*)"' % re.escape(attr), tag)
             if not v:
-                raise SystemExit('data-i18n-%s="%s" on a tag with no %s=""' % (attr, key, attr))
-            if en.get(key, v.group(1)) != v.group(1):
-                raise SystemExit('key %s used for two different strings' % key)
-            en[key] = v.group(1)
-            slices.append(('attr', key, open_start + v.start(1), open_start + v.end(1)))
+                raise SystemExit('%s: data-i18n-%s="%s" on a tag with no %s'
+                                 % (where, attr, m.group(1), attr))
+            claim(m.group(1), v.group(1))
+            slices.append((m.group(1), open_start + v.start(1), open_start + v.end(1)))
 
-    # The strings the script writes into the page, under a `ui.` prefix.
-    ui = re.search(r'<script type="application/json" id="ui-strings">(.*?)</script>', src, re.S)
-    if not ui:
-        raise SystemExit('the ui-strings block is gone')
-    for k, v in json.loads(ui.group(1)).items():
-        en['ui.' + k] = v
-
-    slices.sort(key=lambda s: s[2])
-    return src, en, slices, ui.span(1)
+    slices.sort(key=lambda s: s[1])
+    return slices
 
 
 # --------------------------------------------------------------------------
@@ -117,15 +137,14 @@ def catalogues(en):
         if not f.exists():
             raise SystemExit('missing catalogue: ' + str(f))
         cat = json.loads(f.read_text())
-        missing = sorted(set(en) - set(cat))
-        extra = sorted(set(cat) - set(en))
+        missing, extra = sorted(set(en) - set(cat)), sorted(set(cat) - set(en))
         if missing or extra:
             for k in missing:
                 print('  %s: MISSING  %s' % (loc, k), file=sys.stderr)
             for k in extra:
                 print('  %s: UNKNOWN  %s' % (loc, k), file=sys.stderr)
             raise SystemExit(
-                '%s is out of step with the source: %d missing, %d unknown. '
+                '%s is out of step with the sources: %d missing, %d unknown. '
                 'A key added on one side only is exactly what this check is for.'
                 % (loc, len(missing), len(extra)))
         out[loc] = cat
@@ -141,119 +160,164 @@ def figure(name, caps, cat, inline):
     cap = cat.get('shot.%s.cap' % name, caps[name]['cap'])
     if inline:
         b64 = base64.b64encode((ROOT / 'shots' / (name + '.png')).read_bytes()).decode()
-        s = 'data:image/png;base64,' + b64
+        src = 'data:image/png;base64,' + b64
     else:
-        s = '/shots/%s.png' % name
+        src = '/shots/%s.png' % name
     return ('<figure class="shot">\n'
             '  <img data-shot="{n}" src="{s}" alt="{a}" width="2880" height="1800" '
             'loading="{l}" decoding="async">\n'
             '  <figcaption>{c}</figcaption>\n'
-            '</figure>').format(n=name, s=s, a=alt.replace('"', '&quot;'),
+            '</figure>').format(n=name, s=src, a=alt.replace('"', '&quot;'),
                                 l='eager' if caps[name]['eager'] else 'lazy', c=cap)
 
 
-def switcher(loc):
-    """Two links, and the current one is a span. The URL is the whole state:
-    no cookie, no header sniffing, no redirect — a link somebody shares opens
-    in the language they shared it in."""
+def switcher(page, loc):
+    """Two links to the SAME page in the other language, and the current one is
+    a plain span. The URL is the whole state: no cookie, no header sniffing, no
+    redirect — a link somebody shares opens in the language they shared it in."""
     def label(meta, code):
         return ('<span class="l-long">%s</span><span class="l-short">%s</span>'
                 % (meta['name'], code.upper()))
 
     out = ['<div class="langs">']
     for code, meta in LOCALES.items():
+        href = url_of(page, code)
         if code == loc:
             out.append('<span aria-current="true" lang="%s" title="%s">%s</span>'
                        % (code, meta['name'], label(meta, code)))
         else:
             out.append('<a href="%s" hreflang="%s" lang="%s" title="%s" aria-label="%s" '
                        'data-lang-link data-href="%s">%s</a>'
-                       % (meta['path'], code, code, meta['name'], meta['name'],
-                          meta['path'], label(meta, code)))
+                       % (href, code, code, meta['name'], meta['name'], href, label(meta, code)))
     out.append('</div>')
     return '\n      '.join(out)
 
 
-def render(src, slices, ui_span, cat, loc, caps, inline):
-    parts, at = [], 0
-    for kind, key, start, end in slices:
-        parts.append(src[at:start])
-        parts.append(cat[key])
+def crosslink(text, page, loc):
+    """The header carries both cross-links; keep the one this page needs, drop
+    the other, and point it at the right locale. Both English labels therefore
+    live in the markup, where every other English string on this site lives."""
+    other = PAGES[page]['cross']
+
+    def one(m):
+        if m.group(1) != other:
+            return ''
+        return m.group(0).replace('href="%s"' % m.group(2), 'href="%s"' % url_of(other, loc), 1)
+
+    return re.sub(r'<a class="ghlink cross" data-cross="(\w+)" href="([^"]*)"[^>]*>.*?</a>\n?',
+                  one, text, flags=re.S)
+
+
+def render(page, loc, cat, parts, caps, inline):
+    src = parts['src']
+    out, at = [], 0
+    for key, start, end in parts['slices']:
+        out.append(src[at:start])
+        out.append(cat[key])
         at = end
-    parts.append(src[at:])
-    out = ''.join(parts)
+    out.append(src[at:])
+    text = ''.join(out)
 
     ui = {k[3:]: v for k, v in cat.items() if k.startswith('ui.')}
-    out = re.sub(r'(<script type="application/json" id="ui-strings">).*?(</script>)',
-                 lambda m: m.group(1) + '\n' + json.dumps(ui, ensure_ascii=False, indent=2)
-                 + '\n' + m.group(2), out, flags=re.S)
+    text = re.sub(r'(<script type="application/json" id="ui-strings">).*?(</script>)',
+                  lambda m: m.group(1) + '\n' + json.dumps(ui, ensure_ascii=False, indent=2)
+                  + '\n' + m.group(2), text, flags=re.S)
 
-    out = out.replace('<!--LANGS-->', switcher(loc))
-    out = re.sub(r'<!--SHOT:([\w-]+)-->',
-                 lambda m: figure(m.group(1), caps, cat, inline), out)
-    # The markers have done their job at build time; they are weight on the
-    # wire and a second, stale copy of the key list in a shipped file.
-    out = re.sub(r'\s+data-i18n(?:-[\w-]+)?="[\w.\-]+"', '', out)
-    return out
+    text = text.replace('<!--LANGS-->', switcher(page, loc))
+    text = crosslink(text, page, loc)
+    text = re.sub(r'<!--SHOT:([\w-]+)-->', lambda m: figure(m.group(1), caps, cat, inline), text)
+    # The markers have done their job; shipping them is weight on the wire and
+    # a second, stale copy of the key list in a published file.
+    return re.sub(r'\s+data-i18n(?:-[\w-]+)?="[\w.\-]+"', '', text)
 
 
-def head(loc, description):
+def document(page, loc, body, css, description):
     alts = '\n'.join(
-        '<link rel="alternate" hreflang="%s" href="https://menater.vercel.app%s">' % (c, m['path'])
-        for c, m in LOCALES.items())
-    return ('<!doctype html>\n'
-            '<html lang="%s" data-palette="grayed">\n'
-            '<head>\n'
-            '<meta charset="utf-8">\n'
-            '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
-            '<meta property="og:type" content="website">\n'
-            '<meta property="og:locale" content="%s">\n'
-            '<meta property="og:description" content="%s">\n'
-            '<meta name="twitter:card" content="summary_large_image">\n'
-            '%s\n'
-            '<link rel="alternate" hreflang="x-default" href="https://menater.vercel.app/">\n'
-            '<link rel="icon" href="/favicon.svg" type="image/svg+xml">\n'
-            '<style>img{max-width:100%%}[hidden]{display:none!important}</style>\n'
-            % (loc, LOCALES[loc]['og'],
-               description.replace('&', '&amp;').replace('"', '&quot;'), alts))
+        '<link rel="alternate" hreflang="%s" href="%s%s">' % (c, SITE, url_of(page, c))
+        for c in LOCALES)
+    title = re.search(r'<title[^>]*>(.*?)</title>', body, re.S)
+    esc = lambda s: s.replace('&', '&amp;').replace('"', '&quot;')
+    head = (
+        '<!doctype html>\n'
+        '<html lang="%s" data-palette="grayed">\n'
+        '<head>\n'
+        '<meta charset="utf-8">\n'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
+        '<link rel="canonical" href="%s%s">\n'
+        '<meta property="og:type" content="website">\n'
+        '<meta property="og:locale" content="%s">\n'
+        '<meta property="og:title" content="%s">\n'
+        '<meta property="og:description" content="%s">\n'
+        '<meta name="twitter:card" content="summary_large_image">\n'
+        '%s\n'
+        '<link rel="alternate" hreflang="x-default" href="%s/">\n'
+        '<link rel="icon" href="/favicon.svg" type="image/svg+xml">\n'
+        % (loc, SITE, url_of(page, loc), LOCALES[loc]['og'],
+           esc(title.group(1).strip()), esc(description), alts, SITE))
+    return head + _split_head(body, css) + '\n</body>\n</html>\n'
+
+
+def _split_head(body, css):
+    """The page source opens with its <title> and <meta description>; the rest
+    is the document body. The stylesheet is inlined rather than linked: one
+    request, and no chance of the page painting before its own colours."""
+    at = body.index('<header class="top">')
+    return (body[:at].rstrip() + '\n<style>\n' + css + '\n</style>\n</head>\n<body>\n'
+            + body[at:].rstrip())
 
 
 def main():
-    src, en, slices, ui_span = read_source()
+    css = (ROOT / 'shared.css').read_text().strip()
+    partials = {n: (ROOT / 'partials' / (n + '.html')).read_text().strip()
+                for n in ('header', 'footer', 'script')}
     caps = json.loads((ROOT / 'shots' / 'captions.json').read_text())
 
-    used = re.findall(r'<!--SHOT:([\w-]+)-->', src)
-    missing_caps = [n for n in used if n not in caps]
-    if missing_caps:
-        raise SystemExit('no caption for: ' + ', '.join(missing_caps))
+    en, built = {}, {}
+    for page, meta in PAGES.items():
+        src = (ROOT / meta['src']).read_text()
+        for name, frag in partials.items():
+            src = src.replace('<!--%s-->' % name.upper(), frag)
 
-    # Captions and alt text are user-facing strings like any other, so they go
-    # through the same check: they live beside the images, keyed `shot.<n>.*`.
-    for n in used:
-        en['shot.%s.alt' % n] = caps[n]['alt']
-        en['shot.%s.cap' % n] = caps[n]['cap']
+        used = re.findall(r'<!--SHOT:([\w-]+)-->', src)
+        missing = [n for n in used if n not in caps]
+        if missing:
+            raise SystemExit('%s: no caption for %s' % (meta['src'], ', '.join(missing)))
+        # Captions and alt text are user-facing strings like any other, so they
+        # go through the same check, keyed beside the images they belong to.
+        for n in used:
+            en.setdefault('shot.%s.alt' % n, caps[n]['alt'])
+            en.setdefault('shot.%s.cap' % n, caps[n]['cap'])
+
+        slices = scan(src, en, meta['src'])
+        built[page] = {'src': src, 'slices': slices}
+
+    ui = re.search(r'<script type="application/json" id="ui-strings">(.*?)</script>',
+                   partials['script'], re.S)
+    if not ui:
+        raise SystemExit('the ui-strings block is gone from partials/script.html')
+    for k, v in json.loads(ui.group(1)).items():
+        en['ui.' + k] = v
 
     cats = catalogues(en)
-
     print('%d translatable strings' % len(en))
-    for loc, meta in LOCALES.items():
-        cat = cats[loc]
 
-        art = render(src, slices, ui_span, cat, loc, caps, inline=True)
-        (ROOT / meta['artifact']).write_text(art)
-
-        page = render(src, slices, ui_span, cat, loc, caps, inline=False)
-        page = page.replace('<header class="top">',
-                            '<meta property="og:title" content="MENATER">\n'
-                            '</head>\n<body>\n<header class="top">', 1)
-        full = head(loc, cat['meta.description']) + page + '\n</body>\n</html>\n'
-        out = ROOT / meta['file']
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(full)
-
-        print('  %-2s  %-16s %6.1f KB   %-14s %6.1f KB (inlined)'
-              % (loc, meta['file'], len(full.encode()) / 1024,
-                 meta['artifact'], (ROOT / meta['artifact']).stat().st_size / 1024))
+    for page, meta in PAGES.items():
+        for loc in LOCALES:
+            cat = cats[loc]
+            body = render(page, loc, cat, built[page], caps, inline=False)
+            key = 'd.meta.description' if page == 'docs' else 'meta.description'
+            full = document(page, loc, body, css, cat[key])
+            out = ROOT / (LOCALES[loc]['dir'] + meta['out'])
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(full)
+            line = '  %-8s %-2s  %-18s %6.1f KB' % (page, loc, out.relative_to(ROOT),
+                                                    len(full.encode()) / 1024)
+            if meta['inline']:
+                name = meta['inline'] % ('' if loc == DEFAULT else '.' + loc)
+                inl = render(page, loc, cat, built[page], caps, inline=True)
+                (ROOT / name).write_text(document(page, loc, inl, css, cat[key]))
+                line += '   %-14s %6.1f KB (inlined)' % (name, (ROOT / name).stat().st_size / 1024)
+            print(line)
 
 
 main()

@@ -1,0 +1,167 @@
+<!-- The handful of strings the script writes into the page. English lives
+     here, beside the rest of it; build.py swaps the values for a locale. -->
+<script type="application/json" id="ui-strings">
+{
+  "copy": "Copy",
+  "copied": "Copied",
+  "selectIt": "Select it",
+  "themeOf": "Theme: ",
+  "grayed": "Grayed — slate and acid green",
+  "punk": "Punk — khaki and red",
+  "blued": "Blued — electric blue and lime",
+  "attck": "Attck — incandescent orange",
+  "acme": "Acme — cream paper, printer red (light)",
+  "dark": "Dark — near-black and application blue"
+}
+</script>
+
+<script>
+(function () {
+  var S = JSON.parse(document.getElementById('ui-strings').textContent);
+
+  var THEMES = [
+    { id: 'grayed', bg: '#232830', accent: '#c3f53c' },
+    { id: 'punk',   bg: '#3b3d2a', accent: '#c31f1b' },
+    { id: 'blued',  bg: '#1f31c4', accent: '#c8f24b' },
+    { id: 'attck',  bg: '#7a1c08', accent: '#ffdd1c' },
+    { id: 'acme',   bg: '#f4f1ea', accent: '#e01e0b' },
+    { id: 'dark',   bg: '#16181c', accent: '#1269f5' }
+  ];
+
+  var root = document.documentElement;
+  var picker = document.getElementById('picker');
+  var buttons = [];
+
+  function apply(id) {
+    root.setAttribute('data-palette', id);
+    buttons.forEach(function (b) {
+      b.setAttribute('aria-pressed', String(b.dataset.id === id));
+    });
+    try { localStorage.setItem('menater.site.theme', id); } catch (e) { /* private mode */ }
+  }
+
+  THEMES.forEach(function (t) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'sw';
+    b.dataset.id = t.id;
+    b.title = S[t.id];
+    b.setAttribute('aria-label', S.themeOf + S[t.id]);
+    b.setAttribute('aria-pressed', 'false');
+    b.style.background = t.bg;
+    var dot = document.createElement('i');
+    dot.style.background = t.accent;
+    b.appendChild(dot);
+    b.addEventListener('click', function () { apply(t.id); });
+    picker.appendChild(b);
+    buttons.push(b);
+  });
+
+  var saved = null;
+  try { saved = localStorage.getItem('menater.site.theme'); } catch (e) { saved = null; }
+  var known = THEMES.some(function (t) { return t.id === saved; });
+  apply(known ? saved : 'grayed');
+
+  /* ------------------------------------------------------------------
+     The section bar says where you are, and says when it has more in it.
+     Both are the same defect if left out: a section you cannot see is a
+     section that does not exist for the person hunting it.
+     ------------------------------------------------------------------ */
+  var nav = document.getElementById('topnav');
+  var rail = nav.parentElement;
+  // Whichever of the two actually scrolls is the one to measure and move.
+  var box = nav.scrollWidth > nav.clientWidth || nav.scrollHeight > nav.clientHeight
+    ? nav : (nav.closest('.docs-side') || nav);
+  var links = [].slice.call(nav.querySelectorAll('a'));
+  var targets = links
+    .map(function (a) { return { a: a, el: document.querySelector(a.getAttribute('href')) }; })
+    .filter(function (t) { return t.el; });
+
+  function markOverflow() {
+    // A bar that scrolls without looking like it scrolls hides its own end.
+    var more = nav.scrollWidth - nav.clientWidth - nav.scrollLeft > 8;
+    rail.setAttribute('data-overflow', String(more));
+  }
+  nav.addEventListener('scroll', markOverflow, { passive: true });
+  window.addEventListener('resize', markOverflow);
+  markOverflow();
+
+  function spy() {
+    // The current section is the last one whose top has passed the header.
+    var line = 120;
+    var current = targets[0];
+    targets.forEach(function (t) {
+      if (t.el.getBoundingClientRect().top <= line) current = t;
+    });
+    links.forEach(function (a) { a.removeAttribute('aria-current'); });
+    if (current && window.scrollY > 40) {
+      current.a.setAttribute('aria-current', 'true');
+      // Keep the active entry reachable. The front page's bar scrolls
+      // sideways; the documentation sidebar scrolls DOWN, and sixteen entries
+      // in a column will not all fit. An entry you cannot see is an entry that
+      // does not exist for whoever is hunting it, in either direction.
+      var r = current.a.getBoundingClientRect();
+      var nr = box.getBoundingClientRect();
+      if (box.scrollWidth > box.clientWidth && (r.left < nr.left || r.right > nr.right)) {
+        box.scrollLeft += r.left - nr.left - 24;
+        markOverflow();
+      }
+      if (box.scrollHeight > box.clientHeight && (r.top < nr.top || r.bottom > nr.bottom)) {
+        box.scrollTop += r.top - nr.top - 60;
+      }
+    }
+  }
+  var ticking = false;
+  window.addEventListener('scroll', function () {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(function () { spy(); ticking = false; });
+  }, { passive: true });
+  spy();
+
+  /* The language links are plain hrefs and work with no script at all.
+     This only carries the anchor across, so switching language does not
+     also send you back to the top of a page you were halfway down. */
+  var langs = document.querySelectorAll('[data-lang-link]');
+  if (langs.length) {
+    var carry = function () {
+      var h = window.location.hash;
+      for (var i = 0; i < langs.length; i++) {
+        langs[i].href = langs[i].getAttribute('data-href') + h;
+      }
+    };
+    window.addEventListener('hashchange', carry);
+    carry();
+  }
+
+  // The copy button is on the front page only; this script is shared, so its
+  // absence is a normal state and not a reason to take the rest down with it.
+  /* The documentation's table of contents. It ships OPEN, because a closed
+     <details> hides its content whatever the stylesheet says — so a CSS-only
+     "open from 1000 px" is not expressible. Below that width it is collapsed
+     here instead, and the state follows the viewport as it changes. With no
+     script it stays open: longer on a phone, never missing. */
+  var toc = document.getElementById('toc');
+  if (toc && window.matchMedia) {
+    var narrow = window.matchMedia('(max-width: 999px)');
+    var fit = function (m) { toc.open = !m.matches; };
+    fit(narrow);
+    if (narrow.addEventListener) narrow.addEventListener('change', fit);
+  }
+
+  var copy = document.getElementById('copy');
+  var cmd = document.getElementById('cmd');
+  if (copy && cmd) copy.addEventListener('click', function () {
+    var text = cmd.textContent;
+    var done = function () {
+      copy.textContent = S.copied;
+      setTimeout(function () { copy.textContent = S.copy; }, 1600);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { copy.textContent = S.selectIt; });
+    } else {
+      copy.textContent = S.selectIt;
+    }
+  });
+})();
+</script>

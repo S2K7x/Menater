@@ -3,21 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="canonical" href="https://menater.vercel.app/fr">
 <meta property="og:type" content="website">
 <meta property="og:locale" content="fr_FR">
-<meta property="og:description" content="Console de sécurité auto-hébergée : une IA lit vos alertes et propose un verdict, un humain approuve chaque action, et chaque étape est consignée. Docker, trois conteneurs, open source.">
+<meta property="og:title" content="MENATER — une IA trie vos alertes de sécurité, vous décidez">
+<meta property="og:description" content="Gratuit et open source. Une IA lit les alertes de sécurité que vos outils remontent, vous dit lesquelles comptent, et vous demande avant d'agir. Tourne sur votre propre ordinateur.">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="alternate" hreflang="en" href="https://menater.vercel.app/">
 <link rel="alternate" hreflang="fr" href="https://menater.vercel.app/fr">
 <link rel="alternate" hreflang="x-default" href="https://menater.vercel.app/">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<style>img{max-width:100%}[hidden]{display:none!important}</style>
-<title>MENATER — le tri d'alertes par IA dont vous gardez le contrôle</title>
-<meta name="description" content="Console de sécurité auto-hébergée : une IA lit vos alertes et propose un verdict, un humain approuve chaque action, et chaque étape est consignée. Docker, trois conteneurs, open source.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;700&display=swap">
-
+<title>MENATER — une IA trie vos alertes de sécurité, vous décidez</title>
+<meta name="description" content="Gratuit et open source. Une IA lit les alertes de sécurité que vos outils remontent, vous dit lesquelles comptent, et vous demande avant d'agir. Tourne sur votre propre ordinateur.">
 <style>
 /* ==========================================================================
    MENATER — presentation page.
@@ -30,6 +27,13 @@
    Every rule in DESIGN.md § 12 applies to this page too: no gradients, no
    glass, no radius above 4 px, no superlatives, no fabricated metrics, and
    no green that was not earned.
+
+   `--faint` is defined in all six palettes and USED NOWHERE, on purpose. It
+   is the colour of text you may skip, it measures 3.2-4.2:1 against a panel,
+   and neither of these two pages has any such text: the front page is
+   already the short version and the documentation is what you came for. It
+   stays defined because this palette is the console's, token for token —
+   dropping one here would make the two drift.
    ========================================================================== */
 
 :root,
@@ -135,7 +139,7 @@ ul { margin: 0; padding: 0; list-style: none; }
   font-size: 0.68rem;
   letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: var(--faint);
+  color: var(--muted);
   margin: 0;
 }
 .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
@@ -154,7 +158,6 @@ ul { margin: 0; padding: 0; list-style: none; }
 .pill-green { color: var(--green); background: var(--green-bg); }
 .pill-blue { color: var(--blue); background: var(--blue-bg); }
 .pill-grey { color: var(--fg); background: var(--surface-2); }
-.dash { color: var(--faint); font-family: var(--mono); }
 
 /* --- Shell and section grid -------------------------------------------- */
 
@@ -168,42 +171,6 @@ html { scroll-behavior: smooth; }
 .band-inset { background: var(--panel); }
 
 .sec { display: grid; gap: 32px; padding-block: 64px; align-items: start; }
-@media (min-width: 900px) {
-  .sec { grid-template-columns: var(--rail) minmax(0, 1fr); gap: 40px; }
-  .sec-rail { position: sticky; top: 122px; }
-}
-.sec-rail { display: flex; flex-direction: column; gap: 6px; }
-.sec-rail .num {
-  font-family: var(--mono); font-size: 0.72rem; color: var(--accent);
-  letter-spacing: 0.1em;
-}
-.sec-rail .lbl {
-  font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.18em;
-  text-transform: uppercase; color: var(--faint);
-}
-/* Which of the four groups you are in. Repeated on every section on purpose:
-   it is a running header, not an explanation — its job is to say where you
-   are, wherever you happened to land. */
-.sec-rail .grp {
-  font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.14em;
-  text-transform: uppercase; color: var(--faint);
-  padding-bottom: 6px; margin-bottom: 2px; border-bottom: 1px solid var(--line);
-}
-.sec-body { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
-
-h2.sech { font-size: clamp(1.4rem, 3vw, 2rem); line-height: 1.1; letter-spacing: -0.01em; }
-.lede { color: var(--muted); max-width: 68ch; font-size: 1rem; }
-.prose { max-width: 70ch; color: var(--muted); }
-.prose strong { color: var(--fg); font-weight: 500; }
-
-/* --- Header: identity row, then the section bar ------------------------- */
-
-.top {
-  position: sticky; top: 0; z-index: 30;
-  background: var(--bg);
-  border-bottom: 1px solid var(--line);
-  transition: background var(--swap) linear;
-}
 .top-head {
   display: flex; align-items: center; gap: 10px;
   min-height: 54px; flex-wrap: wrap; padding-block: 6px;
@@ -216,7 +183,7 @@ h2.sech { font-size: clamp(1.4rem, 3vw, 2rem); line-height: 1.1; letter-spacing:
 .lock .tagline {
   display: none;
   font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.18em;
-  text-transform: uppercase; color: var(--faint);
+  text-transform: uppercase; color: var(--muted);
   padding-left: 10px; border-left: 1px solid var(--line-strong);
 }
 @media (min-width: 560px) { .lock .tagline { display: inline; } }
@@ -248,10 +215,7 @@ h2.sech { font-size: clamp(1.4rem, 3vw, 2rem); line-height: 1.1; letter-spacing:
 }
 .topnav a:first-child { padding-left: 0; }
 .topnav a:hover { color: var(--fg); }
-.topnav a .n { color: var(--faint); font-size: 0.66rem; }
 .topnav a[aria-current='true'] { color: var(--fg); border-bottom-color: var(--accent); }
-.topnav a[aria-current='true'] .n { color: var(--accent); }
-.topnav .sep { align-self: center; width: 1px; height: 14px; background: var(--line-strong); margin: 0 10px; flex: none; }
 
 /* The repository link. The GitHub octocat is a BRAND MARK, so it keeps its
    filled shape — the rule against filled icon sets is about icons competing
@@ -332,7 +296,7 @@ h2.sech { font-size: clamp(1.4rem, 3vw, 2rem); line-height: 1.1; letter-spacing:
 .spec .v { font-family: var(--mono); font-size: 1.1rem; color: var(--fg); display: block; }
 .spec .k {
   font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.14em;
-  text-transform: uppercase; color: var(--faint); display: block; margin-top: 2px;
+  text-transform: uppercase; color: var(--muted); display: block; margin-top: 2px;
 }
 
 /* --- Panels and grids -------------------------------------------------- */
@@ -350,10 +314,6 @@ h2.sech { font-size: clamp(1.4rem, 3vw, 2rem); line-height: 1.1; letter-spacing:
 }
 .card h3 { font-size: 0.86rem; letter-spacing: 0.06em; text-transform: uppercase; }
 .card p { color: var(--muted); font-size: 0.9rem; }
-.card .where {
-  font-family: var(--mono); font-size: 0.68rem; color: var(--faint);
-  margin-top: auto; padding-top: 8px; border-top: 1px solid var(--line);
-}
 
 /* A plain list of rules — no card chrome, hairlines only. */
 .rows { display: flex; flex-direction: column; }
@@ -366,24 +326,6 @@ h2.sech { font-size: clamp(1.4rem, 3vw, 2rem); line-height: 1.1; letter-spacing:
 .rows .d { color: var(--muted); font-size: 0.9rem; }
 .rows .d b { color: var(--fg); font-weight: 500; }
 
-/* --- The pipeline chain ------------------------------------------------ */
-
-.chain { display: flex; flex-direction: column; gap: 10px; }
-.chain-line { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; }
-.step {
-  flex: 1 1 150px; min-width: 0;
-  background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--radius);
-  padding: 12px; display: flex; flex-direction: column; gap: 5px;
-}
-.step .id { font-family: var(--mono); font-size: 0.66rem; color: var(--accent); letter-spacing: 0.1em; }
-.step .nm { font-size: 0.82rem; color: var(--fg); font-weight: 500; }
-.step .no { font-size: 0.78rem; color: var(--muted); line-height: 1.45; }
-.errbox {
-  border: 1px dashed var(--line-strong); border-radius: var(--radius);
-  padding: 12px; background: var(--panel);
-  display: flex; flex-direction: column; gap: 5px;
-}
-
 /* --- Tables ------------------------------------------------------------ */
 
 .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
@@ -392,7 +334,7 @@ th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--li
 tbody tr:last-child td { border-bottom: 0; }
 th {
   font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.14em; text-transform: uppercase;
-  color: var(--faint); font-weight: 400; background: var(--panel); white-space: nowrap;
+  color: var(--muted); font-weight: 400; background: var(--panel); white-space: nowrap;
 }
 td.m { font-family: var(--mono); font-size: 0.78rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
 td .sub { color: var(--muted); }
@@ -405,15 +347,7 @@ td .sub { color: var(--muted); }
 .fig { background: var(--surface); padding: 16px; display: flex; flex-direction: column; gap: 4px; }
 .fig .n { font-family: var(--mono); font-size: 1.6rem; line-height: 1.1; color: var(--fg); font-variant-numeric: tabular-nums; }
 .fig .l { font-size: 0.82rem; color: var(--fg); }
-.fig .c { font-size: 0.78rem; color: var(--faint); }
-
-/* --- Quote / thesis ---------------------------------------------------- */
-
-.thesis {
-  border-left: 3px solid var(--accent); padding: 4px 0 4px 20px;
-  font-family: var(--display); font-size: clamp(1.15rem, 2.6vw, 1.6rem);
-  line-height: 1.25; letter-spacing: -0.005em; max-width: 26ch;
-}
+.fig .c { font-size: 0.78rem; color: var(--muted); }
 
 /* --- Code block -------------------------------------------------------- */
 
@@ -422,51 +356,12 @@ pre {
   padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 0.8rem;
   color: var(--fg); line-height: 1.65;
 }
-pre .c { color: var(--faint); }
-pre .a { color: var(--accent); }
-
-/* --- The contents map --------------------------------------------------- */
-
-.map { display: grid; gap: 20px; }
-@media (min-width: 700px) { .map { grid-template-columns: 1fr 1fr; } }
-@media (min-width: 1040px) { .map { grid-template-columns: repeat(4, 1fr); } }
-.map-grp { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
-.map-grp h3 {
-  font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase;
-  padding-bottom: 8px; border-bottom: 1px solid var(--line-strong);
-}
-.map-grp h3 span { color: var(--accent); font-family: var(--mono); font-size: 0.72rem; margin-right: 8px; }
-.map-grp ol { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
-.map-grp a { display: block; text-decoration: none; color: var(--fg); }
-.map-grp a:hover { color: var(--accent); }
-.map-grp a .t { display: block; font-size: 0.9rem; font-weight: 500; }
-.map-grp a .t::before {
-  content: attr(data-n) ' · '; font-family: var(--mono); font-size: 0.72rem;
-  color: var(--faint); font-weight: 400;
-}
-.map-grp a .d { display: block; font-size: 0.82rem; color: var(--muted); }
-.map-grp a:hover .d { color: var(--muted); }
-
-/* --- Folds -------------------------------------------------------------- */
-
-/* What EXPLAINS folds; what REPORTS never does. A fold also says what is
-   inside, so you never open one to find out whether it was worth opening. */
-.fold { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
-.fold > summary {
-  cursor: pointer; list-style: none; padding: 12px 14px;
-  display: flex; align-items: baseline; gap: 12px;
-  font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.08em;
-  text-transform: uppercase; color: var(--fg); min-height: 44px;
-}
-.fold > summary::-webkit-details-marker { display: none; }
-.fold > summary::before {
-  content: '+'; color: var(--accent); font-size: 0.9rem; line-height: 1; flex: none;
-}
-.fold[open] > summary::before { content: '−'; }
-.fold > summary .hint { margin-left: auto; color: var(--faint); text-transform: none; letter-spacing: 0.04em; }
-.fold > summary:hover { color: var(--accent); }
-.fold-body { padding: 0 14px 14px; display: flex; flex-direction: column; gap: 16px; }
-.fold-body > .tablewrap { border-left: 0; border-right: 0; border-radius: 0; }
+pre .c { color: var(--muted); }
+/* The address you open after installing. It was --accent, which is designed
+   to sit on --bg and --surface and NOT on --hero, the darkest inset: 2.58:1
+   in punk, 3.62:1 on the light theme. Colour was not carrying the meaning
+   here anyway — the arrow and the last-line position do. */
+pre .a { color: var(--fg); }
 
 /* --- Back to top -------------------------------------------------------- */
 
@@ -493,7 +388,7 @@ pre .a { color: var(--accent); }
 
 .foot { padding-block: 40px 56px; display: flex; flex-direction: column; gap: 14px; }
 .foot .row { display: flex; flex-wrap: wrap; gap: 16px; align-items: baseline; justify-content: space-between; }
-.foot p { color: var(--faint); font-size: 0.82rem; max-width: 70ch; }
+.foot p { color: var(--muted); font-size: 0.82rem; max-width: 70ch; }
 .heb { font-size: 1rem; color: var(--muted); }
 
 /* --- The flow diagram --------------------------------------------------
@@ -525,7 +420,7 @@ pre .a { color: var(--accent); }
 }
 .flow-node .fn-n {
   font-family: var(--mono); font-size: 0.64rem; letter-spacing: 0.16em;
-  text-transform: uppercase; color: var(--faint);
+  text-transform: uppercase; color: var(--muted);
 }
 .flow-node .fn-t { font-size: 0.92rem; color: var(--fg); font-weight: 500; line-height: 1.3; }
 .flow-node .fn-d { font-size: 0.8rem; color: var(--muted); line-height: 1.5; }
@@ -589,7 +484,7 @@ pre .a { color: var(--accent); }
 .flow-outcomes .ok-grey { color: var(--fg); }
 .flow-outcomes .ok-orange { color: var(--orange); }
 
-.flow-note { font-size: 0.84rem; color: var(--faint); max-width: 72ch; }
+.flow-note { font-size: 0.84rem; color: var(--muted); max-width: 72ch; }
 .flow-note b { color: var(--fg); font-weight: 500; }
 
 /* --- The language switcher ---------------------------------------------
@@ -624,8 +519,121 @@ pre .a { color: var(--accent); }
 
 /* --- A gallery of the screens that document rather than argue ----------- */
 .gallery { display: flex; flex-direction: column; gap: 26px; }
+
+/* --- Landing: a section with no numbered rail ---------------------------
+   The front page dropped its numbered rail with its table of contents: five
+   sections do not need a running header saying which of five you are in, and
+   a number that marks nothing is a number people hunt the missing ones for. */
+.sec-plain { grid-template-columns: minmax(0, 1fr) !important; }
+@media (min-width: 900px) { .sec-plain { max-width: 980px; } }
+
+/* --- Landing: the primary button ---------------------------------------- */
+.btn {
+  display: inline-flex; align-items: center; min-height: 40px;
+  padding: 0 18px; border-radius: var(--radius);
+  background: var(--accent); color: var(--accent-fg); text-decoration: none;
+  font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase;
+}
+.btn:hover { background: var(--accent-dim); color: var(--accent-fg); }
+
+/* --- Landing: the claims list -------------------------------------------
+   Four lines, not four paragraphs. Each opens with the claim itself, because
+   the first words of a line are what a scanning eye actually reads — the rest
+   of the line is read only by whoever the claim interested. */
+.claims { display: flex; flex-direction: column; }
+.claims li { display: grid; gap: 2px 24px; padding: 16px 0; border-top: 1px solid var(--line); }
+.claims li:first-child { border-top: 0; }
+@media (min-width: 760px) { .claims li { grid-template-columns: 280px minmax(0, 1fr); align-items: baseline; } }
+.claims .c-t { font-size: 1rem; color: var(--fg); font-weight: 500; }
+.claims .c-d { color: var(--muted); font-size: 0.92rem; }
+
+/* --- The documentation page ---------------------------------------------
+   One long page with sixteen anchors, not sixteen pages: it is searchable
+   with the browser's own Ctrl-F, it is one file, and there is no router to
+   get wrong. The sidebar is what gives it a visible shape. */
+.docs-grid { display: grid; gap: 28px; padding-block: 32px 72px; align-items: start; }
+@media (min-width: 1000px) {
+  .docs-grid { grid-template-columns: 236px minmax(0, 1fr); gap: 48px; }
+  .docs-side { position: sticky; top: 78px; max-height: calc(100vh - 100px); overflow-y: auto; }
+}
+.docs-body { min-width: 0; display: flex; flex-direction: column; gap: 44px; }
+
+/* On a phone the sidebar is a fold; from 1000 px it is always open and the
+   marker means nothing, so the summary stops being a control at all. Opening
+   and closing is the script's job: a closed <details> hides its content
+   whatever this file says. */
+.docs-toc { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.docs-toc > summary {
+  cursor: pointer; list-style: none; padding: 12px 14px; min-height: 44px;
+  display: flex; align-items: center; gap: 12px;
+  font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--fg);
+}
+.docs-toc > summary::-webkit-details-marker { display: none; }
+.docs-toc > summary::before { content: '+'; color: var(--accent); flex: none; }
+.docs-toc[open] > summary::before { content: '−'; }
+.docs-toc > summary .hint { margin-left: auto; color: var(--muted); text-transform: none; }
+.docs-toc nav { display: flex; flex-direction: column; padding: 0 6px 10px; }
+@media (min-width: 1000px) {
+  .docs-toc { border: 0; background: none; }
+  .docs-toc > summary { display: none; }
+  .docs-toc nav { padding: 0; }
+}
+.docs-toc .grp {
+  font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--muted); padding: 16px 8px 6px; margin: 0;
+}
+.docs-toc .grp:first-child { padding-top: 4px; }
+.docs-toc nav a {
+  display: flex; gap: 10px; align-items: baseline;
+  padding: 7px 8px; border-radius: var(--radius);
+  font-size: 0.86rem; color: var(--muted); text-decoration: none;
+  border-left: 2px solid transparent;
+}
+.docs-toc nav a:hover { color: var(--fg); background: var(--surface-2); }
+.docs-toc nav a .n { font-family: var(--mono); font-size: 0.68rem; color: var(--muted); flex: none; }
+.docs-toc nav a[aria-current='true'] { color: var(--fg); border-left-color: var(--accent); background: var(--surface-2); }
+/* Same trap one line up: the accent as TEXT on --surface-2 is 1.87:1 in punk.
+   The active entry is already marked three other ways — an accent left border,
+   a lifted background and full-strength text — so the number inherits. Colour
+   never carries the meaning alone here. */
+.docs-toc nav a[aria-current='true'] .n { color: var(--fg); }
+
+.docs-head { display: flex; flex-direction: column; gap: 14px; padding-bottom: 8px; }
+.docs-head h1 { font-size: clamp(1.7rem, 3.6vw, 2.5rem); line-height: 1.08; max-width: 24ch; }
+
+/* A heading level is a size AND an outline: h2 opens a section, h3 a block
+   inside it, and neither is chosen for how big the text should look. */
+.docs-body section { display: flex; flex-direction: column; gap: 16px; scroll-margin-top: 78px; }
+.docs-body h2 {
+  font-size: clamp(1.25rem, 2.4vw, 1.6rem); line-height: 1.15;
+  padding-bottom: 10px; border-bottom: 1px solid var(--line-strong);
+}
+.docs-body h3 { font-size: 0.86rem; letter-spacing: 0.06em; text-transform: uppercase; margin-top: 10px; }
+.docs-body > section > p { color: var(--muted); max-width: 74ch; }
+.docs-body p b, .docs-body p strong { color: var(--fg); font-weight: 500; }
+.docs-body dd, .docs-body li { max-width: 74ch; }
+
+/* Two ways of stepping outside the running prose, and they say different
+   things: a callout is the POINT of the section, a note is an aside you may
+   skip. Neither is a warning colour — nothing here is a failure. */
+.callout {
+  border-left: 3px solid var(--accent); background: var(--panel);
+  padding: 14px 18px; border-radius: 0 var(--radius) var(--radius) 0;
+}
+.note {
+  border: 1px dashed var(--line-strong); background: var(--panel);
+  padding: 14px 16px; border-radius: var(--radius); font-size: 0.9rem;
+}
+
+.gloss { margin: 0; display: grid; gap: 0; }
+.gloss dt {
+  font-family: var(--mono); font-size: 0.8rem; color: var(--fg);
+  padding-top: 14px; border-top: 1px solid var(--line);
+}
+.gloss dt:first-child { border-top: 0; padding-top: 0; }
+.gloss dd { margin: 0 0 14px; padding-top: 4px; color: var(--muted); font-size: 0.9rem; }
 </style>
-<meta property="og:title" content="MENATER">
 </head>
 <body>
 <header class="top">
@@ -647,6 +655,8 @@ pre .a { color: var(--accent); }
       <span aria-current="true" lang="fr" title="Français"><span class="l-long">Français</span><span class="l-short">FR</span></span>
       </div>
 
+    <a class="ghlink cross" data-cross="docs" href="/fr/docs">Documentation</a>
+    
     <a class="ghlink" href="https://github.com/S2K7x/Menater" target="_blank" rel="noopener noreferrer">
       <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
         <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38
@@ -665,421 +675,185 @@ pre .a { color: var(--accent); }
       <p class="kick">Thème</p>
     </div>
   </div>
-
-  <!-- Six entries and no group titles. The table of contents this page used
-       to open with was a second navigation level for a page you scroll: it
-       gave back exactly what the ordering already bought (CLARITY.md § 10). -->
-  <div class="navrail">
-    <nav class="wrap topnav" id="topnav" aria-label="Sections de cette page">
-      <a href="#why"><span class="n">01</span><span>Pourquoi</span></a>
-      <a href="#how"><span class="n">02</span><span>Comment ça marche</span></a>
-      <a href="#screens"><span class="n">03</span><span>Ce que vous obtenez</span></a>
-      <a href="#guardrails"><span class="n">04</span><span>Garde-fous</span></a>
-      <a href="#install"><span class="n">05</span><span>Installation</span></a>
-      <a href="#limits"><span class="n">06</span><span>Limites</span></a>
-    </nav>
-  </div>
 </header>
 
+<div class="navrail">
+  <nav class="wrap topnav" id="topnav" aria-label="Sections de cette page">
+    <a href="#how"><span>Comment ça marche</span></a>
+    <a href="#does"><span>Ce qu'il fait</span></a>
+    <a href="#trust"><span>Pourquoi lui faire confiance</span></a>
+    <a href="#get"><span>L'installer</span></a>
+  </nav>
+</div>
+
 <main id="top">
-  <!-- ===================== HERO ===================== -->
+  <!-- ============================ HERO ============================
+       Inverted pyramid: the conclusion first. Someone who reads the
+       headline, the sentence under it and nothing else should already
+       know what this is and whether it is for them. -->
   <section class="wrap hero">
-    <p class="kick">Auto-hébergé · open source · tourne sur votre propre machine</p>
-    <h1>Vos alertes, triées par IA. <em>Rien ne s'exécute</em> sans vous.</h1>
-    <p class="hero-sub">MENATER lit les alertes de sécurité que vos outils remontent, détermine lesquelles comptent, et ne vous présente que celles qui demandent une décision. <b>Il propose. Vous approuvez. Tout est consigné.</b></p>
+    <p class="kick">Gratuit · open source · tourne sur votre propre ordinateur</p>
+    <h1>Une IA trie vos alertes de sécurité. <em>Vous décidez</em> de la suite.</h1>
+    <p class="hero-sub">Les outils de sécurité remontent des centaines d'avertissements par jour, et la plupart ne sont rien. MENATER les lit, vous dit lesquels comptent, et vous demande avant d'agir.</p>
 
     <div class="hero-cta">
+      <a class="btn" href="/docs">Lire la documentation</a>
       <div class="term">
         <span class="cue" aria-hidden="true">$</span>
         <code id="cmd">docker compose up -d --build</code>
       </div>
       <button class="copy" id="copy" type="button">Copier</button>
-      <a class="textlink" href="#how">Voir comment ça marche →</a>
     </div>
 
     <div class="spec">
-      <div><span class="v">3</span><span class="k">conteneurs</span></div>
-      <div><span class="v">1</span><span class="k">commande pour installer</span></div>
-      <div><span class="v">0</span><span class="k">action sans un humain</span></div>
-      <div><span class="v">1,278</span><span class="k">tests au vert</span></div>
+      <div><span class="v">0</span><span class="k">chose faite sans vous demander</span></div>
+      <div><span class="v">1</span><span class="k">commande pour l'installer</span></div>
+      <div><span class="v">100%</span><span class="k">reste sur votre ordinateur</span></div>
     </div>
 
     <figure class="shot">
   <img data-shot="01-queue" src="/shots/01-queue.png" alt="La file de tri MENATER : deux alertes en attente d'un humain en tête, puis les dossiers clos, chaque ligne portant gravité, verdict, confiance et temps écoulé." width="2880" height="1800" loading="eager" decoding="async">
-  <figcaption>La file de tri. Ce qui attend un humain remonte en tête et porte l'accent — la seule couleur réservée à <em>quelqu'un doit agir</em>. Capture réelle : cette installation n'a pas de clé de modèle, d'où le <span class="mono">verdict de repli</span> sur chaque ligne.</figcaption>
+  <figcaption>La file d'alertes. Ce qui attend une décision remonte en tête et porte la couleur d'accent — la seule réservée à <em>quelqu'un doit agir</em>. Capture réelle, sur une installation sans clé d'IA : d'où le <span class="mono">verdict de repli</span> sur chaque ligne.</figcaption>
 </figure>
   </section>
 
-  <!-- ===================== 01 · WHY ===================== -->
-  <section class="band band-inset" id="why">
-    <div class="wrap sec">
-      <div class="sec-rail">
-        <span class="num">01</span>
-        <span class="lbl">Pourquoi</span>
-      </div>
-      <div class="sec-body">
-        <h2 class="sech">Une IA qui décide seule est une IA qui lit un texte écrit par l'attaquant.</h2>
-        <p class="lede">Les outils de sécurité remontent bien plus d'alertes que personne ne peut en lire : trier automatiquement n'est donc pas vraiment une option. Mais une alerte est un texte composé par un attaquant, et un modèle qui peut à la fois le lire et agir dessus peut se faire dicter la suite. MENATER sépare ces deux pouvoirs : le modèle lit et propose, un humain garde la détente.</p>
-
-        <p class="thesis">Il dit ce qu'il ne voit pas, au lieu de combler le trou.</p>
-
-        <details class="fold">
-          <summary>
-            <span>Les quatre règles qui en découlent</span>
-            <span class="hint">4 règles · appliquées dans le code</span>
-          </summary>
-          <div class="fold-body">
-            <ul class="rows">
-              <li>
-                <span class="t">Ne jamais combler un trou par une valeur par défaut</span>
-                <span class="d">Une valeur absente est affichée comme absente — <span class="dash">—</span>, jamais <span class="mono">0</span>, jamais <span class="mono">N/A</span>, jamais une supposition. Et rejeter une alerte parce qu'un champ manque est la même erreur sous sa forme la plus dure : <b>cela remplace l'alerte par rien du tout.</b></span>
-              </li>
-              <li>
-                <span class="t">Le silence ne vaut jamais accord</span>
-                <span class="d">Une demande d'approbation qui expire n'exécute rien — elle escalade. Une configuration absente ne peut pas non plus autoriser une exécution : le mode observation est celui par défaut, et seul le mot exact <span class="mono">false</span> le désactive.</span>
-              </li>
-              <li>
-                <span class="t">Une panne ne doit jamais s'afficher en vert</span>
-                <span class="d">Une chaîne qui s'est exécutée en ne transmettant aucun élément est <span class="pill pill-red">Rompue</span>, pas <span class="pill pill-green">Terminée</span>. Un verdict <em>sain</em> exige au moins une source de renseignement qui a réellement répondu — personne n'a regardé se dit <span class="pill pill-grey">Pas interrogée</span>, ce qui est une autre phrase.</span>
-              </li>
-              <li>
-                <span class="t">Aucune action irréversible sans un humain</span>
-                <span class="d">La liste de ce que la console peut exécuter est fermée à quatre entrées. Rien d'autre n'est implémentable — pas même derrière une approbation — et aucune règle de réglage ne peut l'atteindre.</span>
-              </li>
-            </ul>
-          </div>
-        </details>
-      </div>
-    </div>
-  </section>
-
-  <!-- ===================== 02 · HOW IT WORKS ===================== -->
-  <section class="band" id="how">
-    <div class="wrap sec">
-      <div class="sec-rail">
-        <span class="num">02</span>
-        <span class="lbl">Comment ça marche</span>
-      </div>
+  <!-- ============================ HOW IT WORKS ============================ -->
+  <section class="band band-inset" id="how">
+    <div class="wrap sec sec-plain">
       <div class="sec-body">
         <h2 class="sech">Une alerte arrive. Cinq étapes plus tard, vous décidez.</h2>
-        <p class="lede">Les mêmes cinq étapes se déroulent pour chaque alerte, dans le même ordre, et chacune consigne ce qu'elle a fait. La quatrième, c'est une personne — et rien au-delà n'a lieu sans elle.</p>
+        <p class="lede">Chaque alerte passe par les mêmes cinq étapes, dans le même ordre. La quatrième, c'est vous.</p>
 
         <div class="flow">
           <ol class="flow-track">
             <li class="flow-node">
               <span class="fn-n">Étape 1</span>
               <span class="fn-t">Une alerte arrive</span>
-              <span class="fn-d">Depuis votre SIEM, par webhook ou par interrogation régulière. Vérifiée, et dédoublonnée pour qu'une même alerte ne soit jamais triée deux fois.</span>
+              <span class="fn-d">Quelque chose a semblé anormal sur votre réseau. Vos outils de sécurité l'envoient ici.</span>
             </li>
             <li class="flow-node">
               <span class="fn-n">Étape 2</span>
-              <span class="fn-t">Le contexte est rassemblé</span>
-              <span class="fn-d">Cette adresse est-elle connue comme malveillante ? Ce mot de passe a-t-il fuité ? Une source sans clé est marquée <em>pas interrogée</em>, jamais devinée.</span>
+              <span class="fn-t">Le contexte est ajouté</span>
+              <span class="fn-d">Cette adresse est-elle connue pour des attaques ? Ce mot de passe a-t-il fuité ? MENATER se renseigne.</span>
             </li>
             <li class="flow-node">
               <span class="fn-n">Étape 3</span>
-              <span class="fn-t">L'IA propose</span>
-              <span class="fn-d">Un verdict, un niveau de confiance, et le raisonnement derrière les deux. Une proposition — jamais un ordre.</span>
+              <span class="fn-t">L'IA donne son avis</span>
+              <span class="fn-d">Ce qu'elle pense que c'est, à quel point elle en est sûre, et pourquoi. Un avis — pas un ordre.</span>
             </li>
             <li class="flow-node flow-gate">
               <span class="fn-n">Étape 4</span>
               <span class="fn-you">Vous</span>
               <span class="fn-t">Vous décidez</span>
-              <span class="fn-d">La proposition vous parvient dans la console, et sur Slack ou Discord si vous le souhaitez. Tant que vous n'avez pas répondu, rien ne s'exécute.</span>
+              <span class="fn-d">Elle vous demande, à l'écran ou dans votre messagerie. Rien n'arrive tant que vous n'avez pas répondu.</span>
             </li>
             <li class="flow-node">
               <span class="fn-n">Étape 5</span>
               <span class="fn-t">C'est consigné</span>
-              <span class="fn-d">Une ligne dans un journal auquel on ajoute et que l'on ne modifie jamais, scellée à celle qui la précède. Une falsification se voit.</span>
+              <span class="fn-d">Une trace de ce qui s'est passé, que personne ne peut modifier discrètement après coup.</span>
             </li>
           </ol>
 
           <ul class="flow-outcomes">
             <li>
-              <span class="o-k ok-green">Vous approuvez</span>
-              <span class="o-v">L'action que vous avez approuvée s'exécute, et elle seule.</span>
+              <span class="o-k ok-green">Vous dites oui</span>
+              <span class="o-v">Cette chose-là se fait. Rien d'autre.</span>
             </li>
             <li>
-              <span class="o-k ok-grey">Vous refusez</span>
-              <span class="o-v">Rien ne s'exécute. Le refus est consigné, et c'est lui qui mesure l'IA.</span>
+              <span class="o-k ok-grey">Vous dites non</span>
+              <span class="o-v">Rien ne se fait.</span>
             </li>
             <li>
               <span class="o-k ok-orange">Vous ne répondez pas</span>
-              <span class="o-v">Rien ne s'exécute. L'alerte escalade vers un humain, au lieu d'expirer en silence.</span>
+              <span class="o-v">Rien ne se fait. L'alerte remonte à une personne au lieu d'expirer en silence.</span>
             </li>
           </ul>
 
-          <p class="flow-note"><b>À l'installation, l'étape 4 ne se déclenche même pas.</b> La console démarre en mode observation : elle consigne ce qu'elle aurait proposé et n'exécute strictement rien, jusqu'à ce que votre équipe ait vu passer assez d'alertes réelles pour lui faire confiance.</p>
+          <p class="flow-note"><b>Sur une installation neuve, l'étape 4 n'arrive même pas.</b> MENATER se contente d'observer : il note ce qu'il aurait suggéré, et ne fait strictement rien, jusqu'à ce que vous décidiez de l'activer.</p>
         </div>
-
-        <details class="fold">
-          <summary>
-            <span>Ce que fait réellement le moteur en dessous</span>
-            <span class="hint">6 workflows · échanges typés</span>
-          </summary>
-          <div class="fold-body">
-            <p class="prose">MENATER exécute son propre moteur. Il n'y a aucune plateforme de workflows à installer et aucun second produit qui devrait être joignable pour qu'une alerte soit triée — un workflow ne peut donc pas être à moitié déployé, renommé dans un éditeur, ou laissé non publié. Les cinq étapes ci-dessus sont cinq workflows aux entrées et sorties fixes et typées ; un sixième est le gestionnaire d'erreurs, déclaré sur les cinq autres et appelé seulement depuis leurs branches d'échec.</p>
-            <ul class="rows">
-              <li>
-                <span class="t">Une jonction attend</span>
-                <span class="d">Une étape à plusieurs entrées ne démarre pas dès que l'une d'elles a répondu. L'enrichissement assemblerait sinon un tiers de ses sources — <b>sans erreur, sans trace, et avec un résultat plausible.</b></span>
-              </li>
-              <li>
-                <span class="t">Réessayer, puis échouer en le nommant</span>
-                <span class="d">Chaque appel externe réessaie avec un délai croissant, en respectant l'attente suggérée comme un plancher plutôt qu'en la raccourcissant. Quand il échoue quand même, il échoue en le nommant : une source qu'on n'a pas pu interroger n'est pas une source qui n'a rien dit.</span>
-              </li>
-              <li>
-                <span class="t">La vue non réduite</span>
-                <span class="d">La file recoud les exécutions en dossiers, et deux formes de panne disparaissent dans cette réduction. Un écran séparé les montre telles quelles — chaînes rompues, exécutions rattachées à aucune alerte, journal cherchable, et un rejeu qui <b>refuse</b> quand l'alerte d'origine est inconnue.</span>
-              </li>
-            </ul>
-          </div>
-        </details>
       </div>
     </div>
   </section>
 
-  <!-- ===================== 03 · WHAT YOU GET ===================== -->
-  <section class="band band-inset" id="screens">
-    <div class="wrap sec">
-      <div class="sec-rail">
-        <span class="num">03</span>
-        <span class="lbl">Ce que vous obtenez</span>
-      </div>
+  <!-- ============================ WHAT IT DOES ============================ -->
+  <section class="band" id="does">
+    <div class="wrap sec sec-plain">
       <div class="sec-body">
-        <h2 class="sech">Trois écrans font l'essentiel du travail.</h2>
-        <p class="lede">Une console, une adresse, un mot de passe. Elle contient dix onglets, mais une journée ordinaire se passe dans trois d'entre eux.</p>
+        <h2 class="sech">Trois choses, sur un seul écran.</h2>
 
         <div class="grid g3">
           <article class="card">
-            <h3>La file d'alertes</h3>
-            <p>Toutes les alertes, les plus urgentes d'abord. Ouvrez une ligne et vous avez toute l'histoire : ce qui est arrivé, ce qu'on a appris, ce que l'IA en pense, et ce qu'elle veut faire.</p>
+            <h3>Il trie vos alertes</h3>
+            <p>Les urgentes d'abord, le reste hors de votre chemin. Ouvrez-en une et vous avez toute l'histoire sur une seule page.</p>
           </article>
           <article class="card">
-            <h3>Analyse de code</h3>
-            <p>L'autre moitié de la console lit votre code et y cherche les failles qu'un attaquant utiliserait — un dossier, un fichier ou un dépôt GitHub. Chaque trouvaille dit ce qui peut arriver et comment y remédier.</p>
+            <h3>Il vérifie votre code</h3>
+            <p>Pointez-le sur un dossier ou un projet GitHub et il cherche les erreurs qu'un attaquant utiliserait. Chacune dit ce qui pourrait arriver, et comment la corriger.</p>
           </article>
           <article class="card">
-            <h3>Recherche</h3>
-            <p>Collez une adresse, un domaine, une empreinte de fichier ou un e-mail et posez la question directement. La réponse dit toujours combien de sources ont réellement répondu.</p>
+            <h3>Il répond à une question</h3>
+            <p>Collez une adresse, un site ou un e-mail et demandez ce qu'on en sait. Il vous dit toujours combien de sources ont réellement répondu.</p>
           </article>
         </div>
 
         <figure class="shot">
   <img data-shot="06-code" src="/shots/06-code.png" alt="L'onglet Code : une bande en quatre étapes — « lecture de votre code », « recherche de failles », « second avis », « votre rapport » — puis un sélecteur de cible proposant un dossier, un fichier ou un dépôt GitHub, et un choix entre tout le projet et seulement ce qui a changé." width="2880" height="1800" loading="lazy" decoding="async">
-  <figcaption>L'analyse de code. Les quatre étapes sont nommées avant que quoi que ce soit ne démarre, et la question de la portée dit franchement quel choix coûte le plus cher.</figcaption>
+  <figcaption>La vérification du code. Les quatre étapes sont nommées avant que quoi que ce soit ne démarre, et la question de la portée dit franchement laquelle coûte le plus cher.</figcaption>
 </figure>
-
-        <details class="fold">
-          <summary>
-            <span>Les quatre autres écrans</span>
-            <span class="hint">4 captures d'écran</span>
-          </summary>
-          <div class="fold-body">
-            <div class="gallery">
-              <figure class="shot">
-  <img data-shot="02-ingestion" src="/shots/02-ingestion.png" alt="L'onglet Ingestion : trois architectures de livraison côte à côte avec leurs coûts énoncés, l'hybride sélectionnée, et un tableau associant P1 à P4 au webhook ou à l'interrogation régulière avec le délai que chacune implique." width="2880" height="1800" loading="lazy" decoding="async">
-  <figcaption>Choisir une architecture de livraison. Chaque option dit ce qu'elle apporte <em>et</em> ce qu'elle coûte, et le tableau annonce la moitié d'un intervalle d'interrogation — le délai moyen ajouté, pas l'intervalle, parce que c'est ce chiffre-là qu'on met en balance avec une P1.</figcaption>
-</figure>
-              <figure class="shot">
-  <img data-shot="03-tracking" src="/shots/03-tracking.png" alt="L'onglet Suivi : 120 exécutions inspectées, 118 rattachées à une alerte, un avertissement disant que la fenêtre observée est pleine, et trois sous-onglets pour les chaînes de traitement, les exécutions orphelines et le journal." width="2880" height="1800" loading="lazy" decoding="async">
-  <figcaption>La vue non réduite. Elle compte les exécutions que la file n'a pas pu vous montrer, et prévient quand la fenêtre observée est pleine — <em>au-delà, la console ne sait pas</em> — plutôt que de laisser une lecture bornée passer pour une lecture complète.</figcaption>
-</figure>
-              <figure class="shot">
-  <img data-shot="05-lookup" src="/shots/05-lookup.png" alt="L'onglet Recherche après interrogation de 8.8.8.8 : un verdict « rien contre elle », la ligne « 1 source sur 4 a répondu », et deux fiches de source marquées « pas interrogée »." width="2880" height="1800" loading="lazy" decoding="async">
-  <figcaption>Un verdict qui énonce sa propre portée. Une source a répondu, et le panneau le dit à côté du verdict ; les deux sources sans clé sont <b>pas interrogées</b> — une question que personne n'a posée, pas un trou dans ce qu'on sait.</figcaption>
-</figure>
-              <figure class="shot">
-  <img data-shot="07-health" src="/shots/07-health.png" alt="Le résultat du test de connectivité : un bandeau rouge indiquant « au moins un maillon est rompu, 9 vérifications au vert, 5 à surveiller, 1 en échec, 0 indéterminée — en 14 ms », puis les lignes par vérification pour la base de données, le schéma SQL, la clé du modèle de tri et quatre sources d'enrichissement." width="2880" height="1800" loading="lazy" decoding="async">
-  <figcaption>Le test de connectivité sur la même installation. <b>Neuf au vert, cinq à surveiller, une en échec, zéro indéterminée</b> — quatre états, si bien que « en cours de vérification » n'est jamais rapporté comme « rompu ». Chaque ligne nomme la conséquence puis le remède : la clé de modèle manquante annonce que chaque alerte prendra le verdict de repli, et où mettre la clé.</figcaption>
-</figure>
-            </div>
-          </div>
-        </details>
-
-        <details class="fold">
-          <summary>
-            <span>Les dix onglets, une ligne chacun</span>
-            <span class="hint">10 onglets · d'Alertes à Réglages</span>
-          </summary>
-          <div class="fold-body">
-            <div class="tablewrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th scope="col">Onglet</th>
-                    <th scope="col">Ce qu'on y trouve</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr><td class="m">Alerts</td><td>La file et la fiche d'incident. Chaque valeur d'une alerte porte un raccourci vers Recherche avec la question déjà posée.</td></tr>
-                  <tr><td class="m">Code</td><td>Lancer une analyse de code et lire le rapport. Elle continue de tourner pendant que vous travaillez dans un autre onglet.</td></tr>
-                  <tr><td class="m">Ingestion</td><td>Comment les alertes entrent : le mode de livraison, les sources sur chacun, et le pipeline tel qu'il s'exécute.</td></tr>
-                  <tr><td class="m">Rules</td><td>Déclarez ce qui est normal chez vous — le scanner autorisé, la fenêtre de sauvegarde — avec un essai à blanc qui répond <em>quelle règle correspondrait à cette alerte</em> sans rien toucher.</td></tr>
-                  <tr><td class="m">Tracking</td><td>La vue non réduite : chaînes rompues, exécutions orphelines, journal cherchable, rejeu.</td></tr>
-                  <tr><td class="m">Metrics</td><td>Deux taux, jamais confondus : ce que l'IA a qualifié de faux positif, et ce qu'un humain a refusé.</td></tr>
-                  <tr><td class="m">Health</td><td>Un bouton qui teste chaque maillon de la chaîne, et neuf alertes de test à y faire passer.</td></tr>
-                  <tr><td class="m">Lookup</td><td>Du renseignement sur une valeur, plus une vérification de mot de passe compromis dont l'empreinte ne quitte jamais votre navigateur.</td></tr>
-                  <tr><td class="m">Guide</td><td>La documentation, cherchable — et la recherche lit aussi le glossaire, si bien qu'un mot cherché dans le mauvais vocabulaire trouve quand même sa section.</td></tr>
-                  <tr><td class="m">Settings</td><td>Clés, sources, moteurs — et une liste de contrôle nommant tout ce qui manque encore avant qu'une alerte puisse être triée.</td></tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </details>
-
-        <details class="fold">
-          <summary>
-            <span>Six thèmes, et pourquoi le sélecteur en haut n'est pas un gadget</span>
-            <span class="hint">6 palettes · contraste testé</span>
-          </summary>
-          <div class="fold-body">
-            <p class="prose">Le sélecteur dans l'en-tête repeint cette page avec les six vraies palettes de la console, depuis les mêmes jetons de couleur. Un test calcule les rapports de contraste WCAG et <b>refuse</b> une palette qui passe en dessous — il a rattrapé un rouge d'échec à 2,5:1, sur l'écran qui dépend le plus du rouge. Et la couleur ne porte jamais le sens à elle seule ici : chaque couleur de risque est doublée d'un mot, si bien que la console fonctionne encore si vous ne les distinguez pas.</p>
-          </div>
-        </details>
       </div>
     </div>
   </section>
 
-  <!-- ===================== 04 · GUARDRAILS ===================== -->
-  <section class="band" id="guardrails">
-    <div class="wrap sec">
-      <div class="sec-rail">
-        <span class="num">04</span>
-        <span class="lbl">Garde-fous</span>
-      </div>
+  <!-- ============================ WHY TRUST IT ============================
+       Four lines, not four paragraphs. Each opens with the claim, because the
+       first words of a line are what a scanning eye actually reads. -->
+  <section class="band band-inset" id="trust">
+    <div class="wrap sec sec-plain">
       <div class="sec-body">
-        <h2 class="sech">La liste de ce qu'il refuse de faire, c'est ça la fonctionnalité.</h2>
-        <p class="lede">Quatre limites, chacune écrite dans le code plutôt que promise dans une présentation. C'est ce qui rend une IA sûre à pointer toute la journée sur du texte écrit par un attaquant.</p>
+        <h2 class="sech">Ce qu'il ne fera jamais.</h2>
 
-        <div class="grid g2">
-          <article class="card">
-            <h3>Il observe avant d'agir</h3>
-            <p>Une installation neuve n'exécute rien. Elle consigne la décision qu'elle aurait prise, et attend que votre équipe ait mesuré, sur de vraies alertes, à quelle fréquence elle n'était pas d'accord. C'est cette mesure qui ouvre la porte, pas une date.</p>
-          </article>
-          <article class="card">
-            <h3>Quatre actions, et pas de cinquième</h3>
-            <p>Isoler temporairement une machine — avec expiration et annulation automatique — ouvrir un ticket, escalader, ou clore en faux positif. Rien d'autre ne peut être ajouté. Et l'isolement refuse de s'exécuter quand il n'a aucune machine à nommer.</p>
-          </article>
-          <article class="card">
-            <h3>L'assistant ne peut pas agir</h3>
-            <p>Un panneau répond aux questions sur votre installation au moyen de sept consultations en lecture seule, et rien d'autre. Une instruction cachée dans un journal arrive à un modèle qui n'a aucun moyen d'y obéir.</p>
-          </article>
-          <article class="card">
-            <h3>Tout reste sur votre machine</h3>
-            <p>Trois conteneurs sur votre hôte, un seul port publié. Vos alertes vont au modèle que vous avez choisi avec la clé que vous avez fournie, et nulle part ailleurs. Pas de compte, pas de télémétrie, aucun nuage d'éditeur sur le chemin.</p>
-          </article>
-        </div>
-
-        <figure class="shot">
-  <img data-shot="04-case" src="/shots/04-case.png" alt="Une fiche d'incident pour une alerte critique de rançongiciel : verdict de repli à confiance 0, quatre étapes de pipeline avec leurs durées, et un bloc d'approbation proposant une escalade." width="2880" height="1800" loading="lazy" decoding="async">
-  <figcaption>Un incident. Le verdict nomme sa propre cause, la destination est <span class="dash">—</span> parce que la détection n'en a consigné aucune, et l'action proposée est derrière <b>Approbation requise</b>. Rien n'a été exécuté.</figcaption>
-</figure>
-
-        <div class="figs">
-          <div class="fig">
-            <span class="n">400 / 400</span>
-            <span class="l">alertes acceptées en charge</span>
-            <span class="c">50 en parallèle · ~134 par seconde · chaque chaîne réglée, rien laissé en cours</span>
-          </div>
-          <div class="fig">
-            <span class="n">1 of 12</span>
-            <span class="l">doublons acceptés</span>
-            <span class="c">12 copies simultanées d'une même alerte → 1 acceptée, 11 déjà vues, zéro erreur</span>
-          </div>
-          <div class="fig">
-            <span class="n">0</span>
-            <span class="l">maillons rompus dans le journal d'audit</span>
-            <span class="c">revérifié sur 2 644 lignes écrites sous charge concurrente</span>
-          </div>
-          <div class="fig">
-            <span class="n">1,278</span>
-            <span class="l">tests au vert</span>
-            <span class="c">913 console · 365 analyse de code · vérification de types propre</span>
-          </div>
-        </div>
-
-        <details class="fold">
-          <summary>
-            <span>Les conditions dans lesquelles ces chiffres ont été relevés</span>
-            <span class="hint">une machine · reproductible</span>
-          </summary>
-          <div class="fold-body">
-            <p class="prose">Exécuté contre <span class="mono">docker compose up</span> et rien d'autre. C'est une passe de qualité sur une machine, pas un banc d'essai publié ; ce qui compte est que ce soit reproductible et que les conditions soient dites. <b>Elle a trouvé huit défauts, et ils ont été corrigés</b> — trois méritent d'être nommés : le point d'entrée disait aux émetteurs que leurs alertes <em>refusées</em> avaient été acceptées ; l'insertion de dédoublonnage n'était pas sûre face à une rafale et répondait par une erreur ; et le vérificateur d'audit signalait des maillons rompus sur des lignes saines. Un vérificateur qui crie au loup est un vérificateur qu'un auditeur cesse de croire, ce qui masquerait une vraie suppression dans le bruit.</p>
-          </div>
-        </details>
+        <ul class="claims">
+          <li>
+            <span class="c-t">Il n'agit jamais tout seul.</span>
+            <span class="c-d">Il peut faire exactement quatre choses, et chacune a besoin de votre feu vert.</span>
+          </li>
+          <li>
+            <span class="c-t">Il ne devine jamais.</span>
+            <span class="c-d">Quand il ne sait pas, il le dit. Il ne remplit jamais un blanc par une réponse plausible.</span>
+          </li>
+          <li>
+            <span class="c-t">Il ne cache jamais un problème.</span>
+            <span class="c-d">Ce qui a cassé n'est jamais affiché comme allant bien. Un écran existe dont c'est le seul rôle.</span>
+          </li>
+          <li>
+            <span class="c-t">Il n'envoie rien ailleurs.</span>
+            <span class="c-d">Pas de compte, pas de traçage. Vos alertes vont à l'IA que vous avez choisie, et nulle part ailleurs.</span>
+          </li>
+        </ul>
       </div>
     </div>
   </section>
 
-  <!-- ===================== 05 · INSTALL ===================== -->
-  <section class="band band-inset" id="install">
-    <div class="wrap sec">
-      <div class="sec-rail">
-        <span class="num">05</span>
-        <span class="lbl">Installation</span>
-      </div>
+  <!-- ============================ GET IT ============================ -->
+  <section class="band" id="get">
+    <div class="wrap sec sec-plain">
       <div class="sec-body">
-        <h2 class="sech">Deux commandes, sur n'importe quel hôte doté de Docker.</h2>
-        <p class="lede">Rien d'autre à installer : pas de base de données à configurer, pas de schéma à appliquer à la main, pas de seconde machine. La base et l'analyseur ne sont joignables que depuis l'intérieur de la pile.</p>
+        <h2 class="sech">Deux commandes, et c'est à vous.</h2>
+        <p class="lede">Il vous faut Docker. Rien d'autre — pas de base de données à monter, pas de deuxième machine.</p>
 
 <pre><code><span class="c"># renseignez les deux mots de passe</span>
 cp .env.example .env
 
-<span class="c"># base de données + console + analyse de code</span>
 docker compose up -d --build
 
 <span class="a">→ http://localhost:4400</span></code></pre>
 
-        <p class="prose"><strong>Elle démarre en trois minutes et ne trie rien.</strong> Ce n'est pas un défaut : chacun des quatre points ci-dessous est un choix que la console refuse de faire à votre place, et une liste de contrôle dans les réglages les suit tous les quatre jusqu'à ce qu'ils soient faits.</p>
+        <p class="prose">Il démarre en trois minutes, et il ne trie encore rien — vous devez lui dire d'où viennent vos alertes et quelle IA utiliser. Il vous affiche la liste de ce qui manque. <b>La documentation vous accompagne pour tout ça.</b></p>
 
-        <div class="tablewrap">
-          <table>
-            <thead>
-              <tr>
-                <th scope="col">#</th>
-                <th scope="col">Quoi</th>
-                <th scope="col">Si vous le sautez</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr><td class="m">1</td><td>Un secret partagé pour le point d'entrée des alertes</td><td>La porte reste <b>fermée</b>. Ici un secret vide la ferme au lieu de l'ouvrir.</td></tr>
-              <tr><td class="m">2</td><td>Activer le point d'entrée</td><td>Toutes les alertes sont refusées.</td></tr>
-              <tr><td class="m">3</td><td>Une clé pour le modèle d'IA</td><td>Chaque alerte atterrit chez un humain avec une confiance de zéro. Rien n'est perdu ; rien n'est trié.</td></tr>
-              <tr><td class="m">4</td><td>Un outil qui vous envoie des alertes</td><td>Aucune alerte n'arrive.</td></tr>
-            </tbody>
-          </table>
+        <div class="hero-cta">
+          <a class="btn" href="/docs">Lire la documentation</a>
+          <a class="textlink" href="https://github.com/S2K7x/Menater" target="_blank" rel="noopener noreferrer">Voir le code sur GitHub →</a>
         </div>
-
-        <p class="prose">Les clés de renseignement et les notifications de messagerie sont facultatives — une source sans clé s'affiche <span class="pill pill-grey">Pas interrogée</span> plutôt que d'être comblée.</p>
-      </div>
-    </div>
-  </section>
-
-  <!-- ===================== 06 · LIMITS ===================== -->
-  <section class="band" id="limits">
-    <div class="wrap sec">
-      <div class="sec-rail">
-        <span class="num">06</span>
-        <span class="lbl">Limites</span>
-      </div>
-      <div class="sec-body">
-        <h2 class="sech">Ce qu'il ne fait pas.</h2>
-        <p class="lede">Dit ici pour la même raison que la console le dit : une page qui n'énumère que ce qui marche est un vert qui n'a pas été gagné.</p>
-        <ul class="rows">
-          <li>
-            <span class="t">Les deux moitiés ne se parlent pas</span>
-            <span class="d">Une analyse de code ne crée aucune alerte dans la file, et une alerte ne lance aucune analyse. Elles partagent une interface et une connexion ; les relier est la prochaine priorité.</span>
-          </li>
-          <li>
-            <span class="t">La connexion n'identifie personne</span>
-            <span class="d">L'accès est un simple mot de passe. Il protège la console ; il ne distingue pas un approbateur d'un autre, et la ligne d'audit le dit exactement, plutôt que de sous-entendre un nom qu'elle n'a pas.</span>
-          </li>
-          <li>
-            <span class="t">C'est un projet, pas un produit</span>
-            <span class="d">Auto-hébergé, open source, sans contrat de support et sans société derrière. Lisez le code avant de le pointer sur quoi que ce soit d'important — ce qui est de toute façon la bonne chose à faire avec n'importe lequel de ces outils.</span>
-          </li>
-        </ul>
       </div>
     </div>
   </section>
@@ -1171,6 +945,9 @@ docker compose up -d --build
      ------------------------------------------------------------------ */
   var nav = document.getElementById('topnav');
   var rail = nav.parentElement;
+  // Whichever of the two actually scrolls is the one to measure and move.
+  var box = nav.scrollWidth > nav.clientWidth || nav.scrollHeight > nav.clientHeight
+    ? nav : (nav.closest('.docs-side') || nav);
   var links = [].slice.call(nav.querySelectorAll('a'));
   var targets = links
     .map(function (a) { return { a: a, el: document.querySelector(a.getAttribute('href')) }; })
@@ -1195,12 +972,18 @@ docker compose up -d --build
     links.forEach(function (a) { a.removeAttribute('aria-current'); });
     if (current && window.scrollY > 40) {
       current.a.setAttribute('aria-current', 'true');
-      // Keep the active entry reachable when the bar is scrolled sideways.
+      // Keep the active entry reachable. The front page's bar scrolls
+      // sideways; the documentation sidebar scrolls DOWN, and sixteen entries
+      // in a column will not all fit. An entry you cannot see is an entry that
+      // does not exist for whoever is hunting it, in either direction.
       var r = current.a.getBoundingClientRect();
-      var nr = nav.getBoundingClientRect();
-      if (r.left < nr.left || r.right > nr.right) {
-        nav.scrollLeft += r.left - nr.left - 24;
+      var nr = box.getBoundingClientRect();
+      if (box.scrollWidth > box.clientWidth && (r.left < nr.left || r.right > nr.right)) {
+        box.scrollLeft += r.left - nr.left - 24;
         markOverflow();
+      }
+      if (box.scrollHeight > box.clientHeight && (r.top < nr.top || r.bottom > nr.bottom)) {
+        box.scrollTop += r.top - nr.top - 60;
       }
     }
   }
@@ -1227,9 +1010,24 @@ docker compose up -d --build
     carry();
   }
 
+  // The copy button is on the front page only; this script is shared, so its
+  // absence is a normal state and not a reason to take the rest down with it.
+  /* The documentation's table of contents. It ships OPEN, because a closed
+     <details> hides its content whatever the stylesheet says — so a CSS-only
+     "open from 1000 px" is not expressible. Below that width it is collapsed
+     here instead, and the state follows the viewport as it changes. With no
+     script it stays open: longer on a phone, never missing. */
+  var toc = document.getElementById('toc');
+  if (toc && window.matchMedia) {
+    var narrow = window.matchMedia('(max-width: 999px)');
+    var fit = function (m) { toc.open = !m.matches; };
+    fit(narrow);
+    if (narrow.addEventListener) narrow.addEventListener('change', fit);
+  }
+
   var copy = document.getElementById('copy');
   var cmd = document.getElementById('cmd');
-  copy.addEventListener('click', function () {
+  if (copy && cmd) copy.addEventListener('click', function () {
     var text = cmd.textContent;
     var done = function () {
       copy.textContent = S.copied;
@@ -1243,6 +1041,5 @@ docker compose up -d --build
   });
 })();
 </script>
-
 </body>
 </html>
