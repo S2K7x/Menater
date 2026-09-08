@@ -1,755 +1,55 @@
-<title data-i18n="meta.title">MENATER — AI alert triage you stay in control of</title>
-<meta name="description" data-i18n-content="meta.description" content="Self-hosted security console: an AI reads your alerts and proposes a verdict, a human approves every action, and every step is written down. Docker, three containers, open source.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;700&display=swap">
-
-<style>
-/* ==========================================================================
-   MENATER — presentation page.
-
-   The palette is the product's own, token for token (dashboard/src/theme/
-   themes.css). The six themes are here in full because the design system is
-   part of what this page is presenting: it is a demonstration, not a swatch
-   picture. `data-palette` on <html>, defaulting to `grayed` — the brand's.
-
-   Every rule in DESIGN.md § 12 applies to this page too: no gradients, no
-   glass, no radius above 4 px, no superlatives, no fabricated metrics, and
-   no green that was not earned.
-   ========================================================================== */
-
-:root,
-[data-palette='grayed'] {
-  --bg:#232830; --surface:#2b313a; --surface-2:#333a45; --panel:#1f242b; --hero:#171b21;
-  --fg:#f2f4f7; --muted:#98a2b3; --faint:#757f8c;
-  --line:#3d4550; --line-strong:#4d5663;
-  --accent:#c3f53c; --accent-dim:#9dc72a; --accent-fg:#171b21;
-  --red:#ff6b6b; --red-bg:#3a2226; --orange:#ffb020; --orange-bg:#382c18;
-  --green:#6ee7a0; --green-bg:#1d3329; --blue:#7cc4ff; --blue-bg:#1b2b3a; --grey:#8d97a5;
-  --shadow:0 18px 40px rgba(0,0,0,.35);
-  color-scheme: dark;
-}
-[data-palette='punk'] {
-  --bg:#3b3d2a; --surface:#45472f; --surface-2:#515338; --panel:#33351f; --hero:#24261a;
-  --fg:#f5e7bd; --muted:#bfb389; --faint:#9d9672;
-  --line:#565839; --line-strong:#6d6f47;
-  --accent:#c31f1b; --accent-dim:#a01916; --accent-fg:#f5e7bd;
-  --red:#ff997c; --red-bg:#4a2a1f; --orange:#f0b429; --orange-bg:#47381a;
-  --green:#b7d44a; --green-bg:#35401f; --blue:#9fc3c9; --blue-bg:#29383a; --grey:#a99f7c;
-  --shadow:0 18px 40px rgba(0,0,0,.45);
-  color-scheme: dark;
-}
-[data-palette='blued'] {
-  --bg:#1f31c4; --surface:#2739d6; --surface-2:#3548e6; --panel:#182699; --hero:#111c78;
-  --fg:#ffffff; --muted:#b9c4ff; --faint:#909ff5;
-  --line:#3d50e0; --line-strong:#5568f5;
-  --accent:#c8f24b; --accent-dim:#a5cc33; --accent-fg:#16249b;
-  --red:#ffb2a8; --red-bg:#3a2a92; --orange:#ffcf5c; --orange-bg:#35318f;
-  --green:#c8f24b; --green-bg:#23408c; --blue:#a8e5ff; --blue-bg:#1e3bb4; --grey:#9fabf0;
-  --shadow:0 18px 40px rgba(10,20,100,.5);
-  color-scheme: dark;
-}
-[data-palette='attck'] {
-  --bg:#7a1c08; --surface:#8f2410; --surface-2:#a32d15; --panel:#5e1406; --hero:#3d0d03;
-  --fg:#fff3e4; --muted:#f5bfa0; --faint:#e0a58a;
-  --line:#b03a1c; --line-strong:#d04f28;
-  --accent:#ffdd1c; --accent-dim:#d9b800; --accent-fg:#5e1406;
-  --red:#ffa796; --red-bg:#6d1a08; --orange:#ffdd1c; --orange-bg:#6b2a08;
-  --green:#9ce5a8; --green-bg:#2f4a1c; --blue:#7fd4ff; --blue-bg:#1d3a5c; --grey:#e0a487;
-  --shadow:0 18px 40px rgba(60,10,0,.5);
-  color-scheme: dark;
-}
-[data-palette='acme'] {
-  --bg:#f4f1ea; --surface:#ffffff; --surface-2:#ebe7dd; --panel:#fbf9f5; --hero:#e4dfd2;
-  --fg:#16150f; --muted:#5c5a51; --faint:#8a877c;
-  --line:#d9d4c8; --line-strong:#bdb7a8;
-  --accent:#e01e0b; --accent-dim:#b81909; --accent-fg:#ffffff;
-  --red:#c71e10; --red-bg:#fbe2de; --orange:#9b5d00; --orange-bg:#fbeed6;
-  --green:#1e7643; --green-bg:#dcf0e3; --blue:#17548f; --blue-bg:#dde9f7; --grey:#6f6c62;
-  --shadow:0 12px 28px rgba(22,21,15,.12);
-  color-scheme: light;
-}
-[data-palette='dark'] {
-  --bg:#16181c; --surface:#1e2126; --surface-2:#282c33; --panel:#101216; --hero:#0a0b0e;
-  --fg:#f0f2f5; --muted:#9aa1ad; --faint:#6a7280;
-  --line:#2c3038; --line-strong:#3b414b;
-  --accent:#1269f5; --accent-dim:#0955cf; --accent-fg:#ffffff;
-  --red:#f4636b; --red-bg:#33191d; --orange:#f0a63c; --orange-bg:#33260f;
-  --green:#34c77b; --green-bg:#122e20; --blue:#56a8ff; --blue-bg:#14263a; --grey:#838b98;
-  --shadow:0 18px 40px rgba(0,0,0,.55);
-  color-scheme: dark;
-}
-
-:root {
-  --display:'Archivo Black','Helvetica Neue','Arial Narrow',Impact,system-ui,sans-serif;
-  --sans:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
-  --mono:ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace;
-  --radius:4px;
-  --swap:120ms;
-  --shell:1280px;
-  --rail:132px;
-}
-@media (prefers-reduced-motion: reduce) { :root { --swap: 0s; } }
-
-*, *::before, *::after { box-sizing: border-box; }
-
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--fg);
-  font-family: var(--sans);
-  font-size: 0.94rem;
-  line-height: 1.6;
-  -webkit-font-smoothing: antialiased;
-  transition: background var(--swap) linear, color var(--swap) linear;
-}
-
-::selection { background: var(--accent); color: var(--accent-fg); }
-
-a { color: var(--accent); text-underline-offset: 3px; text-decoration-thickness: 1px; }
-a:hover { color: var(--accent-dim); }
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
-
-h1, h2, h3 { font-family: var(--display); font-weight: 400; margin: 0; text-wrap: balance; }
-p { margin: 0; }
-ul { margin: 0; padding: 0; list-style: none; }
-
-/* --- The instrument devices ------------------------------------------- */
-
-.kick {
-  font-family: var(--mono);
-  font-size: 0.68rem;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--faint);
-  margin: 0;
-}
-.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
-.pill {
-  display: inline-block;
-  font-family: var(--mono);
-  font-size: 0.66rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  padding: 2px 6px;
-  border-radius: var(--radius);
-  white-space: nowrap;
-}
-.pill-red { color: var(--red); background: var(--red-bg); }
-.pill-orange { color: var(--orange); background: var(--orange-bg); }
-.pill-green { color: var(--green); background: var(--green-bg); }
-.pill-blue { color: var(--blue); background: var(--blue-bg); }
-.pill-grey { color: var(--fg); background: var(--surface-2); }
-.dash { color: var(--faint); font-family: var(--mono); }
-
-/* --- Shell and section grid -------------------------------------------- */
-
-.wrap { max-width: var(--shell); margin: 0 auto; padding: 0 24px; }
-
-.band { border-top: 1px solid var(--line); }
-/* The header is sticky and two rows tall: an anchor must not land under it. */
-section[id] { scroll-margin-top: 104px; }
-html { scroll-behavior: smooth; }
-@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
-.band-inset { background: var(--panel); }
-
-.sec { display: grid; gap: 32px; padding-block: 64px; align-items: start; }
-@media (min-width: 900px) {
-  .sec { grid-template-columns: var(--rail) minmax(0, 1fr); gap: 40px; }
-  .sec-rail { position: sticky; top: 122px; }
-}
-.sec-rail { display: flex; flex-direction: column; gap: 6px; }
-.sec-rail .num {
-  font-family: var(--mono); font-size: 0.72rem; color: var(--accent);
-  letter-spacing: 0.1em;
-}
-.sec-rail .lbl {
-  font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.18em;
-  text-transform: uppercase; color: var(--faint);
-}
-/* Which of the four groups you are in. Repeated on every section on purpose:
-   it is a running header, not an explanation — its job is to say where you
-   are, wherever you happened to land. */
-.sec-rail .grp {
-  font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.14em;
-  text-transform: uppercase; color: var(--faint);
-  padding-bottom: 6px; margin-bottom: 2px; border-bottom: 1px solid var(--line);
-}
-.sec-body { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
-
-h2.sech { font-size: clamp(1.4rem, 3vw, 2rem); line-height: 1.1; letter-spacing: -0.01em; }
-.lede { color: var(--muted); max-width: 68ch; font-size: 1rem; }
-.prose { max-width: 70ch; color: var(--muted); }
-.prose strong { color: var(--fg); font-weight: 500; }
-
-/* --- Header: identity row, then the section bar ------------------------- */
-
-.top {
-  position: sticky; top: 0; z-index: 30;
-  background: var(--bg);
-  border-bottom: 1px solid var(--line);
-  transition: background var(--swap) linear;
-}
-.top-head {
-  display: flex; align-items: center; gap: 10px;
-  min-height: 54px; flex-wrap: wrap; padding-block: 6px;
-}
-@media (min-width: 720px) { .top-head { gap: 16px; flex-wrap: nowrap; padding-block: 0; } }
-.lock { display: flex; align-items: center; gap: 10px; margin-right: auto; text-decoration: none; color: var(--fg); }
-.lock:hover { color: var(--fg); }
-.lock svg { color: var(--accent); display: block; flex: none; }
-.lock .word { font-family: var(--display); font-size: 1.05rem; letter-spacing: -0.01em; }
-.lock .tagline {
-  display: none;
-  font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.18em;
-  text-transform: uppercase; color: var(--faint);
-  padding-left: 10px; border-left: 1px solid var(--line-strong);
-}
-@media (min-width: 560px) { .lock .tagline { display: inline; } }
-
-/* The bar scrolls sideways when it does not fit, and SAYS SO: a bar that
-   scrolls without looking like it scrolls hides the sections at its end,
-   which for someone hunting one named section means they do not exist. */
-.navrail { position: relative; border-top: 1px solid var(--line); }
-.navrail::after {
-  content: ''; position: absolute; top: 0; right: 0; bottom: 0; width: 40px;
-  pointer-events: none; opacity: 0;
-  background: linear-gradient(to right, transparent, var(--bg));
-  transition: opacity 120ms linear;
-}
-.navrail[data-overflow='true']::after { opacity: 1; }
-
-.topnav {
-  display: flex; align-items: stretch; gap: 0;
-  overflow-x: auto; scrollbar-width: none; min-width: 0;
-}
-.topnav::-webkit-scrollbar { display: none; }
-.topnav a {
-  display: flex; align-items: center; gap: 7px;
-  padding: 11px 12px; white-space: nowrap;
-  font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.08em;
-  text-transform: uppercase; color: var(--muted); text-decoration: none;
-  border-bottom: 2px solid transparent;
-  min-height: 44px;
-}
-.topnav a:first-child { padding-left: 0; }
-.topnav a:hover { color: var(--fg); }
-.topnav a .n { color: var(--faint); font-size: 0.66rem; }
-.topnav a[aria-current='true'] { color: var(--fg); border-bottom-color: var(--accent); }
-.topnav a[aria-current='true'] .n { color: var(--accent); }
-.topnav .sep { align-self: center; width: 1px; height: 14px; background: var(--line-strong); margin: 0 10px; flex: none; }
-
-/* The repository link. The GitHub octocat is a BRAND MARK, so it keeps its
-   filled shape — the rule against filled icon sets is about icons competing
-   with the risk pills for the same pre-attentive channel, and this one sits in
-   the identity row, carries no state, and is the shape people scan for. It
-   takes `--muted` until hovered: findable, never louder than the sections. */
-.ghlink {
-  display: flex; align-items: center; gap: 7px;
-  color: var(--muted); text-decoration: none;
-  font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.12em;
-  text-transform: uppercase;
-  padding: 6px 10px; min-height: 32px;
-  border: 1px solid var(--line-strong); border-radius: var(--radius);
-}
-.ghlink:hover { color: var(--fg); border-color: var(--fg); }
-.ghlink svg { display: block; flex: none; }
-.ghlink span { display: none; }
-@media (min-width: 720px) { .ghlink span { display: inline; } }
-
-.foot-links { display: flex; gap: 18px; flex-wrap: wrap; }
-
-.picker { display: flex; align-items: center; gap: 6px; }
-.picker .kick { display: none; }
-@media (min-width: 640px) { .picker .kick { display: block; margin-right: 4px; } }
-.sw {
-  width: 22px; height: 22px; padding: 0; cursor: pointer;
-  border-radius: var(--radius);
-  border: 1px solid var(--line-strong);
-  position: relative;
-}
-.sw[aria-pressed='true'] { outline: 2px solid var(--accent); outline-offset: 2px; }
-.sw i { position: absolute; inset: 4px 4px auto auto; width: 8px; height: 8px; display: block; }
-
-/* --- Hero -------------------------------------------------------------- */
-
-.hero { padding-block: 72px 56px; display: flex; flex-direction: column; gap: 26px; }
-.hero h1 {
-  font-size: clamp(2.1rem, 5.4vw, 3.6rem);
-  line-height: 1.02;
-  letter-spacing: -0.015em;
-  max-width: 19ch;
-}
-.hero h1 em { font-style: normal; color: var(--accent); }
-.hero-sub { max-width: 62ch; font-size: 1.06rem; color: var(--muted); }
-.hero-sub b { color: var(--fg); font-weight: 500; }
-
-.hero-cta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
-.term {
-  display: flex; align-items: center; gap: 12px;
-  background: var(--hero); border: 1px solid var(--line);
-  border-radius: var(--radius); padding: 10px 12px;
-  font-family: var(--mono); font-size: 0.82rem; color: var(--fg);
-  overflow-x: auto;
-}
-.term .cue { color: var(--accent); user-select: none; }
-.term code { white-space: nowrap; }
-.copy {
-  font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase;
-  background: var(--accent); color: var(--accent-fg); border: 0; border-radius: var(--radius);
-  padding: 9px 14px; cursor: pointer; min-height: 36px;
-}
-.copy:hover { background: var(--accent-dim); }
-.textlink {
-  font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase;
-  color: var(--muted); text-decoration: none; border-bottom: 1px solid var(--line-strong); padding-bottom: 2px;
-}
-.textlink:hover { color: var(--fg); }
-
-.spec {
-  display: flex; flex-wrap: wrap; gap: 0;
-  border: 1px solid var(--line); border-radius: var(--radius);
-  background: var(--surface);
-}
-.spec div {
-  padding: 12px 16px; flex: 1 1 150px; border-right: 1px solid var(--line);
-}
-.spec div:last-child { border-right: 0; }
-.spec .v { font-family: var(--mono); font-size: 1.1rem; color: var(--fg); display: block; }
-.spec .k {
-  font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.14em;
-  text-transform: uppercase; color: var(--faint); display: block; margin-top: 2px;
-}
-
-/* --- Panels and grids -------------------------------------------------- */
-
-.grid { display: grid; gap: 16px; }
-.g2 { grid-template-columns: 1fr; }
-.g3 { grid-template-columns: 1fr; }
-@media (min-width: 720px) { .g2 { grid-template-columns: 1fr 1fr; } .g3 { grid-template-columns: 1fr 1fr; } }
-@media (min-width: 1040px) { .g3 { grid-template-columns: repeat(3, 1fr); } }
-
-.card {
-  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
-  padding: 18px; display: flex; flex-direction: column; gap: 10px;
-  transition: background var(--swap) linear, border-color var(--swap) linear;
-}
-.card h3 { font-size: 0.86rem; letter-spacing: 0.06em; text-transform: uppercase; }
-.card p { color: var(--muted); font-size: 0.9rem; }
-.card .where {
-  font-family: var(--mono); font-size: 0.68rem; color: var(--faint);
-  margin-top: auto; padding-top: 8px; border-top: 1px solid var(--line);
-}
-
-/* A plain list of rules — no card chrome, hairlines only. */
-.rows { display: flex; flex-direction: column; }
-.rows li {
-  display: grid; gap: 4px 20px; padding: 14px 0; border-top: 1px solid var(--line);
-}
-.rows li:first-child { border-top: 0; }
-@media (min-width: 760px) { .rows li { grid-template-columns: 220px minmax(0, 1fr); align-items: baseline; } }
-.rows .t { font-family: var(--mono); font-size: 0.78rem; color: var(--fg); letter-spacing: 0.02em; }
-.rows .d { color: var(--muted); font-size: 0.9rem; }
-.rows .d b { color: var(--fg); font-weight: 500; }
-
-/* --- The pipeline chain ------------------------------------------------ */
-
-.chain { display: flex; flex-direction: column; gap: 10px; }
-.chain-line { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; }
-.step {
-  flex: 1 1 150px; min-width: 0;
-  background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--radius);
-  padding: 12px; display: flex; flex-direction: column; gap: 5px;
-}
-.step .id { font-family: var(--mono); font-size: 0.66rem; color: var(--accent); letter-spacing: 0.1em; }
-.step .nm { font-size: 0.82rem; color: var(--fg); font-weight: 500; }
-.step .no { font-size: 0.78rem; color: var(--muted); line-height: 1.45; }
-.errbox {
-  border: 1px dashed var(--line-strong); border-radius: var(--radius);
-  padding: 12px; background: var(--panel);
-  display: flex; flex-direction: column; gap: 5px;
-}
-
-/* --- Tables ------------------------------------------------------------ */
-
-.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
-table { border-collapse: collapse; width: 100%; font-size: 0.86rem; }
-th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
-tbody tr:last-child td { border-bottom: 0; }
-th {
-  font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.14em; text-transform: uppercase;
-  color: var(--faint); font-weight: 400; background: var(--panel); white-space: nowrap;
-}
-td.m { font-family: var(--mono); font-size: 0.78rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
-td .sub { color: var(--muted); }
-
-/* --- Measured figures -------------------------------------------------- */
-
-.figs { display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
-@media (min-width: 720px) { .figs { grid-template-columns: 1fr 1fr; } }
-@media (min-width: 1040px) { .figs { grid-template-columns: repeat(4, 1fr); } }
-.fig { background: var(--surface); padding: 16px; display: flex; flex-direction: column; gap: 4px; }
-.fig .n { font-family: var(--mono); font-size: 1.6rem; line-height: 1.1; color: var(--fg); font-variant-numeric: tabular-nums; }
-.fig .l { font-size: 0.82rem; color: var(--fg); }
-.fig .c { font-size: 0.78rem; color: var(--faint); }
-
-/* --- Quote / thesis ---------------------------------------------------- */
-
-.thesis {
-  border-left: 3px solid var(--accent); padding: 4px 0 4px 20px;
-  font-family: var(--display); font-size: clamp(1.15rem, 2.6vw, 1.6rem);
-  line-height: 1.25; letter-spacing: -0.005em; max-width: 26ch;
-}
-
-/* --- Code block -------------------------------------------------------- */
-
-pre {
-  margin: 0; background: var(--hero); border: 1px solid var(--line); border-radius: var(--radius);
-  padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 0.8rem;
-  color: var(--fg); line-height: 1.65;
-}
-pre .c { color: var(--faint); }
-pre .a { color: var(--accent); }
-
-/* --- The contents map --------------------------------------------------- */
-
-.map { display: grid; gap: 20px; }
-@media (min-width: 700px) { .map { grid-template-columns: 1fr 1fr; } }
-@media (min-width: 1040px) { .map { grid-template-columns: repeat(4, 1fr); } }
-.map-grp { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
-.map-grp h3 {
-  font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase;
-  padding-bottom: 8px; border-bottom: 1px solid var(--line-strong);
-}
-.map-grp h3 span { color: var(--accent); font-family: var(--mono); font-size: 0.72rem; margin-right: 8px; }
-.map-grp ol { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
-.map-grp a { display: block; text-decoration: none; color: var(--fg); }
-.map-grp a:hover { color: var(--accent); }
-.map-grp a .t { display: block; font-size: 0.9rem; font-weight: 500; }
-.map-grp a .t::before {
-  content: attr(data-n) ' · '; font-family: var(--mono); font-size: 0.72rem;
-  color: var(--faint); font-weight: 400;
-}
-.map-grp a .d { display: block; font-size: 0.82rem; color: var(--muted); }
-.map-grp a:hover .d { color: var(--muted); }
-
-/* --- Folds -------------------------------------------------------------- */
-
-/* What EXPLAINS folds; what REPORTS never does. A fold also says what is
-   inside, so you never open one to find out whether it was worth opening. */
-.fold { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
-.fold > summary {
-  cursor: pointer; list-style: none; padding: 12px 14px;
-  display: flex; align-items: baseline; gap: 12px;
-  font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.08em;
-  text-transform: uppercase; color: var(--fg); min-height: 44px;
-}
-.fold > summary::-webkit-details-marker { display: none; }
-.fold > summary::before {
-  content: '+'; color: var(--accent); font-size: 0.9rem; line-height: 1; flex: none;
-}
-.fold[open] > summary::before { content: '−'; }
-.fold > summary .hint { margin-left: auto; color: var(--faint); text-transform: none; letter-spacing: 0.04em; }
-.fold > summary:hover { color: var(--accent); }
-.fold-body { padding: 0 14px 14px; display: flex; flex-direction: column; gap: 16px; }
-.fold-body > .tablewrap { border-left: 0; border-right: 0; border-radius: 0; }
-
-/* --- Back to top -------------------------------------------------------- */
-
-.totop {
-  font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.1em;
-  text-transform: uppercase; color: var(--muted); text-decoration: none;
-}
-.totop:hover { color: var(--accent); }
-
-/* --- Screenshots ------------------------------------------------------- */
-
-.shot { margin: 0; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
-.shot img {
-  display: block; width: 100%; height: auto;
-  border: 1px solid var(--line-strong); border-radius: var(--radius);
-  background: var(--hero);
-}
-.shot figcaption { font-size: 0.84rem; color: var(--muted); max-width: 78ch; }
-.shot figcaption b { color: var(--fg); font-weight: 500; }
-.shot figcaption em { font-style: italic; }
-.hero .shot { margin-top: 6px; }
-
-/* --- Footer ------------------------------------------------------------ */
-
-.foot { padding-block: 40px 56px; display: flex; flex-direction: column; gap: 14px; }
-.foot .row { display: flex; flex-wrap: wrap; gap: 16px; align-items: baseline; justify-content: space-between; }
-.foot p { color: var(--faint); font-size: 0.82rem; max-width: 70ch; }
-.heb { font-size: 1rem; color: var(--muted); }
-
-/* --- The flow diagram --------------------------------------------------
-   The product IS a five-step flow with a person standing in the middle of
-   it, and the page used to describe that in prose. Drawn in HTML and CSS
-   rather than SVG for three reasons, all of which an SVG would have cost:
-   it reflows into a column on a phone, it repaints in all six palettes
-   because every colour here is a token, and its labels are ordinary text
-   nodes — so they translate, and a screen reader reads it as the ordered
-   list of steps it actually is.
-   ---------------------------------------------------------------------- */
-
-.flow { display: flex; flex-direction: column; gap: 22px; }
-
-.flow-track {
-  display: grid; grid-template-columns: 1fr; gap: 30px 0;
-  margin: 0; padding: 0; list-style: none;
-}
-@media (min-width: 900px) {
-  .flow-track { grid-template-columns: repeat(5, 1fr); gap: 0 34px; }
-}
-
-.flow-node {
-  position: relative;
-  background: var(--surface); border: 1px solid var(--line-strong);
-  border-radius: var(--radius); padding: 14px;
-  display: flex; flex-direction: column; gap: 6px;
-  transition: background var(--swap) linear, border-color var(--swap) linear;
-}
-.flow-node .fn-n {
-  font-family: var(--mono); font-size: 0.64rem; letter-spacing: 0.16em;
-  text-transform: uppercase; color: var(--faint);
-}
-.flow-node .fn-t { font-size: 0.92rem; color: var(--fg); font-weight: 500; line-height: 1.3; }
-.flow-node .fn-d { font-size: 0.8rem; color: var(--muted); line-height: 1.5; }
-
-/* The connector, and its head. Vertical on a phone, horizontal from 900 px.
-   Both pseudo-elements sit on the node BEFORE the gap they cross, so the
-   last node never draws an arrow into nothing. */
-.flow-node:not(:last-child)::after,
-.flow-node:not(:last-child)::before { content: ''; position: absolute; }
-.flow-node:not(:last-child)::after {
-  left: 50%; top: 100%; width: 1px; height: 30px;
-  background: var(--line-strong); transform: translateX(-0.5px);
-}
-.flow-node:not(:last-child)::before {
-  left: 50%; top: calc(100% + 21px); transform: translateX(-50%);
-  border-left: 4px solid transparent; border-right: 4px solid transparent;
-  border-top: 6px solid var(--line-strong);
-}
-@media (min-width: 900px) {
-  .flow-node:not(:last-child)::after {
-    left: 100%; top: 50%; width: 34px; height: 1px; transform: translateY(-0.5px);
-  }
-  .flow-node:not(:last-child)::before {
-    left: calc(100% + 25px); top: 50%; transform: translateY(-50%);
-    border-top: 4px solid transparent; border-bottom: 4px solid transparent;
-    border-left: 6px solid var(--line-strong); border-right: 0;
-  }
-}
-
-/* The gate is the only node that carries the accent, for the reason the
-   console reserves it: A HUMAN IS BLOCKED HERE. Colour never carries the
-   meaning alone — the word sits on it. */
-.flow-node.flow-gate { border-color: var(--accent); background: var(--panel); }
-.flow-node.flow-gate .fn-n { color: var(--accent); }
-.flow-gate .fn-you {
-  align-self: flex-start;
-  font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.14em;
-  text-transform: uppercase;
-  background: var(--accent); color: var(--accent-fg);
-  padding: 2px 7px; border-radius: var(--radius);
-}
-
-.flow-outcomes {
-  display: grid; gap: 1px; background: var(--line);
-  border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden;
-}
-@media (min-width: 760px) { .flow-outcomes { grid-template-columns: repeat(3, 1fr); } }
-.flow-outcomes li {
-  background: var(--surface); padding: 12px 14px;
-  display: flex; flex-direction: column; gap: 4px;
-}
-.flow-outcomes .o-k {
-  font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase;
-}
-.flow-outcomes .o-v { font-size: 0.84rem; color: var(--muted); }
-.flow-outcomes .ok-green { color: var(--green); }
-/* --grey is a RISK-palette neutral and lands at 3.6-4.4:1 on a panel in four
-   of the six themes. "You refuse" is a label, not a secondary mention, so it
-   takes the plain foreground — which is also the honest reading: neutral is
-   the default outcome, not a third risk state. */
-.flow-outcomes .ok-grey { color: var(--fg); }
-.flow-outcomes .ok-orange { color: var(--orange); }
-
-.flow-note { font-size: 0.84rem; color: var(--faint); max-width: 72ch; }
-.flow-note b { color: var(--fg); font-weight: 500; }
-
-/* --- The language switcher ---------------------------------------------
-   Two links, not a control: `/` is English and `/fr` is French, so the URL
-   is the whole state. Nothing is stored, nothing is sniffed, nothing
-   redirects — a link somebody shares opens in the language they shared it
-   in. Placed top-right, with the language written in its own name.
-   ---------------------------------------------------------------------- */
-.langs { display: flex; align-items: stretch; border: 1px solid var(--line-strong); border-radius: var(--radius); overflow: hidden; }
-/* DIRECT CHILDREN. `.langs span` (0,1,1) also matched the label span NESTED
-   inside the active chip, so `--muted` landed on the accent — between 1.2:1
-   and 2.8:1 depending on the theme. That is the `.soc-field span` trap from
-   CLAUDE.md rebuilt on this page, and it was found by measuring the computed
-   colour in a browser, not by reading the rule. */
-.langs > a, .langs > span {
-  display: flex; align-items: center; padding: 0 10px; min-height: 32px;
-  font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase;
-  text-decoration: none; color: var(--muted);
-}
-.langs > a:not([aria-current='true']):hover { color: var(--fg); background: var(--surface-2); }
-/* Names the ELEMENT as well as the state, so this wins by specificity rather
-   than by sitting further down the sheet — the lesson this table has already
-   recorded four times. */
-.langs > a[aria-current='true'], .langs > span[aria-current='true'] {
-  color: var(--accent-fg); background: var(--accent);
-}
-.langs .l-long { display: none; }
-@media (min-width: 720px) {
-  .langs .l-long { display: inline; }
-  .langs .l-short { display: none; }
-}
-
-/* --- A gallery of the screens that document rather than argue ----------- */
-.gallery { display: flex; flex-direction: column; gap: 26px; }
-</style>
-<header class="top">
-  <div class="wrap top-head">
-    <a class="lock" href="#top" data-i18n-aria-label="a11y.toTop" aria-label="MENATER — top of page">
-      <svg width="22" height="22" viewBox="0 0 32 32" fill="currentColor" aria-hidden="true">
-        <rect x="0" y="5" width="4" height="22"></rect>
-        <rect x="7" y="5" width="4" height="22"></rect>
-        <rect x="14" y="21" width="4" height="6"></rect>
-        <rect x="21" y="5" width="4" height="22"></rect>
-        <rect x="28" y="5" width="4" height="22"></rect>
-      </svg>
-      <span class="word">MENATER</span>
-      <span class="tagline" data-i18n="header.tagline">Security operations</span>
-    </a>
-
-    <!--LANGS-->
-
-    <a class="ghlink" href="https://github.com/S2K7x/Menater" target="_blank" rel="noopener noreferrer">
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-        <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38
-                 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13
-                 -.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66
-                 .07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15
-                 -.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27
-                 .68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12
-                 .51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48
-                 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8
-                 c0-4.42-3.58-8-8-8z"></path>
-      </svg>
-      <span>GitHub</span>
-    </a>
-    <div class="picker" id="picker">
-      <p class="kick" data-i18n="header.theme">Theme</p>
-    </div>
-  </div>
-
-  <!-- Six entries and no group titles. The table of contents this page used
-       to open with was a second navigation level for a page you scroll: it
-       gave back exactly what the ordering already bought (CLARITY.md § 10). -->
-  <div class="navrail">
-    <nav class="wrap topnav" id="topnav" data-i18n-aria-label="a11y.sections" aria-label="Sections of this page">
-      <a href="#why"><span class="n">01</span><span data-i18n="nav.why">Why</span></a>
-      <a href="#how"><span class="n">02</span><span data-i18n="nav.how">How it works</span></a>
-      <a href="#screens"><span class="n">03</span><span data-i18n="nav.screens">What you get</span></a>
-      <a href="#guardrails"><span class="n">04</span><span data-i18n="nav.guardrails">Guardrails</span></a>
-      <a href="#install"><span class="n">05</span><span data-i18n="nav.install">Install</span></a>
-      <a href="#limits"><span class="n">06</span><span data-i18n="nav.limits">Limits</span></a>
-    </nav>
-  </div>
-</header>
+<title data-i18n="meta.title">MENATER — an AI sorts your security alerts, you decide</title>
+<meta name="description" data-i18n-content="meta.description" content="Free and open source. An AI reads the security alerts your tools raise, tells you which ones matter, and asks before it does anything. Runs on your own computer.">
+
+<!--HEADER-->
+
+<div class="navrail">
+  <nav class="wrap topnav" id="topnav" data-i18n-aria-label="a11y.sections" aria-label="Sections of this page">
+    <a href="#how"><span data-i18n="nav.how">How it works</span></a>
+    <a href="#does"><span data-i18n="nav.does">What it does</span></a>
+    <a href="#trust"><span data-i18n="nav.trust">Why trust it</span></a>
+    <a href="#get"><span data-i18n="nav.get">Get it</span></a>
+  </nav>
+</div>
 
 <main id="top">
-  <!-- ===================== HERO ===================== -->
+  <!-- ============================ HERO ============================
+       Inverted pyramid: the conclusion first. Someone who reads the
+       headline, the sentence under it and nothing else should already
+       know what this is and whether it is for them. -->
   <section class="wrap hero">
-    <p class="kick" data-i18n="hero.kick">Self-hosted · open source · runs on your own machine</p>
-    <h1 data-i18n="hero.title">Your alerts, triaged by AI. <em>Nothing runs</em> without you.</h1>
+    <p class="kick" data-i18n="hero.kick">Free · open source · runs on your own computer</p>
+    <h1 data-i18n="hero.title">An AI sorts your security alerts. <em>You decide</em> what happens.</h1>
     <p class="hero-sub" data-i18n="hero.sub">
-      MENATER reads the security alerts your tools raise, works out which ones matter, and hands
-      you the few that need a decision. <b>It proposes. You approve. Everything is written down.</b>
+      Security tools raise hundreds of warnings a day, and most of them are nothing.
+      MENATER reads them, tells you which ones matter, and asks you before it does anything.
     </p>
 
     <div class="hero-cta">
+      <a class="btn" href="/docs" data-i18n="hero.docs">Read the documentation</a>
       <div class="term">
         <span class="cue" aria-hidden="true">$</span>
         <code id="cmd">docker compose up -d --build</code>
       </div>
       <button class="copy" id="copy" type="button" data-i18n="hero.copy">Copy</button>
-      <a class="textlink" href="#how" data-i18n="hero.link">See how it works →</a>
     </div>
 
     <div class="spec">
-      <div><span class="v">3</span><span class="k" data-i18n="spec.containers">containers</span></div>
-      <div><span class="v">1</span><span class="k" data-i18n="spec.command">command to install</span></div>
-      <div><span class="v">0</span><span class="k" data-i18n="spec.actions">actions without a human</span></div>
-      <div><span class="v">1,278</span><span class="k" data-i18n="spec.tests">tests passing</span></div>
+      <div><span class="v">0</span><span class="k" data-i18n="spec.actions">things it does without asking you</span></div>
+      <div><span class="v">1</span><span class="k" data-i18n="spec.command">command to install it</span></div>
+      <div><span class="v">100%</span><span class="k" data-i18n="spec.local">stays on your computer</span></div>
     </div>
 
     <!--SHOT:01-queue-->
   </section>
 
-  <!-- ===================== 01 · WHY ===================== -->
-  <section class="band band-inset" id="why">
-    <div class="wrap sec">
-      <div class="sec-rail">
-        <span class="num">01</span>
-        <span class="lbl" data-i18n="nav.why">Why</span>
-      </div>
-      <div class="sec-body">
-        <h2 class="sech" data-i18n="why.h">An AI that decides alone is an AI reading text an attacker wrote.</h2>
-        <p class="lede" data-i18n="why.lede">
-          Security tools raise far more alerts than anyone can read, so triaging them automatically
-          is not really optional. But an alert is text an attacker composed, and a model that can
-          both read it and act on it can be told what to do by it. MENATER separates those two
-          powers: the model reads and proposes, a human holds the trigger.
-        </p>
-
-        <p class="thesis" data-i18n="why.thesis">It says what it cannot see, instead of filling the gap.</p>
-
-        <details class="fold">
-          <summary>
-            <span data-i18n="why.fold.s">The four rules that follow from it</span>
-            <span class="hint" data-i18n="why.fold.h">4 rules · enforced in code</span>
-          </summary>
-          <div class="fold-body">
-            <ul class="rows">
-              <li>
-                <span class="t" data-i18n="why.r1.t">Never fill a gap with a default</span>
-                <span class="d" data-i18n="why.r1.d">A missing value is shown as missing — <span class="dash">—</span>, never <span class="mono">0</span>, never <span class="mono">N/A</span>, never a guess. And rejecting an alert because a field is absent is the same mistake in its harshest form: <b>it replaces the alert with nothing.</b></span>
-              </li>
-              <li>
-                <span class="t" data-i18n="why.r2.t">Silence is never consent</span>
-                <span class="d" data-i18n="why.r2.d">An approval request that times out executes nothing — it escalates. Missing configuration cannot enable execution either: watch-only mode is the default, and only the exact word <span class="mono">false</span> turns it off.</span>
-              </li>
-              <li>
-                <span class="t" data-i18n="why.r3.t">A failure must never show green</span>
-                <span class="d" data-i18n="why.r3.d">A chain that ran and passed zero items is <span class="pill pill-red">Broken</span>, not <span class="pill pill-green">Done</span>. A verdict of <em>clean</em> requires at least one intelligence source that actually answered — nobody looking is <span class="pill pill-grey">Not asked</span>, which is a different sentence.</span>
-              </li>
-              <li>
-                <span class="t" data-i18n="why.r4.t">No irreversible action without a human</span>
-                <span class="d" data-i18n="why.r4.d">The list of things the console can execute is closed at four entries. Nothing else is implementable — not even behind an approval — and no tuning rule can reach it.</span>
-              </li>
-            </ul>
-          </div>
-        </details>
-      </div>
-    </div>
-  </section>
-
-  <!-- ===================== 02 · HOW IT WORKS ===================== -->
-  <section class="band" id="how">
-    <div class="wrap sec">
-      <div class="sec-rail">
-        <span class="num">02</span>
-        <span class="lbl" data-i18n="nav.how">How it works</span>
-      </div>
+  <!-- ============================ HOW IT WORKS ============================ -->
+  <section class="band band-inset" id="how">
+    <div class="wrap sec sec-plain">
       <div class="sec-body">
         <h2 class="sech" data-i18n="how.h">An alert comes in. Five steps later, you decide.</h2>
         <p class="lede" data-i18n="how.lede">
-          The same five steps run for every alert, in the same order, and each one writes down what
-          it did. Step four is a person — and nothing past it happens without them.
+          Every alert goes through the same five steps, in the same order. The fourth one is you.
         </p>
 
         <div class="flow">
@@ -757,531 +57,151 @@ pre .a { color: var(--accent); }
             <li class="flow-node">
               <span class="fn-n" data-i18n="flow.1.n">Step 1</span>
               <span class="fn-t" data-i18n="flow.1.t">An alert arrives</span>
-              <span class="fn-d" data-i18n="flow.1.d">From your SIEM, by webhook or by polling. Checked, and deduplicated so the same alert is never triaged twice.</span>
+              <span class="fn-d" data-i18n="flow.1.d">Something on your network looked wrong. Your security tools send it here.</span>
             </li>
             <li class="flow-node">
               <span class="fn-n" data-i18n="flow.2.n">Step 2</span>
-              <span class="fn-t" data-i18n="flow.2.t">Context is gathered</span>
-              <span class="fn-d" data-i18n="flow.2.d">Is this address known bad? Has this password leaked? A source with no key is marked <em>not asked</em>, never guessed.</span>
+              <span class="fn-t" data-i18n="flow.2.t">Context is added</span>
+              <span class="fn-d" data-i18n="flow.2.d">Is this address known for attacks? Has this password leaked? MENATER asks around.</span>
             </li>
             <li class="flow-node">
               <span class="fn-n" data-i18n="flow.3.n">Step 3</span>
-              <span class="fn-t" data-i18n="flow.3.t">The AI proposes</span>
-              <span class="fn-d" data-i18n="flow.3.d">A verdict, a confidence score, and the reasoning behind both. A proposal — never an order.</span>
+              <span class="fn-t" data-i18n="flow.3.t">The AI gives its opinion</span>
+              <span class="fn-d" data-i18n="flow.3.d">What it thinks this is, how sure it is, and why. An opinion — not an order.</span>
             </li>
             <li class="flow-node flow-gate">
               <span class="fn-n" data-i18n="flow.4.n">Step 4</span>
               <span class="fn-you" data-i18n="flow.4.you">You</span>
               <span class="fn-t" data-i18n="flow.4.t">You decide</span>
-              <span class="fn-d" data-i18n="flow.4.d">The proposal reaches you in the console, and on Slack or Discord if you want it there. Until you answer, nothing runs.</span>
+              <span class="fn-d" data-i18n="flow.4.d">It asks you, on screen or in your chat app. Nothing happens until you answer.</span>
             </li>
             <li class="flow-node">
               <span class="fn-n" data-i18n="flow.5.n">Step 5</span>
-              <span class="fn-t" data-i18n="flow.5.t">It is written down</span>
-              <span class="fn-d" data-i18n="flow.5.d">One row in a log that can be added to and never edited, sealed to the row before it. Tampering shows.</span>
+              <span class="fn-t" data-i18n="flow.5.t">It gets written down</span>
+              <span class="fn-d" data-i18n="flow.5.d">A record of what happened that nobody can quietly change afterwards.</span>
             </li>
           </ol>
 
           <ul class="flow-outcomes">
             <li>
-              <span class="o-k ok-green" data-i18n="flow.o1.k">You approve</span>
-              <span class="o-v" data-i18n="flow.o1.v">The one action you approved runs, and only that one.</span>
+              <span class="o-k ok-green" data-i18n="flow.o1.k">You say yes</span>
+              <span class="o-v" data-i18n="flow.o1.v">That one thing happens. Nothing else.</span>
             </li>
             <li>
-              <span class="o-k ok-grey" data-i18n="flow.o2.k">You refuse</span>
-              <span class="o-v" data-i18n="flow.o2.v">Nothing runs. The refusal is recorded, and it is what measures the AI.</span>
+              <span class="o-k ok-grey" data-i18n="flow.o2.k">You say no</span>
+              <span class="o-v" data-i18n="flow.o2.v">Nothing happens.</span>
             </li>
             <li>
               <span class="o-k ok-orange" data-i18n="flow.o3.k">You do not answer</span>
-              <span class="o-v" data-i18n="flow.o3.v">Nothing runs. It escalates to a human instead of timing out quietly.</span>
+              <span class="o-v" data-i18n="flow.o3.v">Nothing happens. It goes to a person instead of expiring in silence.</span>
             </li>
           </ul>
 
           <p class="flow-note" data-i18n="flow.note">
-            <b>Out of the box, step 4 never even fires.</b> The console starts in watch-only mode: it
-            records what it would have proposed and executes nothing at all, until your team has
-            looked at enough real alerts to trust it.
+            <b>On a fresh install, step 4 never even happens.</b> MENATER only watches: it notes what
+            it would have suggested, and does nothing at all, until you decide to switch that on.
           </p>
         </div>
-
-        <details class="fold">
-          <summary>
-            <span data-i18n="how.fold.s">What the engine underneath actually does</span>
-            <span class="hint" data-i18n="how.fold.h">6 workflows · typed handoffs</span>
-          </summary>
-          <div class="fold-body">
-            <p class="prose" data-i18n="how.fold.p">
-              MENATER runs its own engine. There is no workflow platform to install and no second
-              product that has to be reachable for an alert to be triaged — so a workflow cannot be
-              half-deployed, renamed in an editor, or left unpublished. The five steps above are
-              five workflows with a fixed, typed input and output; a sixth is the error handler,
-              declared on the other five and called only from their failure branches.
-            </p>
-            <ul class="rows">
-              <li>
-                <span class="t" data-i18n="how.f1.t">A junction waits</span>
-                <span class="d" data-i18n="how.f1.d">A step with several inputs does not start when one of them has answered. Enrichment would otherwise assemble a third of its sources — <b>with no error, no trace, and a plausible result.</b></span>
-              </li>
-              <li>
-                <span class="t" data-i18n="how.f2.t">Retry, then a named failure</span>
-                <span class="d" data-i18n="how.f2.d">Every external call retries with backoff, honouring a suggested wait as a floor rather than undercutting it. When it still fails, it fails by name: a source that was not asked is not a source that said nothing.</span>
-              </li>
-              <li>
-                <span class="t" data-i18n="how.f3.t">The unreduced view</span>
-                <span class="d" data-i18n="how.f3.d">The queue stitches runs into cases, and two kinds of failure disappear in that reduction. A separate screen shows them unreduced — broken chains, runs attached to no alert, a searchable log, and a replay that <b>refuses</b> when the original alert is unknown.</span>
-              </li>
-            </ul>
-          </div>
-        </details>
       </div>
     </div>
   </section>
 
-  <!-- ===================== 03 · WHAT YOU GET ===================== -->
-  <section class="band band-inset" id="screens">
-    <div class="wrap sec">
-      <div class="sec-rail">
-        <span class="num">03</span>
-        <span class="lbl" data-i18n="nav.screens">What you get</span>
-      </div>
+  <!-- ============================ WHAT IT DOES ============================ -->
+  <section class="band" id="does">
+    <div class="wrap sec sec-plain">
       <div class="sec-body">
-        <h2 class="sech" data-i18n="screens.h">Three screens do most of the work.</h2>
-        <p class="lede" data-i18n="screens.lede">
-          One console, one address, one password. There are ten tabs in it, but on an ordinary day
-          you live in three of them.
-        </p>
+        <h2 class="sech" data-i18n="does.h">Three things, on one screen.</h2>
 
         <div class="grid g3">
           <article class="card">
-            <h3 data-i18n="screens.c1.h">The queue</h3>
-            <p data-i18n="screens.c1.p">
-              Every alert, most urgent first. Open a row and you get the whole story: what came in,
-              what was found out, what the AI thinks, and what it wants to do.
+            <h3 data-i18n="does.c1.h">Sorts your alerts</h3>
+            <p data-i18n="does.c1.p">
+              The urgent ones first, the rest out of your way. Open one and you see the whole
+              story on a single page.
             </p>
           </article>
           <article class="card">
-            <h3 data-i18n="screens.c2.h">Code scanning</h3>
-            <p data-i18n="screens.c2.p">
-              The other half of the console reads your code and looks for the flaws an attacker would
-              use — a folder, a file or a GitHub repository. Each finding says what can happen and
-              how to fix it.
+            <h3 data-i18n="does.c2.h">Checks your code</h3>
+            <p data-i18n="does.c2.p">
+              Point it at a folder or a GitHub project and it looks for the mistakes an attacker
+              would use. Each one says what could happen, and how to fix it.
             </p>
           </article>
           <article class="card">
-            <h3 data-i18n="screens.c3.h">Lookup</h3>
-            <p data-i18n="screens.c3.p">
-              Paste an address, a domain, a file hash or an e-mail and ask about it directly. The
-              answer always says how many sources actually replied.
+            <h3 data-i18n="does.c3.h">Answers a question</h3>
+            <p data-i18n="does.c3.p">
+              Paste an address, a website or an email and ask what is known about it. It always
+              tells you how many sources actually replied.
             </p>
           </article>
         </div>
 
         <!--SHOT:06-code-->
-
-        <details class="fold">
-          <summary>
-            <span data-i18n="screens.fold1.s">The other four screens</span>
-            <span class="hint" data-i18n="screens.fold1.h">4 screenshots</span>
-          </summary>
-          <div class="fold-body">
-            <div class="gallery">
-              <!--SHOT:02-ingestion-->
-              <!--SHOT:03-tracking-->
-              <!--SHOT:05-lookup-->
-              <!--SHOT:07-health-->
-            </div>
-          </div>
-        </details>
-
-        <details class="fold">
-          <summary>
-            <span data-i18n="screens.fold2.s">All ten tabs, one line each</span>
-            <span class="hint" data-i18n="screens.fold2.h">10 tabs · Alerts to Settings</span>
-          </summary>
-          <div class="fold-body">
-            <div class="tablewrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th scope="col" data-i18n="screens.th1">Tab</th>
-                    <th scope="col" data-i18n="screens.th2">What is on it</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr><td class="m">Alerts</td><td data-i18n="tab.alerts">The queue and the incident card. Every value in an alert carries a jump into Lookup with the question already asked.</td></tr>
-                  <tr><td class="m">Code</td><td data-i18n="tab.code">Run a code scan and read the report. It keeps running while you work in another tab.</td></tr>
-                  <tr><td class="m">Ingestion</td><td data-i18n="tab.ingestion">How alerts get in: the delivery method, the sources on each, and the pipeline as it runs.</td></tr>
-                  <tr><td class="m">Rules</td><td data-i18n="tab.rules">Declare what is normal here — the authorised scanner, the backup window — with a dry run that answers <em>which rule would match this alert</em> without touching anything.</td></tr>
-                  <tr><td class="m">Tracking</td><td data-i18n="tab.tracking">The unreduced view: broken chains, orphan runs, searchable log, replay.</td></tr>
-                  <tr><td class="m">Metrics</td><td data-i18n="tab.metrics">Two rates, never conflated: what the AI called a false positive, and what a human refused.</td></tr>
-                  <tr><td class="m">Health</td><td data-i18n="tab.health">One button that tests every link in the chain, and nine test alerts to send through it.</td></tr>
-                  <tr><td class="m">Lookup</td><td data-i18n="tab.lookup">Threat intelligence on one value, plus a breached-password check whose hash never leaves your browser.</td></tr>
-                  <tr><td class="m">Guide</td><td data-i18n="tab.guide">The documentation, searchable — and the search reads the glossary too, so a word you looked up in the wrong vocabulary still finds its section.</td></tr>
-                  <tr><td class="m">Settings</td><td data-i18n="tab.settings">Keys, sources, engines — and a checklist naming everything still missing before an alert can be triaged.</td></tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </details>
-
-        <details class="fold">
-          <summary>
-            <span data-i18n="screens.fold3.s">Six themes, and why the switch at the top is not a gimmick</span>
-            <span class="hint" data-i18n="screens.fold3.h">6 palettes · contrast tested</span>
-          </summary>
-          <div class="fold-body">
-            <p class="prose" data-i18n="screens.fold3.p">
-              The switch in the header repaints this page with the console's six real palettes, from
-              the same tokens. A test computes the WCAG contrast ratios and <b>refuses</b> a palette
-              that falls below them — it caught a failure red at 2.5:1, on the screen that depends
-              on red most. And colour never carries meaning on its own here: every risk colour is
-              paired with a word, so the console still works if you cannot tell them apart.
-            </p>
-          </div>
-        </details>
       </div>
     </div>
   </section>
 
-  <!-- ===================== 04 · GUARDRAILS ===================== -->
-  <section class="band" id="guardrails">
-    <div class="wrap sec">
-      <div class="sec-rail">
-        <span class="num">04</span>
-        <span class="lbl" data-i18n="nav.guardrails">Guardrails</span>
-      </div>
+  <!-- ============================ WHY TRUST IT ============================
+       Four lines, not four paragraphs. Each opens with the claim, because the
+       first words of a line are what a scanning eye actually reads. -->
+  <section class="band band-inset" id="trust">
+    <div class="wrap sec sec-plain">
       <div class="sec-body">
-        <h2 class="sech" data-i18n="guard.h">The list of things it will not do is the feature.</h2>
-        <p class="lede" data-i18n="guard.lede">
-          Four limits, each one written into the code rather than promised in a slide. They are
-          what makes an AI safe to point at attacker-composed text all day.
-        </p>
+        <h2 class="sech" data-i18n="trust.h">What it will never do.</h2>
 
-        <div class="grid g2">
-          <article class="card">
-            <h3 data-i18n="guard.c1.h">It watches before it acts</h3>
-            <p data-i18n="guard.c1.p">
-              A new install executes nothing. It records the decision it would have made, and waits
-              until your team has measured, over real alerts, how often they disagreed with it.
-              That measurement is the gate, not a date.
-            </p>
-          </article>
-          <article class="card">
-            <h3 data-i18n="guard.c2.h">Four actions, and no fifth</h3>
-            <p data-i18n="guard.c2.p">
-              Isolate a machine temporarily — with an expiry and an automatic undo — open a ticket,
-              escalate, or close as a false positive. Nothing else can be added. And isolation
-              refuses to run when it has no machine to name.
-            </p>
-          </article>
-          <article class="card">
-            <h3 data-i18n="guard.c3.h">The chat assistant cannot act</h3>
-            <p data-i18n="guard.c3.p">
-              A panel answers questions about your own installation using seven read-only lookups
-              and nothing else. An instruction hidden in a log arrives at a model that has no way
-              to obey it.
-            </p>
-          </article>
-          <article class="card">
-            <h3 data-i18n="guard.c4.h">Everything stays on your machine</h3>
-            <p data-i18n="guard.c4.p">
-              Three containers on your own host, one port published. Your alerts go to the model you
-              chose with the key you supplied, and nowhere else. No account, no telemetry, no
-              vendor cloud in the path.
-            </p>
-          </article>
-        </div>
-
-        <!--SHOT:04-case-->
-
-        <div class="figs">
-          <div class="fig">
-            <span class="n">400 / 400</span>
-            <span class="l" data-i18n="fig1.l">alerts accepted under load</span>
-            <span class="c" data-i18n="fig1.c">50 at once · ~134 per second · every chain settled, nothing left running</span>
-          </div>
-          <div class="fig">
-            <span class="n">1 of 12</span>
-            <span class="l" data-i18n="fig2.l">duplicates accepted</span>
-            <span class="c" data-i18n="fig2.c">12 simultaneous copies of one alert → 1 accepted, 11 already seen, zero errors</span>
-          </div>
-          <div class="fig">
-            <span class="n">0</span>
-            <span class="l" data-i18n="fig3.l">broken links in the audit log</span>
-            <span class="c" data-i18n="fig3.c">re-verified across 2,644 rows written under concurrent load</span>
-          </div>
-          <div class="fig">
-            <span class="n">1,278</span>
-            <span class="l" data-i18n="fig4.l">tests passing</span>
-            <span class="c" data-i18n="fig4.c">913 console · 365 code scanning · type checking clean</span>
-          </div>
-        </div>
-
-        <details class="fold">
-          <summary>
-            <span data-i18n="guard.fold.s">The conditions those numbers were taken under</span>
-            <span class="hint" data-i18n="guard.fold.h">one machine · reproducible</span>
-          </summary>
-          <div class="fold-body">
-            <p class="prose" data-i18n="guard.fold.p">
-              Run against <span class="mono">docker compose up</span> and nothing else. This is a QA
-              pass on one machine, not a published benchmark; the point is that it is reproducible
-              and that the conditions are stated. <b>It found eight defects, and they were fixed</b> —
-              three worth naming: the entry point told senders their <em>refused</em> alerts had been
-              accepted; the deduplication insert was not safe against a burst and answered an error;
-              and the audit verifier reported broken links on healthy rows. A verifier that cries
-              wolf is one an auditor stops believing, which would hide a real deletion in the noise.
-            </p>
-          </div>
-        </details>
-      </div>
-    </div>
-  </section>
-
-  <!-- ===================== 05 · INSTALL ===================== -->
-  <section class="band band-inset" id="install">
-    <div class="wrap sec">
-      <div class="sec-rail">
-        <span class="num">05</span>
-        <span class="lbl" data-i18n="nav.install">Install</span>
-      </div>
-      <div class="sec-body">
-        <h2 class="sech" data-i18n="install.h">Two commands, on any host with Docker.</h2>
-        <p class="lede" data-i18n="install.lede">
-          Nothing else to install: no database to configure, no schema to apply by hand, no second
-          machine. The database and the scanner are reachable only from inside the stack.
-        </p>
-
-<pre><code><span class="c" data-i18n="install.code.c1"># fill in the two passwords</span>
-cp .env.example .env
-
-<span class="c" data-i18n="install.code.c2"># database + console + code scanning</span>
-docker compose up -d --build
-
-<span class="a">→ http://localhost:4400</span></code></pre>
-
-        <p class="prose" data-i18n="install.after">
-          <strong>It comes up in three minutes and triages nothing.</strong> That is not a fault:
-          each of the four things below is a choice the console refuses to make for you, and a
-          checklist on the settings page tracks all four until they are done.
-        </p>
-
-        <div class="tablewrap">
-          <table>
-            <thead>
-              <tr>
-                <th scope="col">#</th>
-                <th scope="col" data-i18n="install.th2">What</th>
-                <th scope="col" data-i18n="install.th3">If you skip it</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr><td class="m">1</td><td data-i18n="install.r1.a">A shared secret for the alert endpoint</td><td data-i18n="install.r1.b">The door stays <b>closed</b>. Here an empty secret closes it rather than opening it.</td></tr>
-              <tr><td class="m">2</td><td data-i18n="install.r2.a">Turning the endpoint on</td><td data-i18n="install.r2.b">Every alert is refused.</td></tr>
-              <tr><td class="m">3</td><td data-i18n="install.r3.a">A key for the AI model</td><td data-i18n="install.r3.b">Every alert lands on a human with a confidence of zero. Nothing is lost; nothing is triaged.</td></tr>
-              <tr><td class="m">4</td><td data-i18n="install.r4.a">A tool to send you alerts</td><td data-i18n="install.r4.b">No alerts arrive.</td></tr>
-            </tbody>
-          </table>
-        </div>
-
-        <p class="prose" data-i18n="install.optional">
-          Threat-intelligence keys and chat notifications are optional — a source with no key shows
-          as <span class="pill pill-grey">Not asked</span> rather than being filled in.
-        </p>
-      </div>
-    </div>
-  </section>
-
-  <!-- ===================== 06 · LIMITS ===================== -->
-  <section class="band" id="limits">
-    <div class="wrap sec">
-      <div class="sec-rail">
-        <span class="num">06</span>
-        <span class="lbl" data-i18n="nav.limits">Limits</span>
-      </div>
-      <div class="sec-body">
-        <h2 class="sech" data-i18n="limits.h">What it does not do.</h2>
-        <p class="lede" data-i18n="limits.lede">
-          Said here for the same reason the console says it: a page that lists only what works is a
-          green that was never earned.
-        </p>
-        <ul class="rows">
+        <ul class="claims">
           <li>
-            <span class="t" data-i18n="limits.r1.t">The two halves do not talk</span>
-            <span class="d" data-i18n="limits.r1.d">A code scan creates no alert in the queue, and an alert starts no scan. They share an interface and a login; connecting them is the next priority.</span>
+            <span class="c-t" data-i18n="trust.r1.t">It never acts on its own.</span>
+            <span class="c-d" data-i18n="trust.r1.d">There are exactly four things it can do, and every one of them needs your yes first.</span>
           </li>
           <li>
-            <span class="t" data-i18n="limits.r2.t">The login identifies nobody</span>
-            <span class="d" data-i18n="limits.r2.d">Access is a single password. It protects the console; it does not tell one approver from another, and the audit row says exactly that rather than implying a name it does not have.</span>
+            <span class="c-t" data-i18n="trust.r2.t">It never guesses.</span>
+            <span class="c-d" data-i18n="trust.r2.d">When it does not know something, it says so. It never fills a blank with a plausible answer.</span>
           </li>
           <li>
-            <span class="t" data-i18n="limits.r3.t">It is a project, not a product</span>
-            <span class="d" data-i18n="limits.r3.d">Self-hosted, open source, no support contract and no company behind it. Read the code before you point it at anything that matters — which is the right thing to do with any of these.</span>
+            <span class="c-t" data-i18n="trust.r3.t">It never hides a problem.</span>
+            <span class="c-d" data-i18n="trust.r3.d">Something that broke is never shown as fine. A screen exists whose only job is to find that.</span>
+          </li>
+          <li>
+            <span class="c-t" data-i18n="trust.r4.t">It never phones home.</span>
+            <span class="c-d" data-i18n="trust.r4.d">No account, no tracking. Your alerts go to the AI you picked, and nowhere else.</span>
           </li>
         </ul>
       </div>
     </div>
   </section>
 
-  <!-- ===================== FOOTER ===================== -->
-  <footer class="band band-inset">
-    <div class="wrap foot">
-      <div class="row">
-        <p class="kick" data-i18n="foot.name">MENATER · <span class="heb" lang="he" dir="rtl">מנטר</span> · present tense of <em>lenater</em>, to monitor</p>
-        <p class="kick" data-i18n="foot.stack">Self-hosted · Docker · open source</p>
-        <span class="foot-links">
-          <a class="totop" href="https://github.com/S2K7x/Menater" target="_blank" rel="noopener noreferrer" data-i18n="foot.gh">Source on GitHub ↗</a>
-          <a class="totop" href="#top" data-i18n="foot.top">↑ Back to top</a>
-        </span>
+  <!-- ============================ GET IT ============================ -->
+  <section class="band" id="get">
+    <div class="wrap sec sec-plain">
+      <div class="sec-body">
+        <h2 class="sech" data-i18n="get.h">Two commands, and you have it.</h2>
+        <p class="lede" data-i18n="get.lede">
+          You need Docker. Nothing else — no database to set up, no second machine.
+        </p>
+
+<pre><code><span class="c" data-i18n="get.code.c1"># fill in the two passwords</span>
+cp .env.example .env
+
+docker compose up -d --build
+
+<span class="a">→ http://localhost:4400</span></code></pre>
+
+        <p class="prose" data-i18n="get.after">
+          It starts in three minutes, and it sorts nothing yet — you still have to tell it where
+          your alerts come from and which AI to use. It shows you a checklist of what is missing.
+          <b>The documentation walks through all of it.</b>
+        </p>
+
+        <div class="hero-cta">
+          <a class="btn" href="/docs" data-i18n="get.docs">Read the documentation</a>
+          <a class="textlink" href="https://github.com/S2K7x/Menater" target="_blank" rel="noopener noreferrer" data-i18n="get.gh">See the code on GitHub →</a>
+        </div>
       </div>
-      <p data-i18n="foot.note">
-        Named after an action in progress, not a technology: the console shows a state, never a
-        finished report. It watches; a human acts.
-      </p>
     </div>
-  </footer>
+  </section>
+
+  <!--FOOTER-->
 </main>
 
-<!-- The handful of strings the script writes into the page. English lives
-     here, beside the rest of it; build.py swaps the values for a locale. -->
-<script type="application/json" id="ui-strings">
-{
-  "copy": "Copy",
-  "copied": "Copied",
-  "selectIt": "Select it",
-  "themeOf": "Theme: ",
-  "grayed": "Grayed — slate and acid green",
-  "punk": "Punk — khaki and red",
-  "blued": "Blued — electric blue and lime",
-  "attck": "Attck — incandescent orange",
-  "acme": "Acme — cream paper, printer red (light)",
-  "dark": "Dark — near-black and application blue"
-}
-</script>
-
-<script>
-(function () {
-  var S = JSON.parse(document.getElementById('ui-strings').textContent);
-
-  var THEMES = [
-    { id: 'grayed', bg: '#232830', accent: '#c3f53c' },
-    { id: 'punk',   bg: '#3b3d2a', accent: '#c31f1b' },
-    { id: 'blued',  bg: '#1f31c4', accent: '#c8f24b' },
-    { id: 'attck',  bg: '#7a1c08', accent: '#ffdd1c' },
-    { id: 'acme',   bg: '#f4f1ea', accent: '#e01e0b' },
-    { id: 'dark',   bg: '#16181c', accent: '#1269f5' }
-  ];
-
-  var root = document.documentElement;
-  var picker = document.getElementById('picker');
-  var buttons = [];
-
-  function apply(id) {
-    root.setAttribute('data-palette', id);
-    buttons.forEach(function (b) {
-      b.setAttribute('aria-pressed', String(b.dataset.id === id));
-    });
-    try { localStorage.setItem('menater.site.theme', id); } catch (e) { /* private mode */ }
-  }
-
-  THEMES.forEach(function (t) {
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'sw';
-    b.dataset.id = t.id;
-    b.title = S[t.id];
-    b.setAttribute('aria-label', S.themeOf + S[t.id]);
-    b.setAttribute('aria-pressed', 'false');
-    b.style.background = t.bg;
-    var dot = document.createElement('i');
-    dot.style.background = t.accent;
-    b.appendChild(dot);
-    b.addEventListener('click', function () { apply(t.id); });
-    picker.appendChild(b);
-    buttons.push(b);
-  });
-
-  var saved = null;
-  try { saved = localStorage.getItem('menater.site.theme'); } catch (e) { saved = null; }
-  var known = THEMES.some(function (t) { return t.id === saved; });
-  apply(known ? saved : 'grayed');
-
-  /* ------------------------------------------------------------------
-     The section bar says where you are, and says when it has more in it.
-     Both are the same defect if left out: a section you cannot see is a
-     section that does not exist for the person hunting it.
-     ------------------------------------------------------------------ */
-  var nav = document.getElementById('topnav');
-  var rail = nav.parentElement;
-  var links = [].slice.call(nav.querySelectorAll('a'));
-  var targets = links
-    .map(function (a) { return { a: a, el: document.querySelector(a.getAttribute('href')) }; })
-    .filter(function (t) { return t.el; });
-
-  function markOverflow() {
-    // A bar that scrolls without looking like it scrolls hides its own end.
-    var more = nav.scrollWidth - nav.clientWidth - nav.scrollLeft > 8;
-    rail.setAttribute('data-overflow', String(more));
-  }
-  nav.addEventListener('scroll', markOverflow, { passive: true });
-  window.addEventListener('resize', markOverflow);
-  markOverflow();
-
-  function spy() {
-    // The current section is the last one whose top has passed the header.
-    var line = 120;
-    var current = targets[0];
-    targets.forEach(function (t) {
-      if (t.el.getBoundingClientRect().top <= line) current = t;
-    });
-    links.forEach(function (a) { a.removeAttribute('aria-current'); });
-    if (current && window.scrollY > 40) {
-      current.a.setAttribute('aria-current', 'true');
-      // Keep the active entry reachable when the bar is scrolled sideways.
-      var r = current.a.getBoundingClientRect();
-      var nr = nav.getBoundingClientRect();
-      if (r.left < nr.left || r.right > nr.right) {
-        nav.scrollLeft += r.left - nr.left - 24;
-        markOverflow();
-      }
-    }
-  }
-  var ticking = false;
-  window.addEventListener('scroll', function () {
-    if (ticking) return;
-    ticking = true;
-    requestAnimationFrame(function () { spy(); ticking = false; });
-  }, { passive: true });
-  spy();
-
-  /* The language links are plain hrefs and work with no script at all.
-     This only carries the anchor across, so switching language does not
-     also send you back to the top of a page you were halfway down. */
-  var langs = document.querySelectorAll('[data-lang-link]');
-  if (langs.length) {
-    var carry = function () {
-      var h = window.location.hash;
-      for (var i = 0; i < langs.length; i++) {
-        langs[i].href = langs[i].getAttribute('data-href') + h;
-      }
-    };
-    window.addEventListener('hashchange', carry);
-    carry();
-  }
-
-  var copy = document.getElementById('copy');
-  var cmd = document.getElementById('cmd');
-  copy.addEventListener('click', function () {
-    var text = cmd.textContent;
-    var done = function () {
-      copy.textContent = S.copied;
-      setTimeout(function () { copy.textContent = S.copy; }, 1600);
-    };
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(done, function () { copy.textContent = S.selectIt; });
-    } else {
-      copy.textContent = S.selectIt;
-    }
-  });
-})();
-</script>
+<!--SCRIPT-->

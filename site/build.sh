@@ -1,20 +1,29 @@
 #!/bin/sh
-# One source, four outputs — two locales × two delivery forms.
+# The site: two pages, two languages, one set of sources.
 #
-#   page.src.html   the page, English in the clear, with <!--SHOT:name--> where
-#                   a screenshot goes and data-i18n="key" on what translates
-#   i18n/fr.json    the French against the same keys. A key on one side only
-#                   FAILS this build, naming it
+#   page.src.html   the FRONT PAGE — the short version, plain words, no jargon
+#   docs.src.html   the DOCUMENTATION — the long one, sixteen sections
+#   shared.css      one stylesheet, inlined into every output
+#   partials/       header, footer and script, shared by both pages
+#   i18n/fr.json    the French, against the same keys. A key present on one
+#                   side only FAILS this build, naming it
 #
-#   index.html      English, static host: <img src="/shots/name.png">, so the
-#   fr/index.html   French, same          HTML stays ~62 KB and the seven PNGs
-#                                         are cached separately
-#   page.html       English, published Artifact: screenshots inlined as data
-#   page.fr.html    French, same           URIs, because an Artifact's CSP
-#                                          blocks every external image
+# Outputs, served by Vercel with cleanUrls:
+#
+#   index.html          →  /            docs/index.html     →  /docs
+#   fr/index.html       →  /fr          fr/docs/index.html  →  /fr/docs
+#
+#   page.html, page.fr.html   the front page with its screenshots inlined as
+#                             data URIs, for a host that blocks external
+#                             images. The documentation has no such variant:
+#                             it would add two more megabytes of duplicated
+#                             screenshots for a use nobody has.
 #
 # Captions and alt text live in shots/captions.json, beside the images, and go
 # through the same catalogue check under the keys shot.<name>.cap / .alt.
+#
+# After changing anything visual, run check.mjs — it measures contrast in all
+# six palettes rather than trusting the look of it.
 set -e
 cd "$(dirname "$0")"
 python3 build.py

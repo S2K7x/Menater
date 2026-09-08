@@ -1,0 +1,735 @@
+<title data-i18n="d.meta.title">MENATER documentation</title>
+<meta name="description" data-i18n-content="d.meta.description" content="Full documentation for MENATER: install it, how the five steps work, how alerts get in, every screen in the console, what it refuses to do, and the numbers behind it.">
+
+<!--HEADER-->
+
+<main id="top" class="docs">
+  <div class="wrap docs-grid">
+
+    <!-- The sidebar is the whole navigation of this page: sixteen anchors in
+         five groups, sticky on a wide screen and a closed fold on a phone.
+         A reference you cannot see the shape of is a reference you scroll. -->
+    <aside class="docs-side">
+      <details class="docs-toc" id="toc" open>
+        <summary>
+          <span data-i18n="d.toc">On this page</span>
+          <span class="hint" data-i18n="d.toc.hint">16 sections</span>
+        </summary>
+        <nav id="topnav" data-i18n-aria-label="d.a11y.nav" aria-label="Documentation sections">
+          <p class="grp" data-i18n="d.g1">Start here</p>
+          <a href="#what"><span class="n">01</span><span data-i18n="d.s1">What MENATER is</span></a>
+          <a href="#install"><span class="n">02</span><span data-i18n="d.s2">Install it</span></a>
+          <a href="#setup"><span class="n">03</span><span data-i18n="d.s3">Make it work</span></a>
+
+          <p class="grp" data-i18n="d.g2">How it works</p>
+          <a href="#pipeline"><span class="n">04</span><span data-i18n="d.s4">The five steps</span></a>
+          <a href="#ingest"><span class="n">05</span><span data-i18n="d.s5">How alerts get in</span></a>
+          <a href="#contract"><span class="n">06</span><span data-i18n="d.s6">What an alert must contain</span></a>
+
+          <p class="grp" data-i18n="d.g3">The console</p>
+          <a href="#tabs"><span class="n">07</span><span data-i18n="d.s7">The ten tabs</span></a>
+          <a href="#assistant"><span class="n">08</span><span data-i18n="d.s8">The built-in assistant</span></a>
+          <a href="#mcp"><span class="n">09</span><span data-i18n="d.s9">Connect your own AI</span></a>
+          <a href="#design"><span class="n">10</span><span data-i18n="d.s10">Themes and readability</span></a>
+
+          <p class="grp" data-i18n="d.g4">What holds</p>
+          <a href="#closed"><span class="n">11</span><span data-i18n="d.s11">The four closed lists</span></a>
+          <a href="#shadow"><span class="n">12</span><span data-i18n="d.s12">Watch-only mode</span></a>
+          <a href="#audit"><span class="n">13</span><span data-i18n="d.s13">The audit record</span></a>
+          <a href="#numbers"><span class="n">14</span><span data-i18n="d.s14">Measured numbers</span></a>
+
+          <p class="grp" data-i18n="d.g5">The rest</p>
+          <a href="#limits"><span class="n">15</span><span data-i18n="d.s15">What it does not do</span></a>
+          <a href="#glossary"><span class="n">16</span><span data-i18n="d.s16">Words used here</span></a>
+        </nav>
+      </details>
+    </aside>
+
+    <div class="docs-body">
+      <header class="docs-head">
+        <p class="kick" data-i18n="d.kick">Documentation</p>
+        <h1 data-i18n="d.title">Everything MENATER does, and why it does it that way.</h1>
+        <p class="lede" data-i18n="d.lede">
+          The front page is the short version. This is the long one: what each part does, what it
+          refuses to do, and the reasoning behind both. Read it in order or jump to what you need —
+          nothing below depends on what precedes it.
+        </p>
+      </header>
+
+      <!-- ================= 01 ================= -->
+      <section id="what">
+        <h2 data-i18n="d.s1">What MENATER is</h2>
+        <p data-i18n="d.what.p1">
+          MENATER is a <b>security operations console</b> you install on your own machine. It takes
+          the alerts your detection tools raise, works out which ones matter, and puts the ones that
+          need a decision in front of a person. It is free, open source, and there is no company
+          behind it.
+        </p>
+        <p data-i18n="d.what.p2">
+          It has two halves that share one screen. The <b>alert side</b> deals with what has already
+          happened — an alert is a thing that occurred. The <b>code side</b> deals with what is about
+          to: a flaw in your source code, before it ships. They share an interface and a login; they
+          do not yet feed each other.
+        </p>
+        <p class="callout" data-i18n="d.what.callout">
+          <b>The design idea in one sentence.</b> An AI reading a security alert is reading text an
+          attacker wrote, so the AI is allowed to read and to propose, and a person is the only thing
+          allowed to act.
+        </p>
+        <p data-i18n="d.what.p3">
+          Three programs run: a database, the console itself, and the code scanner. Nothing else is
+          needed and nothing leaves your machine except the requests you configured — to the AI
+          provider whose key you supplied, and to the reputation services you chose to enable.
+        </p>
+      </section>
+
+      <!-- ================= 02 ================= -->
+      <section id="install">
+        <h2 data-i18n="d.s2">Install it</h2>
+        <p data-i18n="d.install.p1">
+          Docker is the normal way to install MENATER, not one option among several. You need Docker
+          and nothing else: no database to configure, no schema to apply by hand, no second machine.
+        </p>
+
+<pre><code><span class="c" data-i18n="d.install.c1"># fill in the two passwords it asks for</span>
+cp .env.example .env
+
+<span class="c" data-i18n="d.install.c2"># database + console + code scanner</span>
+docker compose up -d --build
+
+<span class="a">→ http://localhost:4400</span></code></pre>
+
+        <p data-i18n="d.install.p2">
+          Useful afterwards: <span class="mono">docker compose logs -f console</span> follows what
+          the console is doing, <span class="mono">docker compose down</span> stops everything and
+          keeps your data, and <span class="mono">docker compose down -v</span> erases everything
+          including the database.
+        </p>
+        <p data-i18n="d.install.p3">
+          The database and the code scanner are reachable only from inside the stack. One port is
+          published, and it serves both the interface and the API — a second entry point would mean
+          a lock protecting half the application.
+        </p>
+        <p class="note" data-i18n="d.install.note">
+          <b>Running it without Docker?</b> <span class="mono">npm run dev</span> inside
+          <span class="mono">dashboard/</span> starts the three processes with live reload. That is a
+          development mode: it assumes you already have Node, a running database and the schema
+          applied.
+        </p>
+      </section>
+
+      <!-- ================= 03 ================= -->
+      <section id="setup">
+        <h2 data-i18n="d.s3">Make it work</h2>
+        <p data-i18n="d.setup.p1">
+          <b>It comes up in three minutes and sorts nothing.</b> That is deliberate: each of the four
+          things below is a decision the console refuses to make for you. A checklist at the top of
+          the settings page tracks all four until they are done.
+        </p>
+
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">#</th>
+                <th scope="col" data-i18n="d.setup.th2">What you have to do</th>
+                <th scope="col" data-i18n="d.setup.th3">What happens if you skip it</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td class="m">1</td><td data-i18n="d.setup.r1a">Set a shared secret for the alert endpoint</td><td data-i18n="d.setup.r1b">The door stays <b>closed</b>. An empty secret closes it rather than opening it — "no authentication configured" must never read as "no authentication required".</td></tr>
+              <tr><td class="m">2</td><td data-i18n="d.setup.r2a">Turn the endpoint on</td><td data-i18n="d.setup.r2b">Every alert is refused.</td></tr>
+              <tr><td class="m">3</td><td data-i18n="d.setup.r3a">Give it a key for an AI model</td><td data-i18n="d.setup.r3b">Every alert lands on a human with a confidence of zero, and says why. Nothing is lost; nothing is sorted.</td></tr>
+              <tr><td class="m">4</td><td data-i18n="d.setup.r4a">Point a detection tool at it</td><td data-i18n="d.setup.r4b">No alerts arrive.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p data-i18n="d.setup.p2">
+          Reputation-service keys and chat notifications are optional. A service you gave no key to
+          is shown as <span class="pill pill-grey">Not asked</span> — a question nobody put, which is
+          a different thing from a question that came back empty.
+        </p>
+
+        <!--SHOT:07-health-->
+
+        <p data-i18n="d.setup.p3">
+          The <b>Health</b> tab tests every link in the chain on demand and names, for each one, the
+          consequence and then the fix. It reports four states rather than two, so "still checking"
+          is never announced as "broken".
+        </p>
+      </section>
+
+      <!-- ================= 04 ================= -->
+      <section id="pipeline">
+        <h2 data-i18n="d.s4">The five steps</h2>
+        <p data-i18n="d.pipe.p1">
+          MENATER runs its own engine. There is no workflow platform to install and no second product
+          that has to be reachable for an alert to be sorted — so a workflow cannot be half-deployed,
+          renamed in an editor, or left unpublished. The console reads its own record of what ran.
+        </p>
+
+        <div class="flow">
+          <ol class="flow-track">
+            <li class="flow-node">
+              <span class="fn-n" data-i18n="d.f1.n">01 · Intake</span>
+              <span class="fn-t" data-i18n="d.f1.t">Checked and de-duplicated</span>
+              <span class="fn-d" data-i18n="d.f1.d">Required fields verified, repeats dropped, and the sender told what actually happened: rejected, already seen, or accepted.</span>
+            </li>
+            <li class="flow-node">
+              <span class="fn-n" data-i18n="d.f2.n">02 · Context</span>
+              <span class="fn-t" data-i18n="d.f2.t">Reputation and tagging</span>
+              <span class="fn-d" data-i18n="d.f2.d">Address reputation, location, and technique tagging. A service with no key is marked <em>not asked</em>, and the AI is told that.</span>
+            </li>
+            <li class="flow-node">
+              <span class="fn-n" data-i18n="d.f3.n">03 · Opinion</span>
+              <span class="fn-t" data-i18n="d.f3.t">The AI decides</span>
+              <span class="fn-d" data-i18n="d.f3.d">A verdict, a confidence, and its reasoning. With no key it returns <span class="mono">needs_human</span> at confidence 0 — safe by failing, never open by failing.</span>
+            </li>
+            <li class="flow-node flow-gate">
+              <span class="fn-n" data-i18n="d.f4.n">04 · Decision</span>
+              <span class="fn-you" data-i18n="d.f4.you">Human</span>
+              <span class="fn-t" data-i18n="d.f4.t">Approval and routing</span>
+              <span class="fn-d" data-i18n="d.f4.d">The request goes to the console and to Slack or Discord. Below the notification threshold nobody is asked — so nothing waits, and it escalates at once.</span>
+            </li>
+            <li class="flow-node">
+              <span class="fn-n" data-i18n="d.f5.n">05 · Record</span>
+              <span class="fn-t" data-i18n="d.f5.t">Sealed into the log</span>
+              <span class="fn-d" data-i18n="d.f5.d">One row that can be added to and never edited, sealed to the row before it under a lock.</span>
+            </li>
+          </ol>
+          <p class="flow-note" data-i18n="d.pipe.err">
+            <b>A sixth exists and never runs in sequence.</b> The error handler is declared on the
+            other five and called only from their failure branches. No failure is ever silent: every
+            branch logs, notifies, or both.
+          </p>
+        </div>
+
+        <h3 data-i18n="d.pipe.h2">Three consequences worth knowing</h3>
+        <ul class="rows">
+          <li>
+            <span class="t" data-i18n="d.pipe.c1t">A junction waits</span>
+            <span class="d" data-i18n="d.pipe.c1d">A step with several inputs does not start when one of them has answered. Step 02 would otherwise assemble a third of its sources — <b>with no error, no trace, and a plausible result.</b></span>
+          </li>
+          <li>
+            <span class="t" data-i18n="d.pipe.c2t">Retry, then fail by name</span>
+            <span class="d" data-i18n="d.pipe.c2d">Every outside call retries with a growing delay, treating any wait the other end suggests as a floor rather than shortening it. When it still fails, it says which service and why: a source nobody could reach is not a source that said nothing.</span>
+          </li>
+          <li>
+            <span class="t" data-i18n="d.pipe.c3t">The unreduced view</span>
+            <span class="d" data-i18n="d.pipe.c3d">The queue stitches runs into cases, and two kinds of failure vanish in that stitching. The Tracking tab shows them raw: broken chains, runs attached to no alert, a searchable log, and a replay that <b>refuses</b> when the original alert is unknown rather than replaying a reconstruction.</span>
+          </li>
+        </ul>
+
+        <!--SHOT:03-tracking-->
+      </section>
+
+      <!-- ================= 05 ================= -->
+      <section id="ingest">
+        <h2 data-i18n="d.s5">How alerts get in</h2>
+        <p data-i18n="d.ing.p1">
+          There are two ways to deliver an alert, and <b>they fail differently</b>. Your tool can push
+          it to MENATER the moment it happens, or MENATER can ask your tool for new alerts on a
+          schedule. Neither is better.
+        </p>
+
+        <div class="grid g2">
+          <article class="card">
+            <h3 data-i18n="d.ing.c1h">Push</h3>
+            <p data-i18n="d.ing.c1p">One network hop, so the alert arrives instantly — and you are exactly as reliable as your tool's own retry policy. <b>An alert nobody received is an alert nobody knows about.</b></p>
+          </article>
+          <article class="card">
+            <h3 data-i18n="d.ing.c2h">Pull</h3>
+            <p data-i18n="d.ing.c2p">Half a polling interval of delay on average — and nothing is lost to a call that never arrived, because the bookmark is still where it was.</p>
+          </article>
+        </div>
+
+        <p data-i18n="d.ing.p2">
+          <b>The default uses both, because the cost lands on different alerts.</b> A critical alert
+          contained four minutes late was not contained; a low-priority one sorted four minutes late
+          is still low priority. So the urgent two levels take the instant path and the other two are
+          polled. An alert whose priority could not be read takes the <b>fast</b> path — quietly
+          parking something that might be critical is the failure this product exists to prevent.
+        </p>
+
+        <!--SHOT:02-ingestion-->
+
+        <h3 data-i18n="d.ing.h2">Rules the transport obeys</h3>
+        <ul class="rows">
+          <li>
+            <span class="t" data-i18n="d.ing.r1t">Nothing is refused for taking the wrong path</span>
+            <span class="d" data-i18n="d.ing.r1d">A low-priority alert sent to the instant endpoint is accepted and sorted; the reply says which path the policy expected. Dropping a detection over a routing preference replaces it with nothing.</span>
+          </li>
+          <li>
+            <span class="t" data-i18n="d.ing.r2t">The bookmark only moves onto delivered data</span>
+            <span class="d" data-i18n="d.ing.r2d">Not onto data that was read, and never after an empty or failed poll — a source that is down looks exactly like a source where nothing happened. Each poll also reaches back a little past the bookmark, because a tool that stamps an alert at detection and files it a second later would otherwise lose that second forever.</span>
+          </li>
+          <li>
+            <span class="t" data-i18n="d.ing.r3t">A poll that placed nothing is a failed poll</span>
+            <span class="d" data-i18n="d.ing.r3d">Whether the network request worked is not the question being asked. It reports how many alerts it read, how many it placed, and names the cause when those differ.</span>
+          </li>
+          <li>
+            <span class="t" data-i18n="d.ing.r4t">Polls do not pile up</span>
+            <span class="d" data-i18n="d.ing.r4d">One in flight per source. A source slower than the interval simply gets polled less often, which is the honest consequence of being slow; the alternative accumulates requests until memory runs out.</span>
+          </li>
+          <li>
+            <span class="t" data-i18n="d.ing.r5t">A source that refuses us is backed off, out loud</span>
+            <span class="d" data-i18n="d.ing.r5d">The wait doubles per consecutive failure up to thirty minutes, and it is shown on screen — a skipped source is otherwise indistinguishable from a poller that stopped. The "poll now" button ignores the wait, because a diagnostic control that answers <em>not yet, wait eight minutes</em> is one nobody presses twice.</span>
+          </li>
+        </ul>
+      </section>
+
+      <!-- ================= 06 ================= -->
+      <section id="contract">
+        <h2 data-i18n="d.s6">What an alert must contain</h2>
+        <p data-i18n="d.con.p1">
+          Two tiers, and the difference between them is the difference between <em>we cannot use
+          this</em> and <em>this detection simply had no destination address</em>.
+        </p>
+
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col" data-i18n="d.con.th1">Tier</th>
+                <th scope="col" data-i18n="d.con.th2">Fields</th>
+                <th scope="col" data-i18n="d.con.th3">Rule</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="m" data-i18n="d.con.t1">Identity</td>
+                <td class="m"><span class="mono">alert_id · rule_name · severity · timestamp · raw_log</span></td>
+                <td data-i18n="d.con.t1r">Required. Missing means rejected — <b>and the rejection names the fields.</b></td>
+              </tr>
+              <tr>
+                <td class="m" data-i18n="d.con.t2">Observables</td>
+                <td class="m"><span class="mono">source_ip · dest_ip · user · host · process · file_path · url</span></td>
+                <td data-i18n="d.con.t2r">Optional. Absent stays absent: <span class="mono">null</span>, never an empty string, never invented. Most real detections carry no destination address.</td>
+              </tr>
+              <tr>
+                <td class="m" data-i18n="d.con.t3">Everything else</td>
+                <td class="m" data-i18n="d.con.t3f">whatever your tool sends</td>
+                <td data-i18n="d.con.t3r">Kept whole, on the case and in the audit row. Nothing your tool sends is discarded.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p class="callout" data-i18n="d.con.callout">
+          <b>The consequence to hold onto.</b> Isolating a machine <em>refuses to run</em> when it has
+          no machine to name. An action whose target is unknown is not an action.
+        </p>
+
+        <p data-i18n="d.con.p2">
+          Alerts arrive at <span class="mono">POST /api/ingest/&lt;source&gt;</span>, and the route
+          decides how the payload is read — never the payload itself, so a sender cannot claim to be
+          something else. The Wazuh integration maps nothing: it forwards the alert as written and the
+          console translates.
+        </p>
+      </section>
+
+      <!-- ================= 07 ================= -->
+      <section id="tabs">
+        <h2 data-i18n="d.s7">The ten tabs</h2>
+        <p data-i18n="d.tabs.p1">
+          Grouped rather than trimmed. Ten identical buttons cost a decision every time you look at
+          them; the remedy is categories, not a second menu inside the first.
+        </p>
+
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col" data-i18n="d.tabs.th1">Tab</th>
+                <th scope="col" data-i18n="d.tabs.th2">What is on it</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td class="m">Alerts</td><td data-i18n="d.tab.alerts">The queue and the incident card. Five columns carry eight facts: how bad it is sits inside <em>what it is</em>, and the confidence sits inside <em>the verdict</em>, because 0.58 means nothing without the verdict it qualifies. Every value in an alert carries a jump into Lookup with the question already asked.</td></tr>
+              <tr><td class="m">Code</td><td data-i18n="d.tab.code">Run a code scan and read the report. It is loaded the first time you open it and kept loaded — changing tab during a scan does not cut it.</td></tr>
+              <tr><td class="m">Ingestion</td><td data-i18n="d.tab.ingestion">How alerts get in: the delivery policy, the sources on each path, and the pipeline as it runs, with its editable variables.</td></tr>
+              <tr><td class="m">Rules</td><td data-i18n="d.tab.rules">Declare what is normal here — the authorised scanner, the backup window — with a dry run that answers <em>which rule would match this alert</em> without touching the pipeline. Eight templates ship disabled and unowned.</td></tr>
+              <tr><td class="m">Tracking</td><td data-i18n="d.tab.tracking">The unreduced view: broken chains, runs attached to no alert, a searchable log, replay. Expected orphans — the diagnostic probe fires an invalid alert on purpose — are listed and never counted, or the tab would blink after every connectivity test and a permanent alarm stops being read.</td></tr>
+              <tr><td class="m">Metrics</td><td data-i18n="d.tab.metrics">Two rates, never added together. See <a href="#shadow">Watch-only mode</a>.</td></tr>
+              <tr><td class="m">Health</td><td data-i18n="d.tab.health">One button that tests every link in the chain, and nine test alerts to send through it — one per code path rather than per story: no destination, with a hash, malformed, duplicate.</td></tr>
+              <tr><td class="m">Lookup</td><td data-i18n="d.tab.lookup">Ask about one value — an address, a domain, a web address, a file fingerprint, an email — plus a breached-password check whose fingerprint never leaves your browser. Obfuscated input (<span class="mono">1.2.3[.]4</span>, <span class="mono">hxxp://</span>) is an accepted format, and both forms are shown.</td></tr>
+              <tr><td class="m">Guide</td><td data-i18n="d.tab.guide">The in-console documentation, searchable — and the search reads the glossary too, so a word looked up in the wrong vocabulary still finds its section.</td></tr>
+              <tr><td class="m">Settings</td><td data-i18n="d.tab.settings">Keys, log sources, the machine-to-code inventory, the scan engines, the assistant — and the checklist naming what is still missing.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!--SHOT:05-lookup-->
+
+        <h3 data-i18n="d.tabs.h2">Two rules the Lookup tab holds to</h3>
+        <ul class="rows">
+          <li>
+            <span class="t" data-i18n="d.tabs.l1t">"Clean" needs a source that answered</span>
+            <span class="d" data-i18n="d.tabs.l1d">With no keys configured every service is skipped, and printing <em>nothing found</em> over a value nobody looked at is reassurance built on a hole. The count of services that actually replied sits beside the verdict, never below the fold.</span>
+          </li>
+          <li>
+            <span class="t" data-i18n="d.tabs.l2t">Not every non-answer is a failure</span>
+            <span class="d" data-i18n="d.tabs.l2d">Several services say <em>this address appears in no breach</em> with an HTTP 404, which is the best news the endpoint has. A blanket "anything but 200 is broken" rule would hide the most common and most welcome outcome behind the word <em>unavailable</em>, so each service declares its own answering codes.</span>
+          </li>
+        </ul>
+      </section>
+
+      <!-- ================= 08 ================= -->
+      <section id="assistant">
+        <h2 data-i18n="d.s8">The built-in assistant</h2>
+        <p data-i18n="d.as.p1">
+          A chat panel docked to the side of whatever screen you are on. It answers questions about
+          <em>this</em> installation — <em>explain alert 1234 simply</em>, <em>why is this still
+          waiting?</em>, <em>what is left to configure?</em> — and it receives the page you are on, so
+          "this alert" needs nothing typed.
+        </p>
+        <p class="callout" data-i18n="d.as.callout">
+          <b>Its entire security model is that it cannot act.</b> Its tool list is closed at seven
+          read-only lookups: the queue, one alert, one chain, the rules, the metrics, health, and
+          setup state. There is nothing that approves, isolates, closes, replays, edits a rule or
+          writes a setting.
+        </p>
+        <p data-i18n="d.as.p2">
+          That is not caution for its own sake. Someone asking about an alert is asking about a log
+          an attacker composed, and unrestricted model access to log content is measured at an 87 %
+          prompt-injection success rate. Three layers answer it, in the order they actually hold:
+        </p>
+        <ul class="rows">
+          <li>
+            <span class="t" data-i18n="d.as.l1t">No writes in the list</span>
+            <span class="d" data-i18n="d.as.l1d">An instruction hidden in a log arrives at a model holding seven getters. <b>This is the one that matters.</b></span>
+          </li>
+          <li>
+            <span class="t" data-i18n="d.as.l2t">Untrusted text is fenced, not deleted</span>
+            <span class="d" data-i18n="d.as.l2d">Log content travels inside markers carrying a number generated fresh for that request, so a log cannot forge a closing marker for something that did not exist when it was written. Nothing is stripped: rewriting evidence is the same mistake as filling a blank with a guess.</span>
+          </li>
+          <li>
+            <span class="t" data-i18n="d.as.l3t">The instructions say what a fence means</span>
+            <span class="d" data-i18n="d.as.l3d">Advisory, and third for a reason — a prompt is not a boundary.</span>
+          </li>
+        </ul>
+        <p data-i18n="d.as.p3">
+          Four AI providers are supported, one key each, chosen in settings. <b>Nothing is kept:</b>
+          the conversation travels with each question and is stored nowhere. Storing threads would
+          create a fourth copy of alert content, outside the audit record, with no retention policy.
+          Every answer shows what it looked up — an answer you cannot check is an answer believed for
+          the wrong reasons.
+        </p>
+      </section>
+
+      <!-- ================= 09 ================= -->
+      <section id="mcp">
+        <h2 data-i18n="d.s9">Connect your own AI</h2>
+        <p data-i18n="d.mcp.p1">
+          The same read-only lookups can be exposed to an AI assistant you run yourself — Claude
+          Desktop, Claude Code, Cursor, VS Code — over the Model Context Protocol. It is
+          <b>off by default</b>, and switched off or without a token it answers as though the address
+          did not exist.
+        </p>
+        <p data-i18n="d.mcp.p2">
+          Settings has a four-step install page: turn it on, generate a token, copy the block for
+          your client, press the test button. The address in that block comes from the address
+          <em>you</em> reached the console on, not from a document — install it on a colleague's
+          machine and the block names their host. The token is shown once, and the test runs on the
+          server, because the browser is deliberately refused by the same guard that stops a hostile
+          web page reaching a service on your machine.
+        </p>
+        <p data-i18n="d.mcp.p3">
+          What it exposes: <b>14 tools, 8 prompts, 9 resources</b>, all read-only. The prompts matter
+          more than they look — a client that sees ten tool names sees ten getters and no reason to
+          use them, whereas <em>explain this alert</em>, <em>how dangerous is this</em>,
+          <em>why is it waiting</em> and <em>write me a shift handover</em> are the questions this
+          console exists to answer, offered rather than remembered.
+        </p>
+        <p class="note" data-i18n="d.mcp.note">
+          <b>The token is the whole access control.</b> Anyone who can reach the console and holds it
+          can read the queue, the alerts and the rules. Treat it like the console password. They can
+          change nothing: there is no write in the list.
+        </p>
+      </section>
+
+      <!-- ================= 10 ================= -->
+      <section id="design">
+        <h2 data-i18n="d.s10">Themes and readability</h2>
+        <p data-i18n="d.des.p1">
+          Six colour schemes, switchable from the header of this page too. Every one of them
+          redefines the <b>entire</b> palette: inheriting three colours from another theme produces
+          an accident that review does not catch, such as a dark grey left on a cream background.
+        </p>
+        <p data-i18n="d.des.p2">
+          <b>Contrast is measured, not judged by eye.</b> A test computes the standard contrast ratios
+          and refuses a palette that falls below them — 4.5:1 for text on every surface, for text
+          placed on the accent colour, and for the risk colours inside their own badges. It caught a
+          failure red at 2.5:1, on the screen that depends on red most, and it found a long-standing
+          grey at 2.77:1 in the original theme.
+        </p>
+        <ul class="rows">
+          <li>
+            <span class="t" data-i18n="d.des.r1t">One accent, one job</span>
+            <span class="d" data-i18n="d.des.r1d">The accent colour means exactly one thing — <em>a person is blocked here</em> — plus the primary button. Red says critical or failed, orange worth a look, green handled. A red button would teach an analyst to ignore red on the one screen where red saves time.</span>
+          </li>
+          <li>
+            <span class="t" data-i18n="d.des.r2t">Colour never carries meaning alone</span>
+            <span class="d" data-i18n="d.des.r2d">Every risk colour is paired with a word, so the console still works for someone who cannot tell them apart.</span>
+          </li>
+          <li>
+            <span class="t" data-i18n="d.des.r3t">Density is a feature</span>
+            <span class="d" data-i18n="d.des.r3d">The alert table is meant to show forty rows. A fixed-width font means <em>this string came from the machine and it is exact</em>; prose about a value is not in it, the value is. An analyst scrolling is an analyst who has lost the overview.</span>
+          </li>
+          <li>
+            <span class="t" data-i18n="d.des.r4t">What explains folds, what reports does not</span>
+            <span class="d" data-i18n="d.des.r4d">A definition or a method note goes behind a fold that says how much is inside. A state, a count, a failure or an action awaiting approval stays on screen. Filing a failure behind a silent fold reproduces exactly the defect the Tracking tab exists to expose.</span>
+          </li>
+        </ul>
+        <p data-i18n="d.des.p3">
+          The interface works on a phone: the tab bar scrolls sideways and says so, the alert table
+          folds into cards, touch targets are 44 px, and form fields are 16 px so iOS does not zoom
+          when you tap one.
+        </p>
+      </section>
+
+      <!-- ================= 11 ================= -->
+      <section id="closed">
+        <h2 data-i18n="d.s11">The four closed lists</h2>
+        <p data-i18n="d.cl.p1">
+          Four lists in this product are <b>closed</b> — nothing can be added to them, not even
+          behind an approval. Each is closed for the same reason: an operator points this console at
+          attacker-composed text all day, and an open list is one instruction away from being
+          somebody else's.
+        </p>
+
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col" data-i18n="d.cl.th1">List</th>
+                <th scope="col" data-i18n="d.cl.th2">Size</th>
+                <th scope="col" data-i18n="d.cl.th3">What being closed prevents</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="m" data-i18n="d.cl.r1a">Actions</td>
+                <td class="m">4</td>
+                <td data-i18n="d.cl.r1c">Isolate a machine temporarily (with an expiry and an automatic undo), open a ticket, escalate, close as a false positive. <span class="sub">No tuning rule can reach past this list either.</span></td>
+              </tr>
+              <tr>
+                <td class="m" data-i18n="d.cl.r2a">Assistant tools</td>
+                <td class="m" data-i18n="d.cl.r2b">7 read-only</td>
+                <td data-i18n="d.cl.r2c">The chat panel can read the queue, an alert, a chain, the rules, the metrics, health and setup state, and write nothing. <span class="sub">An injected instruction arrives at a model with nothing to obey it with.</span></td>
+              </tr>
+              <tr>
+                <td class="m" data-i18n="d.cl.r3a">Credential names</td>
+                <td class="m" data-i18n="d.cl.r3b">named list</td>
+                <td data-i18n="d.cl.r3c">Both key stores accept only names on a fixed list. <span class="sub">An arbitrary name would turn the settings endpoint into a way to inject any environment variable into the process, <span class="mono">PATH</span> included.</span></td>
+              </tr>
+              <tr>
+                <td class="m" data-i18n="d.cl.r4a">Reputation services</td>
+                <td class="m">7</td>
+                <td data-i18n="d.cl.r4c">The lookup endpoint takes a value and a kind — never a web address. <span class="sub">A route that fetched whatever it was handed would be a request-forgery hole with a button on it.</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!--SHOT:04-case-->
+
+        <p data-i18n="d.cl.p2">
+          A fifth limit sits on the tuning rules. A team can declare what is normal here — the
+          authorised scanner, the backup window — and the console <b>refuses</b> a permanent allow
+          keyed on one identity field alone, a suppression with no expiry, and any rule with no owner
+          or no stated reason.
+        </p>
+      </section>
+
+      <!-- ================= 12 ================= -->
+      <section id="shadow">
+        <h2 data-i18n="d.s12">Watch-only mode</h2>
+        <p data-i18n="d.sh.p1">
+          A new install <b>executes nothing</b>. It records the decision it would have made and
+          carries on. Leaving that mode is not a switch to flip on your first day: it waits on a
+          number measured over real alerts that went through the real guardrails.
+        </p>
+        <p data-i18n="d.sh.p2">
+          Two rates are measured, and <b>they are never added together</b>, because they answer
+          different questions:
+        </p>
+
+        <div class="grid g2">
+          <article class="card">
+            <h3 data-i18n="d.sh.c1h">How often the AI said "false positive"</h3>
+            <p data-i18n="d.sh.c1p">A measure of <b>distribution</b>, not of correctness. A model that called everything a false positive would score beautifully here.</p>
+          </article>
+          <article class="card">
+            <h3 data-i18n="d.sh.c2h">How often a person said no</h3>
+            <p data-i18n="d.sh.c2p">The share of decisions put to a human that they rejected. <b>This is the one that opens the gate</b> — it is the only stand-in for correctness available without ground truth.</p>
+          </article>
+        </div>
+
+        <p class="note" data-i18n="d.sh.note">
+          <b>Two things not to compare.</b> Two calls to the same model on the same alert return 0.88
+          and 0.91 — comparing them measures the model's noise, not anything about your setup. And
+          comparing a case the pipeline did not produce — a test alert injected halfway through, a
+          fallback verdict written when no key was configured — yields disagreements that are not
+          disagreements, and blocks the gate for nothing.
+        </p>
+        <p data-i18n="d.sh.p3">
+          The default is safe by failing. Missing configuration cannot enable execution, and only the
+          exact word <span class="mono">false</span> turns watch-only off. An approval that times out
+          <b>executes nothing</b> — silence is never consent.
+        </p>
+      </section>
+
+      <!-- ================= 13 ================= -->
+      <section id="audit">
+        <h2 data-i18n="d.s13">The audit record</h2>
+        <p data-i18n="d.au.p1">
+          Every decision writes one row to a table that can be added to and never edited. Each row is
+          sealed to the one before it, so removing or altering a row anywhere in the chain shows up
+          the next time the chain is verified. It is the product's only tamper evidence.
+        </p>
+        <p class="callout" data-i18n="d.au.callout">
+          <b>A verifier that cries wolf is one an auditor stops believing</b> — which would hide a
+          real deletion in the noise. So a false alarm here costs more than no alarm at all.
+        </p>
+        <p data-i18n="d.au.p2">
+          That is not theoretical. A stress pass found the verifier reporting broken links on 22
+          perfectly healthy rows out of 3 195. The cause: the row number was handed out <em>before</em>
+          the lock that orders the sealing, so under load two transactions could seal in one order
+          while carrying numbers in the other. The chain was an intact list that was simply no longer
+          in number order, and the verifier walks by number. Fixed by moving the number inside the
+          lock; re-verified across ~500 rows written 40 ways at once, with zero breaks.
+        </p>
+        <p class="note" data-i18n="d.au.note">
+          Rows sealed before that fix keep their broken links. The table is append-only and immutable
+          by design, which is the right trade: they cannot be rewritten, and the verifier goes on
+          naming them honestly.
+        </p>
+      </section>
+
+      <!-- ================= 14 ================= -->
+      <section id="numbers">
+        <h2 data-i18n="d.s14">Measured numbers</h2>
+        <p data-i18n="d.nu.p1">
+          Run against a plain <span class="mono">docker compose up</span> — database, console, code
+          scanner, nothing else. <b>This is a quality pass on one machine, not a published
+          benchmark</b>; what matters is that it is reproducible and that the conditions are stated.
+        </p>
+
+        <div class="figs">
+          <div class="fig">
+            <span class="n">400 / 400</span>
+            <span class="l" data-i18n="d.fig1l">alerts accepted under load</span>
+            <span class="c" data-i18n="d.fig1c">50 at once · ~134 per second · 95 % answered within 424 ms · every chain settled, nothing left running</span>
+          </div>
+          <div class="fig">
+            <span class="n">1 of 12</span>
+            <span class="l" data-i18n="d.fig2l">duplicates accepted</span>
+            <span class="c" data-i18n="d.fig2c">12 simultaneous copies of one alert → 1 accepted, 11 already seen, zero errors</span>
+          </div>
+          <div class="fig">
+            <span class="n">0</span>
+            <span class="l" data-i18n="d.fig3l">broken links in the audit chain</span>
+            <span class="c" data-i18n="d.fig3c">re-verified across 2 644 rows written under concurrent load</span>
+          </div>
+          <div class="fig">
+            <span class="n">1,278</span>
+            <span class="l" data-i18n="d.fig4l">tests passing</span>
+            <span class="c" data-i18n="d.fig4c">913 console · 365 code scanner · type checking clean</span>
+          </div>
+        </div>
+
+        <p data-i18n="d.nu.p2">
+          <b>That pass found eight defects and they were fixed.</b> Three are worth naming, because
+          each is a failure that looked like a success:
+        </p>
+        <ul class="rows">
+          <li>
+            <span class="t" data-i18n="d.nu.d1t">Refused alerts reported as accepted</span>
+            <span class="d" data-i18n="d.nu.d1d">The entry point returned "accepted" for every alert it managed to start, including ones the pipeline had rejected for missing fields — so the sender had no reason to fix anything, and the reason, already computed, never left the server.</span>
+          </li>
+          <li>
+            <span class="t" data-i18n="d.nu.d2t">The duplicate check was not safe under a burst</span>
+            <span class="d" data-i18n="d.nu.d2d">"Insert unless a row exists" reads as one atomic step and is not: two transactions both saw the row absent, both inserted, one died. Twelve simultaneous copies of one alert produced one server error — and a server error tells the sender to retry an alert that was already accepted.</span>
+          </li>
+          <li>
+            <span class="t" data-i18n="d.nu.d3t">The audit verifier cried wolf</span>
+            <span class="d" data-i18n="d.nu.d3d">See <a href="#audit">The audit record</a>.</span>
+          </li>
+        </ul>
+      </section>
+
+      <!-- ================= 15 ================= -->
+      <section id="limits">
+        <h2 data-i18n="d.s15">What it does not do</h2>
+        <p data-i18n="d.li.p1">
+          Stated here for the same reason the console states it: a page that lists only what works is
+          a green that was never earned.
+        </p>
+        <ul class="rows">
+          <li>
+            <span class="t" data-i18n="d.li.r1t">The two halves do not talk</span>
+            <span class="d" data-i18n="d.li.r1d">A code scan creates no alert in the queue, and an alert starts no scan. What does connect them is a table you fill in mapping machine names to the code that runs on them, so an incident card can name the project and hand it to the scanner with one click — it fills a form in, it never launches anything. Matching is exact, and an ambiguous entry is refused at save time rather than guessed at.</span>
+          </li>
+          <li>
+            <span class="t" data-i18n="d.li.r2t">The login identifies nobody</span>
+            <span class="d" data-i18n="d.li.r2d">Access is a single password. It protects the console; it does not tell one approver from another, and the audit row says exactly that rather than implying a name it does not have.</span>
+          </li>
+          <li>
+            <span class="t" data-i18n="d.li.r3t">Autonomy waits on measurement</span>
+            <span class="d" data-i18n="d.li.r3d">Leaving watch-only mode is gated on a disagreement rate measured over real alerts, not on a date. See <a href="#shadow">Watch-only mode</a>.</span>
+          </li>
+          <li>
+            <span class="t" data-i18n="d.li.r4t">It is a project, not a product</span>
+            <span class="d" data-i18n="d.li.r4d">Self-hosted, open source, no support contract and no company behind it. Read the code before you point it at anything that matters — which is the right thing to do with any tool in this category.</span>
+          </li>
+        </ul>
+      </section>
+
+      <!-- ================= 16 ================= -->
+      <section id="glossary">
+        <h2 data-i18n="d.s16">Words used here</h2>
+        <p data-i18n="d.gl.p1">
+          The front page avoids these on purpose. They appear on this page and inside the console, so
+          they are defined once, here.
+        </p>
+        <dl class="gloss">
+          <dt data-i18n="d.gl.t1">Alert</dt>
+          <dd data-i18n="d.gl.d1">A single warning raised by a detection tool: <em>this file was blocked</em>, <em>this account failed to sign in twelve times</em>. It is a thing that already happened, not a prediction.</dd>
+
+          <dt data-i18n="d.gl.t2">Triage</dt>
+          <dd data-i18n="d.gl.d2">Deciding, quickly, which alerts deserve a person's time. Borrowed from hospitals, and it means the same thing here.</dd>
+
+          <dt data-i18n="d.gl.t3">False positive</dt>
+          <dd data-i18n="d.gl.d3">An alert that turned out to be nothing. Most alerts are. The cost of getting this wrong runs both ways, which is why the console is careful about the word.</dd>
+
+          <dt data-i18n="d.gl.t4">SIEM</dt>
+          <dd data-i18n="d.gl.d4">The tool that collects logs from everything you run and raises alerts from them. It is what feeds MENATER. Wazuh is the one this project is tested against.</dd>
+
+          <dt data-i18n="d.gl.t5">Enrichment</dt>
+          <dd data-i18n="d.gl.d5">Adding context to an alert before anyone judges it — is this address known for attacks, where is it, which known technique does this match.</dd>
+
+          <dt data-i18n="d.gl.t6">Watch-only mode</dt>
+          <dd data-i18n="d.gl.d6">The default. The console notes what it would have done and does nothing. Called <em>shadow mode</em> in the source code.</dd>
+
+          <dt data-i18n="d.gl.t7">Observable</dt>
+          <dd data-i18n="d.gl.d7">A concrete value inside an alert you can go and look up: an address, a machine name, a file fingerprint, a user.</dd>
+
+          <dt data-i18n="d.gl.t8">Webhook</dt>
+          <dd data-i18n="d.gl.d8">A web address you give to another tool so it can push data to you the instant something happens, instead of you asking.</dd>
+
+          <dt data-i18n="d.gl.t9">Polling</dt>
+          <dd data-i18n="d.gl.d9">The opposite: asking another tool for anything new, on a schedule.</dd>
+
+          <dt data-i18n="d.gl.t10">Prompt injection</dt>
+          <dd data-i18n="d.gl.d10">Hiding instructions inside text an AI will read, so it follows them instead of yours. A log an attacker can write into is the textbook case, and it is the reason this console's AI is allowed to read and not to act.</dd>
+        </dl>
+      </section>
+
+      <!--FOOTER-->
+    </div>
+  </div>
+</main>
+
+<!--SCRIPT-->

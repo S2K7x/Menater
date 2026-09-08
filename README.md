@@ -194,24 +194,46 @@ knows it exists.
 
 | File | Holds |
 |---|---|
-| `site/page.src.html` | **The source**, English in the clear. `<!--SHOT:name-->` marks where a screenshot goes, `data-i18n="key"` what translates |
+| `site/page.src.html` | **The front page.** The short version — plain words, no jargon, ~670 rendered words |
+| `site/docs.src.html` | **The documentation.** Sixteen sections behind a sticky sidebar, ~4 800 words |
+| `site/shared.css` | One stylesheet, inlined into every output |
+| `site/partials/` | Header, footer and script, shared by both pages |
 | `site/i18n/fr.json` | The French, against the same keys |
 | `site/shots/` | Seven screenshots of a running install, and `captions.json` beside them |
-| `site/index.html` · `site/fr/index.html` | Generated — what Vercel serves at `/` and `/fr`. HTML plus seven cached PNGs |
-| `site/page.html` · `site/page.fr.html` | Generated — the same pages with the images inlined, for hosts that block external images |
-| `site/build.sh` | Writes the four outputs from the one source |
+| `site/build.sh` | Writes the six outputs from those sources |
+| `site/check.cjs` | Measures the built site in a browser: contrast, overflow, anchors, script errors |
 
 ```bash
-cd site && ./build.sh     # after editing page.src.html, a caption or a catalogue
+cd site && ./build.sh     # after editing a source, a caption or a catalogue
 ```
 
-**Two languages, and the URL is the whole state.** `/` is English, `/fr` is
-French, each with its own `lang` attribute and `hreflang` pair; the switcher is
-two links that carry your anchor across. No cookie, no header sniffing, no
-redirect — a link somebody shares opens in the language they shared it in, and
-the page never arrives in one language and repaints in another. **A key present
-on one side only fails the build**, naming it: the typed-catalogue rule the
-console applies to `console.ts`, applied to a page.
+**Two pages, and they answer different questions.** `/` is for someone deciding
+in ten seconds whether this is for them; `/docs` is for someone who already
+decided and wants the specifics. The split is why the front page could drop from
+3 147 words to 670 without deleting anything: what used to be folded on it now
+has a page of its own, with a sidebar and its own vocabulary section.
+
+| Built | Served at |
+|---|---|
+| `site/index.html` | `/` |
+| `site/docs/index.html` | `/docs` |
+| `site/fr/index.html` | `/fr` |
+| `site/fr/docs/index.html` | `/fr/docs` |
+| `site/page.html` · `site/page.fr.html` | nowhere — the front page with its screenshots inlined, for a host that blocks external images |
+
+**Two languages, and the URL is the whole state.** Each page is a static file
+with its own `lang` attribute and `hreflang` pair; the switcher is two links
+that carry your anchor across and keep you on the page you were reading. No
+cookie, no header sniffing, no redirect — a link somebody shares opens in the
+language they shared it in, and the page never arrives in one language and
+repaints in another. **A key present on one side only fails the build**, naming
+it: the typed-catalogue rule the console applies to `console.ts`, applied to a
+page.
+
+**Contrast is measured, not looked at.** `check.cjs` drives a real browser over
+both pages, both languages and all six palettes — 648 checks — plus horizontal
+overflow from 320 px, every in-page anchor, and script errors. It needs
+Playwright; it exits non-zero on a failure, so it can gate a change.
 
 ### Deploying it
 
@@ -229,10 +251,12 @@ so there is nothing to detect and nothing to ask for.
 | Build / Install Command | leave empty |
 | Environment Variables | **none** — the page is static and reads nothing |
 
-`site/vercel.json` carries the rest: long-lived caching on the screenshots,
-which never change under their own name, and the three headers a public page
-should not be without. `site/.vercelignore` keeps the generator and the inlined
-variant off the public host.
+`site/vercel.json` carries the rest: `cleanUrls` — which is what makes
+`docs/index.html` answer at `/docs` — long-lived caching on the screenshots,
+which never change under their own name, a no-cache rule on everything else so
+a deploy is visible immediately, and the three headers a public page should not
+be without. `site/.vercelignore` keeps the generator, the browser check and the
+inlined variants off the public host.
 
 **Every screenshot is a real screen**, taken against `docker compose up` with
 alerts injected through the real pipeline — no mockups, and none of them is a
