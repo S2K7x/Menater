@@ -1157,6 +1157,61 @@ nothing alike for someone searching.
 | **P4** | ~~**"Code scanning", never "VulnPipe"**~~ ✅ | A second product name on the page makes a reader ask which of the two they are being sold. It is one feature of one console, and the page now says so. The engine keeps its directory name; the *interface* has not called it that since the merge |
 | **P5** | ~~**English and French, chosen by the reader**~~ ✅ | See below |
 | **P6** | ~~**Three screenshots in the clear, four in a fold**~~ ✅ | Seven full-width captioned figures is seven stops. The four that document a screen rather than making a point are behind one fold that names them |
+| **P7** | ~~**Split it: a front page and a `/docs`**~~ ✅ | See below. P1-P6 made one page shorter; this made it a different KIND of page |
+| **P8** | ~~**Plain words on the front page**~~ ✅ | No SIEM, no webhook, no polling, no enrichment, no audit chain, no shadow mode. Every one of them is defined in the documentation's own vocabulary section, which exists because the front page had to stop using them |
+| **P9** | ~~**A browser check, not an eye**~~ ✅ | `site/check.cjs`: 648 contrast measurements over two pages, two languages and six palettes, plus overflow from 320 px, every anchor, and script errors. It found six real defects on its first run |
+
+### P7 — one page was still the wrong shape
+
+Cutting the page from 3 147 words to 1 406 made it shorter. It did not make it
+**readable at a glance**, because the material that was cut had to go somewhere
+and "somewhere" was a fold on the same page — which is still a page that says
+*there is more here* nine times before you reach the install command.
+
+The measured difference between the two jobs, from the vendors this product
+sits beside and from the reading research: 79 % of people **scan** a new page
+rather than read it, in an F-shaped path — two horizontal sweeps and then a
+vertical one down the left. A page built for that puts the conclusion first
+(the inverted pyramid) and gives each line a front-loaded opening, because the
+first words of a line are the only ones a scan reliably takes in. A reference
+is the opposite: someone arrives already convinced, with a specific question,
+and wants a visible shape and a searchable page.
+
+**One page cannot be both.** So:
+
+| | Front page `/` | Documentation `/docs` |
+|---|---|---|
+| Reader | deciding, in ten seconds, whether this is for them | already decided, has a question |
+| Length | **~670 rendered words**, five sections | **~4 800 words**, sixteen sections |
+| Vocabulary | plain words only — no jargon, and none introduced | technical, and every term defined in § 16 |
+| Shape | scroll it, no folds, nothing hidden | sticky sidebar, groups, anchors, Ctrl-F |
+| Ends on | the install command and a link here | what it does not do |
+
+Nothing was deleted: everything the front page dropped is in the documentation,
+in more detail than it had before. The two diagrams stay — the front page keeps
+the five-step flow with the human gate, and the documentation carries its own
+version naming the six workflows.
+
+The rule for what goes where, so the next edit does not drift: **the front page
+may not use a word it has to define.** If a sentence needs a definition, the
+sentence belongs in the documentation and the front page gets the consequence
+instead.
+
+### P9 — what measuring the built pages found
+
+The first run of `check.cjs` failed on six things a review had passed over,
+five of them the same root cause: `--faint` is the colour of text you may
+skip, it measures 3.2-4.2:1 against a panel, and it was dressing text that
+**names** something — the label under a hero number, a table header, the
+conditions a figure was taken under, a sidebar group, and the front page's
+single most important sentence (*"on a fresh install, step 4 never even
+happens"*). The sixth was `--accent` used as TEXT on `--hero`, the darkest
+inset: **2.58:1** on the punk palette, on the line telling you which address to
+open after installing.
+
+`--faint` is now referenced nowhere and still defined in all six palettes, on
+purpose: neither page has any text you may skip, and dropping the token would
+make this palette drift from the console's.
 
 ### P5 — two languages, and the cheapest correct way to do it
 

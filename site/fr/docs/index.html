@@ -1,0 +1,1408 @@
+<!doctype html>
+<html lang="fr" data-palette="grayed">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="canonical" href="https://menater.vercel.app/fr/docs">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="fr_FR">
+<meta property="og:title" content="Documentation MENATER">
+<meta property="og:description" content="Documentation complète de MENATER : l'installer, comment fonctionnent les cinq étapes, comment les alertes entrent, chaque écran de la console, ce qu'il refuse de faire, et les chiffres derrière tout ça.">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="alternate" hreflang="en" href="https://menater.vercel.app/docs">
+<link rel="alternate" hreflang="fr" href="https://menater.vercel.app/fr/docs">
+<link rel="alternate" hreflang="x-default" href="https://menater.vercel.app/">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<title>Documentation MENATER</title>
+<meta name="description" content="Documentation complète de MENATER : l'installer, comment fonctionnent les cinq étapes, comment les alertes entrent, chaque écran de la console, ce qu'il refuse de faire, et les chiffres derrière tout ça.">
+<style>
+/* ==========================================================================
+   MENATER — presentation page.
+
+   The palette is the product's own, token for token (dashboard/src/theme/
+   themes.css). The six themes are here in full because the design system is
+   part of what this page is presenting: it is a demonstration, not a swatch
+   picture. `data-palette` on <html>, defaulting to `grayed` — the brand's.
+
+   Every rule in DESIGN.md § 12 applies to this page too: no gradients, no
+   glass, no radius above 4 px, no superlatives, no fabricated metrics, and
+   no green that was not earned.
+
+   `--faint` is defined in all six palettes and USED NOWHERE, on purpose. It
+   is the colour of text you may skip, it measures 3.2-4.2:1 against a panel,
+   and neither of these two pages has any such text: the front page is
+   already the short version and the documentation is what you came for. It
+   stays defined because this palette is the console's, token for token —
+   dropping one here would make the two drift.
+   ========================================================================== */
+
+:root,
+[data-palette='grayed'] {
+  --bg:#232830; --surface:#2b313a; --surface-2:#333a45; --panel:#1f242b; --hero:#171b21;
+  --fg:#f2f4f7; --muted:#98a2b3; --faint:#757f8c;
+  --line:#3d4550; --line-strong:#4d5663;
+  --accent:#c3f53c; --accent-dim:#9dc72a; --accent-fg:#171b21;
+  --red:#ff6b6b; --red-bg:#3a2226; --orange:#ffb020; --orange-bg:#382c18;
+  --green:#6ee7a0; --green-bg:#1d3329; --blue:#7cc4ff; --blue-bg:#1b2b3a; --grey:#8d97a5;
+  --shadow:0 18px 40px rgba(0,0,0,.35);
+  color-scheme: dark;
+}
+[data-palette='punk'] {
+  --bg:#3b3d2a; --surface:#45472f; --surface-2:#515338; --panel:#33351f; --hero:#24261a;
+  --fg:#f5e7bd; --muted:#bfb389; --faint:#9d9672;
+  --line:#565839; --line-strong:#6d6f47;
+  --accent:#c31f1b; --accent-dim:#a01916; --accent-fg:#f5e7bd;
+  --red:#ff997c; --red-bg:#4a2a1f; --orange:#f0b429; --orange-bg:#47381a;
+  --green:#b7d44a; --green-bg:#35401f; --blue:#9fc3c9; --blue-bg:#29383a; --grey:#a99f7c;
+  --shadow:0 18px 40px rgba(0,0,0,.45);
+  color-scheme: dark;
+}
+[data-palette='blued'] {
+  --bg:#1f31c4; --surface:#2739d6; --surface-2:#3548e6; --panel:#182699; --hero:#111c78;
+  --fg:#ffffff; --muted:#b9c4ff; --faint:#909ff5;
+  --line:#3d50e0; --line-strong:#5568f5;
+  --accent:#c8f24b; --accent-dim:#a5cc33; --accent-fg:#16249b;
+  --red:#ffb2a8; --red-bg:#3a2a92; --orange:#ffcf5c; --orange-bg:#35318f;
+  --green:#c8f24b; --green-bg:#23408c; --blue:#a8e5ff; --blue-bg:#1e3bb4; --grey:#9fabf0;
+  --shadow:0 18px 40px rgba(10,20,100,.5);
+  color-scheme: dark;
+}
+[data-palette='attck'] {
+  --bg:#7a1c08; --surface:#8f2410; --surface-2:#a32d15; --panel:#5e1406; --hero:#3d0d03;
+  --fg:#fff3e4; --muted:#f5bfa0; --faint:#e0a58a;
+  --line:#b03a1c; --line-strong:#d04f28;
+  --accent:#ffdd1c; --accent-dim:#d9b800; --accent-fg:#5e1406;
+  --red:#ffa796; --red-bg:#6d1a08; --orange:#ffdd1c; --orange-bg:#6b2a08;
+  --green:#9ce5a8; --green-bg:#2f4a1c; --blue:#7fd4ff; --blue-bg:#1d3a5c; --grey:#e0a487;
+  --shadow:0 18px 40px rgba(60,10,0,.5);
+  color-scheme: dark;
+}
+[data-palette='acme'] {
+  --bg:#f4f1ea; --surface:#ffffff; --surface-2:#ebe7dd; --panel:#fbf9f5; --hero:#e4dfd2;
+  --fg:#16150f; --muted:#5c5a51; --faint:#8a877c;
+  --line:#d9d4c8; --line-strong:#bdb7a8;
+  --accent:#e01e0b; --accent-dim:#b81909; --accent-fg:#ffffff;
+  --red:#c71e10; --red-bg:#fbe2de; --orange:#9b5d00; --orange-bg:#fbeed6;
+  --green:#1e7643; --green-bg:#dcf0e3; --blue:#17548f; --blue-bg:#dde9f7; --grey:#6f6c62;
+  --shadow:0 12px 28px rgba(22,21,15,.12);
+  color-scheme: light;
+}
+[data-palette='dark'] {
+  --bg:#16181c; --surface:#1e2126; --surface-2:#282c33; --panel:#101216; --hero:#0a0b0e;
+  --fg:#f0f2f5; --muted:#9aa1ad; --faint:#6a7280;
+  --line:#2c3038; --line-strong:#3b414b;
+  --accent:#1269f5; --accent-dim:#0955cf; --accent-fg:#ffffff;
+  --red:#f4636b; --red-bg:#33191d; --orange:#f0a63c; --orange-bg:#33260f;
+  --green:#34c77b; --green-bg:#122e20; --blue:#56a8ff; --blue-bg:#14263a; --grey:#838b98;
+  --shadow:0 18px 40px rgba(0,0,0,.55);
+  color-scheme: dark;
+}
+
+:root {
+  --display:'Archivo Black','Helvetica Neue','Arial Narrow',Impact,system-ui,sans-serif;
+  --sans:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace;
+  --radius:4px;
+  --swap:120ms;
+  --shell:1280px;
+  --rail:132px;
+}
+@media (prefers-reduced-motion: reduce) { :root { --swap: 0s; } }
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--sans);
+  font-size: 0.94rem;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  transition: background var(--swap) linear, color var(--swap) linear;
+}
+
+::selection { background: var(--accent); color: var(--accent-fg); }
+
+a { color: var(--accent); text-underline-offset: 3px; text-decoration-thickness: 1px; }
+a:hover { color: var(--accent-dim); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+
+h1, h2, h3 { font-family: var(--display); font-weight: 400; margin: 0; text-wrap: balance; }
+p { margin: 0; }
+ul { margin: 0; padding: 0; list-style: none; }
+
+/* --- The instrument devices ------------------------------------------- */
+
+.kick {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0;
+}
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.pill {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: var(--radius);
+  white-space: nowrap;
+}
+.pill-red { color: var(--red); background: var(--red-bg); }
+.pill-orange { color: var(--orange); background: var(--orange-bg); }
+.pill-green { color: var(--green); background: var(--green-bg); }
+.pill-blue { color: var(--blue); background: var(--blue-bg); }
+.pill-grey { color: var(--fg); background: var(--surface-2); }
+
+/* --- Shell and section grid -------------------------------------------- */
+
+.wrap { max-width: var(--shell); margin: 0 auto; padding: 0 24px; }
+
+.band { border-top: 1px solid var(--line); }
+/* The header is sticky and two rows tall: an anchor must not land under it. */
+section[id] { scroll-margin-top: 104px; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+.band-inset { background: var(--panel); }
+
+.sec { display: grid; gap: 32px; padding-block: 64px; align-items: start; }
+.top-head {
+  display: flex; align-items: center; gap: 10px;
+  min-height: 54px; flex-wrap: wrap; padding-block: 6px;
+}
+@media (min-width: 720px) { .top-head { gap: 16px; flex-wrap: nowrap; padding-block: 0; } }
+.lock { display: flex; align-items: center; gap: 10px; margin-right: auto; text-decoration: none; color: var(--fg); }
+.lock:hover { color: var(--fg); }
+.lock svg { color: var(--accent); display: block; flex: none; }
+.lock .word { font-family: var(--display); font-size: 1.05rem; letter-spacing: -0.01em; }
+.lock .tagline {
+  display: none;
+  font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--muted);
+  padding-left: 10px; border-left: 1px solid var(--line-strong);
+}
+@media (min-width: 560px) { .lock .tagline { display: inline; } }
+
+/* The bar scrolls sideways when it does not fit, and SAYS SO: a bar that
+   scrolls without looking like it scrolls hides the sections at its end,
+   which for someone hunting one named section means they do not exist. */
+.navrail { position: relative; border-top: 1px solid var(--line); }
+.navrail::after {
+  content: ''; position: absolute; top: 0; right: 0; bottom: 0; width: 40px;
+  pointer-events: none; opacity: 0;
+  background: linear-gradient(to right, transparent, var(--bg));
+  transition: opacity 120ms linear;
+}
+.navrail[data-overflow='true']::after { opacity: 1; }
+
+.topnav {
+  display: flex; align-items: stretch; gap: 0;
+  overflow-x: auto; scrollbar-width: none; min-width: 0;
+}
+.topnav::-webkit-scrollbar { display: none; }
+.topnav a {
+  display: flex; align-items: center; gap: 7px;
+  padding: 11px 12px; white-space: nowrap;
+  font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--muted); text-decoration: none;
+  border-bottom: 2px solid transparent;
+  min-height: 44px;
+}
+.topnav a:first-child { padding-left: 0; }
+.topnav a:hover { color: var(--fg); }
+.topnav a[aria-current='true'] { color: var(--fg); border-bottom-color: var(--accent); }
+
+/* The repository link. The GitHub octocat is a BRAND MARK, so it keeps its
+   filled shape — the rule against filled icon sets is about icons competing
+   with the risk pills for the same pre-attentive channel, and this one sits in
+   the identity row, carries no state, and is the shape people scan for. It
+   takes `--muted` until hovered: findable, never louder than the sections. */
+.ghlink {
+  display: flex; align-items: center; gap: 7px;
+  color: var(--muted); text-decoration: none;
+  font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 6px 10px; min-height: 32px;
+  border: 1px solid var(--line-strong); border-radius: var(--radius);
+}
+.ghlink:hover { color: var(--fg); border-color: var(--fg); }
+.ghlink svg { display: block; flex: none; }
+.ghlink span { display: none; }
+@media (min-width: 720px) { .ghlink span { display: inline; } }
+
+.foot-links { display: flex; gap: 18px; flex-wrap: wrap; }
+
+.picker { display: flex; align-items: center; gap: 6px; }
+.picker .kick { display: none; }
+@media (min-width: 640px) { .picker .kick { display: block; margin-right: 4px; } }
+.sw {
+  width: 22px; height: 22px; padding: 0; cursor: pointer;
+  border-radius: var(--radius);
+  border: 1px solid var(--line-strong);
+  position: relative;
+}
+.sw[aria-pressed='true'] { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sw i { position: absolute; inset: 4px 4px auto auto; width: 8px; height: 8px; display: block; }
+
+/* --- Hero -------------------------------------------------------------- */
+
+.hero { padding-block: 72px 56px; display: flex; flex-direction: column; gap: 26px; }
+.hero h1 {
+  font-size: clamp(2.1rem, 5.4vw, 3.6rem);
+  line-height: 1.02;
+  letter-spacing: -0.015em;
+  max-width: 19ch;
+}
+.hero h1 em { font-style: normal; color: var(--accent); }
+.hero-sub { max-width: 62ch; font-size: 1.06rem; color: var(--muted); }
+.hero-sub b { color: var(--fg); font-weight: 500; }
+
+.hero-cta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.term {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--hero); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 10px 12px;
+  font-family: var(--mono); font-size: 0.82rem; color: var(--fg);
+  overflow-x: auto;
+}
+.term .cue { color: var(--accent); user-select: none; }
+.term code { white-space: nowrap; }
+.copy {
+  font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase;
+  background: var(--accent); color: var(--accent-fg); border: 0; border-radius: var(--radius);
+  padding: 9px 14px; cursor: pointer; min-height: 36px;
+}
+.copy:hover { background: var(--accent-dim); }
+.textlink {
+  font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted); text-decoration: none; border-bottom: 1px solid var(--line-strong); padding-bottom: 2px;
+}
+.textlink:hover { color: var(--fg); }
+
+.spec {
+  display: flex; flex-wrap: wrap; gap: 0;
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--surface);
+}
+.spec div {
+  padding: 12px 16px; flex: 1 1 150px; border-right: 1px solid var(--line);
+}
+.spec div:last-child { border-right: 0; }
+.spec .v { font-family: var(--mono); font-size: 1.1rem; color: var(--fg); display: block; }
+.spec .k {
+  font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--muted); display: block; margin-top: 2px;
+}
+
+/* --- Panels and grids -------------------------------------------------- */
+
+.grid { display: grid; gap: 16px; }
+.g2 { grid-template-columns: 1fr; }
+.g3 { grid-template-columns: 1fr; }
+@media (min-width: 720px) { .g2 { grid-template-columns: 1fr 1fr; } .g3 { grid-template-columns: 1fr 1fr; } }
+@media (min-width: 1040px) { .g3 { grid-template-columns: repeat(3, 1fr); } }
+
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 18px; display: flex; flex-direction: column; gap: 10px;
+  transition: background var(--swap) linear, border-color var(--swap) linear;
+}
+.card h3 { font-size: 0.86rem; letter-spacing: 0.06em; text-transform: uppercase; }
+.card p { color: var(--muted); font-size: 0.9rem; }
+
+/* A plain list of rules — no card chrome, hairlines only. */
+.rows { display: flex; flex-direction: column; }
+.rows li {
+  display: grid; gap: 4px 20px; padding: 14px 0; border-top: 1px solid var(--line);
+}
+.rows li:first-child { border-top: 0; }
+@media (min-width: 760px) { .rows li { grid-template-columns: 220px minmax(0, 1fr); align-items: baseline; } }
+.rows .t { font-family: var(--mono); font-size: 0.78rem; color: var(--fg); letter-spacing: 0.02em; }
+.rows .d { color: var(--muted); font-size: 0.9rem; }
+.rows .d b { color: var(--fg); font-weight: 500; }
+
+/* --- Tables ------------------------------------------------------------ */
+
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.86rem; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tbody tr:last-child td { border-bottom: 0; }
+th {
+  font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--muted); font-weight: 400; background: var(--panel); white-space: nowrap;
+}
+td.m { font-family: var(--mono); font-size: 0.78rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
+td .sub { color: var(--muted); }
+
+/* --- Measured figures -------------------------------------------------- */
+
+.figs { display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+@media (min-width: 720px) { .figs { grid-template-columns: 1fr 1fr; } }
+@media (min-width: 1040px) { .figs { grid-template-columns: repeat(4, 1fr); } }
+.fig { background: var(--surface); padding: 16px; display: flex; flex-direction: column; gap: 4px; }
+.fig .n { font-family: var(--mono); font-size: 1.6rem; line-height: 1.1; color: var(--fg); font-variant-numeric: tabular-nums; }
+.fig .l { font-size: 0.82rem; color: var(--fg); }
+.fig .c { font-size: 0.78rem; color: var(--muted); }
+
+/* --- Code block -------------------------------------------------------- */
+
+pre {
+  margin: 0; background: var(--hero); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 0.8rem;
+  color: var(--fg); line-height: 1.65;
+}
+pre .c { color: var(--muted); }
+/* The address you open after installing. It was --accent, which is designed
+   to sit on --bg and --surface and NOT on --hero, the darkest inset: 2.58:1
+   in punk, 3.62:1 on the light theme. Colour was not carrying the meaning
+   here anyway — the arrow and the last-line position do. */
+pre .a { color: var(--fg); }
+
+/* --- Back to top -------------------------------------------------------- */
+
+.totop {
+  font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--muted); text-decoration: none;
+}
+.totop:hover { color: var(--accent); }
+
+/* --- Screenshots ------------------------------------------------------- */
+
+.shot { margin: 0; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.shot img {
+  display: block; width: 100%; height: auto;
+  border: 1px solid var(--line-strong); border-radius: var(--radius);
+  background: var(--hero);
+}
+.shot figcaption { font-size: 0.84rem; color: var(--muted); max-width: 78ch; }
+.shot figcaption b { color: var(--fg); font-weight: 500; }
+.shot figcaption em { font-style: italic; }
+.hero .shot { margin-top: 6px; }
+
+/* --- Footer ------------------------------------------------------------ */
+
+.foot { padding-block: 40px 56px; display: flex; flex-direction: column; gap: 14px; }
+.foot .row { display: flex; flex-wrap: wrap; gap: 16px; align-items: baseline; justify-content: space-between; }
+.foot p { color: var(--muted); font-size: 0.82rem; max-width: 70ch; }
+.heb { font-size: 1rem; color: var(--muted); }
+
+/* --- The flow diagram --------------------------------------------------
+   The product IS a five-step flow with a person standing in the middle of
+   it, and the page used to describe that in prose. Drawn in HTML and CSS
+   rather than SVG for three reasons, all of which an SVG would have cost:
+   it reflows into a column on a phone, it repaints in all six palettes
+   because every colour here is a token, and its labels are ordinary text
+   nodes — so they translate, and a screen reader reads it as the ordered
+   list of steps it actually is.
+   ---------------------------------------------------------------------- */
+
+.flow { display: flex; flex-direction: column; gap: 22px; }
+
+.flow-track {
+  display: grid; grid-template-columns: 1fr; gap: 30px 0;
+  margin: 0; padding: 0; list-style: none;
+}
+@media (min-width: 900px) {
+  .flow-track { grid-template-columns: repeat(5, 1fr); gap: 0 34px; }
+}
+
+.flow-node {
+  position: relative;
+  background: var(--surface); border: 1px solid var(--line-strong);
+  border-radius: var(--radius); padding: 14px;
+  display: flex; flex-direction: column; gap: 6px;
+  transition: background var(--swap) linear, border-color var(--swap) linear;
+}
+.flow-node .fn-n {
+  font-family: var(--mono); font-size: 0.64rem; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--muted);
+}
+.flow-node .fn-t { font-size: 0.92rem; color: var(--fg); font-weight: 500; line-height: 1.3; }
+.flow-node .fn-d { font-size: 0.8rem; color: var(--muted); line-height: 1.5; }
+
+/* The connector, and its head. Vertical on a phone, horizontal from 900 px.
+   Both pseudo-elements sit on the node BEFORE the gap they cross, so the
+   last node never draws an arrow into nothing. */
+.flow-node:not(:last-child)::after,
+.flow-node:not(:last-child)::before { content: ''; position: absolute; }
+.flow-node:not(:last-child)::after {
+  left: 50%; top: 100%; width: 1px; height: 30px;
+  background: var(--line-strong); transform: translateX(-0.5px);
+}
+.flow-node:not(:last-child)::before {
+  left: 50%; top: calc(100% + 21px); transform: translateX(-50%);
+  border-left: 4px solid transparent; border-right: 4px solid transparent;
+  border-top: 6px solid var(--line-strong);
+}
+@media (min-width: 900px) {
+  .flow-node:not(:last-child)::after {
+    left: 100%; top: 50%; width: 34px; height: 1px; transform: translateY(-0.5px);
+  }
+  .flow-node:not(:last-child)::before {
+    left: calc(100% + 25px); top: 50%; transform: translateY(-50%);
+    border-top: 4px solid transparent; border-bottom: 4px solid transparent;
+    border-left: 6px solid var(--line-strong); border-right: 0;
+  }
+}
+
+/* The gate is the only node that carries the accent, for the reason the
+   console reserves it: A HUMAN IS BLOCKED HERE. Colour never carries the
+   meaning alone — the word sits on it. */
+.flow-node.flow-gate { border-color: var(--accent); background: var(--panel); }
+.flow-node.flow-gate .fn-n { color: var(--accent); }
+.flow-gate .fn-you {
+  align-self: flex-start;
+  font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.14em;
+  text-transform: uppercase;
+  background: var(--accent); color: var(--accent-fg);
+  padding: 2px 7px; border-radius: var(--radius);
+}
+
+.flow-outcomes {
+  display: grid; gap: 1px; background: var(--line);
+  border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden;
+}
+@media (min-width: 760px) { .flow-outcomes { grid-template-columns: repeat(3, 1fr); } }
+.flow-outcomes li {
+  background: var(--surface); padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.flow-outcomes .o-k {
+  font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase;
+}
+.flow-outcomes .o-v { font-size: 0.84rem; color: var(--muted); }
+.flow-outcomes .ok-green { color: var(--green); }
+/* --grey is a RISK-palette neutral and lands at 3.6-4.4:1 on a panel in four
+   of the six themes. "You refuse" is a label, not a secondary mention, so it
+   takes the plain foreground — which is also the honest reading: neutral is
+   the default outcome, not a third risk state. */
+.flow-outcomes .ok-grey { color: var(--fg); }
+.flow-outcomes .ok-orange { color: var(--orange); }
+
+.flow-note { font-size: 0.84rem; color: var(--muted); max-width: 72ch; }
+.flow-note b { color: var(--fg); font-weight: 500; }
+
+/* --- The language switcher ---------------------------------------------
+   Two links, not a control: `/` is English and `/fr` is French, so the URL
+   is the whole state. Nothing is stored, nothing is sniffed, nothing
+   redirects — a link somebody shares opens in the language they shared it
+   in. Placed top-right, with the language written in its own name.
+   ---------------------------------------------------------------------- */
+.langs { display: flex; align-items: stretch; border: 1px solid var(--line-strong); border-radius: var(--radius); overflow: hidden; }
+/* DIRECT CHILDREN. `.langs span` (0,1,1) also matched the label span NESTED
+   inside the active chip, so `--muted` landed on the accent — between 1.2:1
+   and 2.8:1 depending on the theme. That is the `.soc-field span` trap from
+   CLAUDE.md rebuilt on this page, and it was found by measuring the computed
+   colour in a browser, not by reading the rule. */
+.langs > a, .langs > span {
+  display: flex; align-items: center; padding: 0 10px; min-height: 32px;
+  font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase;
+  text-decoration: none; color: var(--muted);
+}
+.langs > a:not([aria-current='true']):hover { color: var(--fg); background: var(--surface-2); }
+/* Names the ELEMENT as well as the state, so this wins by specificity rather
+   than by sitting further down the sheet — the lesson this table has already
+   recorded four times. */
+.langs > a[aria-current='true'], .langs > span[aria-current='true'] {
+  color: var(--accent-fg); background: var(--accent);
+}
+.langs .l-long { display: none; }
+@media (min-width: 720px) {
+  .langs .l-long { display: inline; }
+  .langs .l-short { display: none; }
+}
+
+/* --- A gallery of the screens that document rather than argue ----------- */
+.gallery { display: flex; flex-direction: column; gap: 26px; }
+
+/* --- Landing: a section with no numbered rail ---------------------------
+   The front page dropped its numbered rail with its table of contents: five
+   sections do not need a running header saying which of five you are in, and
+   a number that marks nothing is a number people hunt the missing ones for. */
+.sec-plain { grid-template-columns: minmax(0, 1fr) !important; }
+@media (min-width: 900px) { .sec-plain { max-width: 980px; } }
+
+/* --- Landing: the primary button ---------------------------------------- */
+.btn {
+  display: inline-flex; align-items: center; min-height: 40px;
+  padding: 0 18px; border-radius: var(--radius);
+  background: var(--accent); color: var(--accent-fg); text-decoration: none;
+  font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase;
+}
+.btn:hover { background: var(--accent-dim); color: var(--accent-fg); }
+
+/* --- Landing: the claims list -------------------------------------------
+   Four lines, not four paragraphs. Each opens with the claim itself, because
+   the first words of a line are what a scanning eye actually reads — the rest
+   of the line is read only by whoever the claim interested. */
+.claims { display: flex; flex-direction: column; }
+.claims li { display: grid; gap: 2px 24px; padding: 16px 0; border-top: 1px solid var(--line); }
+.claims li:first-child { border-top: 0; }
+@media (min-width: 760px) { .claims li { grid-template-columns: 280px minmax(0, 1fr); align-items: baseline; } }
+.claims .c-t { font-size: 1rem; color: var(--fg); font-weight: 500; }
+.claims .c-d { color: var(--muted); font-size: 0.92rem; }
+
+/* --- The documentation page ---------------------------------------------
+   One long page with sixteen anchors, not sixteen pages: it is searchable
+   with the browser's own Ctrl-F, it is one file, and there is no router to
+   get wrong. The sidebar is what gives it a visible shape. */
+.docs-grid { display: grid; gap: 28px; padding-block: 32px 72px; align-items: start; }
+@media (min-width: 1000px) {
+  .docs-grid { grid-template-columns: 236px minmax(0, 1fr); gap: 48px; }
+  .docs-side { position: sticky; top: 78px; max-height: calc(100vh - 100px); overflow-y: auto; }
+}
+.docs-body { min-width: 0; display: flex; flex-direction: column; gap: 44px; }
+
+/* On a phone the sidebar is a fold; from 1000 px it is always open and the
+   marker means nothing, so the summary stops being a control at all. Opening
+   and closing is the script's job: a closed <details> hides its content
+   whatever this file says. */
+.docs-toc { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.docs-toc > summary {
+  cursor: pointer; list-style: none; padding: 12px 14px; min-height: 44px;
+  display: flex; align-items: center; gap: 12px;
+  font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--fg);
+}
+.docs-toc > summary::-webkit-details-marker { display: none; }
+.docs-toc > summary::before { content: '+'; color: var(--accent); flex: none; }
+.docs-toc[open] > summary::before { content: '−'; }
+.docs-toc > summary .hint { margin-left: auto; color: var(--muted); text-transform: none; }
+.docs-toc nav { display: flex; flex-direction: column; padding: 0 6px 10px; }
+@media (min-width: 1000px) {
+  .docs-toc { border: 0; background: none; }
+  .docs-toc > summary { display: none; }
+  .docs-toc nav { padding: 0; }
+}
+.docs-toc .grp {
+  font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--muted); padding: 16px 8px 6px; margin: 0;
+}
+.docs-toc .grp:first-child { padding-top: 4px; }
+.docs-toc nav a {
+  display: flex; gap: 10px; align-items: baseline;
+  padding: 7px 8px; border-radius: var(--radius);
+  font-size: 0.86rem; color: var(--muted); text-decoration: none;
+  border-left: 2px solid transparent;
+}
+.docs-toc nav a:hover { color: var(--fg); background: var(--surface-2); }
+.docs-toc nav a .n { font-family: var(--mono); font-size: 0.68rem; color: var(--muted); flex: none; }
+.docs-toc nav a[aria-current='true'] { color: var(--fg); border-left-color: var(--accent); background: var(--surface-2); }
+/* Same trap one line up: the accent as TEXT on --surface-2 is 1.87:1 in punk.
+   The active entry is already marked three other ways — an accent left border,
+   a lifted background and full-strength text — so the number inherits. Colour
+   never carries the meaning alone here. */
+.docs-toc nav a[aria-current='true'] .n { color: var(--fg); }
+
+.docs-head { display: flex; flex-direction: column; gap: 14px; padding-bottom: 8px; }
+.docs-head h1 { font-size: clamp(1.7rem, 3.6vw, 2.5rem); line-height: 1.08; max-width: 24ch; }
+
+/* A heading level is a size AND an outline: h2 opens a section, h3 a block
+   inside it, and neither is chosen for how big the text should look. */
+.docs-body section { display: flex; flex-direction: column; gap: 16px; scroll-margin-top: 78px; }
+.docs-body h2 {
+  font-size: clamp(1.25rem, 2.4vw, 1.6rem); line-height: 1.15;
+  padding-bottom: 10px; border-bottom: 1px solid var(--line-strong);
+}
+.docs-body h3 { font-size: 0.86rem; letter-spacing: 0.06em; text-transform: uppercase; margin-top: 10px; }
+.docs-body > section > p { color: var(--muted); max-width: 74ch; }
+.docs-body p b, .docs-body p strong { color: var(--fg); font-weight: 500; }
+.docs-body dd, .docs-body li { max-width: 74ch; }
+
+/* Two ways of stepping outside the running prose, and they say different
+   things: a callout is the POINT of the section, a note is an aside you may
+   skip. Neither is a warning colour — nothing here is a failure. */
+.callout {
+  border-left: 3px solid var(--accent); background: var(--panel);
+  padding: 14px 18px; border-radius: 0 var(--radius) var(--radius) 0;
+}
+.note {
+  border: 1px dashed var(--line-strong); background: var(--panel);
+  padding: 14px 16px; border-radius: var(--radius); font-size: 0.9rem;
+}
+
+.gloss { margin: 0; display: grid; gap: 0; }
+.gloss dt {
+  font-family: var(--mono); font-size: 0.8rem; color: var(--fg);
+  padding-top: 14px; border-top: 1px solid var(--line);
+}
+.gloss dt:first-child { border-top: 0; padding-top: 0; }
+.gloss dd { margin: 0 0 14px; padding-top: 4px; color: var(--muted); font-size: 0.9rem; }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap top-head">
+    <a class="lock" href="#top" aria-label="MENATER — haut de page">
+      <svg width="22" height="22" viewBox="0 0 32 32" fill="currentColor" aria-hidden="true">
+        <rect x="0" y="5" width="4" height="22"></rect>
+        <rect x="7" y="5" width="4" height="22"></rect>
+        <rect x="14" y="21" width="4" height="6"></rect>
+        <rect x="21" y="5" width="4" height="22"></rect>
+        <rect x="28" y="5" width="4" height="22"></rect>
+      </svg>
+      <span class="word">MENATER</span>
+      <span class="tagline">Sécurité opérationnelle</span>
+    </a>
+
+    <div class="langs">
+      <a href="/docs" hreflang="en" lang="en" title="English" aria-label="English" data-lang-link data-href="/docs"><span class="l-long">English</span><span class="l-short">EN</span></a>
+      <span aria-current="true" lang="fr" title="Français"><span class="l-long">Français</span><span class="l-short">FR</span></span>
+      </div>
+
+        <a class="ghlink cross" data-cross="landing" href="/fr">Accueil</a>
+
+    <a class="ghlink" href="https://github.com/S2K7x/Menater" target="_blank" rel="noopener noreferrer">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+        <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38
+                 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13
+                 -.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66
+                 .07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15
+                 -.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27
+                 .68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12
+                 .51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48
+                 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8
+                 c0-4.42-3.58-8-8-8z"></path>
+      </svg>
+      <span>GitHub</span>
+    </a>
+    <div class="picker" id="picker">
+      <p class="kick">Thème</p>
+    </div>
+  </div>
+</header>
+
+<main id="top" class="docs">
+  <div class="wrap docs-grid">
+
+    <!-- The sidebar is the whole navigation of this page: sixteen anchors in
+         five groups, sticky on a wide screen and a closed fold on a phone.
+         A reference you cannot see the shape of is a reference you scroll. -->
+    <aside class="docs-side">
+      <details class="docs-toc" id="toc" open>
+        <summary>
+          <span>Sur cette page</span>
+          <span class="hint">16 sections</span>
+        </summary>
+        <nav id="topnav" aria-label="Sections de la documentation">
+          <p class="grp">Pour commencer</p>
+          <a href="#what"><span class="n">01</span><span>Ce qu'est MENATER</span></a>
+          <a href="#install"><span class="n">02</span><span>L'installer</span></a>
+          <a href="#setup"><span class="n">03</span><span>Le rendre opérationnel</span></a>
+
+          <p class="grp">Comment ça marche</p>
+          <a href="#pipeline"><span class="n">04</span><span>Les cinq étapes</span></a>
+          <a href="#ingest"><span class="n">05</span><span>Comment les alertes entrent</span></a>
+          <a href="#contract"><span class="n">06</span><span>Ce que doit contenir une alerte</span></a>
+
+          <p class="grp">La console</p>
+          <a href="#tabs"><span class="n">07</span><span>Les dix onglets</span></a>
+          <a href="#assistant"><span class="n">08</span><span>L'assistant intégré</span></a>
+          <a href="#mcp"><span class="n">09</span><span>Brancher votre propre IA</span></a>
+          <a href="#design"><span class="n">10</span><span>Thèmes et lisibilité</span></a>
+
+          <p class="grp">Ce qui tient</p>
+          <a href="#closed"><span class="n">11</span><span>Les quatre listes fermées</span></a>
+          <a href="#shadow"><span class="n">12</span><span>Le mode observation</span></a>
+          <a href="#audit"><span class="n">13</span><span>Le registre d'audit</span></a>
+          <a href="#numbers"><span class="n">14</span><span>Les chiffres mesurés</span></a>
+
+          <p class="grp">Le reste</p>
+          <a href="#limits"><span class="n">15</span><span>Ce qu'il ne fait pas</span></a>
+          <a href="#glossary"><span class="n">16</span><span>Les mots employés ici</span></a>
+        </nav>
+      </details>
+    </aside>
+
+    <div class="docs-body">
+      <header class="docs-head">
+        <p class="kick">Documentation</p>
+        <h1>Tout ce que fait MENATER, et pourquoi il le fait ainsi.</h1>
+        <p class="lede">La page d'accueil est la version courte. Voici la longue : ce que fait chaque partie, ce qu'elle refuse de faire, et le raisonnement derrière les deux. Lisez dans l'ordre ou allez droit à ce qui vous intéresse — rien ici ne dépend de ce qui précède.</p>
+      </header>
+
+      <!-- ================= 01 ================= -->
+      <section id="what">
+        <h2>Ce qu'est MENATER</h2>
+        <p>MENATER est une <b>console de sécurité opérationnelle</b> que vous installez sur votre propre machine. Elle prend les alertes que remontent vos outils de détection, détermine lesquelles comptent, et met devant une personne celles qui demandent une décision. C'est gratuit, open source, et il n'y a aucune société derrière.</p>
+        <p>Elle a deux moitiés qui partagent un même écran. Le <b>côté alertes</b> traite ce qui a déjà eu lieu — une alerte est un fait accompli. Le <b>côté code</b> traite ce qui est sur le point d'arriver : une faille dans votre code source, avant qu'elle ne parte en production. Elles partagent une interface et une connexion ; elles ne s'alimentent pas encore l'une l'autre.</p>
+        <p class="callout"><b>L'idée de conception, en une phrase.</b> Une IA qui lit une alerte de sécurité lit un texte écrit par un attaquant : l'IA a donc le droit de lire et de proposer, et une personne est la seule chose autorisée à agir.</p>
+        <p>Trois programmes tournent : une base de données, la console elle-même, et l'analyseur de code. Rien d'autre n'est nécessaire, et rien ne quitte votre machine hormis les requêtes que vous avez configurées — vers le fournisseur d'IA dont vous avez fourni la clé, et vers les services de réputation que vous avez choisi d'activer.</p>
+      </section>
+
+      <!-- ================= 02 ================= -->
+      <section id="install">
+        <h2>L'installer</h2>
+        <p>Docker est la façon normale d'installer MENATER, pas une option parmi d'autres. Il vous faut Docker et rien de plus : pas de base de données à configurer, pas de schéma à appliquer à la main, pas de deuxième machine.</p>
+
+<pre><code><span class="c"># renseignez les deux mots de passe demandés</span>
+cp .env.example .env
+
+<span class="c"># base de données + console + analyseur de code</span>
+docker compose up -d --build
+
+<span class="a">→ http://localhost:4400</span></code></pre>
+
+        <p>Utile ensuite : <span class="mono">docker compose logs -f console</span> suit ce que fait la console, <span class="mono">docker compose down</span> arrête tout en gardant vos données, et <span class="mono">docker compose down -v</span> efface tout, base de données comprise.</p>
+        <p>La base de données et l'analyseur de code ne sont joignables que depuis l'intérieur de la pile. Un seul port est publié, et il sert à la fois l'interface et l'API — un second point d'entrée voudrait dire une serrure qui ne protège que la moitié de l'application.</p>
+        <p class="note"><b>Vous voulez le faire tourner sans Docker ?</b> <span class="mono">npm run dev</span> dans <span class="mono">dashboard/</span> démarre les trois processus avec rechargement à chaud. C'est un mode de développement : il suppose que vous avez déjà Node, une base de données en marche et le schéma appliqué.</p>
+      </section>
+
+      <!-- ================= 03 ================= -->
+      <section id="setup">
+        <h2>Le rendre opérationnel</h2>
+        <p><b>Elle démarre en trois minutes et ne trie rien.</b> C'est délibéré : chacun des quatre points ci-dessous est une décision que la console refuse de prendre à votre place. Une liste de contrôle en haut de la page de réglages les suit tous les quatre jusqu'à ce qu'ils soient faits.</p>
+
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">#</th>
+                <th scope="col">Ce que vous devez faire</th>
+                <th scope="col">Ce qui arrive si vous le sautez</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td class="m">1</td><td>Définir un secret partagé pour le point d'entrée des alertes</td><td>La porte reste <b>fermée</b>. Un secret vide la ferme au lieu de l'ouvrir — « aucune authentification configurée » ne doit jamais se lire « aucune authentification requise ».</td></tr>
+              <tr><td class="m">2</td><td>Activer le point d'entrée</td><td>Toutes les alertes sont refusées.</td></tr>
+              <tr><td class="m">3</td><td>Lui donner une clé pour un modèle d'IA</td><td>Chaque alerte atterrit chez un humain avec une confiance de zéro, et dit pourquoi. Rien n'est perdu ; rien n'est trié.</td></tr>
+              <tr><td class="m">4</td><td>Pointer un outil de détection vers lui</td><td>Aucune alerte n'arrive.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>Les clés des services de réputation et les notifications de messagerie sont facultatives. Un service auquel vous n'avez pas donné de clé s'affiche <span class="pill pill-grey">Pas interrogé</span> — une question que personne n'a posée, ce qui n'est pas la même chose qu'une question restée sans réponse.</p>
+
+        <figure class="shot">
+  <img data-shot="07-health" src="/shots/07-health.png" alt="Le résultat du test de connectivité : un bandeau rouge indiquant « au moins un maillon est rompu, 9 vérifications au vert, 5 à surveiller, 1 en échec, 0 indéterminée — en 14 ms », puis les lignes par vérification pour la base de données, le schéma SQL, la clé du modèle de tri et quatre sources d'enrichissement." width="2880" height="1800" loading="lazy" decoding="async">
+  <figcaption>Le test de connectivité. <b>Neuf au vert, cinq à surveiller, une en échec, zéro indéterminée</b> — quatre états, si bien que « en cours de vérification » n'est jamais annoncé comme « rompu ». Chaque ligne nomme la conséquence puis le remède.</figcaption>
+</figure>
+
+        <p>L'onglet <b>Santé</b> teste à la demande chaque maillon de la chaîne et nomme, pour chacun, la conséquence puis le remède. Il rapporte quatre états et non deux, si bien que « vérification en cours » n'est jamais annoncé comme « rompu ».</p>
+      </section>
+
+      <!-- ================= 04 ================= -->
+      <section id="pipeline">
+        <h2>Les cinq étapes</h2>
+        <p>MENATER exécute son propre moteur. Il n'y a aucune plateforme de workflows à installer et aucun second produit qui devrait être joignable pour qu'une alerte soit triée — un workflow ne peut donc pas être à moitié déployé, renommé dans un éditeur, ou laissé non publié. La console lit son propre registre de ce qui s'est exécuté.</p>
+
+        <div class="flow">
+          <ol class="flow-track">
+            <li class="flow-node">
+              <span class="fn-n">01 · Réception</span>
+              <span class="fn-t">Vérifiée et dédoublonnée</span>
+              <span class="fn-d">Champs obligatoires vérifiés, doublons écartés, et l'émetteur informé de ce qui s'est réellement passé : refusée, déjà vue, ou acceptée.</span>
+            </li>
+            <li class="flow-node">
+              <span class="fn-n">02 · Contexte</span>
+              <span class="fn-t">Réputation et étiquetage</span>
+              <span class="fn-d">Réputation de l'adresse, localisation, étiquetage des techniques connues. Un service sans clé est marqué <em>pas interrogé</em>, et l'IA en est informée.</span>
+            </li>
+            <li class="flow-node">
+              <span class="fn-n">03 · Avis</span>
+              <span class="fn-t">L'IA décide</span>
+              <span class="fn-d">Un verdict, une confiance, et son raisonnement. Sans clé, elle renvoie <span class="mono">needs_human</span> à confiance 0 — sûre en échouant, jamais ouverte en échouant.</span>
+            </li>
+            <li class="flow-node flow-gate">
+              <span class="fn-n">04 · Décision</span>
+              <span class="fn-you">Humain</span>
+              <span class="fn-t">Approbation et routage</span>
+              <span class="fn-d">La demande part vers la console et vers Slack ou Discord. Sous le seuil de notification, personne n'est sollicité — rien n'attend donc, et l'alerte remonte aussitôt.</span>
+            </li>
+            <li class="flow-node">
+              <span class="fn-n">05 · Registre</span>
+              <span class="fn-t">Scellée dans le journal</span>
+              <span class="fn-d">Une ligne à laquelle on ajoute et que l'on ne modifie jamais, scellée à la précédente sous un verrou.</span>
+            </li>
+          </ol>
+          <p class="flow-note"><b>Un sixième existe et ne s'exécute jamais dans la séquence.</b> Le gestionnaire d'erreurs est déclaré sur les cinq autres et appelé seulement depuis leurs branches d'échec. Aucune panne n'est silencieuse : chaque branche journalise, notifie, ou les deux.</p>
+        </div>
+
+        <h3>Trois conséquences à connaître</h3>
+        <ul class="rows">
+          <li>
+            <span class="t">Une jonction attend</span>
+            <span class="d">Une étape à plusieurs entrées ne démarre pas dès que l'une d'elles a répondu. L'étape 02 assemblerait sinon un tiers de ses sources — <b>sans erreur, sans trace, et avec un résultat plausible.</b></span>
+          </li>
+          <li>
+            <span class="t">Réessayer, puis échouer en le nommant</span>
+            <span class="d">Chaque appel externe réessaie avec un délai croissant, en traitant toute attente suggérée par l'autre bout comme un plancher plutôt qu'en la raccourcissant. Quand il échoue quand même, il dit quel service et pourquoi : une source que personne n'a pu joindre n'est pas une source qui n'a rien dit.</span>
+          </li>
+          <li>
+            <span class="t">La vue non réduite</span>
+            <span class="d">La file recoud les exécutions en dossiers, et deux formes de panne disparaissent dans cette couture. L'onglet Suivi les montre brutes : chaînes rompues, exécutions rattachées à aucune alerte, journal cherchable, et un rejeu qui <b>refuse</b> quand l'alerte d'origine est inconnue, plutôt que de rejouer une reconstitution.</span>
+          </li>
+        </ul>
+
+        <figure class="shot">
+  <img data-shot="03-tracking" src="/shots/03-tracking.png" alt="L'onglet Suivi : 120 exécutions inspectées, 118 rattachées à une alerte, un avertissement disant que la fenêtre observée est pleine, et trois sous-onglets pour les chaînes de traitement, les exécutions orphelines et le journal." width="2880" height="1800" loading="lazy" decoding="async">
+  <figcaption>La vue non réduite. Elle compte les exécutions que la file n'a pas pu vous montrer, et prévient quand la fenêtre observée est pleine — <em>au-delà, la console ne sait pas</em> — plutôt que de laisser une lecture bornée passer pour une lecture complète.</figcaption>
+</figure>
+      </section>
+
+      <!-- ================= 05 ================= -->
+      <section id="ingest">
+        <h2>Comment les alertes entrent</h2>
+        <p>Il y a deux façons de livrer une alerte, et <b>elles échouent différemment</b>. Votre outil peut la pousser vers MENATER à l'instant où elle survient, ou MENATER peut demander à votre outil les nouvelles alertes à intervalle régulier. Aucune n'est meilleure.</p>
+
+        <div class="grid g2">
+          <article class="card">
+            <h3>Pousser</h3>
+            <p>Un seul saut réseau : l'alerte arrive instantanément — et vous êtes exactement aussi fiable que la politique de réessai de votre outil. <b>Une alerte que personne n'a reçue est une alerte dont personne ne sait rien.</b></p>
+          </article>
+          <article class="card">
+            <h3>Interroger</h3>
+            <p>En moyenne, la moitié d'un intervalle d'attente — et rien n'est perdu à cause d'un appel qui n'est jamais arrivé, parce que le signet est resté où il était.</p>
+          </article>
+        </div>
+
+        <p><b>Le réglage par défaut utilise les deux, parce que le coût ne tombe pas sur les mêmes alertes.</b> Une alerte critique contenue quatre minutes trop tard n'a pas été contenue ; une alerte de faible priorité triée quatre minutes trop tard reste de faible priorité. Les deux niveaux urgents prennent donc le chemin instantané et les deux autres sont interrogés. Une alerte dont la priorité n'a pas pu être lue prend le chemin <b>rapide</b> — garer discrètement quelque chose qui pourrait être critique est précisément l'échec que ce produit existe pour empêcher.</p>
+
+        <figure class="shot">
+  <img data-shot="02-ingestion" src="/shots/02-ingestion.png" alt="L'onglet Ingestion : trois architectures de livraison côte à côte avec leurs coûts énoncés, l'hybride sélectionnée, et un tableau associant P1 à P4 au webhook ou à l'interrogation régulière avec le délai que chacune implique." width="2880" height="1800" loading="lazy" decoding="async">
+  <figcaption>Choisir un mode de livraison. Chaque option dit ce qu'elle apporte <em>et</em> ce qu'elle coûte, et le tableau annonce la moitié d'un intervalle d'interrogation — le délai moyen ajouté, pas l'intervalle, parce que c'est ce chiffre-là qu'on met en balance avec une alerte critique.</figcaption>
+</figure>
+
+        <h3>Les règles que suit le transport</h3>
+        <ul class="rows">
+          <li>
+            <span class="t">Rien n'est refusé pour avoir pris le mauvais chemin</span>
+            <span class="d">Une alerte de faible priorité envoyée au point d'entrée instantané est acceptée et triée ; la réponse dit quel chemin la politique attendait. Jeter une détection pour une préférence de routage la remplace par rien.</span>
+          </li>
+          <li>
+            <span class="t">Le signet n'avance que sur des données livrées</span>
+            <span class="d">Pas sur des données lues, et jamais après une interrogation vide ou en échec — une source en panne ressemble exactement à une source où rien ne s'est passé. Chaque interrogation revient aussi un peu en arrière du signet, parce qu'un outil qui horodate une alerte à la détection et la range une seconde plus tard perdrait sinon cette seconde pour toujours.</span>
+          </li>
+          <li>
+            <span class="t">Une interrogation qui n'a rien placé est une interrogation en échec</span>
+            <span class="d">Savoir si la requête réseau a fonctionné n'est pas la question posée. Elle rapporte combien d'alertes elle a lues, combien elle en a placées, et nomme la cause quand les deux diffèrent.</span>
+          </li>
+          <li>
+            <span class="t">Les interrogations ne s'empilent pas</span>
+            <span class="d">Une seule en cours par source. Une source plus lente que l'intervalle est simplement interrogée moins souvent, ce qui est la conséquence honnête d'être lente ; l'alternative accumule les requêtes jusqu'à saturer la mémoire.</span>
+          </li>
+          <li>
+            <span class="t">Une source qui nous refuse est mise en attente, et c'est annoncé</span>
+            <span class="d">L'attente double à chaque échec consécutif jusqu'à trente minutes, et elle est affichée à l'écran — une source sautée est autrement indiscernable d'un collecteur arrêté. Le bouton « interroger maintenant » ignore l'attente, parce qu'un contrôle de diagnostic qui répond <em>pas encore, attendez huit minutes</em> est un contrôle sur lequel personne n'appuie deux fois.</span>
+          </li>
+        </ul>
+      </section>
+
+      <!-- ================= 06 ================= -->
+      <section id="contract">
+        <h2>Ce que doit contenir une alerte</h2>
+        <p>Deux niveaux, et la différence entre eux est celle qui sépare <em>on ne peut rien en faire</em> de <em>cette détection n'avait tout simplement pas d'adresse de destination</em>.</p>
+
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Niveau</th>
+                <th scope="col">Champs</th>
+                <th scope="col">Règle</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="m">Identité</td>
+                <td class="m"><span class="mono">alert_id · rule_name · severity · timestamp · raw_log</span></td>
+                <td>Obligatoire. Un champ manquant vaut refus — <b>et le refus nomme les champs.</b></td>
+              </tr>
+              <tr>
+                <td class="m">Observables</td>
+                <td class="m"><span class="mono">source_ip · dest_ip · user · host · process · file_path · url</span></td>
+                <td>Facultatif. Absent reste absent : <span class="mono">null</span>, jamais une chaîne vide, jamais inventé. La plupart des détections réelles n'ont pas d'adresse de destination.</td>
+              </tr>
+              <tr>
+                <td class="m">Tout le reste</td>
+                <td class="m">ce que votre outil envoie</td>
+                <td>Conservé intégralement, sur le dossier et dans la ligne d'audit. Rien de ce qu'envoie votre outil n'est jeté.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p class="callout"><b>La conséquence à retenir.</b> Isoler une machine <em>refuse de s'exécuter</em> quand il n'y a aucune machine à nommer. Une action dont la cible est inconnue n'est pas une action.</p>
+
+        <p>Les alertes arrivent sur <span class="mono">POST /api/ingest/&lt;source&gt;</span>, et c'est la route qui décide comment le contenu est lu — jamais le contenu lui-même, si bien qu'un émetteur ne peut pas se faire passer pour un autre. L'intégration Wazuh ne convertit rien : elle transmet l'alerte telle quelle et la console traduit.</p>
+      </section>
+
+      <!-- ================= 07 ================= -->
+      <section id="tabs">
+        <h2>Les dix onglets</h2>
+        <p>Regroupés plutôt qu'amputés. Dix boutons identiques coûtent une décision chaque fois qu'on les regarde ; le remède, ce sont des catégories, pas un second menu à l'intérieur du premier.</p>
+
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Onglet</th>
+                <th scope="col">Ce qu'on y trouve</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td class="m">Alerts</td><td>La file et la fiche d'incident. Cinq colonnes portent huit informations : la gravité est à l'intérieur de <em>ce que c'est</em>, et la confiance à l'intérieur du <em>verdict</em>, parce que 0,58 ne veut rien dire sans le verdict qu'il qualifie. Chaque valeur d'une alerte porte un raccourci vers Recherche avec la question déjà posée.</td></tr>
+              <tr><td class="m">Code</td><td>Lancer une analyse de code et lire le rapport. L'onglet est chargé à la première ouverture puis gardé en mémoire — changer d'onglet pendant une analyse ne la coupe pas.</td></tr>
+              <tr><td class="m">Ingestion</td><td>Comment les alertes entrent : la politique de livraison, les sources sur chaque chemin, et le pipeline tel qu'il s'exécute, avec ses variables modifiables.</td></tr>
+              <tr><td class="m">Rules</td><td>Déclarez ce qui est normal chez vous — le scanner autorisé, la fenêtre de sauvegarde — avec un essai à blanc qui répond <em>quelle règle correspondrait à cette alerte</em> sans toucher au pipeline. Huit modèles sont livrés désactivés et sans propriétaire.</td></tr>
+              <tr><td class="m">Tracking</td><td>La vue non réduite : chaînes rompues, exécutions rattachées à aucune alerte, journal cherchable, rejeu. Les orphelines attendues — la sonde de diagnostic envoie exprès une alerte invalide — sont listées et jamais comptées, sinon l'onglet clignoterait après chaque test de connectivité, et une alarme permanente cesse d'être lue.</td></tr>
+              <tr><td class="m">Metrics</td><td>Deux taux, jamais additionnés. Voir <a href="#shadow">Le mode observation</a>.</td></tr>
+              <tr><td class="m">Health</td><td>Un bouton qui teste chaque maillon de la chaîne, et neuf alertes de test à y faire passer — une par chemin de code plutôt qu'une par scénario : sans destination, avec une empreinte, malformée, en double.</td></tr>
+              <tr><td class="m">Lookup</td><td>Poser une question sur une valeur — une adresse, un domaine, une adresse web, une empreinte de fichier, un e-mail — plus une vérification de mot de passe compromis dont l'empreinte ne quitte jamais votre navigateur. Les formats obfusqués (<span class="mono">1.2.3[.]4</span>, <span class="mono">hxxp://</span>) sont acceptés, et les deux formes sont affichées.</td></tr>
+              <tr><td class="m">Guide</td><td>La documentation intégrée à la console, cherchable — et la recherche lit aussi le glossaire, si bien qu'un mot cherché dans le mauvais vocabulaire trouve quand même sa section.</td></tr>
+              <tr><td class="m">Settings</td><td>Clés, sources de journaux, la table qui relie machines et code, les moteurs d'analyse, l'assistant — et la liste de ce qui manque encore.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <figure class="shot">
+  <img data-shot="05-lookup" src="/shots/05-lookup.png" alt="L'onglet Recherche après interrogation de 8.8.8.8 : un verdict « rien contre elle », la ligne « 1 source sur 4 a répondu », et deux fiches de source marquées « pas interrogée »." width="2880" height="1800" loading="lazy" decoding="async">
+  <figcaption>Un verdict qui énonce sa propre portée. Une source a répondu, et le panneau le dit à côté du verdict ; les deux sources sans clé sont <b>pas interrogées</b> — une question que personne n'a posée, pas un trou dans ce qu'on sait.</figcaption>
+</figure>
+
+        <h3>Deux règles auxquelles l'onglet Recherche se tient</h3>
+        <ul class="rows">
+          <li>
+            <span class="t">« Rien à signaler » exige une source qui a répondu</span>
+            <span class="d">Sans aucune clé configurée, tous les services sont sautés, et afficher <em>rien trouvé</em> à propos d'une valeur que personne n'a regardée, c'est bâtir une réassurance sur un trou. Le nombre de services qui ont réellement répondu est à côté du verdict, jamais plus bas.</span>
+          </li>
+          <li>
+            <span class="t">Toute non-réponse n'est pas un échec</span>
+            <span class="d">Plusieurs services disent <em>cette adresse n'apparaît dans aucune fuite</em> avec un code HTTP 404, ce qui est la meilleure nouvelle que ce service ait à donner. Une règle générale « tout ce qui n'est pas 200 est cassé » masquerait derrière le mot <em>indisponible</em> le résultat le plus fréquent et le plus rassurant : chaque service déclare donc ses propres codes de réponse.</span>
+          </li>
+        </ul>
+      </section>
+
+      <!-- ================= 08 ================= -->
+      <section id="assistant">
+        <h2>L'assistant intégré</h2>
+        <p>Un panneau de discussion ancré sur le côté de l'écran où vous êtes. Il répond aux questions sur <em>cette</em> installation — <em>explique-moi l'alerte 1234 simplement</em>, <em>pourquoi attend-elle encore ?</em>, <em>que reste-t-il à configurer ?</em> — et il reçoit la page où vous vous trouvez, si bien que « cette alerte » ne demande rien à taper.</p>
+        <p class="callout"><b>Tout son modèle de sécurité tient dans le fait qu'il ne peut pas agir.</b> Sa liste d'outils est fermée à sept consultations en lecture seule : la file, une alerte, une chaîne, les règles, les mesures, la santé, et l'état de configuration. Il n'y a rien qui approuve, isole, clôt, rejoue, modifie une règle ou écrit un réglage.</p>
+        <p>Ce n'est pas de la prudence pour la forme. Qui pose une question sur une alerte pose une question sur un journal qu'un attaquant a composé, et un accès sans restriction d'un modèle au contenu des journaux se mesure à 87 % de réussite d'injection de consignes. Trois couches y répondent, dans l'ordre où elles tiennent réellement :</p>
+        <ul class="rows">
+          <li>
+            <span class="t">Aucune écriture dans la liste</span>
+            <span class="d">Une consigne cachée dans un journal arrive à un modèle qui ne détient que sept lectures. <b>C'est celle-là qui compte.</b></span>
+          </li>
+          <li>
+            <span class="t">Le texte non fiable est encadré, pas supprimé</span>
+            <span class="d">Le contenu des journaux voyage entre des marqueurs portant un nombre généré pour cette requête-là, de sorte qu'un journal ne peut pas fabriquer une balise de fermeture pour quelque chose qui n'existait pas au moment où il a été écrit. Rien n'est retiré : réécrire une preuve est la même erreur que combler un blanc par une supposition.</span>
+          </li>
+          <li>
+            <span class="t">Les consignes disent ce qu'un encadrement signifie</span>
+            <span class="d">Indicatif, et en troisième position pour une raison : une consigne n'est pas une frontière.</span>
+          </li>
+        </ul>
+        <p>Quatre fournisseurs d'IA sont pris en charge, une clé chacun, choisis dans les réglages. <b>Rien n'est conservé :</b> la conversation voyage avec chaque question et n'est stockée nulle part. Garder les fils créerait une quatrième copie du contenu des alertes, hors du registre d'audit, sans politique de conservation. Chaque réponse montre ce qu'elle a consulté — une réponse que vous ne pouvez pas vérifier est une réponse crue pour de mauvaises raisons.</p>
+      </section>
+
+      <!-- ================= 09 ================= -->
+      <section id="mcp">
+        <h2>Brancher votre propre IA</h2>
+        <p>Ces mêmes consultations en lecture seule peuvent être exposées à un assistant IA que vous faites tourner vous-même — Claude Desktop, Claude Code, Cursor, VS Code — via le protocole MCP. C'est <b>désactivé par défaut</b>, et éteint ou sans jeton, l'adresse répond comme si elle n'existait pas.</p>
+        <p>Les réglages contiennent une page d'installation en quatre étapes : l'activer, générer un jeton, copier le bloc pour votre client, appuyer sur le bouton de test. L'adresse dans ce bloc vient de l'adresse par laquelle <em>vous</em> avez atteint la console, pas d'un document — installez-la sur la machine d'un collègue et le bloc nomme leur machine. Le jeton est affiché une seule fois, et le test s'exécute sur le serveur, parce que le navigateur est délibérément refusé par la même protection qui empêche une page web hostile d'atteindre un service tournant chez vous.</p>
+        <p>Ce qui est exposé : <b>14 outils, 8 questions toutes prêtes, 9 ressources</b>, tous en lecture seule. Les questions toutes prêtes comptent plus qu'il n'y paraît — un client qui voit dix noms d'outils voit dix lectures et aucune raison de s'en servir, alors que <em>explique cette alerte</em>, <em>à quel point est-ce dangereux</em>, <em>pourquoi ça attend</em> et <em>rédige-moi une passation d'équipe</em> sont les questions que cette console existe pour répondre, proposées plutôt que devinées.</p>
+        <p class="note"><b>Le jeton constitue tout le contrôle d'accès.</b> Quiconque peut joindre la console et le détient peut lire la file, les alertes et les règles. Traitez-le comme le mot de passe de la console. Il ne peut rien modifier : il n'y a aucune écriture dans la liste.</p>
+      </section>
+
+      <!-- ================= 10 ================= -->
+      <section id="design">
+        <h2>Thèmes et lisibilité</h2>
+        <p>Six jeux de couleurs, changeables depuis l'en-tête de cette page aussi. Chacun redéfinit la palette <b>entière</b> : hériter trois couleurs d'un autre thème produit un accident que la relecture ne rattrape pas, comme un gris foncé resté sur un fond crème.</p>
+        <p><b>Le contraste est mesuré, pas jugé à l'œil.</b> Un test calcule les rapports de contraste standard et refuse une palette qui passe en dessous — 4,5:1 pour le texte sur chaque surface, pour le texte posé sur la couleur d'accent, et pour les couleurs de risque à l'intérieur de leurs propres pastilles. Il a rattrapé un rouge d'échec à 2,5:1, sur l'écran qui dépend le plus du rouge, et un gris resté depuis toujours à 2,77:1 dans le thème d'origine.</p>
+        <ul class="rows">
+          <li>
+            <span class="t">Un accent, un rôle</span>
+            <span class="d">La couleur d'accent signifie exactement une chose — <em>une personne est bloquée ici</em> — plus le bouton principal. Le rouge dit critique ou en échec, l'orange mérite un coup d'œil, le vert traité. Un bouton rouge apprendrait à un analyste à ignorer le rouge sur le seul écran où le rouge fait gagner du temps.</span>
+          </li>
+          <li>
+            <span class="t">La couleur ne porte jamais le sens seule</span>
+            <span class="d">Chaque couleur de risque est doublée d'un mot, si bien que la console fonctionne encore pour quelqu'un qui ne les distingue pas.</span>
+          </li>
+          <li>
+            <span class="t">La densité est une fonctionnalité</span>
+            <span class="d">Le tableau d'alertes est fait pour afficher quarante lignes. Une police à chasse fixe veut dire <em>cette chaîne vient de la machine et elle est exacte</em> ; la prose autour d'une valeur n'y est pas, la valeur si. Un analyste qui fait défiler est un analyste qui a perdu la vue d'ensemble.</span>
+          </li>
+          <li>
+            <span class="t">Ce qui explique se replie, ce qui rapporte non</span>
+            <span class="d">Une définition ou une note de méthode passe derrière un repli qui dit ce qu'il contient. Un état, un décompte, une panne ou une action en attente d'approbation reste à l'écran. Ranger une panne derrière un repli silencieux reproduit exactement le défaut que l'onglet Suivi existe pour exposer.</span>
+          </li>
+        </ul>
+        <p>L'interface fonctionne sur téléphone : la barre d'onglets défile latéralement et le dit, le tableau d'alertes se replie en fiches, les zones tactiles font 44 px, et les champs de formulaire font 16 px pour qu'iOS ne zoome pas quand on les touche.</p>
+      </section>
+
+      <!-- ================= 11 ================= -->
+      <section id="closed">
+        <h2>Les quatre listes fermées</h2>
+        <p>Quatre listes, dans ce produit, sont <b>fermées</b> — on ne peut rien y ajouter, pas même derrière une approbation. Chacune l'est pour la même raison : un opérateur pointe cette console sur du texte écrit par un attaquant toute la journée, et une liste ouverte est à une consigne près d'être celle de quelqu'un d'autre.</p>
+
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Liste</th>
+                <th scope="col">Taille</th>
+                <th scope="col">Ce que la fermeture empêche</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="m">Actions</td>
+                <td class="m">4</td>
+                <td>Isoler temporairement une machine (avec une expiration et une annulation automatique), ouvrir un ticket, escalader, clore en faux positif. <span class="sub">Aucune règle de réglage ne peut passer outre cette liste non plus.</span></td>
+              </tr>
+              <tr>
+                <td class="m">Outils de l'assistant</td>
+                <td class="m">7 en lecture</td>
+                <td>Le panneau de discussion peut lire la file, une alerte, une chaîne, les règles, les mesures, la santé et l'état de configuration, et n'écrire rien. <span class="sub">Une consigne injectée arrive à un modèle qui n'a rien pour y obéir.</span></td>
+              </tr>
+              <tr>
+                <td class="m">Noms de secrets</td>
+                <td class="m">liste nommée</td>
+                <td>Les deux coffres à clés n'acceptent que des noms figurant sur une liste fixe. <span class="sub">Un nom arbitraire transformerait la page de réglages en moyen d'injecter n'importe quelle variable d'environnement dans le processus, <span class="mono">PATH</span> compris.</span></td>
+              </tr>
+              <tr>
+                <td class="m">Services de réputation</td>
+                <td class="m">7</td>
+                <td>Le point d'entrée de recherche prend une valeur et un type — jamais une adresse web. <span class="sub">Une route qui irait chercher ce qu'on lui tend serait une faille de falsification de requête avec un bouton dessus.</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <figure class="shot">
+  <img data-shot="04-case" src="/shots/04-case.png" alt="Une fiche d'incident pour une alerte critique de rançongiciel : verdict de repli à confiance 0, quatre étapes de pipeline avec leurs durées, et un bloc d'approbation proposant une escalade." width="2880" height="1800" loading="lazy" decoding="async">
+  <figcaption>Une fiche d'incident. Le verdict nomme sa propre cause, la destination est <span class="dash">—</span> parce que la détection n'en a consigné aucune, et l'action proposée est derrière <b>Approbation requise</b>. Rien n'a été exécuté.</figcaption>
+</figure>
+
+        <p>Une cinquième limite pèse sur les règles de réglage. Une équipe peut déclarer ce qui est normal chez elle — le scanner autorisé, la fenêtre de sauvegarde — et la console <b>refuse</b> une autorisation permanente fondée sur un seul champ d'identité, une mise en sourdine sans expiration, et toute règle sans propriétaire ou sans raison énoncée.</p>
+      </section>
+
+      <!-- ================= 12 ================= -->
+      <section id="shadow">
+        <h2>Le mode observation</h2>
+        <p>Une installation neuve <b>n'exécute rien</b>. Elle consigne la décision qu'elle aurait prise et poursuit. Sortir de ce mode n'est pas un interrupteur à basculer le premier jour : cela attend un chiffre mesuré sur de vraies alertes passées par les vrais garde-fous.</p>
+        <p>Deux taux sont mesurés, et <b>ils ne sont jamais additionnés</b>, parce qu'ils répondent à des questions différentes :</p>
+
+        <div class="grid g2">
+          <article class="card">
+            <h3>À quelle fréquence l'IA a dit « faux positif »</h3>
+            <p>Une mesure de <b>répartition</b>, pas de justesse. Un modèle qui qualifierait tout de faux positif obtiendrait ici un score magnifique.</p>
+          </article>
+          <article class="card">
+            <h3>À quelle fréquence une personne a dit non</h3>
+            <p>La part des décisions soumises à un humain qu'il a rejetées. <b>C'est celui-ci qui ouvre la porte</b> — c'est le seul substitut à la justesse disponible sans vérité de terrain.</p>
+          </article>
+        </div>
+
+        <p class="note"><b>Deux choses à ne pas comparer.</b> Deux appels au même modèle sur la même alerte renvoient 0,88 et 0,91 — les comparer mesure le bruit du modèle, pas quoi que ce soit de votre installation. Et comparer un dossier que le pipeline n'a pas produit — une alerte de test injectée à mi-parcours, un verdict de repli écrit faute de clé — produit des désaccords qui n'en sont pas, et bloque la porte pour rien.</p>
+        <p>Le comportement par défaut est sûr en échouant. Une configuration absente ne peut pas autoriser une exécution, et seul le mot exact <span class="mono">false</span> désactive le mode observation. Une approbation qui expire <b>n'exécute rien</b> — le silence ne vaut jamais accord.</p>
+      </section>
+
+      <!-- ================= 13 ================= -->
+      <section id="audit">
+        <h2>Le registre d'audit</h2>
+        <p>Chaque décision écrit une ligne dans une table à laquelle on ajoute et que l'on ne modifie jamais. Chaque ligne est scellée à la précédente : retirer ou altérer une ligne, où que ce soit dans la chaîne, se voit à la vérification suivante. C'est la seule preuve d'intégrité du produit.</p>
+        <p class="callout"><b>Un vérificateur qui crie au loup est un vérificateur qu'un auditeur cesse de croire</b> — ce qui masquerait une vraie suppression dans le bruit. Une fausse alerte coûte donc ici plus cher que pas d'alerte du tout.</p>
+        <p>Ce n'est pas théorique. Une passe de charge a trouvé le vérificateur signalant des maillons rompus sur 22 lignes parfaitement saines sur 3 195. La cause : le numéro de ligne était attribué <em>avant</em> le verrou qui ordonne le scellement, si bien que sous charge deux transactions pouvaient sceller dans un ordre en portant des numéros dans l'autre. La chaîne était une liste intacte qui n'était simplement plus dans l'ordre des numéros, et le vérificateur la parcourt par numéro. Corrigé en déplaçant le numéro à l'intérieur du verrou ; revérifié sur ~500 lignes écrites 40 à la fois, sans une seule rupture.</p>
+        <p class="note">Les lignes scellées avant ce correctif gardent leurs maillons rompus. La table est en ajout seul et immuable par conception, ce qui est le bon compromis : elles ne peuvent pas être réécrites, et le vérificateur continue de les nommer honnêtement.</p>
+      </section>
+
+      <!-- ================= 14 ================= -->
+      <section id="numbers">
+        <h2>Les chiffres mesurés</h2>
+        <p>Exécuté contre un simple <span class="mono">docker compose up</span> — base de données, console, analyseur de code, rien d'autre. <b>C'est une passe de qualité sur une machine, pas un banc d'essai publié</b> ; ce qui compte est que ce soit reproductible et que les conditions soient dites.</p>
+
+        <div class="figs">
+          <div class="fig">
+            <span class="n">400 / 400</span>
+            <span class="l">alertes acceptées en charge</span>
+            <span class="c">50 en parallèle · ~134 par seconde · 95 % répondues en moins de 424 ms · chaque chaîne réglée, rien laissé en cours</span>
+          </div>
+          <div class="fig">
+            <span class="n">1 of 12</span>
+            <span class="l">doublons acceptés</span>
+            <span class="c">12 copies simultanées d'une même alerte → 1 acceptée, 11 déjà vues, zéro erreur</span>
+          </div>
+          <div class="fig">
+            <span class="n">0</span>
+            <span class="l">maillons rompus dans la chaîne d'audit</span>
+            <span class="c">revérifié sur 2 644 lignes écrites sous charge concurrente</span>
+          </div>
+          <div class="fig">
+            <span class="n">1,278</span>
+            <span class="l">tests au vert</span>
+            <span class="c">913 console · 365 analyseur de code · vérification de types propre</span>
+          </div>
+        </div>
+
+        <p><b>Cette passe a trouvé huit défauts et ils ont été corrigés.</b> Trois méritent d'être nommés, parce que chacun est une panne qui ressemblait à un succès :</p>
+        <ul class="rows">
+          <li>
+            <span class="t">Des alertes refusées rapportées comme acceptées</span>
+            <span class="d">Le point d'entrée renvoyait « accepté » pour toute alerte qu'il parvenait à démarrer, y compris celles que le pipeline avait rejetées pour champs manquants — l'émetteur n'avait donc aucune raison de corriger quoi que ce soit, et la raison, déjà calculée, ne quittait jamais le serveur.</span>
+          </li>
+          <li>
+            <span class="t">La détection de doublons n'était pas sûre en rafale</span>
+            <span class="d">« Insérer sauf si une ligne existe » se lit comme une étape atomique et n'en est pas une : deux transactions voyaient toutes deux la ligne absente, inséraient toutes deux, et l'une mourait. Douze copies simultanées d'une alerte produisaient une erreur serveur — et une erreur serveur dit à l'émetteur de réessayer une alerte déjà acceptée.</span>
+          </li>
+          <li>
+            <span class="t">Le vérificateur d'audit criait au loup</span>
+            <span class="d">Voir <a href="#audit">Le registre d'audit</a>.</span>
+          </li>
+        </ul>
+      </section>
+
+      <!-- ================= 15 ================= -->
+      <section id="limits">
+        <h2>Ce qu'il ne fait pas</h2>
+        <p>Dit ici pour la même raison que la console le dit : une page qui n'énumère que ce qui marche est un vert qui n'a pas été gagné.</p>
+        <ul class="rows">
+          <li>
+            <span class="t">Les deux moitiés ne se parlent pas</span>
+            <span class="d">Une analyse de code ne crée aucune alerte dans la file, et une alerte ne lance aucune analyse. Ce qui les relie, c'est une table que vous remplissez pour associer des noms de machines au code qui y tourne, afin qu'une fiche d'incident puisse nommer le projet et le transmettre à l'analyseur en un clic — elle remplit un formulaire, elle ne lance jamais rien. La correspondance est exacte, et une entrée ambiguë est refusée à l'enregistrement plutôt que devinée.</span>
+          </li>
+          <li>
+            <span class="t">La connexion n'identifie personne</span>
+            <span class="d">L'accès est un simple mot de passe. Il protège la console ; il ne distingue pas un approbateur d'un autre, et la ligne d'audit le dit exactement, plutôt que de sous-entendre un nom qu'elle n'a pas.</span>
+          </li>
+          <li>
+            <span class="t">L'autonomie attend une mesure</span>
+            <span class="d">Sortir du mode observation dépend d'un taux de désaccord mesuré sur de vraies alertes, pas d'une date. Voir <a href="#shadow">Le mode observation</a>.</span>
+          </li>
+          <li>
+            <span class="t">C'est un projet, pas un produit</span>
+            <span class="d">Auto-hébergé, open source, sans contrat de support et sans société derrière. Lisez le code avant de le pointer sur quoi que ce soit d'important — ce qui est de toute façon la bonne chose à faire avec n'importe quel outil de cette catégorie.</span>
+          </li>
+        </ul>
+      </section>
+
+      <!-- ================= 16 ================= -->
+      <section id="glossary">
+        <h2>Les mots employés ici</h2>
+        <p>La page d'accueil les évite exprès. Ils apparaissent sur cette page et dans la console : ils sont donc définis une fois, ici.</p>
+        <dl class="gloss">
+          <dt>Alerte</dt>
+          <dd>Un avertissement unique remonté par un outil de détection : <em>ce fichier a été bloqué</em>, <em>ce compte a échoué douze fois à se connecter</em>. C'est un fait déjà survenu, pas une prédiction.</dd>
+
+          <dt>Tri (triage)</dt>
+          <dd>Décider, vite, quelles alertes méritent le temps d'une personne. Emprunté à l'hôpital, et le sens est le même ici.</dd>
+
+          <dt>Faux positif</dt>
+          <dd>Une alerte qui s'avère n'être rien. La plupart le sont. Se tromper coûte cher dans les deux sens, d'où la prudence de la console avec ce mot.</dd>
+
+          <dt>SIEM</dt>
+          <dd>L'outil qui collecte les journaux de tout ce que vous faites tourner et en tire des alertes. C'est lui qui alimente MENATER. Wazuh est celui contre lequel ce projet est testé.</dd>
+
+          <dt>Enrichissement</dt>
+          <dd>Ajouter du contexte à une alerte avant que quiconque ne la juge — cette adresse est-elle connue pour des attaques, où se trouve-t-elle, à quelle technique connue cela correspond-il.</dd>
+
+          <dt>Mode observation</dt>
+          <dd>Le comportement par défaut. La console note ce qu'elle aurait fait et ne fait rien. Appelé <em>shadow mode</em> dans le code source.</dd>
+
+          <dt>Observable</dt>
+          <dd>Une valeur concrète dans une alerte, sur laquelle on peut aller se renseigner : une adresse, un nom de machine, une empreinte de fichier, un utilisateur.</dd>
+
+          <dt>Webhook</dt>
+          <dd>Une adresse web que vous donnez à un autre outil pour qu'il vous pousse des données à l'instant où quelque chose se produit, au lieu que vous ayez à demander.</dd>
+
+          <dt>Interrogation régulière (polling)</dt>
+          <dd>L'inverse : demander à un autre outil s'il y a du nouveau, à intervalle régulier.</dd>
+
+          <dt>Injection de consignes</dt>
+          <dd>Cacher des instructions dans un texte qu'une IA va lire, pour qu'elle les suive à la place des vôtres. Un journal dans lequel un attaquant peut écrire en est le cas d'école, et c'est la raison pour laquelle l'IA de cette console a le droit de lire et pas d'agir.</dd>
+        </dl>
+      </section>
+
+      <!-- ===================== FOOTER ===================== -->
+  <footer class="band band-inset">
+    <div class="wrap foot">
+      <div class="row">
+        <p class="kick">MENATER · <span class="heb" lang="he" dir="rtl">מנטר</span> · présent du verbe <em>lenater</em>, surveiller</p>
+        <p class="kick">Auto-hébergé · Docker · open source</p>
+        <span class="foot-links">
+          <a class="totop" href="https://github.com/S2K7x/Menater" target="_blank" rel="noopener noreferrer">Le code sur GitHub ↗</a>
+          <a class="totop" href="#top">↑ Haut de page</a>
+        </span>
+      </div>
+      <p>Nommé d'après une action en cours, pas d'après une technologie : la console montre un état, jamais un rapport terminé. Elle surveille ; un humain agit.</p>
+    </div>
+  </footer>
+    </div>
+  </div>
+</main>
+
+<!-- The handful of strings the script writes into the page. English lives
+     here, beside the rest of it; build.py swaps the values for a locale. -->
+<script type="application/json" id="ui-strings">
+{
+  "copy": "Copier",
+  "copied": "Copié",
+  "selectIt": "Sélectionnez-le",
+  "themeOf": "Thème : ",
+  "grayed": "Grayed — ardoise et vert acide",
+  "punk": "Punk — kaki et rouge",
+  "blued": "Blued — bleu électrique et citron vert",
+  "attck": "Attck — orange incandescent",
+  "acme": "Acme — papier crème, rouge d'imprimeur (clair)",
+  "dark": "Dark — gris presque noir et bleu applicatif"
+}
+</script>
+
+<script>
+(function () {
+  var S = JSON.parse(document.getElementById('ui-strings').textContent);
+
+  var THEMES = [
+    { id: 'grayed', bg: '#232830', accent: '#c3f53c' },
+    { id: 'punk',   bg: '#3b3d2a', accent: '#c31f1b' },
+    { id: 'blued',  bg: '#1f31c4', accent: '#c8f24b' },
+    { id: 'attck',  bg: '#7a1c08', accent: '#ffdd1c' },
+    { id: 'acme',   bg: '#f4f1ea', accent: '#e01e0b' },
+    { id: 'dark',   bg: '#16181c', accent: '#1269f5' }
+  ];
+
+  var root = document.documentElement;
+  var picker = document.getElementById('picker');
+  var buttons = [];
+
+  function apply(id) {
+    root.setAttribute('data-palette', id);
+    buttons.forEach(function (b) {
+      b.setAttribute('aria-pressed', String(b.dataset.id === id));
+    });
+    try { localStorage.setItem('menater.site.theme', id); } catch (e) { /* private mode */ }
+  }
+
+  THEMES.forEach(function (t) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'sw';
+    b.dataset.id = t.id;
+    b.title = S[t.id];
+    b.setAttribute('aria-label', S.themeOf + S[t.id]);
+    b.setAttribute('aria-pressed', 'false');
+    b.style.background = t.bg;
+    var dot = document.createElement('i');
+    dot.style.background = t.accent;
+    b.appendChild(dot);
+    b.addEventListener('click', function () { apply(t.id); });
+    picker.appendChild(b);
+    buttons.push(b);
+  });
+
+  var saved = null;
+  try { saved = localStorage.getItem('menater.site.theme'); } catch (e) { saved = null; }
+  var known = THEMES.some(function (t) { return t.id === saved; });
+  apply(known ? saved : 'grayed');
+
+  /* ------------------------------------------------------------------
+     The section bar says where you are, and says when it has more in it.
+     Both are the same defect if left out: a section you cannot see is a
+     section that does not exist for the person hunting it.
+     ------------------------------------------------------------------ */
+  var nav = document.getElementById('topnav');
+  var rail = nav.parentElement;
+  // Whichever of the two actually scrolls is the one to measure and move.
+  var box = nav.scrollWidth > nav.clientWidth || nav.scrollHeight > nav.clientHeight
+    ? nav : (nav.closest('.docs-side') || nav);
+  var links = [].slice.call(nav.querySelectorAll('a'));
+  var targets = links
+    .map(function (a) { return { a: a, el: document.querySelector(a.getAttribute('href')) }; })
+    .filter(function (t) { return t.el; });
+
+  function markOverflow() {
+    // A bar that scrolls without looking like it scrolls hides its own end.
+    var more = nav.scrollWidth - nav.clientWidth - nav.scrollLeft > 8;
+    rail.setAttribute('data-overflow', String(more));
+  }
+  nav.addEventListener('scroll', markOverflow, { passive: true });
+  window.addEventListener('resize', markOverflow);
+  markOverflow();
+
+  function spy() {
+    // The current section is the last one whose top has passed the header.
+    var line = 120;
+    var current = targets[0];
+    targets.forEach(function (t) {
+      if (t.el.getBoundingClientRect().top <= line) current = t;
+    });
+    links.forEach(function (a) { a.removeAttribute('aria-current'); });
+    if (current && window.scrollY > 40) {
+      current.a.setAttribute('aria-current', 'true');
+      // Keep the active entry reachable. The front page's bar scrolls
+      // sideways; the documentation sidebar scrolls DOWN, and sixteen entries
+      // in a column will not all fit. An entry you cannot see is an entry that
+      // does not exist for whoever is hunting it, in either direction.
+      var r = current.a.getBoundingClientRect();
+      var nr = box.getBoundingClientRect();
+      if (box.scrollWidth > box.clientWidth && (r.left < nr.left || r.right > nr.right)) {
+        box.scrollLeft += r.left - nr.left - 24;
+        markOverflow();
+      }
+      if (box.scrollHeight > box.clientHeight && (r.top < nr.top || r.bottom > nr.bottom)) {
+        box.scrollTop += r.top - nr.top - 60;
+      }
+    }
+  }
+  var ticking = false;
+  window.addEventListener('scroll', function () {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(function () { spy(); ticking = false; });
+  }, { passive: true });
+  spy();
+
+  /* The language links are plain hrefs and work with no script at all.
+     This only carries the anchor across, so switching language does not
+     also send you back to the top of a page you were halfway down. */
+  var langs = document.querySelectorAll('[data-lang-link]');
+  if (langs.length) {
+    var carry = function () {
+      var h = window.location.hash;
+      for (var i = 0; i < langs.length; i++) {
+        langs[i].href = langs[i].getAttribute('data-href') + h;
+      }
+    };
+    window.addEventListener('hashchange', carry);
+    carry();
+  }
+
+  // The copy button is on the front page only; this script is shared, so its
+  // absence is a normal state and not a reason to take the rest down with it.
+  /* The documentation's table of contents. It ships OPEN, because a closed
+     <details> hides its content whatever the stylesheet says — so a CSS-only
+     "open from 1000 px" is not expressible. Below that width it is collapsed
+     here instead, and the state follows the viewport as it changes. With no
+     script it stays open: longer on a phone, never missing. */
+  var toc = document.getElementById('toc');
+  if (toc && window.matchMedia) {
+    var narrow = window.matchMedia('(max-width: 999px)');
+    var fit = function (m) { toc.open = !m.matches; };
+    fit(narrow);
+    if (narrow.addEventListener) narrow.addEventListener('change', fit);
+  }
+
+  var copy = document.getElementById('copy');
+  var cmd = document.getElementById('cmd');
+  if (copy && cmd) copy.addEventListener('click', function () {
+    var text = cmd.textContent;
+    var done = function () {
+      copy.textContent = S.copied;
+      setTimeout(function () { copy.textContent = S.copy; }, 1600);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { copy.textContent = S.selectIt; });
+    } else {
+      copy.textContent = S.selectIt;
+    }
+  });
+})();
+</script>
+</body>
+</html>
