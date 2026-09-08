@@ -139,3 +139,92 @@ export const UNTRUSTED_ALERT_FIELDS = [
   'extensions',
   'reasoning',
 ] as const;
+
+/**
+ * The only two fields of an enrichment source the CONSOLE writes.
+ *
+ * `status` is one of four words we chose (`ok` / `skipped` / `unavailable` /
+ * `absent`) and `source` comes from the closed table in `MAPPERS`. Everything
+ * else in the bag was written by a third party, about a value an attacker
+ * chose.
+ */
+const OUR_SOURCE_FIELDS = new Set(['status', 'source']);
+
+/**
+ * Beyond this, a provider is nesting deeper than any field we map, and the
+ * value is fenced whole rather than walked. Recursing without a floor over
+ * JSON somebody else composed is the denial of service that comes free with
+ * every parser.
+ */
+const MAX_ENRICHMENT_DEPTH = 4;
+
+function fenceValue(fence: Fence, label: string, value: unknown, depth: number): unknown {
+  // Numbers and booleans carry no instruction, and fencing them would cost the
+  // model the ability to reason about a score as a score. `if everything is
+  // marked untrusted, nothing is` — the rule `fenceFields` states above.
+  if (value === null || value === undefined || typeof value === 'number' || typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'string') return fenced(fence, label, value);
+  if (depth >= MAX_ENRICHMENT_DEPTH) return fenced(fence, label, value);
+  if (Array.isArray(value)) return value.map((v) => fenceValue(fence, label, v, depth + 1));
+  if (typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      out[k] = fenceValue(fence, `${label}.${k}`, v, depth + 1);
+    }
+    return out;
+  }
+  return fenced(fence, label, value);
+}
+
+/**
+ * Fences what the three enrichment sources brought back.
+ *
+ * ============================================================================
+ * WHY THIS IS NOT A LIST OF FIELD NAMES
+ *
+ * `UNTRUSTED_ALERT_FIELDS` above can be a list because an alert has a contract:
+ * `domain.ts` names its fields. An enrichment source has none — `EnrichmentSource`
+ * is `{ status, source, [key: string]: unknown }`, an open bag whose contents
+ * are whatever `MAPPERS` picked out of that provider's JSON. A list of names
+ * here would go stale the day a mapper gains a field or a fourth source is
+ * added, and it would go stale SILENTLY: the new field would simply travel in
+ * the clear. This repository has already paid for a list of exact names once,
+ * in `isDataAccess()`.
+ *
+ * So the rule is inverted. Everything is fenced EXCEPT the two fields whose
+ * vocabulary is ours and closed, and the numbers and booleans, which cannot
+ * carry an instruction.
+ *
+ * WHAT THIS TEXT ACTUALLY IS
+ *
+ * It reads like reference data and it is not. Shodan's `hostnames` is the
+ * reverse DNS of the address that attacked us — a PTR record its owner sets.
+ * `org` and `isp` come from WHOIS on the same address. VirusTotal's
+ * `meaningful_name` is the file name whoever submitted the sample chose, and
+ * `popular_threat_label` is derived from engine detection names for it. A
+ * `reason` on a failed lookup is `clip(e.message)` — the provider's own error
+ * prose, forwarded.
+ *
+ * None of it is a log, so none of it was covered by the fence; all of it is
+ * text an attacker can influence and get read back to a model, which is the
+ * exact channel this file exists to close.
+ * ============================================================================
+ */
+export function fenceEnrichment(fence: Fence, enrichment: unknown): unknown {
+  if (!enrichment || typeof enrichment !== 'object') return enrichment;
+  const out: Record<string, unknown> = {};
+  for (const [name, source] of Object.entries(enrichment as Record<string, unknown>)) {
+    if (!source || typeof source !== 'object' || Array.isArray(source)) {
+      out[name] = fenceValue(fence, `enrichment.${name}`, source, 1);
+      continue;
+    }
+    const bag: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(source as Record<string, unknown>)) {
+      bag[k] = OUR_SOURCE_FIELDS.has(k) ? v : fenceValue(fence, `enrichment.${name}.${k}`, v, 1);
+    }
+    out[name] = bag;
+  }
+  return out;
+}

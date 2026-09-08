@@ -4,6 +4,82 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-08 — Tuesday · Security
+
+**Subject**: the assistant's fence covered the alert and not the enrichment.
+Shodan / AbuseIPDB / VirusTotal text — which describes an address an attacker
+chose — reached the model verbatim, through `menater://alert/{id}` as well as
+the panel.
+
+**Result**: PR opened (branch `claude/nightly-2026-09-08-fence-enrichment`).
+
+**Why this subject**: Tuesday's first listed area is prompt injection on the
+paths that hand a log to a model. The suite was green on the default branch
+first, so the calendar rule did not preempt it, and no PR was open.
+
+**What I learned**:
+
+- **`ROADMAP.md` X2 already asserted enrichment free text was fenced.** It was
+  not. The documentation is what kept the hole invisible: anyone auditing the
+  fencing would have read that row and stopped. This is the project's own
+  "documentation describing an unimplemented intention is worse than no
+  documentation", turned on a security guarantee.
+- **The untrusted text people forget is the text that does not look like a
+  log.** Enrichment reads as reference data — a score, a country, an ISP. But
+  Shodan's `hostnames` is the reverse DNS of the attacking address, a PTR
+  record its owner sets; `org`/`isp` are WHOIS on that same address;
+  VirusTotal's `meaningful_name` is the file name whoever submitted the sample
+  chose. Checked in `transforms/enrichment.ts`: a failed lookup's `reason` is
+  `clip(e.message ?? e.description ?? …)` — the provider's own prose, forwarded.
+- **A list of field names was the wrong shape here, and the reason is
+  structural.** `UNTRUSTED_ALERT_FIELDS` can be a list because an alert has a
+  contract in `domain.ts`. `EnrichmentSource` is `{ status, source, [key:
+  string]: unknown }` — an open bag — so a name list would go stale *silently*
+  the day a mapper gains a field or a fourth source arrives. The rule is
+  inverted: fence everything except the two fields whose vocabulary is ours and
+  closed. Numbers and booleans stay bare, because they carry no instruction and
+  the model has to keep reasoning about a score as a score.
+- **One call site covers both surfaces.** `readResource` in `mcp.ts` calls
+  `runTool('get_alert')`, so the MCP resource and the docked panel are the same
+  path. Verified by reading it, not assumed.
+- **The demo snapshot is a real offline test fixture.** With no database
+  `snapshot()` falls back to `demoCases`, whose enrichment carries actual free
+  text (`org: 'Bulletproof Hosting Ltd'`, `popular_threat_label`). So the
+  end-to-end test drives the real tool with no mocking at all.
+
+**Do not redo**:
+
+- **Do not fence `enrichment_meta`.** Its source lists are our own names,
+  `file_hash` is a hex match our own regex made, the rest are booleans and a
+  timestamp. Marking it too would dilute the mark — the rule `fenceFields`
+  already states.
+- **Do not fence the numbers.** `abuse_confidence_score: 100` inside a fence is
+  a string the model has to unwrap before it can compare it, bought for nothing:
+  a number cannot carry an instruction.
+- **Ruled out: fencing `approval.human_reasoning` and `approver.slack_username`
+  in the same PR.** They are also unfenced and they are also not ours, but they
+  are typed by someone holding the console password — a different threat model
+  and a different argument, and it did not belong in a PR about third-party
+  text. Noted here so the next security night has it. Same for `list_rules`'s
+  `conditions`, which is operator-authored.
+- **Ruled out: touching `alertRow`'s `host` / `source_ip`.** They are unfenced
+  by an existing deliberate choice, and reopening it is an architecture
+  decision, not a night's fix.
+
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 957 passed | 1 skipped  (953 before; +4 new, nothing skipped or weakened)
+npm run build       # dist built
+```
+The end-to-end test was checked **RED** first: with `fenceEnrichment` removed
+from the call site it fails with `expected 'Bulletproof Hosting Ltd' to contain
+'<nonce>'`. Size measured on all seven demo cases before and after: `get_alert`
+grows by 169–815 characters, worst reply 5,123 against the 12,000-character
+`capResult` cap — so no reply is pushed into truncation by the fencing.
+`VulnPipe/` untouched, its suite not run.
+
 ## 2026-09-07 — Monday · Feature
 
 **Subject**: J0.3, the service ↔ repository inventory — the table that says
