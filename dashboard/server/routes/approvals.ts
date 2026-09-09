@@ -7,6 +7,7 @@
 
 import { json, readBody } from '../respond.ts';
 import { invalidate, snapshot } from '../snapshot.ts';
+import { injectAlert } from '../injection.ts';
 import { getEngine } from '../runtime.ts';
 import type { Ctx } from './context.ts';
 
@@ -114,15 +115,19 @@ export async function approvalsRoutes(c: Ctx): Promise<boolean> {
         if (!engine) {
           return json(res, 503, { ok: false, error: am.engineUnavailable });
         }
-        const run = await engine.start('01-ingestion', { ...alert, source: 'replay' }, alertId);
+        // AND THE PIPELINE'S ANSWER IS READ BACK. `same_id: true` is the
+        // documented way to test deduplication, so the pipeline answering
+        // "duplicate, skipped" is an expected outcome here — and it was being
+        // reported as "Alert replayed", which is the opposite of what happened.
+        const r = await injectAlert(engine, { ...alert, source: 'replay' }, alertId);
         invalidate();
         return json(res, 200, {
-          ok: true,
-          status: 202,
+          ok: r.ok,
+          status: r.status,
           alert_id: alertId,
           source_alert_id: sourceId,
-          response: JSON.stringify({ run_id: run.id, status: run.status }),
-          detail: am.replaySent(alertId) });
+          response: JSON.stringify({ run_id: r.run_id, status: r.run_status }),
+          detail: r.ok ? am.replaySent(alertId) : am.replayRefused(r.status, r.detail) });
       } catch (err) {
         return json(res, 200, {
           ok: false,

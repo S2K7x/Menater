@@ -1380,6 +1380,19 @@ The three that mattered:
 Requires a manual `psql` on an existing database — `sql/` only runs on first
 start. Documented in CLAUDE.md.
 
+**Defect 1 survived on the two buttons inside the console, and was fixed
+separately.** `webhook.ts` got `responseOf`; `POST /api/simulate` (Health →
+inject a test alert) and `POST /api/replay` (Tracking) did not, and went on
+answering `ok: true, status: 202` for every run they started. So the
+`malformed` scenario — which ships for the sole purpose of showing what a
+sender is told — reported a green injection, then "no trace of that alert"
+forty-five seconds later; and a `same_id` replay, the documented way to test
+deduplication, reported "Alert replayed" over a pipeline that had replayed
+nothing. Both now read the answer through `server/injection.ts`, and
+`injection.test.ts` runs the real workflows to prove the refusal path is
+reached. The same fix removed a stale Health-tab question — *"Are the workflows
+published?"* — asked about machinery that left with n8n.
+
 ### Everything the pipeline says is English
 
 The engine's own strings — guardrail messages, node labels and notes, approval

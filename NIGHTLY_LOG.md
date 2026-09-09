@@ -4,6 +4,105 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-09 — Wednesday · Tests and QA
+
+**Subject**: the console's two injection buttons reported `ok: true, 202
+accepted` for every run they managed to start, whatever the pipeline had
+decided about the alert. The `malformed` scenario — which exists solely to show
+what a refused sender is told — produced a green banner.
+
+**Result**: PR opened (branch `claude/nightly-2026-09-09-injection-answer`).
+
+**Why this subject**: Wednesday is the failure-path night, and its stated rule
+is *a failure must never look like a success*. The suite was green on the
+default branch first (957 passed, 1 skipped, typecheck clean), so the calendar
+rule did not preempt it, and no PR was open. This is priority (2) — a real,
+reproducible bug — not (4) coverage.
+
+**What I learned**:
+
+- **`Engine.responseOf` had exactly one caller.** It was written for the trap
+  already in the table ("the entry point answered 202 for an alert the pipeline
+  REFUSED") and wired into `webhook.ts` alone. `POST /api/simulate` and
+  `POST /api/replay` both still did `engine.start(...)` then hard-coded
+  `ok: true, status: 202`. Grepping for the other callers of a thing you just
+  fixed is a two-minute habit that would have caught this a pass earlier.
+- **The two buttons had no test because neither has a sender to disappoint.**
+  The webhook's answer is a protocol, so it got tested; a console button's
+  answer is "just a banner", so it did not. That is backwards — the banner is
+  the only thing the operator sees.
+- **The pipeline really does reach `respond-400` on the shipped scenario.** Not
+  assumed: `injection.test.ts` assembles the real engine on `MemoryRunStore`,
+  registers the real workflows and injects `SCENARIOS`. The `malformed`
+  scenario needs almost nothing stubbed — validation fails before the `dedup`
+  postgres node — so the harness is ~40 lines rather than the ~80 of
+  `pipeline-to-case.test.ts`. I deliberately did NOT extract a shared harness:
+  one duplicated fixture is cheaper than a shared file two suites fight over.
+- **`replayRefused` was already in the catalogue and called from nowhere** —
+  dead since the replay route stopped speaking HTTP to n8n. It went back to
+  work with a `detail` argument added.
+- **A duplicate is not a malfunction, and the wording had to say so.** The
+  `burst` scenario and a `same_id` replay exist to demonstrate deduplication,
+  so `ok: false` (correct: no chain started, so nothing to follow) is rendered
+  with a red banner. I left the tone alone and changed the sentence instead —
+  "already seen, so no second chain was started". A third banner tone is a
+  CLARITY.md change, not this PR.
+
+**Found and NOT fixed — a stale-vocabulary cluster around "published"** (a
+future night's subject, same family as the n8n sweep):
+
+- `console.ts` `diagLede` still describes the OLD diagnostic: *"checks access
+  to the pipeline, that the six workflows exist and are published, how they
+  chain, their credentials"*. `runDiagnostics` checks none of that any more —
+  it checks database, schema, model key, the node contract, runs seen and the
+  entry point. **Live on the Health tab**, and the Guide contradicts it two
+  screens away ("There is no publish step, so there is nothing to forget").
+- `console.ts` `published` / `unpublished` — **live**, rendered per workflow on
+  the Health tab, where `workflowList()` hardcodes `active: true`. A badge that
+  is always the same word, in the vocabulary of a product that left.
+- `server/i18n.ts` `findingNothingPublished` and `webhookUnreachable` — both
+  **dead** (no caller). The second says "Check that 01-Ingestion is published".
+- I did not add a test forbidding "published" in user-facing strings, because
+  it would have failed on those four and forced this PR to widen.
+
+**Do not redo**:
+
+- **Do not report a duplicate as `ok: true`.** It is tempting (nothing is
+  broken), and it restarts `follow()` hunting a run deduplication deliberately
+  did not create — the 45-second "no trace of that alert" this PR removes.
+- **Do not borrow the webhook's fallback 202 when no `respond` node was
+  reached.** HTTP obliges the webhook to send a status; a console button is not
+  a protocol and can say `0` plus "the run broke before deciding". Inventing an
+  acceptance is the defect, at one remove.
+- **Ruled out: testing the routes through `handleRequest`.** `getEngine()` is
+  module state keyed on the database config, with no injection point, and a
+  `pg` pool is lazy — so the route would build an engine whose every write
+  fails, which tests the failure of the store rather than the answer. The logic
+  moved into `injection.ts` instead, where the real engine can be handed in.
+  Making `runtime.ts` injectable for tests is a bigger change than this bug.
+- **Ruled out: a shared test harness with `pipeline-to-case.test.ts`.** See
+  above.
+
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 969 passed | 1 skipped  (957 before; +12 new, nothing skipped or weakened)
+npm run build       # dist built, 472 kB / 140 kB gzip
+```
+Checked **RED** first: with `injectAlert` reverted to the shipped behaviour
+(`return { ok: true, status: 202, … }`, ignoring `responseOf`), the two
+refusal tests fail — `expected true to be false` on the `malformed` and
+duplicate paths. `VulnPipe/` untouched, its suite not run. No model key and no
+database here, and neither is needed: the pipeline takes its fail-safe verdict
+and the store is in memory.
+
+**Note**: `npm install` rewrote `dashboard/package-lock.json` (npm version
+churn — `libc` fields, `@types/pg` moved to `devDependencies`). Reverted, not
+committed. Worth knowing: `package.json` lists `@types/pg` under
+`devDependencies` while the committed lock has it under `dependencies`, so any
+`npm install` on a recent npm produces that diff. Pre-existing, left alone.
+
 ## 2026-09-08 — Tuesday · Security
 
 **Subject**: the assistant's fence covered the alert and not the enrichment.

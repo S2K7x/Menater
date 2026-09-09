@@ -206,7 +206,7 @@ export function HealthPanel({
     try {
       const r = await api.simulate(scenario ? { scenario } : {});
       if (!r.ok) {
-        setMessage({ ok: false, text: h.injectKo(r.status, r.response.slice(0, 200)) });
+        setMessage({ ok: false, text: h.injectKo(r.response.slice(0, 300)) });
         return;
       }
       setMessage({ ok: true, text: h.injectOk(r.alert_id) });
