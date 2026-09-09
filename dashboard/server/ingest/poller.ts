@@ -45,7 +45,7 @@
  * ============================================================================
  */
 
-import { fetchWithDeadline } from '../http.ts';
+import { describeFetchError, fetchWithDeadline } from '../http.ts';
 import { mapLimit } from '../limit.ts';
 import { isManagedCredential } from '../credentials.ts';
 import { mappingFor, normalize } from '../engine/transforms/normalize.ts';
@@ -370,7 +370,11 @@ export async function pollSource(
       { timeoutMs: 20_000, fetchImpl: deps.fetchImpl },
     );
   } catch (err) {
-    return fail((err as Error).message);
+    // NOT `(err as Error).message`: that is the string "fetch failed" for every
+    // transport failure there is, and this sentence is the only thing on the
+    // Ingestion tab that says whether to fix the address, start the machine or
+    // open the firewall. It is persisted too, as the cursor's `lastError`.
+    return fail(describeFetchError(err));
   }
 
   if (!res.ok) {

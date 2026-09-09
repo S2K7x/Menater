@@ -32,7 +32,7 @@ import { TOOLS } from '../assistant/tools.ts';
 import { describeProviders, providerFor } from '../assistant/providers.ts';
 import { mcpCatalogue } from '../assistant/mcp.ts';
 import { saveConfig } from '../config.ts';
-import { fetchWithDeadline } from '../http.ts';
+import { describeFetchError, fetchWithDeadline } from '../http.ts';
 import { PORT } from '../env.ts';
 import { randomBytes } from 'node:crypto';
 import type { Ctx } from './context.ts';
@@ -225,7 +225,9 @@ export async function assistantRoutes(c: Ctx): Promise<boolean> {
           + `${cat.prompts.length} prompts and ${cat.resources.length} resources — all read-only.`,
       });
     } catch (err) {
-      return json(res, 200, { ok: false, detail: `Could not reach it: ${(err as Error).message}` });
+      // "Could not reach it: fetch failed" told the person installing an MCP
+      // client nothing they did not already know. The cause is one level down.
+      return json(res, 200, { ok: false, detail: `Could not reach it: ${describeFetchError(err)}` });
     }
   }
 
@@ -279,8 +281,12 @@ export async function assistantRoutes(c: Ctx): Promise<boolean> {
       // "the API is not responding", because on those the body usually comes
       // from the Vite proxy and is not JSON. Sending this sentence as a 502
       // would throw away the only part that says WHICH upstream failed.
+      // …and "could not reach it" is the half of the sentence the reader
+      // already has. `describeFetchError` supplies the other half; it leaves an
+      // error that already explains itself untouched, so nothing is lost here
+      // for the failures that are not transport failures.
       return json(res, 409, {
-        error: `The assistant could not reach the model provider: ${(err as Error).message}`,
+        error: `The assistant could not reach the model provider: ${describeFetchError(err)}`,
       });
     }
   }

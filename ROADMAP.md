@@ -1645,6 +1645,7 @@ Small, known, and written down so it is not rediscovered.
 | Bounded run window | The Tracking tab announces the truncation instead of hiding it, but beyond the window the console still knows nothing. Lifted by S1.4 |
 | Probe ↔ error-handler correlation by time | The 06 triggered by the diagnostic probe is attached to it over a 10 s window. It only changes the RANK of the row, never its content — but it is a heuristic, not a proof |
 | **French code comments** | Roughly 148 of 176 source files. Not user-facing, and the most valuable prose in the repository: they carry the reasoning. A deliberate pass, not a machine translation |
+| Raw transport errors inside the engine | `describeFetchError` covers the three operator-facing screens (see the traps table). The engine's own `io.ts` nodes — `http`, `notify`, `llm` — still let a bare `TypeError: "fetch failed"` become a step error, so an unreachable Slack or model provider lands on an incident card with no cause. Same one-line fix per node; it is deliberately not in that PR because ROADMAP § 7 already reserves a separate pass for the engine's strings, and touching five nodes for a wording change is test risk that belongs with it |
 
 ---
 
