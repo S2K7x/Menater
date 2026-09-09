@@ -171,6 +171,8 @@ export interface ServerMessages {
     rulesNoDatabase: string;
     simulateNoEngine: string;
     simulateStarted: (scenario: string, status: string) => string;
+    /** The pipeline refused the injected alert: its status, and its own reason. */
+    simulateRefused: (scenario: string, status: number, detail: string | null) => string;
     approverRequired: string;
     engineUnavailable: string;
     approvalUnknownToken: string;
@@ -183,7 +185,7 @@ export interface ServerMessages {
     replayUnknownCase: (id: string) => string;
     replayNoPayload: (id: string) => string;
     replaySent: (id: string) => string;
-    replayRefused: (status: number) => string;
+    replayRefused: (status: number, detail: string | null) => string;
     replayUnreachable: (error: string) => string;
   };
 
@@ -390,6 +392,23 @@ const EN: ServerMessages = {
       + 'has nowhere to go. Settings → Database.',
     simulateStarted: (scenario, status) =>
       `Scenario "${scenario}" injected into the console pipeline (${status}).`,
+    simulateRefused: (scenario, status, detail) => {
+      // The reason the pipeline WROTE, or the plain statement that it wrote
+      // none — never a placeholder standing in for one.
+      const why = detail ? ` — ${detail}.` : ', with no reason recorded.';
+      if (status === 0) {
+        return `Scenario "${scenario}" reached no answer in the pipeline: the run broke `
+          + `before deciding${detail ? ` — ${detail}.` : '.'}`;
+      }
+      // A DUPLICATE IS NOT A MALFUNCTION. The `burst` scenario exists to show
+      // deduplication working, so the sentence says what happened rather than
+      // reading like a breakage — while still refusing to claim a chain
+      // started, because none did.
+      if (status === 200) {
+        return `Scenario "${scenario}": already seen, so no second chain was started${why}`;
+      }
+      return `Scenario "${scenario}" was not accepted: the pipeline answered ${status}${why}`;
+    },
     approverRequired: 'Your identifier is required: it is logged with the decision.',
     engineUnavailable:
       'The engine is not started: no database is configured, so there is no run to answer.',
@@ -412,7 +431,19 @@ const EN: ServerMessages = {
     replayNoPayload: (id) =>
       `Case ${id} never went through ingestion: its original payload is unknown, and the console will not replay an alert reconstructed from memory.`,
     replaySent: (id) => `Alert replayed under id ${id}.`,
-    replayRefused: (status) => `The entry point refused the replay (${status}).`,
+    replayRefused: (status, detail) => {
+      const why = detail ? ` — ${detail}.` : ', with no reason recorded.';
+      if (status === 0) {
+        return `The replay reached no answer in the pipeline: the run broke before `
+          + `deciding${detail ? ` — ${detail}.` : '.'}`;
+      }
+      // Replaying under the ORIGINAL id is the documented way to test
+      // deduplication: answering 200 is that test passing, not a failure.
+      if (status === 200) {
+        return `Already seen: deduplication kept it, so nothing was replayed${why}`;
+      }
+      return `The replay was not accepted: the pipeline answered ${status}${why}`;
+    },
     replayUnreachable: (error) =>
       `The entry point did not answer: ${error}. Nothing was replayed.`,
   },

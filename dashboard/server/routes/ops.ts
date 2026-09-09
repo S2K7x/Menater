@@ -7,6 +7,7 @@
 
 import { json, readBody } from '../respond.ts';
 import { invalidate } from '../snapshot.ts';
+import { injectAlert } from '../injection.ts';
 import {
   getEngine } from '../runtime.ts';
 import { runDiagnostics } from '../diagnostics.ts';
@@ -91,17 +92,25 @@ export async function opsRoutes(c: Ctx): Promise<boolean> {
       }
 
       try {
-        const run = await engine.start('01-ingestion', { ...alert, source: 'simulator' },
+        // THE ANSWER IS THE PIPELINE'S, NOT A BLANKET 202. `01-Ingestion`
+        // decides between 400 (invalid schema), 200 (duplicate), 500 (dedup
+        // unavailable) and 202 — and the `malformed` scenario exists precisely
+        // to be refused. Reporting every started run as injected turned that
+        // scenario into a green banner followed, forty-five seconds later, by
+        // "no trace of that alert". See `injection.ts`.
+        const r = await injectAlert(engine, { ...alert, source: 'simulator' },
           String(alert.alert_id));
         invalidate();
         return json(res, 200, {
-          ok: true,
-          status: 202,
+          ok: r.ok,
+          status: r.status,
           alert_id: String(alert.alert_id),
           scenario: scenario.id,
-          run_id: run.id,
+          run_id: r.run_id,
           pipeline: 'console',
-          response: am.simulateStarted(scenario.title, run.status) });
+          response: r.ok
+            ? am.simulateStarted(scenario.title, r.run_status)
+            : am.simulateRefused(scenario.title, r.status, r.detail) });
       } catch (err) {
         // A failure here is the ENGINE's, and saying so beats a bare status:
         // the whole point of the button is to find out what is broken.

@@ -455,7 +455,7 @@ export interface ConsoleDictionary {
     inject: string;
     injecting: string;
     injectOk: (id: string) => string;
-    injectKo: (status: number, body: string) => string;
+    injectKo: (body: string) => string;
     injectFailed: string;
     scenario: string;
     scenarioHelp: string;
@@ -1592,7 +1592,12 @@ const EN: ConsoleDictionary = {
     inject: 'Inject',
     injecting: 'Injecting…',
     injectOk: (id) => `Alert ${id} sent. The pipeline is handling it; the list updates in a few seconds.`,
-    injectKo: (status, body) => `The entry point answered ${status}. Are the workflows published? ${body}`,
+    // THE SERVER'S SENTENCE, SHOWN AS IT IS. It already names the status and
+    // the pipeline's own reason, so a frame around it repeated the status —
+    // and the frame this replaces asked "Are the workflows published?", a
+    // question about machinery that left with n8n: the workflows are compiled
+    // into this process and there is no publish step to get wrong.
+    injectKo: (body) => body,
     injectFailed: 'Injection failed.',
     scenario: 'Alert type',
     scenarioHelp:
