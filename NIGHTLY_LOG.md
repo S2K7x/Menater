@@ -4,6 +4,99 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-09 (second run) — Wednesday · Tests and QA
+
+**Subject**: every transport failure in the console reached the operator as the
+two words *"fetch failed"*. `fetch` rejects with that message and puts the real
+cause one level down in `err.cause`; three screens whose entire job is to name
+what is wrong read `(err as Error).message` and printed it.
+
+**Result**: PR opened (branch `claude/nightly-2026-09-09-fetch-failure-cause`).
+
+**Why this subject**: the suite was green on the default branch first (969
+passed, 1 skipped, typecheck clean), so the calendar rule did not preempt, and
+no PR was open. Wednesday is the failure-path night. This is priority (2) — a
+real, reproducible defect, demonstrated by four tests that fail before the fix —
+carried by priority (4), since `runDiagnostics` had **no test file at all**.
+
+**What I learned**:
+
+- **`describePgError` could not be reused, and the reason is exact.** It keys on
+  the message being EMPTY. `fetch`'s message is not empty, it is worthless — so
+  handing it a fetch failure returns `"fetch failed"` unchanged. Two functions,
+  because they detect two different kinds of silence.
+- **Probing Node 22.22.2 changed the design twice.** (a) An `AbortController`
+  abort is a `DOMException` with **no `cause` at all** — a helper that only
+  unwrapped `cause` would have said nothing for a timeout. (b) `fetch` to port
+  **1** does not produce `ECONNREFUSED`: undici refuses it as a *blocked port*,
+  `cause.message: "bad port"`, **no code**. So the code table alone is
+  insufficient, and my first `closedAddress()` helper was measuring the wrong
+  failure. Bind a port and release it instead of picking a number.
+- **No `AggregateError` was observed from `fetch`** on this host, unlike `pg`.
+  Deliberately not special-cased: the generic fallback degrades to the
+  constructor name rather than to `"fetch failed"`, and coding for a shape I
+  could not reproduce is what NIGHTLY.md forbids.
+- **`tcpProbe` in `probes.ts` had this table all along**, for the socket path
+  (ECONNREFUSED / ENOTFOUND / EHOSTUNREACH / ETIMEDOUT → a sentence). The fetch
+  path never got one. `describeFetchError` reuses its wording on purpose: the
+  same refusal must not be described two ways depending on the button pressed.
+- **The poller's transport rejection was its only untested failure path.**
+  `poller.test.ts` covers non-2xx, oversized bodies, bad shapes, credentials,
+  partial delivery — everything that comes back with a status to name. The one
+  that comes back with nothing had no test, and it is the one that persists its
+  string into the cursor file as `lastError`.
+- **`runDiagnostics` reports a fresh install's database as `ECONNREFUSED
+  127.0.0.1:5432`, never as "not configured".** Its `if (!conf.database.host ||
+  !conf.database.database)` branch is **unreachable from a fresh install**: the
+  defaults fill both fields (`host: '127.0.0.1'`, `database: 'menater'`), so
+  only someone who clears the field by hand can reach it. Same family as the
+  dead `refang()` regex in the traps table. **Not fixed** — the remedy shown is
+  identical either way, so it is a wording decision on a screen, and
+  `CLARITY.md` governs that, not a test night. Left for a Saturday.
+
+**Do not redo**:
+
+- **Do not test the MCP test button or the assistant chat route end to end.**
+  Both catches are one line and both got the same fix, but neither is reachable
+  with an injected `fetch`: the MCP button dials `127.0.0.1:${PORT}` (so the
+  result depends on whether the developer's own console is running — a flaky
+  test by construction), and the chat ROUTE calls `chat()` with the real global
+  `fetch`, even though `chat()` itself accepts a `fetchImpl`. Same wall the
+  2026-09-09 entry below records for `runtime.ts`. They are covered by
+  `http.test.ts` on the helper, and that is stated in the PR rather than hidden.
+- **Do not widen this into the engine.** `io.ts`'s `http` / `notify` / `llm`
+  nodes have the same defect and it is the same one-line fix, but ROADMAP § 7
+  already reserves a separate pass for the engine's strings. Noted there as
+  debt instead; five nodes is test risk that does not belong in this PR.
+- **Do not "simplify" `describeFetchError` into `describePgError`.** See above.
+- **Do not make the helper rewrite messages it did not need to.** It passes an
+  error that already explains itself through untouched, and a test pins that —
+  it is the only reason it is safe on the two catches that see more than
+  transport failures.
+
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 993 passed | 1 skipped  (969 before; +24 new, nothing skipped or weakened)
+npm run build       # dist built, 472.18 kB / 139.73 kB gzip (unchanged: server-side change)
+```
+Checked **RED** first, with both call-site fixes reverted: 4 tests fail — three
+in `poller.test.ts` and one in `diagnostics.test.ts` — all with
+`expected 'fetch failed' not to be 'fetch failed'`, and one with
+`expected 'This operation was aborted' to match /deadline/i`. The nine tests
+`http.test.ts` adds failed before the function existed. `VulnPipe/` untouched,
+its suite not run. The one skipped test is the pre-existing
+`store-contract.test.ts > contrat — postgres`, which needs a database.
+
+**Note on the suite's health**: checked while looking for slow or flaky tests,
+per the theme. Only one real sleep in the whole suite (`setTimeout(r, 5)` in
+`poller.test.ts`), one `useFakeTimers` block, and 18.2 s total for 993 tests.
+Nothing to fix there. The new `diagnostics.test.ts` deliberately points the
+database at a **closed loopback port** rather than the default 5432, so it
+cannot depend on whether the machine running the suite happens to have a
+Postgres listening — the `vitest.config.ts` lesson, applied to a new file.
+
 ## 2026-09-09 — Wednesday · Tests and QA
 
 **Subject**: the console's two injection buttons reported `ok: true, 202

@@ -179,6 +179,65 @@ describe('pollSource', () => {
     expect(out.error).toMatch(/401/);
   });
 
+  /**
+   * The source that was never reached at all.
+   *
+   * Every other failure here comes back with a status code to name. This one
+   * has none: `fetch` rejects, and it rejects with the two words "fetch
+   * failed", the cause one level down in `err.cause`. The poller wrote that
+   * string straight onto the Ingestion tab AND into the cursor file's
+   * `lastError`, so the row for a source whose address had a typo in it read
+   * exactly like the row for a source behind a firewall.
+   *
+   * It is the same family as the `pg` trap in CLAUDE.md, and the only failure
+   * path of `pollSource` that had no test.
+   */
+  const rejectsWith = (err: unknown) =>
+    (vi.fn(async () => { throw err; }) as unknown) as typeof globalThis.fetch;
+
+  const netError = (code: string, message: string) => {
+    const cause = Object.assign(new Error(message), { code });
+    return Object.assign(new TypeError('fetch failed'), { cause });
+  };
+
+  it('names WHY a source could not be reached, not just that it could not', async () => {
+    const out = await pollSource(SOURCE, policy, {
+      deliver: vi.fn(),
+      fetchImpl: rejectsWith(netError('ENOTFOUND', 'getaddrinfo ENOTFOUND siem.example.com')),
+    });
+    expect(out.error).not.toBe('fetch failed');
+    expect(out.error).toMatch(/cannot be found/i);
+    expect(out.error).toContain('ENOTFOUND');
+    // And it is still a failed poll, with the cursor where it was.
+    expect(out.accepted).toBe(0);
+    expect(out.since).toBeNull();
+  });
+
+  it('tells a wrong address from a service that is switched off', async () => {
+    const refused = await pollSource(SOURCE, policy, {
+      deliver: vi.fn(),
+      fetchImpl: rejectsWith(netError('ECONNREFUSED', 'connect ECONNREFUSED 10.0.0.4:8089')),
+    });
+    const unknown = await pollSource(SOURCE, policy, {
+      deliver: vi.fn(),
+      fetchImpl: rejectsWith(netError('ENOTFOUND', 'getaddrinfo ENOTFOUND siem.example.com')),
+    });
+    // Two different fixes: one is a typo in the field above, the other is a
+    // machine to go and start. Reported identically, they are one shrug.
+    expect(refused.error).not.toEqual(unknown.error);
+    expect(refused.error).toMatch(/nothing is listening/i);
+  });
+
+  it('says the deadline fired rather than "This operation was aborted"', async () => {
+    const out = await pollSource(SOURCE, policy, {
+      deliver: vi.fn(),
+      fetchImpl: rejectsWith(Object.assign(new Error('This operation was aborted'), {
+        name: 'AbortError',
+      })),
+    });
+    expect(out.error).toMatch(/deadline/i);
+  });
+
   it('counts items with no alert id instead of skipping them silently', async () => {
     const { impl } = stubFetch([{ rule_name: 'nameless' }, alert('a-1', '2026-09-04T10:00:00Z')]);
     const out = await pollSource(SOURCE, policy, { deliver: vi.fn(), fetchImpl: impl });

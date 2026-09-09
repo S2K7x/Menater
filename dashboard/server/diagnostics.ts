@@ -39,7 +39,7 @@
  * ============================================================================
  */
 
-import { fetchWithDeadline } from './http.ts';
+import { describeFetchError, fetchWithDeadline } from './http.ts';
 import { messages, type Locale } from './i18n.ts';
 import { getConfig } from './config.ts';
 import { getEngineStore } from './runtime.ts';
@@ -236,9 +236,13 @@ export async function runDiagnostics(
         ...(res.status === 401 ? { remedy: dg.webhookSecretRemedy } : {}),
       });
     } catch (err) {
+      // The entry point was never reached. `(err as Error).message` is the
+      // string "fetch failed" for a refused port, an unresolvable name, a
+      // firewall and an expired certificate alike — one word for four different
+      // fixes, on the screen whose whole job is to name what is wrong.
       add({
         id: 'webhook', group: g.ingestion, label: dg.webhookLabel, status: 'fail',
-        detail: (err as Error).message,
+        detail: describeFetchError(err),
       });
     }
   }
