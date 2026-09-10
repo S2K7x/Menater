@@ -27,7 +27,7 @@
  * ============================================================================
  */
 
-import { fetchWithDeadline } from '../../http.ts';
+import { describeFetchError, fetchWithDeadline } from '../../http.ts';
 import type { NodeHandler } from '../engine.ts';
 import { resolve, type ValueRef } from '../values.ts';
 import type { PureDeps } from './pure.ts';
@@ -41,6 +41,55 @@ export interface IoDeps extends PureDeps {
   fetch?: typeof globalThis.fetch;
   /** Exécute une requête paramétrée. `null` = pas de base configurée. */
   query?: (sql: string, params: unknown[]) => Promise<unknown[]>;
+}
+
+/**
+ * `fetchWithDeadline`, with the cause of a failure named.
+ *
+ * ============================================================================
+ * A CALL THAT REACHED NOBODY MUST NOT LAND ON A CARD AS "fetch failed"
+ *
+ * The engine records `(err as Error).message` as the step error, and the
+ * console prints that string in the two places somebody reads while an
+ * incident is open: the technical incident on the card, and the run's note in
+ * the Tracking tab. Node's `fetch` rejects EVERY transport failure with the
+ * same `TypeError: "fetch failed"` and puts the reason one level down in
+ * `err.cause` — so a hostname with a typo in it, a chat service behind a
+ * firewall, a switched-off ticket endpoint and an expired certificate all
+ * arrived as those two words.
+ *
+ * `describeFetchError` already unwraps it for the three console screens (see
+ * the traps table). These nodes are the fourth surface, and ROADMAP § 7 held
+ * them back deliberately rather than by oversight: the wording of five call
+ * sites inside the engine is its own pass, and this is it.
+ *
+ * `what` NAMES THE DESTINATION AND NEVER THE URL. A webhook URL is itself the
+ * credential — anyone holding it can post into that channel — and a step error
+ * is written to the run journal and printed on screen. So the two webhook
+ * transports are named in words, and an operator-configured endpoint is quoted
+ * by host alone, never by its path or its query.
+ * ============================================================================
+ */
+async function reach(
+  what: string,
+  url: string,
+  init: RequestInit,
+  opts: { timeoutMs: number; fetchImpl: typeof globalThis.fetch },
+): Promise<Response> {
+  try {
+    return await fetchWithDeadline(url, init, opts);
+  } catch (err) {
+    throw new Error(`Could not reach ${what}: ${describeFetchError(err)}`);
+  }
+}
+
+/** The host alone. See `reach`: a configured endpoint may carry a token. */
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host || 'that address';
+  } catch {
+    return 'that address';
+  }
 }
 
 function scope(ctx: Parameters<NodeHandler>[0], deps: IoDeps) {
@@ -102,7 +151,8 @@ export function makeHttp(deps: IoDeps): NodeHandler {
 
     // An external call with NO deadline freezes the execution until the system
     // times out, several minutes later, saying nothing.
-    const res = await fetchWithDeadline(
+    const res = await reach(
+      hostOf(url),
       url,
       { method, headers, body },
       { timeoutMs: p.timeoutMs ?? 10_000, fetchImpl: doFetch },
@@ -230,7 +280,8 @@ export function makeNotify(deps: IoDeps): NodeHandler {
       };
       if (Array.isArray(embeds) && embeds.length > 0) body.embeds = embeds.slice(0, 10);
 
-      const res = await fetchWithDeadline(
+      const res = await reach(
+        'Discord',
         url,
         { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },
         { timeoutMs: 10_000, fetchImpl: doFetch },
@@ -267,7 +318,8 @@ export function makeNotify(deps: IoDeps): NodeHandler {
       const body: Record<string, unknown> = { text };
       if (blocks) body.blocks = blocks;
 
-      const res = await fetchWithDeadline(
+      const res = await reach(
+        'Slack',
         url,
         { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },
         { timeoutMs: 10_000, fetchImpl: doFetch },
@@ -287,7 +339,8 @@ export function makeNotify(deps: IoDeps): NodeHandler {
     const payload: Record<string, unknown> = { channel: resolve(p.channel, s), text };
     if (blocks) payload.blocks = blocks;
 
-    const res = await fetchWithDeadline(
+    const res = await reach(
+      'Slack',
       'https://slack.com/api/chat.postMessage',
       {
         method: 'POST',
@@ -331,7 +384,8 @@ export function makeLlm(deps: IoDeps): NodeHandler {
     }
 
     const s = scope(ctx, deps);
-    const res = await fetchWithDeadline(
+    const res = await reach(
+      'the model provider (openrouter.ai)',
       'https://openrouter.ai/api/v1/chat/completions',
       {
         method: 'POST',
@@ -344,6 +398,28 @@ export function makeLlm(deps: IoDeps): NodeHandler {
       },
       { timeoutMs: p.timeoutMs ?? 60_000, fetchImpl: doFetch },
     );
+
+    // A REFUSAL IS NOT AN EMPTY ANSWER, AND THIS NODE USED TO CONFLATE THEM.
+    // The status was never looked at: a 401 on a wrong key, a 402 on an
+    // exhausted account and a 429 all left `choices` undefined and fell
+    // through to "The model answered with no content" — a cause that is not
+    // missing but WRONG, which sends an operator to look at the model rather
+    // than at their key. A wrong key is the likeliest misconfiguration there
+    // is here, and this is the node the whole triage hangs on. A body-less
+    // refusal was worse still: `res.json()` threw `Unexpected end of JSON
+    // input`, naming neither the provider nor the status.
+    //
+    // The status is named because 401, 402 and 429 call for three different
+    // actions. The body is the provider's own prose, so it is clipped like
+    // Discord's above, and never assumed to have a shape.
+    if (!res.ok) {
+      const detail = (await res.text().catch(() => '')).trim().slice(0, 300);
+      throw new Error(
+        `The model provider refused the request (HTTP ${res.status})`
+        + (detail ? `: ${detail}` : '.'),
+      );
+    }
+
     const body = (await res.json()) as {
       choices?: Array<{ message?: { content?: string } }>;
       usage?: { prompt_tokens?: number; completion_tokens?: number };

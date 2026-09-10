@@ -4,6 +4,109 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-10 — Thursday · Bugs and technical debt
+
+**Subject**: the engine's three outbound nodes (`http`, `notify`, `llm`)
+reported a cause that was either absent or wrong. A transport failure reached
+the incident card as the two words *"fetch failed"*; a model provider's
+refusal reached it as *"The model answered with no content."*
+
+**Result**: PR opened (branch `claude/nightly-2026-09-10-engine-transport-cause`).
+
+**Why this subject**: the suite was green on the default branch first (993
+passed, 1 skipped, typecheck clean), so the calendar rule did not preempt, and
+no PR was open. Thursday's reservoir is ROADMAP § 7 plus what earlier nights
+noted without fixing, and this item is in **both**: § 7's row *"Raw transport
+errors inside the engine"*, written by the 2026-09-09 (second run) night, which
+recorded "do not widen this into the engine" for that PR precisely so a later
+one would take it. This is that later one.
+
+**What I learned**:
+
+- **The commissioned half was the smaller half.** § 7 described a wording
+  problem — five call sites, one wrapper. Reading `makeLlm` to fix it turned up
+  a real bug beside it: the node never looked at `res.status`. It went straight
+  to `res.json()`, so a 401 (wrong key), a 402 (no credit) and a 429 all left
+  `choices` undefined and fell through to `'The model answered with no
+  content.'` **A wrong cause is worse than a missing one**: "fetch failed" at
+  least looks like nothing, while that sentence sends someone to inspect the
+  model, the prompt and the schema — everything except the field that is wrong.
+- **The body-less refusal was worse than either.** Measured, not predicted: a
+  429 with an empty body made `res.json()` throw `Unexpected end of JSON
+  input`, which names neither the provider nor the status. That is the string
+  the test caught first and it is what convinced me the second half belonged in
+  this PR.
+- **The rule is not "check `res.ok`", and it matters that it is not.** The
+  neighbouring `notify` branches already check it, and `http` deliberately does
+  NOT — a non-2xx there is data, routed to the error port, and that behaviour is
+  tested. The rule that generalises is: *a fallback sentence must not be
+  reachable from a state it does not describe.* "Answered with no content" is
+  true of an empty 200 and of nothing else. There is now a test asserting it
+  still fires for the empty 200 — the fix had to remove the wrong callers of
+  that sentence, not the sentence.
+- **A diagnostic string is an egress path.** The obvious `what` in `Could not
+  reach ${what}` is the URL. For two of the five call sites the URL *is* the
+  credential — a Slack or Discord webhook URL carries its own authorisation —
+  and step errors are written to `soc_run_step`, replayed in Tracking and
+  printed on the card. Hence words for the webhooks and `hostOf()` for the one
+  configured endpoint. Two tests assert the secret does not appear.
+- **One existing test had to change, and it is not a weakening.** `nodes.test.ts`'s
+  "a Slack that never answers does not freeze the run" asserted
+  `rejects.toThrow(/abort/i)` — it was matching the browser's raw `AbortError`
+  word, i.e. the very thing this change replaces with a sentence. Its CLAIM
+  (it rejects rather than hanging) is untouched; the assertion is now
+  `/Slack.*deadline/is`, which pins two things where it pinned one.
+
+**Found and NOT fixed**:
+
+- **`makeNotify`'s `slack-bot` branch still calls `res.json()` with no guard.**
+  An HTML error page from a gateway in front of Slack throws a `SyntaxError`
+  instead of naming the status. Slack's own API answers JSON even on `ok:
+  false`, so it is reachable only through an intermediary — and that branch is
+  the one whose success is READ from the body, with a test file that exists
+  because it lied about success once. Added to § 7 as its own row rather than
+  slipped into this PR.
+- The `runDiagnostics` "not configured" branch is still unreachable from a
+  fresh install (2026-09-09 entry below). Still a wording decision on a screen;
+  still a Saturday.
+
+**Do not redo**:
+
+- **Do not put the dialled URL into a step error** to make the message more
+  precise. See above: two of the five are secrets. If a future call site needs
+  more than a host, it needs a reason and a test that the secret cannot reach
+  the journal.
+- **Do not give `http` a `res.ok` check to match `llm`.** Its non-2xx goes out
+  of the error port on purpose, without throwing, so a wired error branch can
+  catch it — `nodes.test.ts` pins that and it is the older, deliberate design.
+- **Do not delete `'The model answered with no content.'`** It is correct for
+  the state it names. The fix was to stop other states reaching it, and a test
+  now holds it in place.
+- **Ruled out: routing these through the i18n catalogue.** They are engine
+  strings; CLAUDE.md says those live where they are produced and are English.
+  Same reasoning `describePgError` and `describeFetchError` already follow.
+
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 1003 passed | 1 skipped  (993 before; +10 new, nothing skipped)
+npm run build       # dist built, 472.18 kB / 139.73 kB gzip (unchanged: server-side change)
+```
+Checked **RED** first: `io-failures.test.ts` was written before the fix and ran
+**9 failed | 1 passed** of 10 — the five transport tests on `'fetch failed'`,
+the two `llm` refusal tests on `'The model answered with no content.'` and
+`'Unexpected end of JSON input'`, and the end-to-end one on `run.error` being
+the literal string `'fetch failed'`. The one that passed is the empty-200
+guard, which must pass both before and after. `VulnPipe/` untouched, its suite
+not run. No model key and no database needed: every transport is simulated and
+the run store is in memory.
+
+**Note**: `npm install` rewrote `dashboard/package-lock.json` again, exactly as
+the 2026-09-09 entry records (`@types/pg` moves between `dependencies` and
+`devDependencies`). Reverted, not committed. Still pre-existing, still left
+alone.
+
 ## 2026-09-09 (second run) — Wednesday · Tests and QA
 
 **Subject**: every transport failure in the console reached the operator as the

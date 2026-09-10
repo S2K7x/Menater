@@ -329,7 +329,11 @@ describe('slack — un 200 n’est pas un succès', () => {
           text: { kind: 'const', value: 'coucou' },
         }),
       );
-      const settled = expect(pending).rejects.toThrow(/abort/i);
+      // The claim is that it REJECTS rather than hanging. It used to be
+      // checked against the raw `AbortError` — the browser's word, not a
+      // sentence — and the node now says which host went quiet and why. Both
+      // halves are pinned, so this asks for more than `/abort/i` did, not less.
+      const settled = expect(pending).rejects.toThrow(/Slack.*deadline/is);
       await vi.advanceTimersByTimeAsync(11_000);
       await settled;
     } finally {
