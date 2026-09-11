@@ -216,7 +216,9 @@ export function makePostgres(deps: IoDeps): NodeHandler {
  * received into a success — or the reverse:
  *
  *   SLACK BOT (`chat.postMessage`)  HTTP 200 with `{"ok": false, "error": …}`
- *                                   when it FAILED. The status code is useless.
+ *                                   when it FAILED, so the status cannot decide
+ *                                   it — but it is the only clue left when what
+ *                                   answered is not the envelope at all.
  *   SLACK WEBHOOK                   HTTP 200 with the literal TEXT `ok`.
  *                                   `res.json()` throws on it.
  *   DISCORD WEBHOOK                 HTTP 204 with an EMPTY body. Both
@@ -247,6 +249,13 @@ export function makePostgres(deps: IoDeps): NodeHandler {
 
 /** Discord refuses a `content` over 2000 characters with a 400. */
 const DISCORD_CONTENT_MAX = 2000;
+
+/**
+ * What `chat.postMessage` answers with. Every field is optional because this
+ * shape is a CLAIM about what came back, checked before it is believed: `ok`
+ * being a boolean is what tells the Slack API's answer from an intermediary's.
+ */
+type SlackEnvelope = { ok?: boolean; error?: string; ts?: string };
 
 export function makeNotify(deps: IoDeps): NodeHandler {
   const doFetch = deps.fetch ?? globalThis.fetch;
@@ -326,7 +335,20 @@ export function makeNotify(deps: IoDeps): NodeHandler {
       );
       // PLAIN TEXT, both ways. `res.json()` would throw on the literal `ok`
       // that means success.
-      const answer = (await res.text()).trim();
+      //
+      // AND THE READ ITSELF CAN FAIL, which is the sibling of the guard on the
+      // bot branch below. Unwrapped, a body the other end cut off surfaced here
+      // as a bare `TypeError: terminated` — the "fetch failed" family this file
+      // was fixed for, one line past where `reach` stops looking.
+      let answer: string;
+      try {
+        answer = (await res.text()).trim();
+      } catch (err) {
+        throw new Error(
+          `Slack answered HTTP ${res.status}, but its answer could not be read: `
+          + describeFetchError(err),
+        );
+      }
       if (!res.ok) throw new Error(`Slack refused: ${answer || `HTTP ${res.status}`}`);
       return { output: { ts: null, transport: 'slack-webhook' } };
     }
@@ -349,7 +371,61 @@ export function makeNotify(deps: IoDeps): NodeHandler {
       },
       { timeoutMs: 10_000, fetchImpl: doFetch },
     );
-    const body = (await res.json()) as { ok?: boolean; error?: string; ts?: string };
+    // NOT `res.json()`, AND THE REASON IS THE SAME AS THE ONE BELOW.
+    //
+    // Everything that is not Slack's envelope — an HTML error page from a
+    // gateway or a proxy in front of it, a captive portal's sign-in page, a
+    // body-less 5xx — surfaced as whatever `JSON.parse` had to say about the
+    // first ten bytes. Measured on Node 22: `Unexpected token '<', "<html><hea"
+    // ... is not valid JSON`, and `Unexpected end of JSON input` — that second
+    // one being the exact string the `llm` node was fixed for one branch over.
+    // A sentence about JSON syntax, on the step that posts the approval
+    // request, naming neither Slack, nor the status, nor the fact that a call
+    // was made at all.
+    //
+    // `Slack refused: …` is true of an `ok: false` envelope and of nothing
+    // else. Calling a gateway's 502 a refusal BY Slack sends somebody to check
+    // a channel name and a bot scope over a network problem — so the envelope
+    // is what decides, and the status is what is reported when it is absent.
+    // A BODY THAT COULD NOT BE READ IS NOT AN EMPTY BODY, and the difference
+    // is the whole point of the guard below it. `res.text()` rejects after the
+    // status line is already in — a truncated chunked body, a connection the
+    // other end drops mid-answer — and swallowing that into `''` makes the
+    // sentence claim Slack's endpoint SENT nothing, over an event where we
+    // never found out what it sent. Measured on Node 22: `TypeError:
+    // terminated`, cause `other side closed`. Two different faults reported in
+    // the same words send somebody looking for an intermediary that answered
+    // empty, when the fault is a dropped connection — this node's own defect,
+    // rebuilt one state further in.
+    let raw: string | null = null;
+    let unread = '';
+    try {
+      raw = (await res.text()).trim();
+    } catch (err) {
+      unread = describeFetchError(err);
+    }
+    if (raw === null) {
+      throw new Error(
+        `Slack answered HTTP ${res.status}, but its answer could not be read: ${unread}`,
+      );
+    }
+
+    let body: SlackEnvelope | null = null;
+    try {
+      const parsed: unknown = raw ? JSON.parse(raw) : null;
+      if (parsed !== null && typeof parsed === 'object') body = parsed as SlackEnvelope;
+    } catch {
+      // Not the envelope. Reported below, with the status — which is the clue.
+    }
+
+    if (body === null || typeof body.ok !== 'boolean') {
+      // The body is the intermediary's own prose, so it is clipped like
+      // Discord's above and never assumed to have a shape.
+      throw new Error(
+        `Slack's endpoint answered HTTP ${res.status}, but not with the Slack API's JSON`
+        + (raw ? `: ${raw.slice(0, 300)}` : ' (empty body).'),
+      );
+    }
     if (!body.ok) {
       // The Slack API answers HTTP 200 with `ok: false`. Trusting the status
       // code would turn a failure into a success — an approval message never

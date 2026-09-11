@@ -4,6 +4,241 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-11 (third run) — Friday · Unblocking PR #9 and PR #11
+
+**Subject**: both open PRs were `mergeable_state: dirty` and neither could be
+merged. Reviewing the code they carried while resolving them turned up a real
+defect inside PR #9's own fix.
+
+**Result**: both branches merged onto `main` on `claude/fix-pr-9-11-cz73hl`,
+conflicts resolved, and two follow-up fixes on top.
+
+**The conflicts were documentation only — no code conflicted.** Both branches
+were cut from `ad9c9ed` and `main` has since taken PR #10, which wrote the same
+three files:
+
+- `NIGHTLY_LOG.md` — twice, and both times the diff had **interleaved two
+  separate entries** rather than stacked them, because the 09-11 entries open
+  with a byte-identical heading and share the `**Verified**:` block. Taking
+  either side whole would have lost an entry; each was reconstructed as
+  *part 1 + the shared block + part 2* and re-stacked newest-first. PR #11's
+  run is 12:37 against PR #10's 00:37, so it became the `(second run)` — the
+  convention this file already uses for 09-09 and 09-10.
+- `ROADMAP.md` § 7 — PR #9's side struck through the `notify` row but predated
+  the two rows PR #10 added. Kept PR #10's two, took PR #9's struck-through
+  one.
+- `CLAUDE.md` — two new trap rows, both kept. Neither side deleted anything.
+
+**The defect, which is the reason this is not just a merge.** PR #9 replaces
+`res.json()` with `res.text()` so that an answer which is not Slack's envelope
+names the status instead of leaking `Unexpected token '<'`. It reads the body
+as `(await res.text().catch(() => '')).trim()` — and `''` then flows into a
+sentence that says **« (empty body) »**.
+
+`res.text()` rejects *after* the status line is in. Probed against a real
+socket that promises a `content-length` of 200 and destroys itself after ten
+bytes, on Node 22.22.2:
+
+```
+status = 200
+text() REJECTED with: TypeError: terminated | cause: other side closed
+```
+
+So a connection the other end cut mid-answer was reported as Slack's endpoint
+having **sent** an empty body — a claim about bytes nobody ever saw, and the
+two faults do not have the same fix: an empty body sends somebody looking for
+the intermediary that answered nothing, a cut connection is the network. That
+is the defect PR #9 exists to remove, rebuilt one state further in, and it is
+the same shape as the scan report that took green by default when coverage was
+UNKNOWN.
+
+**And the sibling one branch up had no catch at all.** `slack-webhook` read
+`(await res.text()).trim()` unwrapped, so the same event surfaced as a bare
+`TypeError: terminated` — the "fetch failed" family this very file was written
+to close, one line past where `reach` stops looking.
+
+**Fixed**: three states, three sentences. Unread names the cause through
+`describeFetchError` (which already keys on `cause.message` when there is no
+code, so `other side closed` comes out intact and in `tcpProbe`'s vocabulary);
+empty still says empty, because the sentence stays for the state it describes;
+present is quoted and clipped at 300 as before.
+
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 1022 passed | 1 skipped  (1010 on main; +6 PR #9, +3 PR #11, +3 here)
+npm run build       # dist built, 472.18 kB / 139.73 kB gzip (unchanged: server-side change)
+```
+Checked **RED** by stashing `io.ts` alone against the finished tests: **exactly
+2 of the 3 new tests fail** — the unread body called empty, and the webhook
+leaking `terminated`. The third passes before and after **by design**: it pins
+that a body which really IS empty still says so, which is what stops the fix
+from trading one vagueness for another. The one skipped test is the
+pre-existing `store-contract.test.ts > contrat — postgres`, which needs a
+database.
+
+**What I did not do**:
+- **Did not push to either PR's branch.** This session was handed
+  `claude/fix-pr-9-11-cz73hl` with an instruction not to push elsewhere. Both
+  PRs' commits are merged here whole, with their authorship intact, so merging
+  this supersedes both.
+- **Did not touch the Discord branch's `catch(() => '')`.** It has the same
+  shape and NOT the same defect: `Discord refused: HTTP 500` claims nothing
+  about the body. Worth a pass only if someone wants the cause there too.
+- **Did not change PR #11's code.** Checked the one assumption its author
+  flagged for review — that nothing mutates `inventory.entries` in place.
+  `sanitizeInventory` is the only writer and rebuilds through
+  `normalizeInventory` + `.filter()`, both of which allocate; `saveConfig`
+  calls it and then replaces `cached`. The memo cannot go stale today. It is
+  an invariant held by three functions and nothing enforces it — worth a line
+  in `config.ts` if it ever grows a fourth writer.
+- **Did not add a CI workflow.** There is none in the repository; the green
+  checks on both PRs are Vercel and GitGuardian, and neither runs the suite.
+  Noting it because "checks passed" reads as "the tests ran", and they did not.
+
+## 2026-09-11 (second run) — Friday · Performance and cost
+
+**Subject**: `resolveRepository` re-normalised the entire service inventory for
+every case of every snapshot rebuild. At the declared ceilings that is 111 ms
+of blocked event loop every 20 seconds, on a single-threaded API.
+
+**Result**: PR opened (branch `claude/nightly-2026-09-11-inventory-index`).
+
+**Why this subject**: the suite was green on the default branch first (1003
+passed, 1 skipped, typecheck clean), so the calendar rule did not preempt.
+Friday's method is measure → optimise → measure, and this is the one lead where
+the multiplier was real rather than argued. **Two nightly PRs were already
+open** (#9 on `engine/nodes/io.ts`, #10 on `server/snapshot.ts`), so the subject
+also had to avoid both files — which it does: the whole fix is inside
+`server/inventory.ts`, and the caller in `snapshot.ts` is untouched.
+
+**Measured, before and after**, same machine, median of 11 runs, one
+`resolveRepository` call per case exactly as `withRepositories` does it:
+
+| inventory | cases | before | after |
+|---|---|---|---|
+| 10 × 4 | 120 | 0.54 ms | 0.10 ms |
+| 50 × 8 | 500 | 11.06 ms | 0.19 ms |
+| 200 × 20 (ceiling) | 120 | 27.09 ms | 0.06 ms |
+| 200 × 20 (ceiling) | 500 | 111.61 ms | 0.12 ms |
+
+The index build is paid once per array: **0.165 ms** at 50 × 8, **1.201 ms** at
+the ceiling. That is the honest other half of the number — the first rebuild
+after a config save pays it, and every rebuild for the next hours does not.
+
+**What I learned**:
+
+- **The memo's key had to be the array's IDENTITY, and that is a safety
+  argument rather than a convenience.** `config.ts`'s `sanitizeInventory`
+  rebuilds `{ entries: readInventory(...) }` on every load AND every save, so a
+  changed table is necessarily a different array. Checked that nothing on the
+  server mutates the list in place: the only reader is `snapshot.ts:306` and
+  the only writers go through `sanitizeInventory`. A memo keyed on anything
+  else — a hash, a revision counter — would have needed invalidation somebody
+  could forget, and forgetting it means naming a repository the operator just
+  deleted.
+- **A `WeakMap`, so the previous configuration's index is collected with its
+  array.** A `Map` would hold every inventory the process has ever loaded.
+- **The test counts WORK, not milliseconds.** A timing assertion is the flaky
+  kind this project already removed once (the retry tests, 2026-09-09). Making
+  `identifiers` a counting getter gives a deterministic number: **100 reads
+  before the fix, 2 after**, for 50 cases against 2 entries. It was checked RED
+  on exactly that.
+- **First-wins had to be preserved explicitly.** The scan returned the first
+  entry in order; a `Map` built naively lets the LAST writer win.
+  `normalizeInventory` refuses a duplicate identifier so a stored inventory
+  cannot hold one — but the resolver is exported and callable with any list, so
+  the index does `if (!index.has(k))` and a test pins it.
+- **`matched_value` must stay the identifier as STORED**, not the lowercased
+  comparison key: it is printed on the incident card, and the operator should
+  read back the line they typed. The index keeps the original string beside the
+  key; a test pins that too.
+
+**Measured and RULED OUT — do not spend another night on it**:
+
+- **`gzipSync` in `respond.ts:43`.** It looked like the classic "synchronous
+  call on the hot path" trap this table already carries twice (`fsync`,
+  `writeFileSync` on a timer), and it is on every JSON response over 4 kB
+  including the snapshot. Measured: **1.7 ms for a 534 kB payload**, 1.0 ms at
+  320 kB. Level 1 is ~3× faster and compresses slightly worse. Neither is worth
+  a change, and making `json()` asynchronous would touch every route for
+  nothing. The lead is dead; it was killed by a measurement, not by an opinion.
+
+**Found and NOT fixed** — a mapping pass over the token-cost surfaces turned
+these up. **They are NOT independently verified by me** (they come from a
+read-only survey, and I measured only the inventory subject myself), so a future
+Friday must re-measure each before acting. Ranked as reported:
+
+- **`mcp.ts:558` serialises every tool result twice**, once pretty-printed into
+  `content[0].text` and once as `structuredContent` — reported as 11,191 B on
+  the wire where 5,123 B would do. The spec's "also return the serialised form"
+  is satisfied by a compact block. Biggest single number in the survey.
+- **`chat.ts:166` / `providers.ts:295` drop `body.tools` entirely on the final
+  turn.** Removing the tools block changes the head of the Anthropic prefix, so
+  the last call of every capped run is reported as a full cache miss on the
+  schemas + stable system prompt. Keeping `tools` and sending
+  `tool_choice: {type:'none'}` would hold the prefix byte-identical. If it
+  checks out this is the sharpest one, because it is the cache design already
+  documented in `prompt.ts` leaking at one call site.
+- **`explain_verdict` re-sends what `get_alert` just sent** (reported 71%
+  overlap), and `mcp.ts`'s `triage-alert` prompt instructs a client to call
+  both. The per-request memo in `chat.ts` keys on `name:args`, so it cannot
+  collapse two different tools returning the same payload.
+- **`get_metrics.rate_meanings`** restates the "two rates" paragraph that is
+  already in the cached system prefix — reported as 41% of that tool's output.
+- **The "seven tools" claim is stale in five places** (`tools.ts:19`,
+  `tools.ts:56`, `providers.ts:343`, `mcp.ts:530`, and `prompt.ts:67-69`).
+  `TOOLS.length` is 14. The last one is not merely a doc defect: the system
+  prompt enumerates seven capabilities and omits `search_alerts`,
+  `find_similar`, `explain_verdict`, `get_timeline`, `test_rule` and
+  `explain_term`, so the model is told about half its catalogue in the very
+  prefix meant to stop it answering from memory. Same family as the n8n sweep —
+  a name that outlived the thing it named. **This one is worth a night on its
+  own**, and it is a correctness subject, not a cost one.
+
+**Also noted, not taken**: a survey of the hot read path flagged four more
+places in `server/engine/cases.ts` (`outputOf` rescanning the step array once
+per node id, `Date.parse` called ~13k times per rebuild where ~240 would do,
+six `filter` passes to produce six counters, `tagAttack` not stopping at three
+matches) and one in `pg-store.ts` (`stepsOfMany` doing `SELECT *` unfiltered by
+node id). Same caveat: unverified, re-measure first. They are all in one file,
+which is why they are a separate night rather than this one — and `cases.ts` is
+the file a wrong "optimisation" would damage most.
+
+**Do not redo**:
+
+- **Do not key the memo on anything but the array.** See above. A revision
+  number or a content hash reintroduces an invalidation somebody can forget,
+  and the failure mode is a deleted machine still resolving.
+- **Do not make it a `Map`.** It would retain every inventory the process has
+  loaded, and the arrays are exactly the thing that should die with the config.
+- **Do not "simplify" the `if (!index.has(k))` guard away.** It is what keeps
+  first-wins, and the only thing standing between this and a silently different
+  answer on a hand-built list.
+- **Do not assert milliseconds in the test.** Counting reads is deterministic;
+  a stopwatch on a loaded machine is the test people learn to ignore.
+- **Do not touch `respond.ts`'s gzip.** Measured, see above.
+
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 1006 passed | 1 skipped  (1003 before; +3 new, nothing skipped or weakened)
+npm run build       # dist built, 472.18 kB / 139.73 kB gzip (unchanged: server-side change)
+```
+Checked **RED** first: the work-counting test failed `expected 100 to be 2`
+before the fix. The other two new tests pass both before and after by design —
+they pin the behaviour the optimisation must not change (first-wins, the stored
+`matched_value`, and no stale answer after the table is replaced). `VulnPipe/`
+untouched, its suite not run. No model key and no database needed: the resolver
+is pure. Both benchmark probes were deleted after measuring.
+
+**Note**: `npm install` rewrote `dashboard/package-lock.json` again, exactly as
+the three previous entries record (`@types/pg` between `dependencies` and
+`devDependencies`). Reverted, not committed. Still pre-existing, still left
+alone.
+
 ## 2026-09-11 — Friday · Performance and cost
 
 **Subject**: the snapshot cache. Measuring it turned up a defect worth more
@@ -123,6 +358,128 @@ reason to keep probes out of the tree. `npm install` rewrote
 `dashboard/package-lock.json` again (`@types/pg` between `dependencies` and
 `devDependencies`), exactly as the two entries below record. Reverted, not
 committed.
+
+## 2026-09-10 (second run) — Thursday · Bugs and technical debt
+
+**Subject**: `makeNotify`'s `slack-bot` branch read the answer with
+`await res.json()` and no guard. Anything that was not Slack's envelope — an
+HTML error page from a gateway in front of it, a captive portal, a body-less
+5xx — reached the incident card as a sentence about JSON syntax, on the step
+that posts the approval request.
+
+**Result**: PR opened (branch `claude/great-pascal-gfbcer` — see the note on
+branch naming at the end of this entry).
+
+**Why this subject**: the suite was green on the default branch first (1003
+passed, 1 skipped, typecheck clean), so the calendar rule did not preempt, and
+no PR was open. Thursday's reservoir is ROADMAP § 7 plus what earlier nights
+noted without fixing, and this is the row the run earlier today wrote there
+itself — *"Non-JSON refusals on the `notify` bot transport"*, deliberately left
+out of that PR so the transport whose test file exists because it lied about
+success once was not widened in the same pass. This is that later pass, and it
+is priority (2): a real defect, three tests red before the change.
+
+**What I learned**:
+
+- **The commissioned half was again the smaller half** — the same shape as this
+  morning's entry, which is starting to look like a property of this file
+  rather than a coincidence. § 7 described a missing guard. Reading the branch
+  to add it showed the guard was load-bearing for the line BELOW it: because
+  `res.json()` threw first, `if (!body.ok)` had never once been reached with
+  `ok` absent. Add the guard naively — return `{}` on a parse failure — and a
+  **captive portal answering 200** becomes `Slack refused: no reason given`.
+  That is a refusal by Slack that never happened, and it sends an operator to
+  check a channel name and a bot scope while the actual fault is the network.
+  The test `does not mistake a 200 that is not the envelope for a posted
+  message` exists to pin that specific wrong fix.
+- **`ok` is the discriminator, and it has to be typed, not truthy.** Slack's
+  Web API puts a boolean `ok` on every answer, so `typeof body.ok !== 'boolean'`
+  separates "the Slack API answered" from "something answered for it" without
+  consulting the status at all — which matters, because the status genuinely
+  cannot decide it (Slack says no with a 200). The status is then what gets
+  REPORTED, not what decides.
+- **Measured, not assumed** (`scripts/probe-json-refusal.mjs`, run then
+  deleted). Node 22.22.2, synthetic `Response` and a real socket give
+  byte-identical messages — which is what makes the test fixtures faithful and
+  is worth knowing before writing another one of these:
+  ```
+  html 502   → SyntaxError: Unexpected token '<', "<html><hea"... is not valid JSON
+  empty 502  → SyntaxError: Unexpected end of JSON input
+  empty 200  → SyntaxError: Unexpected end of JSON input
+  ```
+  The second is the exact string `makeLlm` was fixed for this morning. The same
+  defect had two homes and only one was fixed.
+- **Typecheck caught the fix, and the suite did not.** `body = parsed as typeof
+  body` narrows to `null` inside the assignment, so `body.ok` was `never` —
+  five TS2339s while all 1009 tests were green. Naming the shape
+  (`type SlackEnvelope`) fixes it, and the name earns its keep: it is a CLAIM
+  about what came back, checked before it is believed.
+
+**Found and NOT fixed**:
+
+- **The three clip sites can echo a request header.** `notify`/Discord,
+  `notify`/slack-bot and `llm` all put up to 300 characters of the remote body
+  into a step error, which is written to `soc_run_step` and printed on the
+  card. The bot token and the model key travel in the `authorization` HEADER,
+  never the URL, so this is not the webhook-URL leak the traps table already
+  covers — but a proxy error page that echoes request headers (a 407, a
+  debugging endpoint) would carry one there. Speculative, symmetrical across
+  three sites, and scrubbing one and not the others is worse than scrubbing
+  none. Raised as a decision in the PR rather than settled tonight.
+- **No 429 special case for `slack-bot`.** Discord needs one because its 429
+  body is not an envelope; Slack's is (`{"ok":false,"error":"ratelimited"}`),
+  so it already comes out as `Slack refused: ratelimited` — Slack's own word.
+  Adding a status check for it would be inventing a shape I did not measure.
+- **`res.text()` here is unbounded**, exactly as `res.json()` was. Not a
+  regression, and the endpoint is a constant (`slack.com`), unlike the poller's
+  operator-typed addresses that got a cap. Left alone deliberately.
+
+**Do not redo**:
+
+- **Do not "simplify" this into a shared helper with the Discord branch.** They
+  read three different success conventions; that is the whole reason the file
+  says they cannot share a code path, and a helper would be the lossy converter
+  its header comment already refuses.
+- **Do not delete `Slack refused: …`.** It is correct for the `ok: false`
+  envelope. The fix was to stop other states reaching it — a test now holds it
+  in place, same device as this morning's empty-200 guard.
+- **Do not add a `res.ok` check to this branch.** Slack answers 200 on failure;
+  the status is reported, never trusted to decide.
+- **`assistant/chat.ts:182` is the last unguarded `res.json()` on the server**,
+  and it is NOT the same defect: it checks `res.ok` first and its catch is one
+  level up. Checked, deliberately left. Do not sweep it in as a fourth site
+  without establishing what an operator actually sees.
+
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 1009 passed | 1 skipped  (1003 before; +6 new, nothing skipped or weakened)
+npm run build       # dist built, 472.18 kB / 139.73 kB gzip (unchanged: server-side change)
+```
+Checked **RED** first, and again against the FINAL code by stashing `io.ts`
+alone: **3 failed | 13 passed**, the three being the HTML 502, the body-less
+502, and the 200 that is not an envelope. The other three new tests must pass
+both before and after — they pin the success path, Slack's own refusal, and the
+fact that the message is not `Slack refused`. `VulnPipe/` untouched, its suite
+not run. No model key, no database and no network: every transport is
+simulated. The one skipped test is the pre-existing
+`store-contract.test.ts > contrat — postgres`, which needs a database.
+
+**Note on the branch name**: `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-short-subject`. This session was handed a designated
+branch, `claude/great-pascal-gfbcer`, with an instruction never to push
+elsewhere without explicit permission — and no one is awake to give it. Both
+carry the mandatory `claude/` prefix, the branch was cut from a clean `main`,
+and the PR shows only tonight's commits. Took the conservative option and used
+the designated branch; a future night on a free session should go back to the
+documented name.
+
+**Note**: `npm install` rewrote `dashboard/package-lock.json` again
+(`@types/pg` moving between `dependencies` and `devDependencies`), exactly as
+the two entries below record. Reverted, not committed. Third night running —
+worth someone's five minutes, but it is not a nightly's call to change what
+`npm` writes.
 
 ## 2026-09-10 — Thursday · Bugs and technical debt
 
