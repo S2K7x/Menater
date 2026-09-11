@@ -96,6 +96,91 @@ describe('resolving a machine to the code it runs', () => {
   });
 });
 
+/**
+ * WHAT THE LOOKUP COSTS, AND WHY IT IS A TEST AND NOT A STOPWATCH
+ *
+ * `withRepositories` calls the resolver once per case with the SAME entries
+ * array, and `null` is the common answer — the header says so — which is
+ * precisely the path that scans every identifier of every entry. Read that way
+ * the inventory was re-normalised from scratch for every case: at the declared
+ * ceilings (200 entries × 20 identifiers) that is 12,000 `trim().toLowerCase()`
+ * allocations per case, and the console rebuilds this every refresh.
+ *
+ * A timing assertion would be flaky on a loaded machine, and a flaky test is
+ * one people learn to ignore. So these count WORK instead: how many times the
+ * resolver reads an entry's identifiers. That number is deterministic, it is
+ * the thing the fix changes, and it fails loudly if the memo is ever removed.
+ */
+describe('what resolving a machine costs', () => {
+  /** Entries whose `identifiers` reads are counted. */
+  function counted(entries: InventoryEntry[]): {
+    entries: InventoryEntry[]; reads: () => number;
+  } {
+    let reads = 0;
+    const wrapped = entries.map((e) => {
+      const { identifiers } = e;
+      return Object.defineProperty({ ...e }, 'identifiers', {
+        get() {
+          reads += 1;
+          return identifiers;
+        },
+        enumerable: true,
+      }) as InventoryEntry;
+    });
+    return { entries: wrapped, reads: () => reads };
+  }
+
+  it('reads the inventory ONCE, however many cases are resolved against it', () => {
+    const { entries, reads } = counted([
+      entry({ service: 'a', identifiers: ['web-01'], repository: '/srv/a' }),
+      entry({ service: 'b', identifiers: ['web-02'], repository: '/srv/b' }),
+    ]);
+
+    // Fifty misses — the common answer, and the path that used to scan
+    // everything — against one unchanged inventory.
+    for (let i = 0; i < 50; i += 1) {
+      expect(resolveRepository({ host: `unlisted-${i}` }, entries)).toBeNull();
+    }
+
+    // One pass over the two entries, not one pass per case per observable.
+    expect(reads()).toBe(2);
+  });
+
+  /**
+   * The memo is keyed on the ARRAY, and `sanitizeInventory` builds a new one on
+   * every load and every save. A memo that outlived a save would answer with a
+   * repository the operator had just removed — a setting that looks applied and
+   * is not, which is the failure this console refuses everywhere else.
+   */
+  it('does not serve a stale answer after the inventory is replaced', () => {
+    const before = [entry({ service: 'old', identifiers: ['web-01'], repository: '/srv/old' })];
+    expect(resolveRepository({ host: 'web-01' }, before)?.service).toBe('old');
+
+    const after = [entry({ service: 'new', identifiers: ['web-01'], repository: '/srv/new' })];
+    expect(resolveRepository({ host: 'web-01' }, after)?.service).toBe('new');
+
+    // And the machine that was dropped from the table resolves to nothing.
+    expect(resolveRepository({ host: 'web-01' }, [])).toBeNull();
+  });
+
+  /**
+   * `normalizeInventory` refuses a duplicate identifier, so a stored inventory
+   * cannot hold one — but the resolver is exported and callable with any list,
+   * and the old scan returned the FIRST entry in order. An index that let the
+   * last writer win would silently change that answer.
+   */
+  it('keeps the first entry that claims an identifier, as the scan did', () => {
+    const both = [
+      entry({ service: 'first', identifiers: ['WEB-01'], repository: '/srv/1' }),
+      entry({ service: 'second', identifiers: ['web-01'], repository: '/srv/2' }),
+    ];
+    const match = resolveRepository({ host: 'web-01' }, both);
+    expect(match?.service).toBe('first');
+    // The value reported is the one as STORED, not the comparison key.
+    expect(match?.matched_value).toBe('WEB-01');
+  });
+});
+
 describe('what the store refuses to hold', () => {
   it('refuses one identifier claimed by two entries, and names it', () => {
     const { problems } = normalizeInventory([
