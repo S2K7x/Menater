@@ -11,7 +11,7 @@ than the optimisation I went looking for: a rebuild that `invalidate()` had
 disowned still wrote its result into the cache when it landed, with a fresh
 timestamp on pre-write data.
 
-**Result**: PR opened (branch `claude/nightly-2026-09-11-snapshot-cache-publish`).
+**Result**: PR #10 (branch `claude/nightly-2026-09-11-snapshot-cache-publish`).
 
 **Why this subject**: the suite was green on the default branch first (1003
 passed, 1 skipped, typecheck clean), so the calendar rule did not preempt. PR #9
