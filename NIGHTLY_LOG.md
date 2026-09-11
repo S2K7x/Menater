@@ -6,6 +6,159 @@ they were — they are memory about live code, and rewriting them would lose it.
 
 ## 2026-09-11 — Friday · Performance and cost
 
+**Subject**: `resolveRepository` re-normalised the entire service inventory for
+every case of every snapshot rebuild. At the declared ceilings that is 111 ms
+of blocked event loop every 20 seconds, on a single-threaded API.
+
+**Result**: PR #11 (branch `claude/nightly-2026-09-11-inventory-index`).
+
+**Why this subject**: the suite was green on the default branch first (1003
+passed, 1 skipped, typecheck clean), so the calendar rule did not preempt.
+Friday's method is measure → optimise → measure, and this is the one lead where
+the multiplier was real rather than argued. **Two nightly PRs were already
+open** (#9 on `engine/nodes/io.ts`, #10 on `server/snapshot.ts`), so the subject
+also had to avoid both files — which it does: the whole fix is inside
+`server/inventory.ts`, and the caller in `snapshot.ts` is untouched.
+
+**Measured, before and after**, same machine, median of 11 runs, one
+`resolveRepository` call per case exactly as `withRepositories` does it:
+
+| inventory | cases | before | after |
+|---|---|---|---|
+| 10 × 4 | 120 | 0.54 ms | 0.10 ms |
+| 50 × 8 | 500 | 11.06 ms | 0.19 ms |
+| 200 × 20 (ceiling) | 120 | 27.09 ms | 0.06 ms |
+| 200 × 20 (ceiling) | 500 | 111.61 ms | 0.12 ms |
+
+The index build is paid once per array: **0.165 ms** at 50 × 8, **1.201 ms** at
+the ceiling. That is the honest other half of the number — the first rebuild
+after a config save pays it, and every rebuild for the next hours does not.
+
+**What I learned**:
+
+- **The memo's key had to be the array's IDENTITY, and that is a safety
+  argument rather than a convenience.** `config.ts`'s `sanitizeInventory`
+  rebuilds `{ entries: readInventory(...) }` on every load AND every save, so a
+  changed table is necessarily a different array. Checked that nothing on the
+  server mutates the list in place: the only reader is `snapshot.ts:306` and
+  the only writers go through `sanitizeInventory`. A memo keyed on anything
+  else — a hash, a revision counter — would have needed invalidation somebody
+  could forget, and forgetting it means naming a repository the operator just
+  deleted.
+- **A `WeakMap`, so the previous configuration's index is collected with its
+  array.** A `Map` would hold every inventory the process has ever loaded.
+- **The test counts WORK, not milliseconds.** A timing assertion is the flaky
+  kind this project already removed once (the retry tests, 2026-09-09). Making
+  `identifiers` a counting getter gives a deterministic number: **100 reads
+  before the fix, 2 after**, for 50 cases against 2 entries. It was checked RED
+  on exactly that.
+- **First-wins had to be preserved explicitly.** The scan returned the first
+  entry in order; a `Map` built naively lets the LAST writer win.
+  `normalizeInventory` refuses a duplicate identifier so a stored inventory
+  cannot hold one — but the resolver is exported and callable with any list, so
+  the index does `if (!index.has(k))` and a test pins it.
+- **`matched_value` must stay the identifier as STORED**, not the lowercased
+  comparison key: it is printed on the incident card, and the operator should
+  read back the line they typed. The index keeps the original string beside the
+  key; a test pins that too.
+
+**Measured and RULED OUT — do not spend another night on it**:
+
+- **`gzipSync` in `respond.ts:43`.** It looked like the classic "synchronous
+  call on the hot path" trap this table already carries twice (`fsync`,
+  `writeFileSync` on a timer), and it is on every JSON response over 4 kB
+  including the snapshot. Measured: **1.7 ms for a 534 kB payload**, 1.0 ms at
+  320 kB. Level 1 is ~3× faster and compresses slightly worse. Neither is worth
+  a change, and making `json()` asynchronous would touch every route for
+  nothing. The lead is dead; it was killed by a measurement, not by an opinion.
+
+**Found and NOT fixed** — a mapping pass over the token-cost surfaces turned
+these up. **They are NOT independently verified by me** (they come from a
+read-only survey, and I measured only the inventory subject myself), so a future
+Friday must re-measure each before acting. Ranked as reported:
+
+- **`mcp.ts:558` serialises every tool result twice**, once pretty-printed into
+  `content[0].text` and once as `structuredContent` — reported as 11,191 B on
+  the wire where 5,123 B would do. The spec's "also return the serialised form"
+  is satisfied by a compact block. Biggest single number in the survey.
+- **`chat.ts:166` / `providers.ts:295` drop `body.tools` entirely on the final
+  turn.** Removing the tools block changes the head of the Anthropic prefix, so
+  the last call of every capped run is reported as a full cache miss on the
+  schemas + stable system prompt. Keeping `tools` and sending
+  `tool_choice: {type:'none'}` would hold the prefix byte-identical. If it
+  checks out this is the sharpest one, because it is the cache design already
+  documented in `prompt.ts` leaking at one call site.
+- **`explain_verdict` re-sends what `get_alert` just sent** (reported 71%
+  overlap), and `mcp.ts`'s `triage-alert` prompt instructs a client to call
+  both. The per-request memo in `chat.ts` keys on `name:args`, so it cannot
+  collapse two different tools returning the same payload.
+- **`get_metrics.rate_meanings`** restates the "two rates" paragraph that is
+  already in the cached system prefix — reported as 41% of that tool's output.
+- **The "seven tools" claim is stale in five places** (`tools.ts:19`,
+  `tools.ts:56`, `providers.ts:343`, `mcp.ts:530`, and `prompt.ts:67-69`).
+  `TOOLS.length` is 14. The last one is not merely a doc defect: the system
+  prompt enumerates seven capabilities and omits `search_alerts`,
+  `find_similar`, `explain_verdict`, `get_timeline`, `test_rule` and
+  `explain_term`, so the model is told about half its catalogue in the very
+  prefix meant to stop it answering from memory. Same family as the n8n sweep —
+  a name that outlived the thing it named. **This one is worth a night on its
+  own**, and it is a correctness subject, not a cost one.
+
+**Also noted, not taken**: a survey of the hot read path flagged four more
+places in `server/engine/cases.ts` (`outputOf` rescanning the step array once
+per node id, `Date.parse` called ~13k times per rebuild where ~240 would do,
+six `filter` passes to produce six counters, `tagAttack` not stopping at three
+matches) and one in `pg-store.ts` (`stepsOfMany` doing `SELECT *` unfiltered by
+node id). Same caveat: unverified, re-measure first. They are all in one file,
+which is why they are a separate night rather than this one — and `cases.ts` is
+the file a wrong "optimisation" would damage most.
+
+**Do not redo**:
+
+- **Do not key the memo on anything but the array.** See above. A revision
+  number or a content hash reintroduces an invalidation somebody can forget,
+  and the failure mode is a deleted machine still resolving.
+- **Do not make it a `Map`.** It would retain every inventory the process has
+  loaded, and the arrays are exactly the thing that should die with the config.
+- **Do not "simplify" the `if (!index.has(k))` guard away.** It is what keeps
+  first-wins, and the only thing standing between this and a silently different
+  answer on a hand-built list.
+- **Do not assert milliseconds in the test.** Counting reads is deterministic;
+  a stopwatch on a loaded machine is the test people learn to ignore.
+- **Do not touch `respond.ts`'s gzip.** Measured, see above.
+
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 1006 passed | 1 skipped  (1003 before; +3 new, nothing skipped or weakened)
+npm run build       # dist built, 472.18 kB / 139.73 kB gzip (unchanged: server-side change)
+```
+Checked **RED** first: the work-counting test failed `expected 100 to be 2`
+before the fix. The other two new tests pass both before and after by design —
+they pin the behaviour the optimisation must not change (first-wins, the stored
+`matched_value`, and no stale answer after the table is replaced). `VulnPipe/`
+untouched, its suite not run. No model key and no database needed: the resolver
+is pure. Both benchmark probes were deleted after measuring.
+
+**Note**: `npm install` rewrote `dashboard/package-lock.json` again, exactly as
+the three previous entries record (`@types/pg` between `dependencies` and
+`devDependencies`). Reverted, not committed. Still pre-existing, still left
+alone.
+
+**Merge note**: PR #10 landed on `main` while this PR was open, and the entry
+above it in this file is its night — **two nights of the same date and the same
+theme**, which is why both headings read identically. `main` was merged in
+rather than rebased (never rewrite a pushed branch). The only conflict was this
+file, and only because the two entries share a heading line: `CLAUDE.md`
+auto-merged with both traps rows, and there was no code conflict at all —
+picking a subject inside `server/inventory.ts` precisely because #10 was open on
+`server/snapshot.ts` is what bought that. **Choosing the file to work in around
+the open PRs is worth the five minutes it costs**; the conflict that remained
+was in the journal, where losing a line costs nothing but memory.
+
+## 2026-09-11 — Friday · Performance and cost
+
 **Subject**: the snapshot cache. Measuring it turned up a defect worth more
 than the optimisation I went looking for: a rebuild that `invalidate()` had
 disowned still wrote its result into the cache when it landed, with a fresh
