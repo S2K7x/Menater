@@ -4,6 +4,126 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-11 — Friday · Performance and cost
+
+**Subject**: the snapshot cache. Measuring it turned up a defect worth more
+than the optimisation I went looking for: a rebuild that `invalidate()` had
+disowned still wrote its result into the cache when it landed, with a fresh
+timestamp on pre-write data.
+
+**Result**: PR opened (branch `claude/nightly-2026-09-11-snapshot-cache-publish`).
+
+**Why this subject**: the suite was green on the default branch first (1003
+passed, 1 skipped, typecheck clean), so the calendar rule did not preempt. PR #9
+is open on `server/engine/nodes/io.ts`; this touches `server/snapshot.ts` and
+nothing it touches, so no conflict. Friday's reservoir is performance and cost,
+and I drew from it by measuring the console's central read path — but
+NIGHTLY.md's priority order applies INSIDE the theme, and *(2) a real,
+reproducible bug* outranks *(5) a measured optimisation*. The two optimisations
+the measurement found are written into ROADMAP § 7 with their numbers, not
+taken.
+
+**What I learned**:
+
+- **The documented fix had a back door, and it was open the whole time.** The
+  traps table already carries *"Invalidating `cache` without `inFlight`"*, and
+  `invalidate()` does throw away both references. That is not the same as
+  stopping the walk: the disowned rebuild keeps running and keeps its own
+  `.then`, which wrote `cache = { at: Date.now(), … }` unconditionally. The
+  identity check `inFlight?.promise === promise` was **already written, in the
+  `.finally` immediately below**, for `inFlight` — and never made for `cache`,
+  which is the half that is read. A guard on the write and none on the read.
+- **The reproduction needs no race.** I expected a timing-dependent flake and
+  it is deterministic: background revalidation in flight → `invalidate()` →
+  the rebuild lands → cache holds pre-write data stamped *now* → the next poll
+  reads it as fresh for the full 15 s. `POST /api/approvals/:token/resume`
+  calls `invalidate()` and returns without rebuilding, which is exactly the
+  window. Cost to the operator: the alert they just approved goes on showing
+  *awaiting approval* for up to fifteen seconds, silently.
+- **The fake store had to answer with what it held WHEN ASKED.** My first
+  version read the module variable after the gate opened, so the in-flight
+  rebuild picked up the post-write data and the test asserted the wrong thing
+  (it still went red, for the wrong reason). Capturing the value at call time is
+  what makes the fixture a slow answer to an early question rather than a slow
+  question.
+- **`snapshot.ts` had no test file at all** — the file that assembles the
+  queue, the metrics and the Tracking tab. `vi.mock('./runtime.ts')` plus
+  `vi.mock('./config.ts')` is enough to drive it with a controllable store; the
+  2026-09-09 entry ruled out testing these routes through `handleRequest`, and
+  that still holds, but the MODULE tests fine.
+- **Refusing to publish has a cost, and I checked what bounds it.** If writes
+  arrived faster than a rebuild completes, the cache would never fill.
+  Measured the real invalidate rate instead of guessing: the **push** path
+  (`webhook.ts`) does not invalidate at all, and the **pull** path invalidates
+  per delivered alert at `DELIVERY_CONCURRENCY = 4` over a ~16 s pipeline, i.e.
+  ≤ ~0.25/s. The rest are human actions. And the property that actually
+  matters at a triage desk — concurrent callers share one walk — is untouched
+  by an invalidation, so the worst case is one rebuild per poll cycle, never
+  one per tab. There is a test pinning that.
+
+**Measured and NOT taken** (both in ROADMAP § 7 with their numbers):
+
+- The snapshot is **serialised and gzipped once per request** although the
+  cache hands back identical bytes: 563.9 kB raw → 45.3 kB gzipped at the
+  maximum window, `JSON.stringify` 2.76 ms + `gzipSync` 3.73 ms ≈ 8.5 ms of
+  blocked event loop per request. Ten tabs at the 5 s minimum ≈ 17 ms/s, 1.7%
+  of the loop. Real, not urgent, and the fix belongs in `respond.ts` which
+  every route shares — not in a PR about a cache bug.
+- `trace.chains[].payload` travels in full (7,883 of 138,646 bytes on a
+  24-alert window) and the browser reads exactly `if (!chain.payload)`; the
+  replay route re-reads it server-side. Negligible after gzip, so it is filed
+  as hygiene: the bulk of it is `raw_log`, a second copy of attacker-composed
+  text on the wire for nothing.
+
+**Do not redo**:
+
+- **Do not make `gzipSync` async as the fix for the compression cost.** The
+  compression is not the waste, the REPETITION is — the same bytes recompressed
+  for every tab. Caching the serialised buffer beside the snapshot removes both
+  the stringify and the gzip; making it async removes neither, and adds a
+  concurrency question to a function every route calls.
+- **Do not "simplify" the guard by having `invalidate()` cancel the rebuild.**
+  There is nothing to cancel: a `Promise` in flight over a `pg` query cannot be
+  abandoned, and the caller who asked before the write is legitimately owed
+  that answer. The fix is about who may PUBLISH, not who may finish.
+- **Ruled out: widening this to `force`.** `snapshot(locale, true)` joins an
+  in-flight rebuild that may have started earlier, which looks like the same
+  defect. It is not reachable after a write, because every write calls
+  `invalidate()` and that clears `inFlight` — so a forced read after a write
+  always starts fresh. Changing it would cost a shared walk on the Refresh
+  button for no behaviour anyone can observe.
+- **Known consequence, accepted**: when two rebuilds with DIFFERENT cache keys
+  overlap (a locale or database switch mid-flight), only the later-started one
+  may now publish, where before the later-RESOLVING one won. That is strictly
+  more deterministic, and it costs one cache fill in a scenario that is moot
+  on an English-only product whose config changes call `invalidate()` anyway.
+  Not tested, because the single-locale catalogue gives no second key to
+  exercise without contorting the fixture — stated here and in the PR instead.
+
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 1010 passed | 1 skipped  (1003 before; +7 new, nothing skipped or weakened)
+npm run build       # dist built, 472.18 kB / 139.73 kB gzip (unchanged: server-side change)
+```
+Checked **RED** first, and then again with the one-line fix reverted on the
+finished file: **exactly 2 of the 7 new tests fail** — "does not put what it
+read before the write back into the cache" (`expected ['BEFORE'] to equal
+['AFTER','BEFORE']`) and "leaves the cache empty, so the next read goes back to
+the journal" (`expected 1 to be 2`, i.e. the journal was not re-read). The other
+five pass before and after, which is what makes them guards rather than
+assertions about my change. `VulnPipe/` untouched, its suite not run. No model
+key and no database needed: the store is a fake and the pipeline takes its
+fail-safe verdict.
+
+**Note**: the two measurement probes were written under `dashboard/scripts/`,
+run, and deleted — `npm run typecheck` flagged one of them, which is a good
+reason to keep probes out of the tree. `npm install` rewrote
+`dashboard/package-lock.json` again (`@types/pg` between `dependencies` and
+`devDependencies`), exactly as the two entries below record. Reverted, not
+committed.
+
 ## 2026-09-10 — Thursday · Bugs and technical debt
 
 **Subject**: the engine's three outbound nodes (`http`, `notify`, `llm`)
