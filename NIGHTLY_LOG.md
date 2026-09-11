@@ -124,6 +124,137 @@ reason to keep probes out of the tree. `npm install` rewrote
 `devDependencies`), exactly as the two entries below record. Reverted, not
 committed.
 
+## 2026-09-10 (second run) — Thursday · Bugs and technical debt
+
+**Subject**: `makeNotify`'s `slack-bot` branch read the answer with
+`await res.json()` and no guard. Anything that was not Slack's envelope — an
+HTML error page from a gateway in front of it, a captive portal, a body-less
+5xx — reached the incident card as a sentence about JSON syntax, on the step
+that posts the approval request.
+
+**Result**: PR opened (branch `claude/great-pascal-gfbcer` — see the note on
+branch naming at the end of this entry).
+
+**Why this subject**: the suite was green on the default branch first (1003
+passed, 1 skipped, typecheck clean), so the calendar rule did not preempt, and
+no PR was open. Thursday's reservoir is ROADMAP § 7 plus what earlier nights
+noted without fixing, and this is the row the run earlier today wrote there
+itself — *"Non-JSON refusals on the `notify` bot transport"*, deliberately left
+out of that PR so the transport whose test file exists because it lied about
+success once was not widened in the same pass. This is that later pass, and it
+is priority (2): a real defect, three tests red before the change.
+
+**What I learned**:
+
+- **The commissioned half was again the smaller half** — the same shape as this
+  morning's entry, which is starting to look like a property of this file
+  rather than a coincidence. § 7 described a missing guard. Reading the branch
+  to add it showed the guard was load-bearing for the line BELOW it: because
+  `res.json()` threw first, `if (!body.ok)` had never once been reached with
+  `ok` absent. Add the guard naively — return `{}` on a parse failure — and a
+  **captive portal answering 200** becomes `Slack refused: no reason given`.
+  That is a refusal by Slack that never happened, and it sends an operator to
+  check a channel name and a bot scope while the actual fault is the network.
+  The test `does not mistake a 200 that is not the envelope for a posted
+  message` exists to pin that specific wrong fix.
+- **`ok` is the discriminator, and it has to be typed, not truthy.** Slack's
+  Web API puts a boolean `ok` on every answer, so `typeof body.ok !== 'boolean'`
+  separates "the Slack API answered" from "something answered for it" without
+  consulting the status at all — which matters, because the status genuinely
+  cannot decide it (Slack says no with a 200). The status is then what gets
+  REPORTED, not what decides.
+- **Measured, not assumed** (`scripts/probe-json-refusal.mjs`, run then
+  deleted). Node 22.22.2, synthetic `Response` and a real socket give
+  byte-identical messages — which is what makes the test fixtures faithful and
+  is worth knowing before writing another one of these:
+  ```
+  html 502   → SyntaxError: Unexpected token '<', "<html><hea"... is not valid JSON
+  empty 502  → SyntaxError: Unexpected end of JSON input
+  empty 200  → SyntaxError: Unexpected end of JSON input
+  ```
+  The second is the exact string `makeLlm` was fixed for this morning. The same
+  defect had two homes and only one was fixed.
+- **Typecheck caught the fix, and the suite did not.** `body = parsed as typeof
+  body` narrows to `null` inside the assignment, so `body.ok` was `never` —
+  five TS2339s while all 1009 tests were green. Naming the shape
+  (`type SlackEnvelope`) fixes it, and the name earns its keep: it is a CLAIM
+  about what came back, checked before it is believed.
+
+**Found and NOT fixed**:
+
+- **The three clip sites can echo a request header.** `notify`/Discord,
+  `notify`/slack-bot and `llm` all put up to 300 characters of the remote body
+  into a step error, which is written to `soc_run_step` and printed on the
+  card. The bot token and the model key travel in the `authorization` HEADER,
+  never the URL, so this is not the webhook-URL leak the traps table already
+  covers — but a proxy error page that echoes request headers (a 407, a
+  debugging endpoint) would carry one there. Speculative, symmetrical across
+  three sites, and scrubbing one and not the others is worse than scrubbing
+  none. Raised as a decision in the PR rather than settled tonight.
+- **No 429 special case for `slack-bot`.** Discord needs one because its 429
+  body is not an envelope; Slack's is (`{"ok":false,"error":"ratelimited"}`),
+  so it already comes out as `Slack refused: ratelimited` — Slack's own word.
+  Adding a status check for it would be inventing a shape I did not measure.
+- **`res.text()` here is unbounded**, exactly as `res.json()` was. Not a
+  regression, and the endpoint is a constant (`slack.com`), unlike the poller's
+  operator-typed addresses that got a cap. Left alone deliberately.
+
+**Do not redo**:
+
+- **Do not "simplify" this into a shared helper with the Discord branch.** They
+  read three different success conventions; that is the whole reason the file
+  says they cannot share a code path, and a helper would be the lossy converter
+  its header comment already refuses.
+- **Do not delete `Slack refused: …`.** It is correct for the `ok: false`
+  envelope. The fix was to stop other states reaching it — a test now holds it
+  in place, same device as this morning's empty-200 guard.
+- **Do not add a `res.ok` check to this branch.** Slack answers 200 on failure;
+  the status is reported, never trusted to decide.
+- **`assistant/chat.ts:182` is the last unguarded `res.json()` on the server**,
+  and it is NOT the same defect: it checks `res.ok` first and its catch is one
+  level up. Checked, deliberately left. Do not sweep it in as a fourth site
+  without establishing what an operator actually sees.
+
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 1009 passed | 1 skipped  (1003 before; +6 new, nothing skipped or weakened)
+npm run build       # dist built, 472.18 kB / 139.73 kB gzip (unchanged: server-side change)
+```
+Checked **RED** first, and again against the FINAL code by stashing `io.ts`
+alone: **3 failed | 13 passed**, the three being the HTML 502, the body-less
+502, and the 200 that is not an envelope. The other three new tests must pass
+both before and after — they pin the success path, Slack's own refusal, and the
+fact that the message is not `Slack refused`. `VulnPipe/` untouched, its suite
+not run. No model key, no database and no network: every transport is
+simulated. The one skipped test is the pre-existing
+`store-contract.test.ts > contrat — postgres`, which needs a database.
+
+**Merged `main` in on 2026-09-11** after PR #10 landed. The conflict was three
+documentation files and no code — `snapshot.ts` and `io.ts` do not meet. Both
+`NIGHTLY_LOG.md` entries and both `CLAUDE.md` trap rows were kept whole; in
+`ROADMAP.md` § 7 my struck-through *"Non-JSON refusals"* row replaces the open
+one `main` still carried, and PR #10's two measurement rows are kept. Re-ran
+the gate on the merged tree: typecheck 0 errors, **1016 passed | 1 skipped**
+(1003 + 7 from PR #10 + 6 from this one), build unchanged. The figures above
+are the ones measured on this change alone, before the merge.
+
+**Note on the branch name**: `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-short-subject`. This session was handed a designated
+branch, `claude/great-pascal-gfbcer`, with an instruction never to push
+elsewhere without explicit permission — and no one is awake to give it. Both
+carry the mandatory `claude/` prefix, the branch was cut from a clean `main`,
+and the PR shows only tonight's commits. Took the conservative option and used
+the designated branch; a future night on a free session should go back to the
+documented name.
+
+**Note**: `npm install` rewrote `dashboard/package-lock.json` again
+(`@types/pg` moving between `dependencies` and `devDependencies`), exactly as
+the two entries below record. Reverted, not committed. Third night running —
+worth someone's five minutes, but it is not a nightly's call to change what
+`npm` writes.
+
 ## 2026-09-10 — Thursday · Bugs and technical debt
 
 **Subject**: the engine's three outbound nodes (`http`, `notify`, `llm`)

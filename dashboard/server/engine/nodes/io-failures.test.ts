@@ -20,6 +20,10 @@
  *                and both were reported as "the model answered with no
  *                content" — which sends somebody to look at the model rather
  *                than at their key.
+ *   A PARSER'S   `notify`'s `slack-bot` branch called `res.json()` with no
+ *                guard, so an answer that is not the Slack envelope surfaced as
+ *                whatever `JSON.parse` happened to say — naming neither Slack,
+ *                nor the status, nor the fact that a call was made at all.
  *
  * These tests therefore assert two things about every failure: that the
  * sentence names the cause, and that it is NOT the sentence the defect
@@ -162,6 +166,91 @@ describe('notify — the three transports, all unreachable', () => {
     expectNamesTheCause(said);
     expect(said).toContain('Discord');
     expect(said).not.toContain('s3cr3t');
+  });
+});
+
+describe('notify — slack-bot, when the answer is not the Slack envelope', () => {
+  const params = {
+    channel: { kind: 'const', value: '#soc-approvals' },
+    text: { kind: 'const', value: 'Approval required' },
+  };
+
+  /** `chat.postMessage` reached through something that answers for it. */
+  function answers(body: string, status: number, type = 'text/html') {
+    return vi.fn(
+      async () => new Response(body, { status, headers: { 'content-type': type } }),
+    ) as unknown as typeof globalThis.fetch;
+  }
+
+  function botHandlers(fetchImpl: typeof globalThis.fetch) {
+    return ioHandlers(deps({ fetch: fetchImpl, secret: () => 'xoxb-test' }));
+  }
+
+  // Measured on Node 22.22.2, on a synthetic `Response` AND over a real socket
+  // — both give byte-identical messages, which is what makes these fixtures
+  // faithful:
+  //   html 502  → SyntaxError: Unexpected token '<', "<html><hea"... is not valid JSON
+  //   empty 502 → SyntaxError: Unexpected end of JSON input
+
+  it('names the status instead of leaking a JSON parser error', async () => {
+    // A gateway, a proxy or a captive portal in front of Slack answers HTML.
+    // `res.json()` then threw a SyntaxError quoting the first ten bytes of
+    // somebody's error page — a sentence about JSON syntax, on the step that
+    // posts the approval request.
+    const h = botHandlers(answers('<html><head><title>502</title></head><body>proxy</body></html>', 502));
+    const said = await messageOf(h.notify(ctx('notify', params)));
+
+    expect(said).not.toMatch(/is not valid JSON/i);
+    expect(said).not.toMatch(/unexpected token/i);
+    expect(said).toContain('502');
+    expect(said).toContain('Slack');
+  });
+
+  it('does not call it a refusal BY Slack when Slack is not what answered', async () => {
+    // "Slack refused" is true of an `ok: false` envelope and of nothing else.
+    // A gateway's 502 is not Slack declining to post; saying so sends somebody
+    // to check a channel name and a scope over a network problem.
+    const h = botHandlers(answers('<html>502</html>', 502));
+    const said = await messageOf(h.notify(ctx('notify', params)));
+    expect(said).not.toMatch(/Slack refused/);
+  });
+
+  it('still names a refusal that carries no body at all', async () => {
+    // The exact string the `llm` node was fixed for one branch over.
+    const h = botHandlers(answers('', 502, 'text/plain'));
+    const said = await messageOf(h.notify(ctx('notify', params)));
+
+    expect(said).not.toMatch(/unexpected end of JSON input/i);
+    expect(said).toContain('502');
+  });
+
+  it('does not mistake a 200 that is not the envelope for a posted message', async () => {
+    // The worst of the family: a captive portal answering 200. Reading `ok`
+    // off it yields `undefined`, and the OLD code's `if (!body.ok)` would have
+    // called that a refusal — but only because `res.json()` threw first. A
+    // guard that returned the parse failure to the caller as a success would
+    // report an approval request nobody received.
+    const h = botHandlers(answers('<html>sign in to the corporate wifi</html>', 200));
+    const said = await messageOf(h.notify(ctx('notify', params)));
+    expect(said).toContain('200');
+  });
+
+  it('leaves Slack’s own refusal saying exactly that', async () => {
+    // The sentence stays for the state it describes. The fix removes the
+    // states that were reaching it, not the sentence.
+    const h = botHandlers(answers('{"ok":false,"error":"invalid_auth"}', 200, 'application/json'));
+    const said = await messageOf(h.notify(ctx('notify', params)));
+
+    expect(said).toContain('Slack refused');
+    expect(said).toContain('invalid_auth');
+  });
+
+  it('still posts, and still reads the timestamp back, when Slack answers', async () => {
+    // A guard that broke the success path would be worse than the defect.
+    const h = botHandlers(answers('{"ok":true,"ts":"1727170000.000100"}', 200, 'application/json'));
+    await expect(h.notify(ctx('notify', params))).resolves.toEqual({
+      output: { ts: '1727170000.000100', transport: 'slack-bot' },
+    });
   });
 });
 
