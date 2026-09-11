@@ -4,6 +4,99 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-11 (third run) — Friday · Unblocking PR #9 and PR #11
+
+**Subject**: both open PRs were `mergeable_state: dirty` and neither could be
+merged. Reviewing the code they carried while resolving them turned up a real
+defect inside PR #9's own fix.
+
+**Result**: both branches merged onto `main` on `claude/fix-pr-9-11-cz73hl`,
+conflicts resolved, and two follow-up fixes on top.
+
+**The conflicts were documentation only — no code conflicted.** Both branches
+were cut from `ad9c9ed` and `main` has since taken PR #10, which wrote the same
+three files:
+
+- `NIGHTLY_LOG.md` — twice, and both times the diff had **interleaved two
+  separate entries** rather than stacked them, because the 09-11 entries open
+  with a byte-identical heading and share the `**Verified**:` block. Taking
+  either side whole would have lost an entry; each was reconstructed as
+  *part 1 + the shared block + part 2* and re-stacked newest-first. PR #11's
+  run is 12:37 against PR #10's 00:37, so it became the `(second run)` — the
+  convention this file already uses for 09-09 and 09-10.
+- `ROADMAP.md` § 7 — PR #9's side struck through the `notify` row but predated
+  the two rows PR #10 added. Kept PR #10's two, took PR #9's struck-through
+  one.
+- `CLAUDE.md` — two new trap rows, both kept. Neither side deleted anything.
+
+**The defect, which is the reason this is not just a merge.** PR #9 replaces
+`res.json()` with `res.text()` so that an answer which is not Slack's envelope
+names the status instead of leaking `Unexpected token '<'`. It reads the body
+as `(await res.text().catch(() => '')).trim()` — and `''` then flows into a
+sentence that says **« (empty body) »**.
+
+`res.text()` rejects *after* the status line is in. Probed against a real
+socket that promises a `content-length` of 200 and destroys itself after ten
+bytes, on Node 22.22.2:
+
+```
+status = 200
+text() REJECTED with: TypeError: terminated | cause: other side closed
+```
+
+So a connection the other end cut mid-answer was reported as Slack's endpoint
+having **sent** an empty body — a claim about bytes nobody ever saw, and the
+two faults do not have the same fix: an empty body sends somebody looking for
+the intermediary that answered nothing, a cut connection is the network. That
+is the defect PR #9 exists to remove, rebuilt one state further in, and it is
+the same shape as the scan report that took green by default when coverage was
+UNKNOWN.
+
+**And the sibling one branch up had no catch at all.** `slack-webhook` read
+`(await res.text()).trim()` unwrapped, so the same event surfaced as a bare
+`TypeError: terminated` — the "fetch failed" family this very file was written
+to close, one line past where `reach` stops looking.
+
+**Fixed**: three states, three sentences. Unread names the cause through
+`describeFetchError` (which already keys on `cause.message` when there is no
+code, so `other side closed` comes out intact and in `tcpProbe`'s vocabulary);
+empty still says empty, because the sentence stays for the state it describes;
+present is quoted and clipped at 300 as before.
+
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 1022 passed | 1 skipped  (1010 on main; +6 PR #9, +3 PR #11, +3 here)
+npm run build       # dist built, 472.18 kB / 139.73 kB gzip (unchanged: server-side change)
+```
+Checked **RED** by stashing `io.ts` alone against the finished tests: **exactly
+2 of the 3 new tests fail** — the unread body called empty, and the webhook
+leaking `terminated`. The third passes before and after **by design**: it pins
+that a body which really IS empty still says so, which is what stops the fix
+from trading one vagueness for another. The one skipped test is the
+pre-existing `store-contract.test.ts > contrat — postgres`, which needs a
+database.
+
+**What I did not do**:
+- **Did not push to either PR's branch.** This session was handed
+  `claude/fix-pr-9-11-cz73hl` with an instruction not to push elsewhere. Both
+  PRs' commits are merged here whole, with their authorship intact, so merging
+  this supersedes both.
+- **Did not touch the Discord branch's `catch(() => '')`.** It has the same
+  shape and NOT the same defect: `Discord refused: HTTP 500` claims nothing
+  about the body. Worth a pass only if someone wants the cause there too.
+- **Did not change PR #11's code.** Checked the one assumption its author
+  flagged for review — that nothing mutates `inventory.entries` in place.
+  `sanitizeInventory` is the only writer and rebuilds through
+  `normalizeInventory` + `.filter()`, both of which allocate; `saveConfig`
+  calls it and then replaces `cached`. The memo cannot go stale today. It is
+  an invariant held by three functions and nothing enforces it — worth a line
+  in `config.ts` if it ever grows a fourth writer.
+- **Did not add a CI workflow.** There is none in the repository; the green
+  checks on both PRs are Vercel and GitGuardian, and neither runs the suite.
+  Noting it because "checks passed" reads as "the tests ran", and they did not.
+
 ## 2026-09-11 (second run) — Friday · Performance and cost
 
 **Subject**: `resolveRepository` re-normalised the entire service inventory for

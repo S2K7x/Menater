@@ -335,7 +335,20 @@ export function makeNotify(deps: IoDeps): NodeHandler {
       );
       // PLAIN TEXT, both ways. `res.json()` would throw on the literal `ok`
       // that means success.
-      const answer = (await res.text()).trim();
+      //
+      // AND THE READ ITSELF CAN FAIL, which is the sibling of the guard on the
+      // bot branch below. Unwrapped, a body the other end cut off surfaced here
+      // as a bare `TypeError: terminated` — the "fetch failed" family this file
+      // was fixed for, one line past where `reach` stops looking.
+      let answer: string;
+      try {
+        answer = (await res.text()).trim();
+      } catch (err) {
+        throw new Error(
+          `Slack answered HTTP ${res.status}, but its answer could not be read: `
+          + describeFetchError(err),
+        );
+      }
       if (!res.ok) throw new Error(`Slack refused: ${answer || `HTTP ${res.status}`}`);
       return { output: { ts: null, transport: 'slack-webhook' } };
     }
@@ -374,7 +387,29 @@ export function makeNotify(deps: IoDeps): NodeHandler {
     // else. Calling a gateway's 502 a refusal BY Slack sends somebody to check
     // a channel name and a bot scope over a network problem — so the envelope
     // is what decides, and the status is what is reported when it is absent.
-    const raw = (await res.text().catch(() => '')).trim();
+    // A BODY THAT COULD NOT BE READ IS NOT AN EMPTY BODY, and the difference
+    // is the whole point of the guard below it. `res.text()` rejects after the
+    // status line is already in — a truncated chunked body, a connection the
+    // other end drops mid-answer — and swallowing that into `''` makes the
+    // sentence claim Slack's endpoint SENT nothing, over an event where we
+    // never found out what it sent. Measured on Node 22: `TypeError:
+    // terminated`, cause `other side closed`. Two different faults reported in
+    // the same words send somebody looking for an intermediary that answered
+    // empty, when the fault is a dropped connection — this node's own defect,
+    // rebuilt one state further in.
+    let raw: string | null = null;
+    let unread = '';
+    try {
+      raw = (await res.text()).trim();
+    } catch (err) {
+      unread = describeFetchError(err);
+    }
+    if (raw === null) {
+      throw new Error(
+        `Slack answered HTTP ${res.status}, but its answer could not be read: ${unread}`,
+      );
+    }
+
     let body: SlackEnvelope | null = null;
     try {
       const parsed: unknown = raw ? JSON.parse(raw) : null;

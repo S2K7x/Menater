@@ -24,6 +24,13 @@
  *                guard, so an answer that is not the Slack envelope surfaced as
  *                whatever `JSON.parse` happened to say — naming neither Slack,
  *                nor the status, nor the fact that a call was made at all.
+ *   A FALSE ONE  The first guard for the row above swallowed a failed body
+ *                READ into `''`, so a connection the other end cut mid-answer
+ *                was reported as Slack's endpoint having sent an EMPTY body —
+ *                a claim about bytes nobody ever saw, on the state the guard
+ *                exists to tell apart. The `slack-webhook` branch beside it
+ *                did not catch the read at all, and surfaced Node's bare
+ *                `TypeError: terminated`.
  *
  * These tests therefore assert two things about every failure: that the
  * sentence names the cause, and that it is NOT the sentence the defect
@@ -251,6 +258,80 @@ describe('notify — slack-bot, when the answer is not the Slack envelope', () =
     await expect(h.notify(ctx('notify', params))).resolves.toEqual({
       output: { ts: '1727170000.000100', transport: 'slack-bot' },
     });
+  });
+});
+
+describe('notify — when the answer cannot be READ at all', () => {
+  const params = {
+    channel: { kind: 'const', value: '#soc-approvals' },
+    text: { kind: 'const', value: 'Approval required' },
+  };
+
+  /**
+   * The status line arrived; the body did not.
+   *
+   * Measured on Node 22.22.2 against a real socket that promises a
+   * `content-length` and then destroys itself: `res.text()` REJECTS, with
+   * `TypeError: terminated` and cause `other side closed`. The stream below
+   * reproduces exactly that pair, which is what `describeFetchError` keys on.
+   */
+  function cutOffMidBody(status: number) {
+    return vi.fn(async () => new Response(
+      new ReadableStream({
+        start(c) {
+          c.enqueue(new TextEncoder().encode('{"ok":tr'));
+          c.error(Object.assign(new TypeError('terminated'), {
+            cause: new Error('other side closed'),
+          }));
+        },
+      }),
+      { status },
+    )) as unknown as typeof globalThis.fetch;
+  }
+
+  it('slack-bot does not call an unread body an EMPTY body', async () => {
+    // The two states are not the same fault and do not have the same fix. An
+    // empty body sends somebody looking for the intermediary that answered
+    // nothing; a dropped connection is the network. Reporting one as the other
+    // is the defect this whole file exists to remove, one state further in.
+    const h = ioHandlers(deps({ fetch: cutOffMidBody(200), secret: () => 'xoxb-test' }));
+    const said = await messageOf(h.notify(ctx('notify', params)));
+
+    expect(said).not.toMatch(/empty body/i);
+    expect(said).not.toMatch(/^TypeError/);
+    expect(said).toContain('Slack');
+    expect(said).toContain('200');
+    expect(said).toContain('other side closed');
+  });
+
+  it('slack-bot still says "empty body" when the body really is empty', async () => {
+    // The sentence stays for the state it describes — the same rule the
+    // `Slack refused` guard above follows. Removing it would trade one
+    // vagueness for another.
+    const h = ioHandlers(deps({
+      fetch: vi.fn(async () => new Response('', { status: 502 })) as unknown as typeof globalThis.fetch,
+      secret: () => 'xoxb-test',
+    }));
+    const said = await messageOf(h.notify(ctx('notify', params)));
+    expect(said).toMatch(/empty body/i);
+  });
+
+  it('slack-webhook names the cause instead of leaking "terminated"', async () => {
+    // The sibling one branch up, which had no catch at all: the bare
+    // `TypeError` is the "fetch failed" family this file was written for.
+    const h = ioHandlers(deps({
+      fetch: cutOffMidBody(200),
+      vars: () => new Map([['notify.transport', 'slack-webhook']]),
+      secret: () => 'https://hooks.slack.test/services/T/B/s3cr3t',
+    }));
+    const said = await messageOf(h.notify(ctx('notify', params)));
+
+    expect(said).toContain('Slack');
+    expect(said).toContain('other side closed');
+    expect(said).not.toMatch(/^TypeError/);
+    // A webhook URL IS the credential, and a new sentence must not be the one
+    // that finally carries it into the run journal.
+    expect(said).not.toContain('s3cr3t');
   });
 });
 
