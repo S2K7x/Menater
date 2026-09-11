@@ -281,6 +281,12 @@ function demoSnapshot(checkedAt: string, detail: string, locale: Locale): Consol
  * FORGETTING `inFlight` IS ENOUGH TO UNDO THE INVALIDATION: a walk that
  * started before the write finishes after it, and reinstalls in the cache the
  * state from BEFORE the approval just sent.
+ *
+ * DROPPING THE REFERENCE IS NOT THE SAME AS STOPPING THE WALK, and that is the
+ * half this function cannot do on its own: the disowned rebuild is still
+ * running, still holds its own `.then`, and used to write its result into the
+ * cache anyway when it landed. `rebuild()` is where that is refused — see the
+ * comment there.
  */
 export function invalidate(): void {
   cache = null;
@@ -309,13 +315,34 @@ function withRepositories(snap: ConsoleSnapshot): ConsoleSnapshot {
   return snap;
 }
 
-/** Rebuilds, sharing the work with concurrent callers. */
+/**
+ * Rebuilds, sharing the work with concurrent callers.
+ *
+ * ============================================================================
+ * ONLY THE REBUILD THAT IS STILL THE CURRENT ONE MAY PUBLISH
+ *
+ * `invalidate()` drops the references; it cannot stop a walk already under way.
+ * So a rebuild that asked the database BEFORE an approval was written finishes
+ * AFTER it — and it used to install what it read into the cache regardless,
+ * stamped `Date.now()`. Fresh timestamp, pre-write data: the console went on
+ * showing the alert as awaiting approval for up to `TTL_MS` after the operator
+ * was told the approval had been sent, and nothing said so. A failure that
+ * shows green, in the one place the queue is assembled.
+ *
+ * The identity check is the same one `.finally` already made for `inFlight` —
+ * it was simply not made for `cache`, which is the half that is read.
+ *
+ * The caller still RECEIVES this snapshot, and that is deliberate: they asked
+ * before the write and a real read answered them. What is refused is
+ * PUBLISHING it to everyone else for the next fifteen seconds.
+ * ============================================================================
+ */
 function rebuild(locale: Locale, key: string): Promise<ConsoleSnapshot> {
   if (inFlight && inFlight.key === key) return inFlight.promise;
   const promise = buildSnapshot(locale)
     .then(withRepositories)
     .then((snap) => {
-      cache = { at: Date.now(), key, snapshot: snap };
+      if (inFlight?.promise === promise) cache = { at: Date.now(), key, snapshot: snap };
       return snap;
     })
     .finally(() => {
