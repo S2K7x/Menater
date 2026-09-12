@@ -41,7 +41,7 @@ import { api } from '../lib/api.ts';
 import { useI18n } from '../i18n/context.tsx';
 import { Icon } from './Icon.tsx';
 import { Explain } from './Guidance.tsx';
-import { SectionTabs } from './SectionTabs.tsx';
+import { SectionPanel, SectionTabs } from './SectionTabs.tsx';
 
 export interface WfNode {
   id: string;
@@ -418,13 +418,22 @@ export function WorkflowPanel() {
         <p className="soc-muted" style={{ margin: 0 }}>{t.lede}</p>
       </section>
 
+      {/* ONE REGION, SIX TABS. These tabs do not select between panels: they
+          choose which workflow the single frame below them describes. So every
+          tab points at that one region (`panelId`) and the region is named by
+          whichever tab is selected (`labelledBy`). The alternative — six
+          panels of which five are empty — would be inventing content to
+          satisfy a pattern, and the one this replaces was worse than both:
+          six `aria-controls` pointing at elements that do not exist. */}
       <SectionTabs
         items={payload.workflows.map((w) => ({ id: w.id, label: w.name, hint: `v${w.version}` }))}
         active={workflow.id}
         onChange={(id) => { setActive(id); setSelected(null); }}
         label={t.sectionsLabel}
+        panelId="workflow"
       />
 
+      <SectionPanel id="workflow" labelledBy={workflow.id} active>
       <section className="soc-panel">
         <div className="soc-panel-head">
           <div>
@@ -477,7 +486,11 @@ export function WorkflowPanel() {
           {node ? <NodeCard node={node} /> : <p className="soc-empty soc-wf-hint">{t.pickNode}</p>}
         </div>
       </section>
+      </SectionPanel>
 
+      {/* OUTSIDE the panel, deliberately: the pipeline variables are read on
+          every run of every workflow. Inside, they would announce themselves
+          as belonging to whichever workflow happens to be selected. */}
       <Variables
         values={payload.variables}
         onSaved={(variables) => setPayload({ ...payload, variables })}
