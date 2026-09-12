@@ -4,6 +4,133 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-12 (second run) — Saturday · Interface, clarity, accessibility
+
+**Subject**: `role="tab"` announces a contract to assistive technology — one
+stop in the tab order, arrows choosing inside it, a panel each tab controls.
+`SectionTabs` declared it on four screens and implemented none of the three.
+
+**Result**: PR #14 (branch `claude/great-pascal-889oci`, **based on PR #13's
+branch, not on `main`**).
+
+**Why this subject**: the suite was green on `main` first (1022 passed, 1
+skipped, typecheck clean), so the calendar rule did not preempt. The subject is
+not mine — the first run of tonight (PR #13) found it with its DOM sweep, could
+not fix it in the same PR, and wrote it down under *Found and NOT fixed* as "a
+night of its own". Priority (3): an explicit limitation, already scoped.
+
+**Why the branch is based on PR #13 and not on `main`.** `NIGHTLY.md` § 0.5:
+*a nightly PR still open on the same file — build on it or change subject, do
+not create a conflict.* #13 is tonight's other run; it rewrites the traps table
+in `CLAUDE.md` and adds the day's entry to this file, which is exactly where my
+own two additions go. The 09-11 third run cost a whole session untangling
+precisely that interleaving. **No code file overlaps** — #13 is stylesheets and
+`themes.test.ts`, this is four components — so a rebase onto `main` would
+conflict only in `CLAUDE.md` and `NIGHTLY_LOG.md`, and GitHub retargets the PR
+to `main` on its own once #13 merges.
+
+**What the defect actually was**, measured on the three screens mounted with
+data of the right shape (`SettingsPage`, `IngestionPanel` with the Workflow
+tablist nested inside it, `WorkflowPanel` alone), by a throwaway vitest probe
+run once on the fixed tree and once with the four components `git stash`ed:
+
+| screen | tabs | tab stops | panels | dangling `aria-controls` |
+|---|---|---|---|---|
+| Settings | 9\* | 9 → **1** | 10 / 9 named → **9 / 9** | 0 → 0 |
+| Ingestion (two nested tablists) | 9 | 9 → **2** | 0 → **4** | **9** → **0** |
+| Workflow | 6 | 6 → **1** | 0 → **1** | **6** → **0** |
+
+Two stops on Ingestion after the fix is correct, not a miss: there are two
+tablists on that screen, one stop each. \* Settings shows **9** tabs here and
+**ten** in the product: the probe omits the optional `codeSection` prop, which
+`App` always supplies — and that omission is exactly what exposed the tenth
+panel having no tab, so it is left as the measured figure rather than rounded
+up to the one the product shows.
+
+**What I learned**:
+
+- **The probe found the defect's mirror image, and the brief did not contain
+  it.** I went looking for tabs pointing at panels that are not there. The
+  probe also counted panels, and `panels=10 named-panels=9` on Settings is a
+  `role="tabpanel"` named by a tab that is not in the document: the page
+  pushes its code-analysis TAB only when the caller supplies the section
+  (`if (codeSection)`) and rendered the PANEL unconditionally. **The rule has
+  to be asserted in both directions or half of it is unchecked** — one test
+  walks tabs and resolves `aria-controls`, the other walks panels and resolves
+  `aria-labelledby`. Latent, not operator-visible: `App.tsx` always passes the
+  prop, and the PR says so rather than dressing it up.
+- **The Workflow case is not the same shape as the other three, and forcing it
+  would have been the worse fix.** Its six tabs do not select between panels;
+  they choose which workflow the ONE frame below them describes. Six panels of
+  which five are empty is inventing content to satisfy a pattern — the same
+  mistake as filling a gap with a default. Several controls may point at one
+  region, so they all point at it (`panelId`) and the region is named by
+  whichever tab is selected (`labelledBy`). Both props are optional and default
+  to today's behaviour, so Settings and Tracking are untouched.
+- **Automatic activation is free here and would not be elsewhere.** The arrows
+  move the SELECTION, not only the focus. That is only cheap because rule 2 of
+  the component already mounts every panel and hides them: walking the bar
+  loads nothing, and it is what a click already does.
+- **Up, down and the page keys are deliberately left to the browser.** The bar
+  is sticky above content that scrolls; swallowing them would take the page's
+  own scrolling away from someone navigating by keyboard, which is a worse
+  trade than the one this fix makes. There is a test that pins it, and it is
+  one of the two that pass before AND after by design.
+- **No CSS changed, and the build proves it**: `index-*.css` is 87.68 kB before
+  and after. The JS grew 0.46 kB. The Ingestion change is an attribute swap on
+  divs that already existed; the only new element in the tree is Workflow's
+  wrapper, which carries no class, and `styles.css` has no adjacent-sibling
+  selector and nothing on `[role="tabpanel"]` (grepped both), while `.soc-panel`
+  spaces itself with `margin-bottom` — which collapses through a bare wrapper.
+
+**Do not redo**:
+
+- **Do not give `WorkflowPanel` one panel per workflow.** See above. If someone
+  later decides that section should stop claiming the tab pattern altogether,
+  that is a design call and it is still open — but six empty panels is not the
+  way to close it.
+- **Do not put the pipeline variables inside Workflow's `SectionPanel`.** They
+  are read on every run of every workflow; inside the panel they would announce
+  themselves as belonging to whichever workflow happens to be selected. They
+  are deliberately left outside, with a comment saying why.
+- **Do not add `tabIndex={0}` to the panels.** APG wants a tabpanel focusable
+  only when it holds nothing focusable; all of these hold controls.
+- **Do not translate `SectionTabs.tsx`'s existing French comments.** Everything
+  I wrote in it is English per `NIGHTLY.md`, and the file is now mixed — which
+  is ugly and is still the right trade tonight: 150 lines of re-prose would
+  have buried an 88-line change. It is a real, separate cleanup, and the same
+  is true of `IngestionPanel`, `WorkflowPanel` and `SettingsPage`.
+- **Do not trust `console.log` in a vitest probe.** Vitest swallows it under
+  this config; `process.stderr.write` comes through. Cost ten minutes.
+
+**Still open, and NOT taken tonight** — the rest of PR #13's sweep list is now
+empty, so this is new:
+
+- **The four components carry French comments** (see above). Mechanical, large,
+  and a good Sunday subject since § 7 of `NIGHTLY.md` owns "documentation that
+  describes something other than what the code does".
+- **No test asserts the tab invariants for `TracePanel`.** It has always been
+  correct and the generic pin covers the shape, but it is the one call site of
+  the four that this file does not name.
+
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 1045 passed | 1 skipped  (1035 on PR #13's branch; +10 here)
+npm run build       # dist built, CSS 87.68 kB unchanged, JS 472.64 kB (+0.46 kB)
+```
+Checked **RED** by stashing the four components alone against the finished
+tests: **8 of the 10 fail**. The two that pass before and after do so by
+design — one pins the shape that was already right (a tablist rendered WITH its
+panels, which is what Settings and Tracking do and what nothing here may
+regress), the other pins that the fix does not swallow `ArrowDown`/`PageDown`.
+The one skipped test is the pre-existing `store-contract.test.ts > contrat —
+postgres`, which needs a database. `VulnPipe/` untouched, its suite not run. No
+model key and no database needed: this is all component rendering under jsdom.
+The measurement probe was deleted after use; `npm install` did **not** rewrite
+`package-lock.json` this time.
+
 ## 2026-09-12 — Saturday · Interface, clarity, accessibility
 
 **Subject**: the focus ring — the one thing somebody working at the keyboard

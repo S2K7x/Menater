@@ -29,7 +29,14 @@
  * ============================================================================
  */
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+} from 'react';
 
 import { Icon, type IconName } from './Icon.tsx';
 
@@ -54,12 +61,25 @@ export function SectionTabs<Id extends string>({
   active,
   onChange,
   label,
+  panelId,
 }: {
   items: SectionTabItem<Id>[];
   active: Id;
   onChange: (id: Id) => void;
   /** Nom du groupe pour les lecteurs d'écran. */
   label: string;
+  /**
+   * ONE shared region instead of one panel per tab.
+   *
+   * The default — every tab pointing at `soc-subpanel-<its own id>` — is what
+   * Settings and Tracking do: a `SectionPanel` per tab, all mounted, all but
+   * one `hidden`. The Workflow section is not that shape: its tabs choose
+   * which workflow the SINGLE region below them describes, and rendering six
+   * panels of which five are empty would be inventing content to satisfy a
+   * pattern. Several controls may point at one region; what is not allowed is
+   * pointing at a region that does not exist.
+   */
+  panelId?: string;
 }) {
   const bar = useRef<HTMLDivElement>(null);
 
@@ -131,6 +151,54 @@ export function SectionTabs<Id extends string>({
     el?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
   }, [active]);
 
+  /**
+   * The arrows choose a tab; Tab leaves the bar.
+   *
+   * ==========================================================================
+   * THE DEFECT THIS FIXES
+   *
+   * `role="tab"` does not DESCRIBE a button, it ANNOUNCES a contract: a
+   * tablist is ONE stop in the tab order, and the arrow keys choose inside
+   * it. A screen reader says that contract out loud — "tab 3 of 10" — before
+   * anyone has pressed anything. Nothing here implemented it: the ten
+   * sections of Settings were ten stops before the first setting, and the
+   * arrow key we had just promised did nothing — measured, mounted with
+   * data. A key you have just been told
+   * works, that does not work, does not read as a missing feature. It reads as
+   * a broken page.
+   *
+   * AUTOMATIC ACTIVATION: the arrow moves the selection, not only the focus.
+   * Every panel is already mounted (rule 2 above), so walking the bar loads
+   * nothing — and it is exactly what a click already does.
+   *
+   * ONLY FOUR KEYS ARE TAKEN. Up and down stay with the browser: the bar is
+   * sticky above content that scrolls, and swallowing them would take the
+   * page's own scrolling away from somebody navigating by keyboard.
+   * ==========================================================================
+   */
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>, from: number) => {
+    const last = items.length - 1;
+    let to: number;
+    switch (event.key) {
+      // Wrapping at both ends: a bar that stops dead makes the tenth
+      // section the hardest one to reach, and it is the one the setup
+      // checklist sends people to.
+      case 'ArrowRight': to = from === last ? 0 : from + 1; break;
+      case 'ArrowLeft': to = from === 0 ? last : from - 1; break;
+      case 'Home': to = 0; break;
+      case 'End': to = last; break;
+      default: return;
+    }
+    event.preventDefault();
+    if (to === from) return;
+    onChange(items[to].id);
+    // Focus FOLLOWS the selection, or the next arrow key would start again
+    // from where it was. We index the rendered list rather than building a
+    // selector out of the id: a workflow's id (`01-ingestion`) does not have
+    // to be a valid CSS identifier for the bar to work.
+    bar.current?.querySelectorAll<HTMLElement>('[role="tab"]')[to]?.focus();
+  };
+
   return (
     // Deux elements : l'enveloppe porte le collant et les degrades, la barre
     // porte le defilement. Un seul ne peut pas faire les deux — un pseudo
@@ -141,7 +209,7 @@ export function SectionTabs<Id extends string>({
     // qui défile horizontalement au lieu de la barre.
     <div className="soc-subnav-wrap" data-edges={edges}>
     <div className="soc-subnav" role="tablist" aria-label={label} ref={bar}>
-      {items.map((item) => {
+      {items.map((item, index) => {
         const isActive = item.id === active;
         return (
           <button
@@ -150,9 +218,12 @@ export function SectionTabs<Id extends string>({
             role="tab"
             id={`soc-subtab-${item.id}`}
             aria-selected={isActive}
-            aria-controls={`soc-subpanel-${item.id}`}
+            aria-controls={`soc-subpanel-${panelId ?? item.id}`}
+            // Roving tabindex: only the selected tab is a stop.
+            tabIndex={isActive ? 0 : -1}
             className={`soc-subtab ${isActive ? 'soc-subtab-active' : ''}`}
             onClick={() => onChange(item.id)}
+            onKeyDown={(event) => onKeyDown(event, index)}
           >
             {item.icon ? <Icon name={item.icon} size={14} /> : null}
             <span className="soc-subtab-text">
@@ -182,17 +253,27 @@ export function SectionTabs<Id extends string>({
 export function SectionPanel({
   id,
   active,
+  labelledBy,
   children,
 }: {
   id: string;
   active: boolean;
+  /**
+   * The tab that NAMES this panel, when it is not the one carrying its id.
+   *
+   * One panel per tab names itself. A SHARED region — the Workflow section,
+   * where six tabs describe the same frame — has no fixed name: it is named
+   * by the selected tab, and that name moves with it. Without this the region
+   * would announce itself under a heading that is no longer what it shows.
+   */
+  labelledBy?: string;
   children: ReactNode;
 }) {
   return (
     <div
       role="tabpanel"
       id={`soc-subpanel-${id}`}
-      aria-labelledby={`soc-subtab-${id}`}
+      aria-labelledby={`soc-subtab-${labelledBy ?? id}`}
       hidden={!active}
     >
       {children}
