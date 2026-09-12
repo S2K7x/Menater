@@ -23,7 +23,7 @@
   --bg:#232830; --surface:#2b313a; --surface-2:#333a45; --panel:#1f242b; --hero:#171b21;
   --fg:#f2f4f7; --muted:#98a2b3; --faint:#757f8c;
   --line:#3d4550; --line-strong:#4d5663;
-  --accent:#c3f53c; --accent-dim:#9dc72a; --accent-fg:#171b21;
+  --accent:#c3f53c; --accent-dim:#9dc72a; --accent-fg:#171b21; --focus:#c3f53c;
   --red:#ff6b6b; --red-bg:#3a2226; --orange:#ffb020; --orange-bg:#382c18;
   --green:#6ee7a0; --green-bg:#1d3329; --blue:#7cc4ff; --blue-bg:#1b2b3a; --grey:#8d97a5;
   --shadow:0 18px 40px rgba(0,0,0,.35);
@@ -33,7 +33,7 @@
   --bg:#3b3d2a; --surface:#45472f; --surface-2:#515338; --panel:#33351f; --hero:#24261a;
   --fg:#f5e7bd; --muted:#bfb389; --faint:#9d9672;
   --line:#565839; --line-strong:#6d6f47;
-  --accent:#c31f1b; --accent-dim:#a01916; --accent-fg:#f5e7bd;
+  --accent:#c31f1b; --accent-dim:#a01916; --accent-fg:#f5e7bd; --focus:#f5e7bd;
   --red:#ff997c; --red-bg:#4a2a1f; --orange:#f0b429; --orange-bg:#47381a;
   --green:#b7d44a; --green-bg:#35401f; --blue:#9fc3c9; --blue-bg:#29383a; --grey:#a99f7c;
   --shadow:0 18px 40px rgba(0,0,0,.45);
@@ -43,7 +43,7 @@
   --bg:#1f31c4; --surface:#2739d6; --surface-2:#3548e6; --panel:#182699; --hero:#111c78;
   --fg:#ffffff; --muted:#b9c4ff; --faint:#909ff5;
   --line:#3d50e0; --line-strong:#5568f5;
-  --accent:#c8f24b; --accent-dim:#a5cc33; --accent-fg:#16249b;
+  --accent:#c8f24b; --accent-dim:#a5cc33; --accent-fg:#16249b; --focus:#c8f24b;
   --red:#ffb2a8; --red-bg:#3a2a92; --orange:#ffcf5c; --orange-bg:#35318f;
   --green:#c8f24b; --green-bg:#23408c; --blue:#a8e5ff; --blue-bg:#1e3bb4; --grey:#9fabf0;
   --shadow:0 18px 40px rgba(10,20,100,.5);
@@ -53,7 +53,7 @@
   --bg:#7a1c08; --surface:#8f2410; --surface-2:#a32d15; --panel:#5e1406; --hero:#3d0d03;
   --fg:#fff3e4; --muted:#f5bfa0; --faint:#e0a58a;
   --line:#b03a1c; --line-strong:#d04f28;
-  --accent:#ffdd1c; --accent-dim:#d9b800; --accent-fg:#5e1406;
+  --accent:#ffdd1c; --accent-dim:#d9b800; --accent-fg:#5e1406; --focus:#ffdd1c;
   --red:#ffa796; --red-bg:#6d1a08; --orange:#ffdd1c; --orange-bg:#6b2a08;
   --green:#9ce5a8; --green-bg:#2f4a1c; --blue:#7fd4ff; --blue-bg:#1d3a5c; --grey:#e0a487;
   --shadow:0 18px 40px rgba(60,10,0,.5);
@@ -63,7 +63,7 @@
   --bg:#f4f1ea; --surface:#ffffff; --surface-2:#ebe7dd; --panel:#fbf9f5; --hero:#e4dfd2;
   --fg:#16150f; --muted:#5c5a51; --faint:#8a877c;
   --line:#d9d4c8; --line-strong:#bdb7a8;
-  --accent:#e01e0b; --accent-dim:#b81909; --accent-fg:#ffffff;
+  --accent:#e01e0b; --accent-dim:#b81909; --accent-fg:#ffffff; --focus:#e01e0b;
   --red:#c71e10; --red-bg:#fbe2de; --orange:#9b5d00; --orange-bg:#fbeed6;
   --green:#1e7643; --green-bg:#dcf0e3; --blue:#17548f; --blue-bg:#dde9f7; --grey:#6f6c62;
   --shadow:0 12px 28px rgba(22,21,15,.12);
@@ -73,7 +73,7 @@
   --bg:#16181c; --surface:#1e2126; --surface-2:#282c33; --panel:#101216; --hero:#0a0b0e;
   --fg:#f0f2f5; --muted:#9aa1ad; --faint:#6a7280;
   --line:#2c3038; --line-strong:#3b414b;
-  --accent:#1269f5; --accent-dim:#0955cf; --accent-fg:#ffffff;
+  --accent:#1269f5; --accent-dim:#0955cf; --accent-fg:#ffffff; --focus:#f0f2f5;
   --red:#f4636b; --red-bg:#33191d; --orange:#f0a63c; --orange-bg:#33260f;
   --green:#34c77b; --green-bg:#122e20; --blue:#56a8ff; --blue-bg:#14263a; --grey:#838b98;
   --shadow:0 18px 40px rgba(0,0,0,.55);
@@ -108,7 +108,11 @@ body {
 
 a { color: var(--accent); text-underline-offset: 3px; text-decoration-thickness: 1px; }
 a:hover { color: var(--accent-dim); }
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+/* `--focus`, NOT `--accent`. The accent is a dark red on Punk and an
+   application blue on Dark: measured against the surfaces a ring lands on, both
+   fall under the 3:1 floor of WCAG 1.4.11 — 1.24:1 on Punk against the hairline
+   beside it. Same token, same reason, as the console. */
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 2px; }
 
 h1, h2, h3 { font-family: var(--display); font-weight: 400; margin: 0; text-wrap: balance; }
 p { margin: 0; }

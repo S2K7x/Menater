@@ -173,6 +173,7 @@ inheriting three tokens produces an accident invisible on review.
 | `--accent` | The one accent. **Waiting for a human**, primary action, links |
 | `--accent-dim` | Its hover/pressed state |
 | `--accent-fg` | Text laid **on** the accent. Follows the accent's contrast, not the background's — a bright accent wants dark text |
+| `--focus` | The focus ring. Same kind of role as `--accent-fg`: it follows the contrast of the **surfaces it is drawn on**, not the theme's identity. It is the accent on four themes and the type colour on the two where the accent measures under 3:1 |
 | `--red` `--orange` `--green` `--blue` `--grey` | The risk palette |
 | `--*-bg` | The same, as a pill ground |
 | `--shadow` | Elevation. Discreet on light themes: a dark theme's shadow reads as dirt on cream |
@@ -206,11 +207,13 @@ and screenshots use it. The other five are the user's choice, not the brand's.
 | `--accent-fg` on `--accent` | 4.5:1 |
 | Risk palette on panels, and inside its own `--*-bg` pills | 4.5:1 |
 | `--muted`, `--faint` | 3:1 |
+| `--focus` on every surface a ring lands on, **and on `--line`** | 3:1 |
 | Every token present in every theme | required |
 
 This test is not ceremony. It caught Attck's failure red at **2.5:1** — on the
-screen that depends on red most — and an original defect in the historic theme,
-`--faint` at 2.77:1 on panels. **A palette lifted straight from a poster gives
+screen that depends on red most — an original defect in the historic theme,
+`--faint` at 2.77:1 on panels, and the focus ring drawn in `--accent` at
+**1.24:1** on Punk. **A palette lifted straight from a poster gives
 ravishing, unreadable pastels: a reference image is lit and composed; its
 colours laid down as interface surfaces carry nothing. Lower the values, keep
 the hue.**

@@ -213,7 +213,7 @@ code, .soc-mono { font-family: var(--mono); }
   flex: 1; min-width: 200px; background: var(--panel); border: 1px solid var(--line);
   color: var(--fg); font-family: var(--mono); font-size: 0.78rem; padding: 8px 10px;
 }
-.soc-search:focus { outline: none; border-color: var(--accent); }
+.soc-search:focus { outline: none; border-color: var(--focus); }
 
 /* --- File de triage ------------------------------------------------------- */
 
@@ -417,7 +417,7 @@ code, .soc-mono { font-family: var(--mono); }
   background: var(--panel); border: 1px solid var(--line); color: var(--fg);
   font-family: var(--mono); font-size: 0.78rem; padding: 8px 8px;
 }
-.soc-sort select:focus { outline: none; border-color: var(--accent); }
+.soc-sort select:focus { outline: none; border-color: var(--focus); }
 
 .soc-warn-note {
   display: block; margin-top: 6px; color: var(--orange); font-size: 0.78rem;
@@ -536,7 +536,7 @@ code, .soc-mono { font-family: var(--mono); }
   width: 100%; background: var(--hero); border: 1px solid var(--line);
   color: var(--fg); font-family: var(--sans); font-size: 0.86rem; padding: 10px 10px;
 }
-.soc-field input:focus, .soc-field textarea:focus { outline: none; border-color: var(--accent); }
+.soc-field input:focus, .soc-field textarea:focus { outline: none; border-color: var(--focus); }
 .soc-field textarea { min-height: 74px; resize: vertical; }
 
 .soc-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
@@ -724,7 +724,7 @@ code, .soc-mono { font-family: var(--mono); }
 }
 .soc-doc summary::-webkit-details-marker { display: none; }
 .soc-doc summary:hover { background: var(--surface-2); }
-.soc-doc summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.soc-doc summary:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 
 .soc-doc-num {
   font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.14em;
@@ -830,7 +830,7 @@ code, .soc-mono { font-family: var(--mono); }
 }
 .soc-term summary::-webkit-details-marker { display: none; }
 .soc-term summary:hover { border-bottom-color: var(--accent); color: var(--accent); }
-.soc-term summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.soc-term summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 /*
  * Two classes, not one: the bubble appears inside containers that impose
@@ -925,7 +925,7 @@ code, .soc-mono { font-family: var(--mono); }
 }
 .soc-info > summary::-webkit-details-marker { display: none; }
 .soc-info > summary:hover { color: var(--accent); border-color: var(--accent); }
-.soc-info > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.soc-info > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .soc-info[open] > summary { color: var(--accent); border-color: var(--accent); }
 
 /*
@@ -1375,7 +1375,7 @@ code, .soc-mono { font-family: var(--mono); }
   stroke-width: 1;
 }
 .soc-wf-node:hover rect { stroke: var(--fg); }
-.soc-wf-node:focus-visible rect { outline: 2px solid var(--accent); outline-offset: 2px; }
+.soc-wf-node:focus-visible rect { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 /* THE EFFECT IS THE FIRST INFORMATION: it decides what is replayed after a
    failure. A `write` is never replayed — it becomes "undetermined". */
@@ -1991,7 +1991,7 @@ code, .soc-mono { font-family: var(--mono); }
   color: var(--fg); background: var(--hero);
   border: 1px solid var(--line); border-radius: var(--radius);
 }
-.soc-ai-composer textarea:focus { outline: none; border-color: var(--accent); }
+.soc-ai-composer textarea:focus { outline: none; border-color: var(--focus); }
 
 .soc-ai-send {
   flex-shrink: 0; width: 38px; height: 38px; border-radius: 50%;
@@ -2244,7 +2244,7 @@ h3 { font-size: 0.86rem; letter-spacing: 0.06em; }
 }
 .soc-fold > summary::-webkit-details-marker { display: none; }
 .soc-fold > summary:hover { color: var(--accent); }
-.soc-fold > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.soc-fold > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 /* The chevron is drawn, not loaded, and rotates on open — the affordance
    people already read as "there is more behind this". */

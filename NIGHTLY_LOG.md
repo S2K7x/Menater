@@ -4,6 +4,150 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-12 — Saturday · Interface, clarity, accessibility
+
+**Subject**: the focus ring — the one thing somebody working at the keyboard
+navigates by — was drawn in `var(--accent)` by every rule that draws one, and on
+two of the six themes the accent measures under the 3:1 floor an interface
+element needs.
+
+**Result**: PR #13 (branch `claude/nightly-2026-09-12-focus-ring-contrast`).
+
+**Why this subject**: the suite was green on the default branch first (1022
+passed, 1 skipped, typecheck clean), so the calendar rule did not preempt. Both
+nightly PRs still open (#9, #11) carry code already merged into `main` by #12, so
+there was nothing to conflict with; nothing here touches their files anyway.
+Saturday's reservoir is interface and accessibility, and this is priority (2), a
+real defect with a measurement, not (6) a clarity pass.
+
+**How it was found**, because the method is the transferable part. CLARITY § 7's
+own instruction — mount the screens with data of the right shape rather than
+reviewing them empty — as a throwaway vitest probe that rendered eight panels
+and swept the DOM for heading jumps, unnamed controls, duplicate ids, dangling
+`aria-*` references and closed `<details>` inside accessible names. It found two
+things, and **the one it reported was not the one that mattered**:
+
+- What it flagged: five `HIDDEN-IN-NAME` hits on `<th>` and `<h3>`. **False
+  positives** — jsdom applies no cascade, and `:not([open]) .soc-term-bubble
+  { display: none }` covers `.soc-term` and `.soc-info` both. That trap is
+  properly closed; do not reopen it.
+- What it flagged and IS real, but is not this PR: `IngestionPanel` and
+  `WorkflowPanel` use `SectionTabs` and render **no `SectionPanel` at all**, so
+  nine `aria-controls` on the Ingestion tab point at elements that do not exist;
+  and `SectionTabs` emits `role="tab"` with no roving tabindex and no arrow-key
+  handling, on all four call sites. Written down below rather than fixed.
+- What it did NOT flag, and what this PR is about: the probe cannot see colour.
+  Reading the focus rules by hand while chasing the tab defect showed all
+  fifteen of them written in `var(--accent)` — and the accent is a **dark red on
+  khaki** on Punk.
+
+**Measured**, WCAG 1.4.11 (3:1 for a non-text interface element), every surface
+a ring can land on plus the hairline it replaces on a field:
+
+| theme | worst ratio for `--accent` as a ring | |
+|---|---|---|
+| grayed | 7.59 | ok |
+| punk | **1.24** (on `--line`), 1.61 on `--surface` | **fails** |
+| blued | 4.75 | ok |
+| attck | 4.50 | ok |
+| acme | 3.26 | ok, thinnest margin of the six |
+| dark | **2.75** (on `--line`), 2.91 on `--surface-2` | **fails** |
+
+**What I learned**:
+
+- **The contrast suite measured everything a reader looks at and nothing an
+  operator navigates by.** `themes.test.ts` has five families of ratios — text
+  on ground, text on panel, text on `--hero`, text on the accent, the risk
+  palette, secondary mentions — and every one of them is TEXT. The ring is an
+  *interface* element and had no assertion at all. Same shape as the `--hero`
+  defect this file already records: a token used for a job nobody had measured
+  it for.
+- **The four console fields delete the browser's own ring first**
+  (`.soc-search`, `.soc-sort select`, `.soc-field input/textarea`,
+  `.soc-ai-composer textarea`: `outline: none`, replaced by a 1 px border
+  swap). So on Punk there was no fallback — tabbing into the field where you
+  type the ingestion secret changed nothing anyone could see. That is what
+  takes this from "thin margin" to "no indicator".
+- **The accent was never the right colour for this anyway**, and `styles.css`
+  says so in its own rule 4: the accent means *something is waiting for a
+  human*. A ring on every control spends it everywhere.
+- **The site is a fourth copy of the palette and no test compared it.**
+  `site/shared.css` rewrites the six palettes token for token and says in a
+  comment that dropping one "would make the two drift" — with nothing checking
+  the sentence. Compared them: identical apart from `--shadow`'s leading zeros.
+  A token added on the console side only is exactly that drift, so the site got
+  the same fix and the comparison is now a test.
+
+**Do not redo**:
+
+- **Do not repaint all six rings.** Four themes measure fine with their accent
+  and keeping them is what makes the change targeted rather than a redesign.
+  The RED check that matters is the one that puts the accent back on Punk and
+  Dark only: it fails 2 tests of 66 and names the real numbers.
+- **Do not turn the four `outline: none` rules into real rings in this PR.**
+  The border swap measures fine once the colour does (cream on Punk is 5.98:1
+  against the hairline it replaces), and changing the SHAPE of the indicator is
+  a design decision on all six themes, not a contrast fix.
+- **Do not assert the site and the console are byte-identical.** `--shadow` is
+  written `rgba(0,0,0,.55)` on one side and `rgba(0, 0, 0, 0.55)` on the other.
+  The test normalises whitespace and the leading zero of a decimal: two ways of
+  typing the same colour are not a palette drift, and making one file match the
+  other's typing would be reformatting a file for nothing.
+- **Do not re-run the `HIDDEN-IN-NAME` sweep and believe it.** jsdom has no
+  cascade; a closed `<details>` in a heading is hidden by CSS the sweep cannot
+  see. Two of this project's screen tests read `styles.css` directly for exactly
+  that reason.
+
+**Found and NOT fixed** — the tab pattern, which is a night of its own:
+
+- `SectionTabs` emits `role="tab"` + `aria-controls="soc-subpanel-<id>"`.
+  `SettingsPage` and `TracePanel` render the matching `SectionPanel`;
+  **`IngestionPanel` and `WorkflowPanel` never do** — Ingestion re-implements
+  the `hidden` half as three bare `<div hidden={…}>`. Nine dangling IDREFs on
+  one screen, and a tab whose panel has no role and no accessible name.
+- No roving tabindex and no arrow/Home/End handling anywhere, so a `role="tab"`
+  announces a keyboard contract the component does not keep. On Settings that
+  is ten tab stops before the first setting.
+- Both are in one component plus two call sites. Left out because they are a
+  different defect from the one this PR measures, and because the WorkflowPanel
+  case needs a decision — its "tabs" select which workflow to inspect into one
+  shared region, so either it renders six panels of which five are empty, or it
+  stops claiming the tab pattern. That is a design call, not a fix.
+
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 1035 passed | 1 skipped  (1022 before; +13 new, nothing skipped or weakened)
+npm run build       # dist built, 472.18 kB / 139.73 kB gzip (unchanged: CSS-only change)
+```
+Checked **RED** three ways, because the first way proved the weakest thing:
+1. with the finished tests and the three stylesheets stashed: **13 of 13 fail** —
+   but six of them fail on a MISSING token, which proves nothing about the
+   measurement;
+2. so, with `--focus` put back to the accent on Punk and Dark alone: **exactly 2
+   fail**, `expected 1.87… to be greater than or equal to 3` and `expected
+   2.91… to be greater than or equal to 3`. That is the assertion doing its job,
+   and the other four themes passing is what proves the change is targeted;
+3. and the two site tests, red on a reverted site sheet: the parity test names
+   `--focus dans « punk »: expected undefined to be '#f5e7bd'`, the sweep names
+   `site/shared.css — :focus-visible`.
+
+The sweep test (`aucune règle de mise au point ne dessine en var(--accent)`)
+listed all **15** offending rules before the fix, across all three sheets.
+
+`VulnPipe/` untouched — `dashboard/src/vulnpipe/styles.css` is the console's
+embedded section, not the analysis service, which has no CSS at all. No model
+key and no database needed: the whole subject is static stylesheets.
+
+**Note on the branch name**: this session was handed `claude/great-pascal-2azgk7`
+by its environment, and NIGHTLY.md § 5 mandates
+`claude/nightly-YYYY-MM-DD-short-subject`. Followed NIGHTLY.md, as every entry
+below did; the `claude/` prefix the platform requires is satisfied either way.
+
+**Note**: `npm install` did **not** rewrite `dashboard/package-lock.json` this
+time — the first entry in four where it did not. Nothing was reverted.
+
 ## 2026-09-11 (third run) — Friday · Unblocking PR #9 and PR #11
 
 **Subject**: both open PRs were `mergeable_state: dirty` and neither could be

@@ -223,7 +223,7 @@
 }
 
 .vp-embed input:focus-visible, .vp-embed button:focus-visible, .vp-embed [role='tab']:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
@@ -983,7 +983,7 @@
 
 .vp-switch input:checked + .vp-switch-track { background: var(--accent); border-color: var(--accent); }
 .vp-switch input:checked + .vp-switch-track .vp-switch-knob { transform: translateX(17px); background: var(--accent-fg); }
-.vp-switch input:focus-visible + .vp-switch-track { outline: 2px solid var(--accent); outline-offset: 2px; }
+.vp-switch input:focus-visible + .vp-switch-track { outline: 2px solid var(--focus); outline-offset: 2px; }
 .vp-switch input:disabled + .vp-switch-track { opacity: 0.45; }
 
 .vp-inline-field { display: flex; align-items: center; gap: 8px; }
@@ -1306,7 +1306,7 @@
 }
 
 .vp-action:hover { border-color: var(--accent); color: var(--accent); }
-.vp-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.vp-action:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 /* `align-items: flex-start`: without it the button stretches across the whole
    column and takes on the look of a banner rather than an action. */
@@ -1328,7 +1328,7 @@
   font-size: 0.94rem;
 }
 
-.vp-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.vp-select:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 /* Report export: two gestures, copy and download, in the header. */
 .vp-report-export {
@@ -1380,7 +1380,7 @@
 }
 
 .vp-status-choice:hover { border-color: var(--accent); color: var(--accent); }
-.vp-status-choice:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.vp-status-choice:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 .vp-status-note {
   flex-basis: 100%;
@@ -1406,7 +1406,7 @@
   resize: vertical;
 }
 
-.vp-status-textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.vp-status-textarea:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 .vp-status-form-actions { display: flex; gap: 10px; align-items: center; }
 .vp-status-stale { margin: 12px 0 0; }
 
