@@ -183,7 +183,9 @@ migration nobody was doing. The colour was right about the data and wrong about
 the situation. **Check whether the question applies before showing the answer.**
 
 Contrast is tooled, never judged by eye: `theme/themes.test.ts` computes the
-WCAG ratios for all six themes.
+WCAG ratios for all six themes — **text and interface both**. The focus ring was
+the hole: the suite measured every colour a reader looks at and not the one a
+keyboard user navigates by.
 
 ---
 
@@ -264,6 +266,7 @@ deletion.
 | "Checking" treated as "broken" | The console has four diagnostic states so the undetermined is not a failure |
 | The same help printed once per component instance | The provider form renders twice, so its two help paragraphs appeared twice each. Invisible in the code, obvious on screen |
 | A number that skips (`04, 05, 06, 07, 10`) | Number by **reading order**, and keep it stable under a filter |
+| The focus ring drawn in `--accent` | The accent is reserved for *waiting for a human*, and on two of the six themes it measures under 3:1 against the surfaces a ring lands on — 1.24:1 on Punk against the very border it replaces. A ring is an **interface** element (WCAG 1.4.11), not text: `--focus` is its own role token, and the suite measures it |
 
 The full table, with the story behind each, is in **CLAUDE.md**.
 
