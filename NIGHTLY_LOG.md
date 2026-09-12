@@ -11,7 +11,7 @@ navigates by — was drawn in `var(--accent)` by every rule that draws one, and 
 two of the six themes the accent measures under the 3:1 floor an interface
 element needs.
 
-**Result**: PR opened (branch `claude/nightly-2026-09-12-focus-ring-contrast`).
+**Result**: PR #13 (branch `claude/nightly-2026-09-12-focus-ring-contrast`).
 
 **Why this subject**: the suite was green on the default branch first (1022
 passed, 1 skipped, typecheck clean), so the calendar rule did not preempt. Both
