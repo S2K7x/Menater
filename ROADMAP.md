@@ -504,6 +504,44 @@ translation — that is a decision, not a mechanical pass.
 history; rewriting history is how you lose it.
 `NIGHTLY_LOG.md` moved to the root: it is memory about live code, not history.
 
+### D4 ✅ — The n8n sweep had checked one of the two catalogues
+
+`n8n-removed.test.ts` was written to close the family "a name that outlives the
+thing it named". It walks `src/i18n/console.ts`. **`server/i18n.ts` — the
+diagnostic, the chain notes and every route answer — was never in it**, and it
+had kept the VOCABULARY of what left even though it never kept the NAME, which
+is why a test forbidding `n8n` passed over all of it.
+
+| String | What it said |
+|---|---|
+| `api.webhookUnreachable` | *"Check that 01-Ingestion is **published** and the **instance** answers"* — a publish step this product does not have, and an instance it does not dial |
+| `api.approvalUnreachable`, `api.approvalRefused` | Relaying an approval to another product over HTTP. The engine runs in this process; `POST /api/approvals/:token` calls `engine.resume` |
+| `api.urlMissing`, `api.keyMissing`, `api.keyRefused`, `api.connected`, `api.answered`, `health.noApiKey` | An instance address, an API key and a 401 for a server nothing connects to |
+| `health.findingNothingPublished` | *"No workflow published: the pipeline processes nothing until all six are activated"* — a blocking finding that can never fire |
+
+**None of the ten was referenced by anything.** That is the point, and it is the
+same shape as R42: a typed catalogue refuses a key added on ONE side, and both
+sides of a dead key agree with each other perfectly. Four more were found in
+the console catalogue the same way (`health.injecting`,
+`health.workflowsKicker`, `trace.replayTitle`, `assistant.goToSettings`).
+
+Four strings were **live** and kept the word: `health.diagLede` listed checks
+the diagnostic stopped making, and the Health tab's workflow fold was titled
+*Publication* with six pills reading *published*. The diagnostic now describes
+what it actually runs — database and schema, the model key and the credentials,
+the node contract, recent runs, the entry-point probe — and the fold reads
+*Workflows in the engine*, *loaded*.
+
+Two rules in `n8n-removed.test.ts` hold it: **no publish vocabulary in either
+catalogue** (the Guide carved out by prefix, because it is where the product
+explains what it no longer has — and guarded by a second test, so deleting the
+explanation cannot silently widen the carve-out), and **no key either catalogue
+declares that no product code mentions**. That second rule is deliberately
+one-directional: it searches for the bare key NAME, so a key whose name collides
+with an ordinary word elsewhere (`answered`, `keyMissing`) reads as used. It
+caught twelve of tonight's fourteen dead keys; the other two were found by hand — it
+under-reports, and never flags a string that is really referenced.
+
 ---
 
 ## 3. Console and experience
@@ -1638,7 +1676,7 @@ Small, known, and written down so it is not rediscovered.
 | Subject | Detail |
 |---|---|
 | Two icon sets | `src/components/Icon.tsx` (console) and `src/vulnpipe/components/Icon.tsx` (analysis) have two APIs and two class conventions. Mergeable, not urgent |
-| Dead sections in the analysis dictionary | `t.app`, `t.glossary`, `t.severity` have not been read since the landing page went away |
+| Dead sections in the analysis dictionary | `t.app`, `t.glossary`, `t.severity` have not been read since the landing page went away. **D4 built the rule that proves it** — `n8n-removed.test.ts` flags a catalogue key no product code mentions — and deliberately pointed it at the two console catalogues only: turning it on `src/i18n/dictionary.ts` means removing whole sections, which is a pass of its own, not a line in a documentation sweep |
 | Flaw statuses in `localStorage` | See V2.5 |
 | Coupling to n8n node names | Accepted and tested (the "console contract" diagnostic), but still fragile |
 | 15 s snapshot cache | Enough today; to revisit with S1.4 |

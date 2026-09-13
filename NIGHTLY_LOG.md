@@ -4,6 +4,156 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-13 (second run) — Sunday · Maintenance and state of the project
+
+**Subject**: `n8n-removed.test.ts` was written to stop a name outliving the
+thing it named, and it walks ONE of the two catalogues. `server/i18n.ts` kept
+the VOCABULARY without keeping the name — a live message telling an operator to
+check that a workflow is *published* — plus ten strings nothing referenced at
+all.
+
+**Result**: PR opened (branch `claude/great-pascal-maan0z` — see the branch note
+at the end).
+
+**Why this subject**: the suite was green on the default branch first (1022
+passed, 1 skipped, typecheck clean, build OK), so the calendar rule did not
+preempt. **PR #15 is already tonight's first run** — same date, same theme, and
+it took the assistant's stale capability list, which is the lead I had picked
+from the 2026-09-11 entry. Its own log entry recommends *"the published
+vocabulary cluster"* as the next one, and that is this. It is priority (2), a
+real defect: the entry-point failure message on Health → Test connectivity sent
+an operator looking for a publish step that left with n8n.
+
+**What I learned**:
+
+- **The stale strings did not contain the word `n8n`, which is exactly why the
+  n8n test passed over them.** It forbids the NAME. What survived is the
+  vocabulary: *published*, *activated*, *instance*, *access key*. A sweep
+  written against a name cannot catch the words that named the same thing.
+- **Ten server strings and four console ones were referenced by nothing.**
+  Verified three ways: a bare-name grep, `tsc --noEmit` after deleting them, and
+  the full suite. `server/routes/assistant.ts` already names the destination in
+  its `blocking` sentence, so deleting `assistant.goToSettings` removes a second
+  copy, not an affordance — checked before deleting, because a dead string can
+  also be the evidence of a missing one.
+- **A typed catalogue cannot see this class of defect at all.** It refuses a key
+  added on ONE side; both sides of a dead key agree with each other perfectly.
+  Same shape as R42 (`report.nothingFound`), one catalogue over.
+- **My own test vouched for the strings it was hunting.** The first draft
+  explained the seven dead keys in its header — and the rule went GREEN, because
+  the header is in a file the rule reads. Tests and comments are stripped from
+  the corpus now. Caught by running it, not by reading it.
+- **And then the second draft did it one notch in.** The console-catalogue rule
+  passed over four dead entries because `src/i18n/console.ts` was still in its
+  own search corpus: every key matched its own declaration. A rule that cannot
+  fail is worse than no rule. Both catalogues are excluded now, and the red check
+  below is what proved it — the first red run showed only 2 failures where 3
+  were due.
+- **The rule is one-directional on purpose.** It searches the bare key name, so
+  `api.answered` and `api.keyMissing` read as used because other catalogues
+  declare the same names. It caught 12 of tonight's 14; the other 2 were found
+  by hand. It under-reports and never flags a string that is really referenced —
+  the alternative is parsing accessor expressions, which fails the first time
+  somebody destructures.
+
+**Rendering checked, not reasoned**: a throwaway probe under `src/__probe__/`
+mounted `HealthPanel` in jsdom with a six-workflow report. The fold summary
+reads *"Workflows in the engine" / 6*, the six pills read *loaded*, the new
+`diagLede` renders whole, and `/publish|publicat/i` matches nowhere in the
+rendered text. Probe deleted.
+
+**Found and NOT fixed**, deliberately:
+
+- **`src/i18n/dictionary.ts` (the analysis catalogue) is not covered by the new
+  rule.** ROADMAP § 7 has recorded `t.app`, `t.glossary` and `t.severity` as
+  dead since the landing page went away; pointing the rule at that file means
+  deleting whole sections, which is a pass of its own. The § 7 row now says the
+  rule exists.
+- **`health.workflows[].active` is a constant.** `workflowList()` hardcodes
+  `true` and documents why, so the pill's false branch is unreachable and the
+  badge can only say one thing. Removing the field touches `types.ts`,
+  `snapshot.ts` and `HealthPanel.tsx` — a data change, where tonight's subject
+  is strings. The words are true now; the structure is a separate call.
+- **`.env.example` and `docker-compose.yml` carry half the credential
+  catalogue.** Measured while looking for a subject: of the twelve entries in
+  `MANAGED_CREDENTIALS`, six never reach the console container —
+  `ASSISTANT_APIKEY`, `ANTHROPIC_APIKEY`, `OPENAI_APIKEY`, `GEMINI_APIKEY`,
+  `SLACK_WEBHOOKURL`, `DISCORD_WEBHOOKURL`. So in the documented normal
+  installation the assistant and the two webhook transports cannot be
+  provisioned by deployment at all, only by clicking through Settings on every
+  fresh volume — and `.env.example` steers an operator to `SLACK_BOT_TOKEN`, the
+  path that needs an app, scopes and an install, while never mentioning the
+  webhook that CLAUDE.md calls "by far the fastest way". Separately, `TZ` appears
+  exactly once in the whole repository — in `.env.example` — and no service reads
+  it: a documented variable that reaches nothing. **This is a good next subject**
+  and it is pinnable by a test (every managed credential reachable, every
+  declared variable interpolated). Not taken tonight because naming six new
+  `.env` variables is a decision — reusing `ANTHROPIC_API_KEY` would silently
+  make one key pay for both the Code tab and the assistant.
+
+**Do not redo**:
+
+- **Do not let a test read its own file, or a catalogue read its own file.**
+  Both mistakes were made here, in that order, and both produce a green rule.
+- **Do not carve the Guide out by path.** `docs.sections.7.points.1` moves the
+  day a section is inserted above it. The carve-out is by `docs.` PREFIX, and a
+  second test asserts the Guide still contains a string saying there is no
+  publish step — without it, deleting the explanation would silently widen the
+  rule into "the Guide may say anything".
+- **Do not try to make the dead-key rule exact** by parsing `am.x` / `t.x`
+  accessors. Destructuring defeats it, and a rule that flags a live string is a
+  rule somebody deletes.
+- **Do not delete a dead string without reading its call site first.**
+  `assistant.goToSettings` looked like a dropped affordance and was not; the
+  reverse would have meant deleting the evidence of a real gap.
+
+**State of the week** (Sunday's other half):
+
+- **Seven days, five PRs still open**: #9 and #11 are stale (their commits are
+  on `main` through #12) and should simply be CLOSED; #13 and #14 are the
+  2026-09-12 interface work, with #14 stacked on #13; #15 is tonight's first
+  run. **Recommendation, unchanged from the last two Sundays and now more
+  urgent: merge #13 then #14, close #9 and #11.** Five open PRs on one small
+  repository is how the 2026-09-11 conflict happened, and it cost a whole
+  session.
+- **Still no CI workflow** (`.github/workflows` does not exist). The green
+  checks on every PR are Vercel and GitGuardian; **neither runs the suite**.
+  Said for the second Sunday running. It is a decision for a human about where
+  the suite runs, not a nightly-sized subject.
+- **Dependencies clean**: `npm audit` and `npm audit --omit=dev` both report
+  **0 vulnerabilities**. Nothing bumped, per NIGHTLY.md.
+- **`npm install` did not rewrite `package-lock.json`** this time either (npm
+  10.9.7, Node 22.22.2). The `@types/pg` dependencies/devDependencies mismatch
+  is still in the files and still left alone.
+- **The documentation-drift family is now four for four**: n8n (2026-09), the
+  assistant's capability list (#15, tonight), this one, and one left —
+  `src/i18n/dictionary.ts`. The shape repeats: a fix applied to the surface
+  somebody was looking at, and not to its neighbour. Same lesson as *"a fix
+  applied at the front door and not at the two buttons behind it"*.
+
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 1026 passed | 1 skipped  (1022 before; +4 new, nothing skipped or weakened)
+npm run build       # dist built, 472.15 kB / 139.74 kB gzip (was 472.18 / 139.73: strings changed)
+npm audit           # 0 vulnerabilities
+```
+Checked **RED** first, by stashing `server/i18n.ts`, `src/i18n/console.ts` and
+`HealthPanel.tsx` against the finished tests: **exactly 3 of the 4 new tests
+fail** — six strings naming a publish step, eight orphaned server keys, four
+orphaned console keys. The fourth passes before and after **by design**: it is
+the guard on the Guide carve-out, which must hold in both states or it is not a
+guard. `VulnPipe/` untouched, its suite not run. No model key and no database
+needed: both catalogues are pure data and the panel renders from a fixture.
+
+**Note on the branch name**: NIGHTLY.md § 5 asks for
+`claude/nightly-YYYY-MM-DD-short-subject`. This session was configured with
+`claude/great-pascal-maan0z` as its designated branch and an instruction not to
+push elsewhere, so that is where the work went — the same resolution as the
+2026-09-10 (second run) and 2026-09-13 entries. The `claude/` prefix, which is
+the part the platform requires, holds either way.
+
 ## 2026-09-11 (third run) — Friday · Unblocking PR #9 and PR #11
 
 **Subject**: both open PRs were `mergeable_state: dirty` and neither could be
