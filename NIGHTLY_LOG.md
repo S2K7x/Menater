@@ -12,7 +12,7 @@ the VOCABULARY without keeping the name — a live message telling an operator t
 check that a workflow is *published* — plus ten strings nothing referenced at
 all.
 
-**Result**: PR opened (branch `claude/great-pascal-maan0z` — see the branch note
+**Result**: PR #16 (branch `claude/great-pascal-maan0z` — see the branch note
 at the end).
 
 **Why this subject**: the suite was green on the default branch first (1022
