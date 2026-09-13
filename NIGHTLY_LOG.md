@@ -4,6 +4,158 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-13 — Sunday · Maintenance and state of the project
+
+**Subject**: the assistant's catalogue grew from seven tools to fourteen (X14)
+and **nothing that describes it moved** — not the system prompt, not the panel's
+note, not the Settings blurb, not the Guide, not `CLAUDE.md`, not `ROADMAP.md`'s
+own X1 row.
+
+**Result**: PR opened (branch `claude/great-pascal-ypwptf` — see the branch note
+at the end).
+
+**Why this subject**: the suite was green on the default branch first (1022
+passed, 1 skipped, typecheck clean, build OK), so the calendar rule did not
+preempt. Sunday's reservoir is *bring `CLAUDE.md` and `ROADMAP.md` back in line
+with what the code ACTUALLY does*, and the 2026-09-11 (second run) entry had
+already filed this one as **"worth a night on its own, and it is a correctness
+subject, not a cost one"**. It is priority (2), a real defect, not (3): the
+prompt block whose entire job is to tell the model what it may reach for
+described half the catalogue.
+
+Two PRs are open (#13, #14) and both are CSS/`SectionTabs`/theme work; this
+touches `server/assistant/` and `src/i18n/console.ts` and collides with neither.
+`main` already carries #9 and #11 through #12, so those two open PRs are stale
+rather than pending.
+
+**What I learned**:
+
+- **The prompt named ZERO of the fourteen tools.** I expected seven of fourteen
+  from the survey; measured, the block described seven *capabilities in prose*
+  and contained no tool NAME at all. So `stableSystemPrompt().includes(name)`
+  was false for all fourteen — the drift test went red on the whole catalogue,
+  not on the seven that arrived late.
+- **The schemas being sent is not the same thing as the prompt saying so.** The
+  fourteen schemas travel on every request, so the model is not blind. They
+  answer *how do I call this*; the prompt answers *what am I*, and a model told
+  "you have tools over: A…G" plans over A…G. The sharpest loss is
+  `explain_term`, which holds THIS console's glossary and exists so "what is
+  shadow mode?" is not answered from training — unmentioned, three lines under
+  an instruction not to answer from memory.
+- **Measured the cost rather than arguing it.** Stable prompt 3,393 → 4,009
+  characters (+616); the tool schemas are 5,087 characters and unchanged. The
+  addition is entirely inside the block the cache breakpoint sits after, so it
+  is a cache-write cost paid once per cache lifetime, not a per-request bill —
+  and it adds names, never descriptions, which is what the X14 pass bought.
+- **Three operator-facing sentences had frozen at the same seven**, and the
+  Guide's was flatly false: *"Seven lookups, and every answer about this
+  installation comes through one of them"*. Nothing breaks. What it costs is the
+  half the operator was never told about: nobody asks "is this a one-off or a
+  campaign?" (`find_similar`) or "what happened while I was away?"
+  (`get_timeline`) of an assistant they have been told does seven other things.
+- **`ROADMAP.md`'s X1 row listed two tools that do not exist** — `test_rule_match`
+  and `search_guide`. The real names are `test_rule` and `explain_term`. Nobody
+  had read that row against the code since X14 renamed them.
+- **The fix for a stale count is not a fresh count.** The operator copy now
+  describes REACH (a sentence that stays true when a fifteenth tool lands) and a
+  test forbids the COUNT. The prompt is the opposite — it names every tool,
+  because a prose summary cannot be checked and a list of names can.
+
+**Found and NOT fixed**, deliberately:
+
+- **`ROADMAP.md` line ~825**, under `### Delivered in this pass`: *"The console
+  has a working assistant: seven read-only tools"*. Left alone. It is a dated
+  record of the X1–X7 pass, and **X14's own before/after table says `Before | 10`**
+  — the two disagree about history, and I have no evidence to decide which is
+  right. Rewriting a historical claim to match a guess is worse than leaving the
+  contradiction visible.
+- **The prompt still carries its own mini-glossary** (`TWO RATES`, `SHADOW MODE`)
+  beside `explain_term`, which reads the real `GLOSSARY`. That is a second copy
+  of two definitions and it can drift. It is also the two that matter most and
+  it is cheap, so it stays — but it is the same shape as this defect, one level
+  in, and a future night could pin it with a test that the prompt's definitions
+  match the glossary entries.
+- **The four token-cost items** the 2026-09-11 survey filed remain unverified and
+  untouched: `mcp.ts:558` serialising every tool result twice, `chat.ts:166` /
+  `providers.ts:295` dropping `body.tools` on the final turn (a full cache miss
+  on the last call of every capped run), `explain_verdict` overlapping
+  `get_alert`, and `get_metrics.rate_meanings` restating the cached prefix. The
+  survey's fifth item is the one this night closed.
+
+**Do not redo**:
+
+- **Do not generate the capability list from `TOOLS` at runtime.** It looks like
+  the tidy fix and it is the wrong one twice over: it would restate the
+  descriptions the schemas already carry — the exact bill X14 spent a pass
+  reducing — and a generated list cannot go stale, so the drift test that is the
+  real deliverable would have nothing to catch. The names are written by hand,
+  grouped by question, and the test is what keeps them honest.
+- **Do not put a fresh number in the operator copy.** "Fourteen lookups" is this
+  same defect with a later expiry date. The copy describes reach; the test
+  forbids counts of `lookups|tools|getters` in the assistant strings.
+- **Do not delete the reverse-direction test** (`names no tool the catalogue does
+  not have`). It passes today and always has — it is a guard, not an assertion
+  about this change: a name left behind after a tool is removed costs the model a
+  step to discover, by calling something that answers `Unknown tool`.
+- **Ruled out: asserting the operator copy names every tool.** The three
+  sentences are prose about reach, not lists of identifiers; mapping tool → prose
+  would be brittle and would force the copy into a shape nobody wants to read.
+
+**State of the week** (Sunday's other half):
+
+- **Seven nights, seven PRs, and the merge queue is the weak point.** #9 and #11
+  sat `dirty` until a session was spent unblocking them (#12). #13 and #14 are
+  open now, from 2026-09-12, and #14 already builds on #13 — the same stacking
+  that produced the conflict last time. **Recommendation: merge #13 then #14
+  before another night touches `styles.css` or `themes.css`.**
+- **There is still no CI workflow** (`.github/workflows` does not exist). The
+  green checks on every PR are Vercel and GitGuardian; **neither runs the suite**.
+  "Checks passed" reads as "the tests ran", and they did not. This is the single
+  highest-value maintenance item left, and it is not a nightly-sized subject —
+  it is a decision for a human about where the suite runs.
+- **Dependencies are clean**: `npm audit` and `npm audit --omit=dev` both report
+  **0 vulnerabilities**. Nothing bumped, per NIGHTLY.md.
+- **`npm install` did NOT rewrite `package-lock.json` this time** (npm 10.9.7,
+  Node 22.22.2), unlike the four previous entries. The `@types/pg`
+  dependencies/devDependencies mismatch is still in the files; it simply did not
+  churn tonight. Still pre-existing, still left alone.
+- **The documentation-drift family is now three for three**: n8n (2026-09), the
+  "published" vocabulary cluster (still open, see the 2026-09-09 entry), and this
+  one. **Recommendation for next week: the "published" cluster.** It is live on
+  the Health tab — `diagLede` describes a diagnostic that no longer exists and
+  `workflowList()` hardcodes `active: true` so the badge is always the same word
+  — and it is the same shape as tonight, with the same fix available (a test that
+  refuses the word in user-facing strings).
+
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 1026 passed | 1 skipped  (1022 before; +4 new, nothing skipped or weakened)
+npm run build       # dist built, 472.51 kB / 139.86 kB gzip (was 472.18 / 139.73: the Guide string grew)
+npm audit           # 0 vulnerabilities
+```
+Checked **RED** first, by stashing `prompt.ts` and `console.ts` alone against the
+finished tests: **exactly 2 of the 4 new tests fail** — all fourteen tool names
+reported as unnamed in the prompt, and `docs.assistant.points[1]` reported for
+*"Seven lookups"*. The other two pass before and after **by design**: the
+reverse-drift guard, and the assertion that widening what the copy says it READS
+did not soften the claim that it cannot act. `VulnPipe/` untouched, its suite not
+run. No model key and no database needed: the prompt is a pure function and the
+panel test mocks `api.assistantState`.
+
+**Rendering checked, not reasoned**: a throwaway probe under `src/__probe__/`
+mounted `Assistant` in jsdom and asserted the new `readOnlyNote` reaches the DOM
+(it sits in `.soc-ai-scroll`, and `.soc-ai-note` has no clamp or fixed height, so
+a longer note scrolls and never pushes the panel). Probe deleted.
+
+**Note on the branch name**: NIGHTLY.md § 5 asks for
+`claude/nightly-YYYY-MM-DD-short-subject`. This session was configured with
+`claude/great-pascal-ypwptf` as its designated branch and an instruction not to
+push elsewhere, so that is where the work went — same resolution as the
+2026-09-10 (second run) entry. The `claude/` prefix, which is the part the
+platform requires, holds either way.
+
 ## 2026-09-11 (third run) — Friday · Unblocking PR #9 and PR #11
 
 **Subject**: both open PRs were `mergeable_state: dirty` and neither could be
