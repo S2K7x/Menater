@@ -28,6 +28,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { Assistant } from './Assistant.tsx';
 import { I18nProvider } from '../i18n/context.tsx';
+import { consoleDictionary } from '../i18n/console.ts';
 import { api } from '../lib/api.ts';
 
 function mount(page = { tab: 'queue' }) {
@@ -149,5 +150,63 @@ describe('the link into the Guide', () => {
     await userEvent.click(screen.getByRole('button', { name: /ask the assistant/i }));
     await userEvent.click(await screen.findByRole('button', { name: /how does it work/i }));
     expect(onOpenGuide).toHaveBeenCalled();
+  });
+});
+
+
+/**
+ * What the operator is TOLD the assistant can read.
+ *
+ * ============================================================================
+ * A COUNT IS A CLAIM WITH AN EXPIRY DATE
+ *
+ * Three screens describe the assistant's reach — the panel's own note, the
+ * Settings block beside the key, and the Guide — and all three were written
+ * when the catalogue held seven tools. It holds fourteen. The Guide's was the
+ * one that had gone flatly false: "Seven lookups, and every answer about this
+ * installation comes through one of them", followed by the seven from 2026-09.
+ *
+ * Nothing broke. It cost the operator the half they were never told about:
+ * nobody asks "is this a one-off or a campaign?" or "what happened while I was
+ * away?" of an assistant they have been told does seven other things.
+ *
+ * So the copy describes REACH and the test forbids the COUNT. A sentence about
+ * what it can read stays true when a fifteenth tool lands; a number does not,
+ * and this project has already paid twice for a number nobody remembered to
+ * move (`CLAUDE.md`: "A number that skips is worse than no number", "A name
+ * that outlives the thing it named").
+ * ============================================================================
+ */
+describe('what the operator is told the assistant can read', () => {
+  const d = consoleDictionary('en');
+  const guide = d.docs.sections.find((s) => s.id === 'assistant')!;
+
+  /** Every sentence on a screen that describes the assistant's reach. */
+  const claims: Array<[string, string]> = [
+    ['assistant.readOnlyNote', d.assistant.readOnlyNote],
+    ['assistant.cannotAct', d.assistant.cannotAct],
+    ['settings.assistantSection.reads', d.settings.assistantSection.reads],
+    ['settings.assistantSection.cannot', d.settings.assistantSection.cannot],
+    ['docs.assistant.lede', guide.lede],
+    ...guide.points.map((p, i) => [`docs.assistant.points[${i}]`, `${p.term} ${p.text}`] as [string, string]),
+  ];
+
+  it('counts none of them, because the catalogue outgrew the last count', () => {
+    const counted =
+      /\b(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|\d+)\s+(?:lookups?|tools?|getters?)\b/i;
+    const offenders = claims
+      .filter(([, text]) => counted.test(text))
+      .map(([path, text]) => `${path}: ${text.slice(0, 90)}`);
+    expect(offenders).toEqual([]);
+  });
+
+  /**
+   * The claim the copy exists to make, and the one that must survive the
+   * rewrite above: it reads, it does not act. Widening the description of what
+   * it READS must not quietly soften that.
+   */
+  it('still says on both screens that it can change nothing', () => {
+    expect(d.assistant.cannotAct).toMatch(/cannot|no tool/i);
+    expect(d.settings.assistantSection.cannot).toMatch(/There is no tool/i);
   });
 });

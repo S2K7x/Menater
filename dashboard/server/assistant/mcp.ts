@@ -231,7 +231,7 @@ function toolDescriptors() {
  *
  * The panel opens on suggestions because a blank box is why in-app assistants
  * get closed and never reopened. The same problem exists on the other side of
- * MCP, in a harsher form: a client shows seven tool NAMES and nothing about
+ * MCP, in a harsher form: a client shows fourteen tool NAMES and nothing about
  * what this server is for. Prompts are the protocol's answer — a client
  * surfaces them as commands the operator picks, so the good questions are
  * offered rather than remembered.
@@ -527,7 +527,7 @@ async function dispatch(msg: RpcRequest, locale: any): Promise<unknown | null> {
       return rpcResult(id, {});
 
     case 'tools/list':
-      // No pagination: seven tools fit in one page, and `nextCursor` is omitted
+      // No pagination: the whole catalogue fits in one page, and `nextCursor` is omitted
       // rather than sent as null, which some clients read as another page.
       return rpcResult(id, { tools: toolDescriptors() });
 

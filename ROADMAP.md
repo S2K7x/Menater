@@ -806,7 +806,7 @@ node catalogue.
 
 | # | Item | What it delivers |
 |---|---|---|
-| **X1** ✅ | **Tool catalogue** — `server/assistant/tools.ts`. Closed list, read-only, typed, each with a JSON-Schema parameter block: `list_alerts`, `get_alert`, `explain_verdict`, `get_trace`, `list_rules`, `test_rule_match`, `get_metrics`, `get_health`, `get_setup_state`, `search_guide` | The data floor. Every answer about this installation comes through here |
+| **X1** ✅ | **Tool catalogue** — `server/assistant/tools.ts`. Closed list, read-only, typed, each with a JSON-Schema parameter block. Ten at X1, **fourteen since X14**: `list_alerts`, `search_alerts`, `get_alert`, `find_similar`, `get_trace`, `get_timeline`, `explain_verdict`, `get_attention`, `get_health`, `get_metrics`, `list_rules`, `test_rule`, `get_setup_state`, `explain_term` | The data floor. Every answer about this installation comes through here |
 | **X2** ✅ | **Untrusted-text fencing** — `server/assistant/sanitize.ts`. `raw_log`, `extensions`, vendor rule names and enrichment free text are truncated, control-stripped and wrapped in a labelled fence the system prompt declares as data | The single defence the literature says actually matters, applied at the one place all untrusted text passes through |
 | **X2.1** ✅ | **The enrichment half of X2, actually implemented** — `fenceEnrichment`. The row above claimed enrichment free text was fenced; it was not. `get_alert` returned the three sources verbatim, so Shodan `hostnames`/`org`/`isp`, VirusTotal `meaningful_name`/`popular_threat_label` and a failed lookup's forwarded `reason` reached the model in the clear, through the MCP resource as well as the panel | Third-party prose *about an address an attacker chose* is attacker-influenced text. A claim in this file is what kept it invisible — see the `CLAUDE.md` traps table |
 | **X3** ✅ | **Agent loop** — `server/assistant/chat.ts`. OpenRouter tool-calling, bounded: max steps, max tool calls, hard deadline, one final turn with `tool_choice: none` so a run never ends mid-call | Multi-turn reasoning without an unbounded bill or a hung request |
@@ -819,6 +819,7 @@ node catalogue.
 | **X12** ✅ | **Optimisation pass** — prompt split for caching, tools of one turn run in parallel, per-request lookup memo, bounded tool results, retry with jitter on transient failures only |
 | **X11** ✅ | **Four providers, one key each** — OpenRouter, Anthropic, OpenAI, Google. A neutral transcript in the loop, one adapter per provider in `assistant/providers.ts`, and the provider chosen in Settings next to the key it reads |
 | **X10** ✅ | **Tests** — catalogue is read-only (asserted, not assumed), fencing survives a crafted `raw_log`, the loop stops at its caps, no secret in any tool output, no key ⇒ a named refusal | The assertions that keep X1 and X2 true after the next feature |
+| **X15** ✅ | **The catalogue's own description, brought back in line with it** — the system prompt's *"what you can do"* block named the seven tools of the X1 era in prose and was never moved by X14, so half the catalogue was sent as schemas and mentioned nowhere in the instructions that say what to reach for. It names all fourteen now, grouped by question, and `assistant.test.ts` fails in both directions. The same seven were frozen into three operator-facing sentences — the panel's note, the Settings blurb, and the Guide's *"Seven lookups"*, flatly false — which describe REACH now, with a test forbidding the COUNT | `explain_term` holds THIS console's glossary and exists so "what is shadow mode?" is not answered from training. It was the tool the prompt did not mention, three lines under an instruction not to answer from memory |
 
 ### Delivered in this pass
 
@@ -1109,7 +1110,7 @@ exact position the operator was already in.
 
 ### The section is complete
 
-X1 through X14 are delivered.
+X1 through X15 are delivered.
 
 ### What X does not do
 
