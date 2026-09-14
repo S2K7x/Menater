@@ -388,7 +388,7 @@ export function HealthPanel({
                 <li key={w.id}>
                   <span>{w.name}</span>
                   <span className={w.active ? 'soc-pill soc-pill-ok' : 'soc-pill soc-pill-neutral'}>
-                    {w.active ? h.published : h.unpublished}
+                    {w.active ? h.loaded : h.notLoaded}
                   </span>
                 </li>
               ))}

@@ -158,11 +158,6 @@ export interface ServerMessages {
     passwordFirst: string;
     /** Says WHAT is wrong with the inventory, never just "invalid". */
     inventoryRefused: (problems: string[]) => string;
-    urlMissing: string;
-    keyMissing: string;
-    keyRefused: string;
-    answered: (status: number) => string;
-    connected: (host: string) => string;
     hostMissing: string;
     portCaveat: string;
     caseNotFound: (id: string) => string;
@@ -177,10 +172,7 @@ export interface ServerMessages {
     engineUnavailable: string;
     approvalUnknownToken: string;
     approvalFailed: (error: string) => string;
-    approvalUnreachable: (error: string) => string;
     approvalSent: string;
-    approvalRefused: (status: number) => string;
-    webhookUnreachable: (error: string) => string;
     unknownRoute: string;
     replayUnknownCase: (id: string) => string;
     replayNoPayload: (id: string) => string;
@@ -192,7 +184,6 @@ export interface ServerMessages {
   /** État lisible de la source de données, affiché dans l'onglet Santé. */
   health: {
     forcedDemo: string;
-    noApiKey: string;
     noDatabase: string;
     auditLostRows: (n: number) => string;
     noRecentRuns: string;
@@ -204,7 +195,6 @@ export interface ServerMessages {
     findingNoAudit: string;
     findingModelUnavailable: string;
     findingReplay: string;
-    findingNothingPublished: string;
     findingBrokenChains: (n: number) => string;
     findingStalledChains: (n: number) => string;
     findingOrphanRuns: (n: number) => string;
@@ -374,11 +364,6 @@ const EN: ServerMessages = {
     // The whole list, not the first problem: fixing a pasted inventory one
     // round trip per line is how somebody gives up on the screen.
     inventoryRefused: (problems) => `Service inventory not saved. ${problems.join(' ')}`,
-    urlMissing: 'Instance address missing.',
-    keyMissing: 'Access key missing.',
-    keyRefused: 'Access key refused (401).',
-    answered: (status) => `The pipeline answered ${status}.`,
-    connected: (host) => `Connected to ${host}.`,
     hostMissing: 'Host missing.',
     portCaveat:
       'The port answers. That verifies neither the credentials nor that the tables exist \u2014 run the connectivity test on the Health tab for that.',
@@ -418,13 +403,7 @@ const EN: ServerMessages = {
     approvalFailed: (error) =>
       `The decision could not be recorded: ${error}. Without it the run will time `
       + 'out and the alert will be escalated.',
-    approvalUnreachable: (error) =>
-      `Could not reach the pipeline to relay the decision (${error}). Open the form directly to answer — otherwise the request expires and the alert is escalated with no action.`,
     approvalSent: 'Decision relayed to the pipeline.',
-    approvalRefused: (status) =>
-      `The pipeline refused the submission (HTTP ${status}). Open the form directly to answer.`,
-    webhookUnreachable: (error) =>
-      `Entry point unreachable: ${error}. Check that 01-Ingestion is published and the instance answers.`,
     unknownRoute: 'Unknown route.',
     replayUnknownCase: (id) =>
       `Case ${id} is outside the execution window: the console does not hold its original payload.`,
@@ -450,7 +429,6 @@ const EN: ServerMessages = {
 
   health: {
     forcedDemo: 'Sample data forced in the settings.',
-    noApiKey: 'No access key: set one in the Settings tab.',
     noDatabase:
       'No database configured: the engine is not mounted, so the console has no '
       + 'runs to read. Set the coordinates in Settings \u2192 Database. The sample '
@@ -469,8 +447,6 @@ const EN: ServerMessages = {
       'The model was unreachable on at least one case: a fallback verdict was issued, with no real analysis.',
     findingReplay:
       'Replay required — traces were lost. The Tracking tab lists them and replays them without opening the database.',
-    findingNothingPublished:
-      'No workflow published: the pipeline processes nothing until all six are activated.',
     findingBrokenChains: (n) =>
       `${n} broken chain(s): a step finished as "success" without handing over. See the Tracking tab.`,
     findingStalledChains: (n) =>

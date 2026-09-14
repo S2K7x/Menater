@@ -453,7 +453,6 @@ export interface ConsoleDictionary {
     injectTitle: string;
     injectLede: string;
     inject: string;
-    injecting: string;
     injectOk: (id: string) => string;
     injectKo: (body: string) => string;
     injectFailed: string;
@@ -465,11 +464,10 @@ export interface ConsoleDictionary {
     followDone: (id: string) => string;
     followLost: (id: string, seconds: number) => string;
     followOpen: string;
-    workflowsKicker: string;
     workflowsTitle: string;
     workflowsEmpty: string;
-    published: string;
-    unpublished: string;
+    loaded: string;
+    notLoaded: string;
   };
   /** Onglet Workflow : le pipeline lui-même, et ses variables. */
   workflow: {
@@ -931,7 +929,6 @@ export interface ConsoleDictionary {
     outsidePipeline: string;
     unattached: string;
 
-    replayTitle: string;
     replayLede: string;
     replay: string;
     replaying: string;
@@ -1032,7 +1029,6 @@ export interface ConsoleDictionary {
     cappedTools: string;
     cappedDeadline: string;
     notReady: string;
-    goToSettings: string;
     failed: string;
     emptyLede: string;
   };
@@ -1557,7 +1553,7 @@ const EN: ConsoleDictionary = {
     run: 'Run the test',
     running: 'Checking…',
     diagLede:
-      'Checks access to the pipeline, that the six workflows exist and are published, how they chain, their credentials, then sends a deliberately invalid message to the entry point. That probe creates no alert.',
+      'Checks the engine\u2019s database and that the schema is applied, the model key and the other credentials, that the node names the console reads still exist in the six workflows, whether anything has run lately, then sends a deliberately invalid message to the entry point. That probe creates no alert.',
     diagFailed: 'Test failed.',
     verdicts: {
       operational: 'Everything works',
@@ -1590,7 +1586,6 @@ const EN: ConsoleDictionary = {
     injectLede:
       'Sends a realistic alert into the pipeline, as if a security appliance had just produced it. Unlike the connectivity probe, this one creates a real case in the list.',
     inject: 'Inject',
-    injecting: 'Injecting…',
     injectOk: (id) => `Alert ${id} sent. The pipeline is handling it; the list updates in a few seconds.`,
     // THE SERVER'S SENTENCE, SHOWN AS IT IS. It already names the status and
     // the pipeline's own reason, so a frame around it repeated the status —
@@ -1608,11 +1603,12 @@ const EN: ConsoleDictionary = {
     followLost: (id, seconds) =>
       `${id} produced no step in ${seconds} s. It arrived nowhere: see the Tracking tab.`,
     followOpen: 'Open in the alert queue',
-    workflowsKicker: 'Six workflows',
-    workflowsTitle: 'Publication',
+    workflowsTitle: 'Workflows in the engine',
     workflowsEmpty: 'List unavailable — the pipeline did not answer, or no workflow was found.',
-    published: 'published',
-    unpublished: 'not published',
+    // The engine holds its six definitions compiled in: there is no publish
+    // step to pass or fail, so the pill says what CAN be true of them.
+    loaded: 'loaded',
+    notLoaded: 'not loaded',
   },
   workflow: {
     noWorkflows:
@@ -2312,7 +2308,6 @@ const EN: ConsoleDictionary = {
     outsidePipeline: 'outside the pipeline',
     unattached: 'attached to no alert',
 
-    replayTitle: 'Replay',
     replayLede:
       'Sends the original payload back into the entry point, exactly as the webhook received it. This repairs nothing and changes no workflow: it creates a NEW run from the same alert.',
     replay: 'Replay this alert',
@@ -3098,7 +3093,6 @@ const EN: ConsoleDictionary = {
     cappedTools: 'Answered at the lookup limit — it may have stopped short.',
     cappedDeadline: 'Answered at the time limit — it may have stopped short.',
     notReady: 'The assistant is not ready yet.',
-    goToSettings: 'Open Settings → Assistant',
     failed: 'The assistant could not answer.',
     emptyLede: 'Ask about what is on your screen. Answers come from this installation, not from memory.',
   },
