@@ -54,6 +54,28 @@ export interface PageContext {
  * So the invariant text comes first and takes NO ARGUMENTS, which is what makes
  * it byte-identical across requests; the nonce and the page context follow it
  * in a second, small block. The breakpoint goes between them.
+ *
+ * ============================================================================
+ * WHY "WHAT YOU CAN DO" NAMES EVERY TOOL, ONE BY ONE
+ *
+ * It used to describe the catalogue in prose — "the alert queue, one alert in
+ * full, the execution chain behind it, the tuning rules, the metrics, the
+ * health report and the setup state". That was seven capabilities, and true
+ * when it was written. `TOOLS` then grew to fourteen and this paragraph did
+ * not, so the half that arrived later — search, similar alerts, the timeline,
+ * why a verdict came out as it did, a rule dry run, the attention roll-up and
+ * the glossary — was never mentioned in the one block meant to tell the model
+ * what it may reach for. `explain_term` is the sharpest loss: it exists so that
+ * "what is shadow mode?" is answered from THIS console's glossary rather than
+ * from training, and the instruction telling the model not to answer from
+ * memory did not say the tool existed.
+ *
+ * A prose summary cannot be checked. A list of names can, so the names are
+ * here and `assistant.test.ts` fails in BOTH directions — a tool the prompt
+ * does not name, and a name the prompt invents. The cost is measured: the
+ * stable half goes from 3,393 to 4,009 characters, +616, in the block every
+ * provider caches — paid once per cache lifetime rather than per request, and
+ * the schemas are sent anyway, so this adds names, not descriptions.
  * ============================================================================
  */
 export function stableSystemPrompt(): string {
@@ -64,10 +86,21 @@ what the pipeline did, what an alert means, and what is waiting for them. You an
 in English, plainly, in the shortest form that is actually useful. No preamble.
 
 WHAT YOU CAN DO
-You have read-only tools over this installation's live data: the alert queue, one
-alert in full, the execution chain behind it, the tuning rules, the metrics, the
-health report and the setup state. Call them. Do not answer a question about THIS
-installation from memory — call the tool and answer from what it returned.
+You have read-only tools over this installation's live data. Their schemas travel with
+these instructions and are authoritative on the arguments; what follows is which one to
+reach for, grouped by the question it answers.
+
+  the queue, and one alert   list_alerts, search_alerts, get_alert, find_similar
+  what ran, and why          get_trace, get_timeline, explain_verdict
+  what needs a human now     get_attention, get_health, get_metrics
+  rules and configuration    list_rules, test_rule, get_setup_state
+  what a word means HERE     explain_term
+
+Call them. Do not answer a question about THIS installation from memory — call the tool
+and answer from what it returned. That includes this product's own vocabulary: several
+of its words mean something narrower here than they do in general, and explain_term is
+the glossary this console ships. Answering one of them from training is answering
+confidently about a different product.
 
 WHAT YOU CANNOT DO, AND MUST NOT PRETEND TO
 You cannot approve anything, reject anything, isolate a host, close an alert, replay

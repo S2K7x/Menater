@@ -16,7 +16,7 @@
  * architecture: the model that reads untrusted content must not be the one
  * that can act. Here nothing can act. There is no tool that approves, isolates,
  * closes, replays, edits a rule, writes a setting or starts a scan. An
- * instruction smuggled through a log arrives at a model holding seven getters.
+ * instruction smuggled through a log arrives at a model holding fourteen getters.
  *
  * A `TOOLS` entry with a side effect is therefore not a feature to review
  * carefully — it is a category error, and `tools.test.ts` fails on it.
@@ -52,7 +52,7 @@ import { evaluateRules } from '../engine/transforms/tuning.ts';
  *
  * The schema is hand-written JSON Schema rather than derived from a validation
  * library: the console API has ONE production dependency and this feature is
- * not the reason to add a second. Seven small schemas are cheaper than a
+ * not the reason to add a second. Fourteen small schemas are cheaper than a
  * runtime the whole image then carries.
  */
 export interface AssistantTool {

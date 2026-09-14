@@ -2163,8 +2163,9 @@ const EN: ConsoleDictionary = {
         + 'decision, and the console will not override it: change it where it is defined.',
       keySaved: 'Key saved. It takes effect on the next question.',
       reads:
-        'It can read: the queue, one alert in full, the execution chain behind it, the tuning '
-        + 'rules, the metrics, the health report and the setup state.',
+        'It can read what these screens read: the queue and any alert in it, the chain behind '
+        + 'one, the window as a timeline, the tuning rules and what they would do to an alert, '
+        + 'the metrics, the health report, the setup state and the glossary.',
       cannot:
         'It cannot approve, reject, isolate, close, replay, edit a rule or change a setting. '
         + 'There is no tool for any of it — deliberately, because it reads logs an attacker wrote.',
@@ -2934,10 +2935,13 @@ const EN: ConsoleDictionary = {
           {
             term: 'It reads live data, not its memory',
             text:
-              'Seven lookups, and every answer about this installation comes through one of them: the '
-              + 'queue, one alert in full, the execution chain behind it, the tuning rules, the metrics, '
-              + 'the health report, the setup state. Each answer says WHICH ones it used \u2014 \u201cLooked up: '
-              + 'get_alert\u201d \u2014 so you can check it against the same screen.',
+              'Every answer about this installation comes through a lookup, and the lookups reach what '
+              + 'these screens reach: the queue, any alert in it and a search over them, other alerts like '
+              + 'a given one, the chain behind one and the window as a timeline, why a verdict came out as '
+              + 'it did, the tuning rules and what they would do to an alert, the metrics, the health '
+              + 'report, the setup state, and the glossary of the words this console uses. Each answer '
+              + 'says WHICH ones it used \u2014 \u201cLooked up: get_alert\u201d \u2014 so you can check it against the '
+              + 'same screen.',
           },
           {
             term: 'It cannot do anything',
@@ -3084,7 +3088,8 @@ const EN: ConsoleDictionary = {
     thinking: 'Looking it up…',
     suggestionsTitle: 'Try one of these',
     readOnlyNote:
-      'It reads the queue, the alerts, the chains, the rules, the metrics and the setup state.',
+      'It reads the queue, the alerts, their chains, the rules, the metrics, the health report '
+      + 'and the setup state.',
     cannotAct:
       'It cannot approve, isolate, close or replay anything — those stay a deliberate click of yours.',
     howItWorks: 'How does it work?',

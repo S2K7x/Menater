@@ -15,7 +15,7 @@
  *      visits can use their browser as a tunnel into a local MCP server. The
  *      spec requires the check; this is what proves it is there.
  *   3. DRIFTING FROM THE PANEL'S CATALOGUE. The value of this surface is that
- *      it is the SAME seven read-only tools. A second list would be a second
+ *      it is the SAME read-only catalogue. A second list would be a second
  *      thing to audit.
  * ============================================================================
  */
