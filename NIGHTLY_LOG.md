@@ -10,7 +10,7 @@ they were — they are memory about live code, and rewriting them would lose it.
 report carries a *Send to the triage queue* button per finding; what it sends
 runs `01-Ingestion` like any other alert.
 
-**Result**: PR opened (branch `claude/great-pascal-hjxaw5`).
+**Result**: PR #17 (branch `claude/great-pascal-hjxaw5`).
 
 **Why this subject**: Monday is the feature night and the roadmap says J0
 outranks everything. The suite was green on the default branch first (1022
