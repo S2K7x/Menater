@@ -547,6 +547,44 @@ translation — that is a decision, not a mechanical pass.
 history; rewriting history is how you lose it.
 `NIGHTLY_LOG.md` moved to the root: it is memory about live code, not history.
 
+### D4 ✅ — The n8n sweep had checked one of the two catalogues
+
+`n8n-removed.test.ts` was written to close the family "a name that outlives the
+thing it named". It walks `src/i18n/console.ts`. **`server/i18n.ts` — the
+diagnostic, the chain notes and every route answer — was never in it**, and it
+had kept the VOCABULARY of what left even though it never kept the NAME, which
+is why a test forbidding `n8n` passed over all of it.
+
+| String | What it said |
+|---|---|
+| `api.webhookUnreachable` | *"Check that 01-Ingestion is **published** and the **instance** answers"* — a publish step this product does not have, and an instance it does not dial |
+| `api.approvalUnreachable`, `api.approvalRefused` | Relaying an approval to another product over HTTP. The engine runs in this process; `POST /api/approvals/:token` calls `engine.resume` |
+| `api.urlMissing`, `api.keyMissing`, `api.keyRefused`, `api.connected`, `api.answered`, `health.noApiKey` | An instance address, an API key and a 401 for a server nothing connects to |
+| `health.findingNothingPublished` | *"No workflow published: the pipeline processes nothing until all six are activated"* — a blocking finding that can never fire |
+
+**None of the ten was referenced by anything.** That is the point, and it is the
+same shape as R42: a typed catalogue refuses a key added on ONE side, and both
+sides of a dead key agree with each other perfectly. Four more were found in
+the console catalogue the same way (`health.injecting`,
+`health.workflowsKicker`, `trace.replayTitle`, `assistant.goToSettings`).
+
+Four strings were **live** and kept the word: `health.diagLede` listed checks
+the diagnostic stopped making, and the Health tab's workflow fold was titled
+*Publication* with six pills reading *published*. The diagnostic now describes
+what it actually runs — database and schema, the model key and the credentials,
+the node contract, recent runs, the entry-point probe — and the fold reads
+*Workflows in the engine*, *loaded*.
+
+Two rules in `n8n-removed.test.ts` hold it: **no publish vocabulary in either
+catalogue** (the Guide carved out by prefix, because it is where the product
+explains what it no longer has — and guarded by a second test, so deleting the
+explanation cannot silently widen the carve-out), and **no key either catalogue
+declares that no product code mentions**. That second rule is deliberately
+one-directional: it searches for the bare key NAME, so a key whose name collides
+with an ordinary word elsewhere (`answered`, `keyMissing`) reads as used. It
+caught twelve of tonight's fourteen dead keys; the other two were found by hand — it
+under-reports, and never flags a string that is really referenced.
+
 ---
 
 ## 3. Console and experience
@@ -577,6 +615,7 @@ history; rewriting history is how you lose it.
 | ~~C0.20~~ ✅ | **Acknowledgeable notices** — on Alerts and Health. Acknowledged is not hidden: they collapse behind a line that still counts them, they are keyed **by content** so a reworded finding comes back unread, and it is a browser preference |
 | ~~C0.21~~ ✅ | **Setup checklist** — the four things missing before an alert can be triaged, each stated with its consequence, gone once they are done |
 | ~~C0.22~~ ✅ | **Nine test-alert scenarios** — one per PATH rather than per story: no destination, with a hash, malformed, duplicate. A single hard-coded alert only ever proved the wiring |
+| ~~C0.30~~ ✅ | **The tab pattern is kept, not just declared** — `role="tab"` announces a contract: a tablist is ONE stop in the tab order, the arrows choose inside it, and each tab controls a panel that exists. None of the three held. Ingestion and Workflow rendered no `SectionPanel` at all, so **15 `aria-controls` pointed at nothing** (9 on the Ingestion tab, which nests both tablists); there was no roving tabindex anywhere, so Settings put **one stop per tab before the first setting** (9 in the measured mount, ten in the product, which always supplies the code-analysis section); and Settings rendered a code-analysis panel named by a tab it only sometimes creates. Measured on the three screens mounted with data, before and after |
 
 ### C0.23 ✅ — L (Lookup): asking about one value, by hand
 
@@ -849,7 +888,7 @@ node catalogue.
 
 | # | Item | What it delivers |
 |---|---|---|
-| **X1** ✅ | **Tool catalogue** — `server/assistant/tools.ts`. Closed list, read-only, typed, each with a JSON-Schema parameter block: `list_alerts`, `get_alert`, `explain_verdict`, `get_trace`, `list_rules`, `test_rule_match`, `get_metrics`, `get_health`, `get_setup_state`, `search_guide` | The data floor. Every answer about this installation comes through here |
+| **X1** ✅ | **Tool catalogue** — `server/assistant/tools.ts`. Closed list, read-only, typed, each with a JSON-Schema parameter block. Ten at X1, **fourteen since X14**: `list_alerts`, `search_alerts`, `get_alert`, `find_similar`, `get_trace`, `get_timeline`, `explain_verdict`, `get_attention`, `get_health`, `get_metrics`, `list_rules`, `test_rule`, `get_setup_state`, `explain_term` | The data floor. Every answer about this installation comes through here |
 | **X2** ✅ | **Untrusted-text fencing** — `server/assistant/sanitize.ts`. `raw_log`, `extensions`, vendor rule names and enrichment free text are truncated, control-stripped and wrapped in a labelled fence the system prompt declares as data | The single defence the literature says actually matters, applied at the one place all untrusted text passes through |
 | **X2.1** ✅ | **The enrichment half of X2, actually implemented** — `fenceEnrichment`. The row above claimed enrichment free text was fenced; it was not. `get_alert` returned the three sources verbatim, so Shodan `hostnames`/`org`/`isp`, VirusTotal `meaningful_name`/`popular_threat_label` and a failed lookup's forwarded `reason` reached the model in the clear, through the MCP resource as well as the panel | Third-party prose *about an address an attacker chose* is attacker-influenced text. A claim in this file is what kept it invisible — see the `CLAUDE.md` traps table |
 | **X3** ✅ | **Agent loop** — `server/assistant/chat.ts`. OpenRouter tool-calling, bounded: max steps, max tool calls, hard deadline, one final turn with `tool_choice: none` so a run never ends mid-call | Multi-turn reasoning without an unbounded bill or a hung request |
@@ -862,6 +901,7 @@ node catalogue.
 | **X12** ✅ | **Optimisation pass** — prompt split for caching, tools of one turn run in parallel, per-request lookup memo, bounded tool results, retry with jitter on transient failures only |
 | **X11** ✅ | **Four providers, one key each** — OpenRouter, Anthropic, OpenAI, Google. A neutral transcript in the loop, one adapter per provider in `assistant/providers.ts`, and the provider chosen in Settings next to the key it reads |
 | **X10** ✅ | **Tests** — catalogue is read-only (asserted, not assumed), fencing survives a crafted `raw_log`, the loop stops at its caps, no secret in any tool output, no key ⇒ a named refusal | The assertions that keep X1 and X2 true after the next feature |
+| **X15** ✅ | **The catalogue's own description, brought back in line with it** — the system prompt's *"what you can do"* block named the seven tools of the X1 era in prose and was never moved by X14, so half the catalogue was sent as schemas and mentioned nowhere in the instructions that say what to reach for. It names all fourteen now, grouped by question, and `assistant.test.ts` fails in both directions. The same seven were frozen into three operator-facing sentences — the panel's note, the Settings blurb, and the Guide's *"Seven lookups"*, flatly false — which describe REACH now, with a test forbidding the COUNT | `explain_term` holds THIS console's glossary and exists so "what is shadow mode?" is not answered from training. It was the tool the prompt did not mention, three lines under an instruction not to answer from memory |
 
 ### Delivered in this pass
 
@@ -1152,7 +1192,7 @@ exact position the operator was already in.
 
 ### The section is complete
 
-X1 through X14 are delivered.
+X1 through X15 are delivered.
 
 ### What X does not do
 
@@ -1681,7 +1721,7 @@ Small, known, and written down so it is not rediscovered.
 | Subject | Detail |
 |---|---|
 | Two icon sets | `src/components/Icon.tsx` (console) and `src/vulnpipe/components/Icon.tsx` (analysis) have two APIs and two class conventions. Mergeable, not urgent |
-| Dead sections in the analysis dictionary | `t.app`, `t.glossary`, `t.severity` have not been read since the landing page went away |
+| Dead sections in the analysis dictionary | `t.app`, `t.glossary`, `t.severity` have not been read since the landing page went away. **D4 built the rule that proves it** — `n8n-removed.test.ts` flags a catalogue key no product code mentions — and deliberately pointed it at the two console catalogues only: turning it on `src/i18n/dictionary.ts` means removing whole sections, which is a pass of its own, not a line in a documentation sweep |
 | Flaw statuses in `localStorage` | See V2.5 |
 | Coupling to n8n node names | Accepted and tested (the "console contract" diagnostic), but still fragile |
 | 15 s snapshot cache | Enough today; to revisit with S1.4 |

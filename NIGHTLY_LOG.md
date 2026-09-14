@@ -122,6 +122,579 @@ and the network, exactly as `injection.test.ts` does.
 **Note**: `npm install` did NOT rewrite `dashboard/package-lock.json` this time,
 unlike the four previous entries. Nothing reverted, nothing committed.
 
+## 2026-09-13 (second run) — Sunday · Maintenance and state of the project
+
+**Subject**: `n8n-removed.test.ts` was written to stop a name outliving the
+thing it named, and it walks ONE of the two catalogues. `server/i18n.ts` kept
+the VOCABULARY without keeping the name — a live message telling an operator to
+check that a workflow is *published* — plus ten strings nothing referenced at
+all.
+
+**Result**: PR #16 (branch `claude/great-pascal-maan0z` — see the branch note
+at the end).
+
+**Why this subject**: the suite was green on the default branch first (1022
+passed, 1 skipped, typecheck clean, build OK), so the calendar rule did not
+preempt. **PR #15 is already tonight's first run** — same date, same theme, and
+it took the assistant's stale capability list, which is the lead I had picked
+from the 2026-09-11 entry. Its own log entry recommends *"the published
+vocabulary cluster"* as the next one, and that is this. It is priority (2), a
+real defect: the entry-point failure message on Health → Test connectivity sent
+an operator looking for a publish step that left with n8n.
+
+**What I learned**:
+
+- **The stale strings did not contain the word `n8n`, which is exactly why the
+  n8n test passed over them.** It forbids the NAME. What survived is the
+  vocabulary: *published*, *activated*, *instance*, *access key*. A sweep
+  written against a name cannot catch the words that named the same thing.
+- **Ten server strings and four console ones were referenced by nothing.**
+  Verified three ways: a bare-name grep, `tsc --noEmit` after deleting them, and
+  the full suite. `server/routes/assistant.ts` already names the destination in
+  its `blocking` sentence, so deleting `assistant.goToSettings` removes a second
+  copy, not an affordance — checked before deleting, because a dead string can
+  also be the evidence of a missing one.
+- **A typed catalogue cannot see this class of defect at all.** It refuses a key
+  added on ONE side; both sides of a dead key agree with each other perfectly.
+  Same shape as R42 (`report.nothingFound`), one catalogue over.
+- **My own test vouched for the strings it was hunting.** The first draft
+  explained the seven dead keys in its header — and the rule went GREEN, because
+  the header is in a file the rule reads. Tests and comments are stripped from
+  the corpus now. Caught by running it, not by reading it.
+- **And then the second draft did it one notch in.** The console-catalogue rule
+  passed over four dead entries because `src/i18n/console.ts` was still in its
+  own search corpus: every key matched its own declaration. A rule that cannot
+  fail is worse than no rule. Both catalogues are excluded now, and the red check
+  below is what proved it — the first red run showed only 2 failures where 3
+  were due.
+- **The rule is one-directional on purpose.** It searches the bare key name, so
+  `api.answered` and `api.keyMissing` read as used because other catalogues
+  declare the same names. It caught 12 of tonight's 14; the other 2 were found
+  by hand. It under-reports and never flags a string that is really referenced —
+  the alternative is parsing accessor expressions, which fails the first time
+  somebody destructures.
+
+**Rendering checked, not reasoned**: a throwaway probe under `src/__probe__/`
+mounted `HealthPanel` in jsdom with a six-workflow report. The fold summary
+reads *"Workflows in the engine" / 6*, the six pills read *loaded*, the new
+`diagLede` renders whole, and `/publish|publicat/i` matches nowhere in the
+rendered text. Probe deleted.
+
+**Found and NOT fixed**, deliberately:
+
+- **`src/i18n/dictionary.ts` (the analysis catalogue) is not covered by the new
+  rule.** ROADMAP § 7 has recorded `t.app`, `t.glossary` and `t.severity` as
+  dead since the landing page went away; pointing the rule at that file means
+  deleting whole sections, which is a pass of its own. The § 7 row now says the
+  rule exists.
+- **`health.workflows[].active` is a constant.** `workflowList()` hardcodes
+  `true` and documents why, so the pill's false branch is unreachable and the
+  badge can only say one thing. Removing the field touches `types.ts`,
+  `snapshot.ts` and `HealthPanel.tsx` — a data change, where tonight's subject
+  is strings. The words are true now; the structure is a separate call.
+- **`.env.example` and `docker-compose.yml` carry half the credential
+  catalogue.** Measured while looking for a subject: of the twelve entries in
+  `MANAGED_CREDENTIALS`, six never reach the console container —
+  `ASSISTANT_APIKEY`, `ANTHROPIC_APIKEY`, `OPENAI_APIKEY`, `GEMINI_APIKEY`,
+  `SLACK_WEBHOOKURL`, `DISCORD_WEBHOOKURL`. So in the documented normal
+  installation the assistant and the two webhook transports cannot be
+  provisioned by deployment at all, only by clicking through Settings on every
+  fresh volume — and `.env.example` steers an operator to `SLACK_BOT_TOKEN`, the
+  path that needs an app, scopes and an install, while never mentioning the
+  webhook that CLAUDE.md calls "by far the fastest way". Separately, `TZ` appears
+  exactly once in the whole repository — in `.env.example` — and no service reads
+  it: a documented variable that reaches nothing. **This is a good next subject**
+  and it is pinnable by a test (every managed credential reachable, every
+  declared variable interpolated). Not taken tonight because naming six new
+  `.env` variables is a decision — reusing `ANTHROPIC_API_KEY` would silently
+  make one key pay for both the Code tab and the assistant.
+
+**Do not redo**:
+
+- **Do not let a test read its own file, or a catalogue read its own file.**
+  Both mistakes were made here, in that order, and both produce a green rule.
+- **Do not carve the Guide out by path.** `docs.sections.7.points.1` moves the
+  day a section is inserted above it. The carve-out is by `docs.` PREFIX, and a
+  second test asserts the Guide still contains a string saying there is no
+  publish step — without it, deleting the explanation would silently widen the
+  rule into "the Guide may say anything".
+- **Do not try to make the dead-key rule exact** by parsing `am.x` / `t.x`
+  accessors. Destructuring defeats it, and a rule that flags a live string is a
+  rule somebody deletes.
+- **Do not delete a dead string without reading its call site first.**
+  `assistant.goToSettings` looked like a dropped affordance and was not; the
+  reverse would have meant deleting the evidence of a real gap.
+
+**State of the week** (Sunday's other half):
+
+- **Seven days, five PRs still open**: #9 and #11 are stale (their commits are
+  on `main` through #12) and should simply be CLOSED; #13 and #14 are the
+  2026-09-12 interface work, with #14 stacked on #13; #15 is tonight's first
+  run. **Recommendation, unchanged from the last two Sundays and now more
+  urgent: merge #13 then #14, close #9 and #11.** Five open PRs on one small
+  repository is how the 2026-09-11 conflict happened, and it cost a whole
+  session.
+- **Still no CI workflow** (`.github/workflows` does not exist). The green
+  checks on every PR are Vercel and GitGuardian; **neither runs the suite**.
+  Said for the second Sunday running. It is a decision for a human about where
+  the suite runs, not a nightly-sized subject.
+- **Dependencies clean**: `npm audit` and `npm audit --omit=dev` both report
+  **0 vulnerabilities**. Nothing bumped, per NIGHTLY.md.
+- **`npm install` did not rewrite `package-lock.json`** this time either (npm
+  10.9.7, Node 22.22.2). The `@types/pg` dependencies/devDependencies mismatch
+  is still in the files and still left alone.
+- **The documentation-drift family is now four for four**: n8n (2026-09), the
+  assistant's capability list (#15, tonight), this one, and one left —
+  `src/i18n/dictionary.ts`. The shape repeats: a fix applied to the surface
+  somebody was looking at, and not to its neighbour. Same lesson as *"a fix
+  applied at the front door and not at the two buttons behind it"*.
+
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 1026 passed | 1 skipped  (1022 before; +4 new, nothing skipped or weakened)
+npm run build       # dist built, 472.15 kB / 139.74 kB gzip (was 472.18 / 139.73: strings changed)
+npm audit           # 0 vulnerabilities
+```
+Checked **RED** first, by stashing `server/i18n.ts`, `src/i18n/console.ts` and
+`HealthPanel.tsx` against the finished tests: **exactly 3 of the 4 new tests
+fail** — six strings naming a publish step, eight orphaned server keys, four
+orphaned console keys. The fourth passes before and after **by design**: it is
+the guard on the Guide carve-out, which must hold in both states or it is not a
+guard. `VulnPipe/` untouched, its suite not run. No model key and no database
+needed: both catalogues are pure data and the panel renders from a fixture.
+
+**Note on the branch name**: NIGHTLY.md § 5 asks for
+`claude/nightly-YYYY-MM-DD-short-subject`. This session was configured with
+`claude/great-pascal-maan0z` as its designated branch and an instruction not to
+push elsewhere, so that is where the work went — the same resolution as the
+2026-09-10 (second run) and 2026-09-13 entries. The `claude/` prefix, which is
+the part the platform requires, holds either way.
+
+## 2026-09-13 — Sunday · Maintenance and state of the project
+
+**Subject**: the assistant's catalogue grew from seven tools to fourteen (X14)
+and **nothing that describes it moved** — not the system prompt, not the panel's
+note, not the Settings blurb, not the Guide, not `CLAUDE.md`, not `ROADMAP.md`'s
+own X1 row.
+
+**Result**: PR opened (branch `claude/great-pascal-ypwptf` — see the branch note
+at the end).
+
+**Why this subject**: the suite was green on the default branch first (1022
+passed, 1 skipped, typecheck clean, build OK), so the calendar rule did not
+preempt. Sunday's reservoir is *bring `CLAUDE.md` and `ROADMAP.md` back in line
+with what the code ACTUALLY does*, and the 2026-09-11 (second run) entry had
+already filed this one as **"worth a night on its own, and it is a correctness
+subject, not a cost one"**. It is priority (2), a real defect, not (3): the
+prompt block whose entire job is to tell the model what it may reach for
+described half the catalogue.
+
+Two PRs are open (#13, #14) and both are CSS/`SectionTabs`/theme work; this
+touches `server/assistant/` and `src/i18n/console.ts` and collides with neither.
+`main` already carries #9 and #11 through #12, so those two open PRs are stale
+rather than pending.
+
+**What I learned**:
+
+- **The prompt named ZERO of the fourteen tools.** I expected seven of fourteen
+  from the survey; measured, the block described seven *capabilities in prose*
+  and contained no tool NAME at all. So `stableSystemPrompt().includes(name)`
+  was false for all fourteen — the drift test went red on the whole catalogue,
+  not on the seven that arrived late.
+- **The schemas being sent is not the same thing as the prompt saying so.** The
+  fourteen schemas travel on every request, so the model is not blind. They
+  answer *how do I call this*; the prompt answers *what am I*, and a model told
+  "you have tools over: A…G" plans over A…G. The sharpest loss is
+  `explain_term`, which holds THIS console's glossary and exists so "what is
+  shadow mode?" is not answered from training — unmentioned, three lines under
+  an instruction not to answer from memory.
+- **Measured the cost rather than arguing it.** Stable prompt 3,393 → 4,009
+  characters (+616); the tool schemas are 5,087 characters and unchanged. The
+  addition is entirely inside the block the cache breakpoint sits after, so it
+  is a cache-write cost paid once per cache lifetime, not a per-request bill —
+  and it adds names, never descriptions, which is what the X14 pass bought.
+- **Three operator-facing sentences had frozen at the same seven**, and the
+  Guide's was flatly false: *"Seven lookups, and every answer about this
+  installation comes through one of them"*. Nothing breaks. What it costs is the
+  half the operator was never told about: nobody asks "is this a one-off or a
+  campaign?" (`find_similar`) or "what happened while I was away?"
+  (`get_timeline`) of an assistant they have been told does seven other things.
+- **`ROADMAP.md`'s X1 row listed two tools that do not exist** — `test_rule_match`
+  and `search_guide`. The real names are `test_rule` and `explain_term`. Nobody
+  had read that row against the code since X14 renamed them.
+- **The fix for a stale count is not a fresh count.** The operator copy now
+  describes REACH (a sentence that stays true when a fifteenth tool lands) and a
+  test forbids the COUNT. The prompt is the opposite — it names every tool,
+  because a prose summary cannot be checked and a list of names can.
+
+**Found and NOT fixed**, deliberately:
+
+- **`ROADMAP.md` line ~825**, under `### Delivered in this pass`: *"The console
+  has a working assistant: seven read-only tools"*. Left alone. It is a dated
+  record of the X1–X7 pass, and **X14's own before/after table says `Before | 10`**
+  — the two disagree about history, and I have no evidence to decide which is
+  right. Rewriting a historical claim to match a guess is worse than leaving the
+  contradiction visible.
+- **The prompt still carries its own mini-glossary** (`TWO RATES`, `SHADOW MODE`)
+  beside `explain_term`, which reads the real `GLOSSARY`. That is a second copy
+  of two definitions and it can drift. It is also the two that matter most and
+  it is cheap, so it stays — but it is the same shape as this defect, one level
+  in, and a future night could pin it with a test that the prompt's definitions
+  match the glossary entries.
+- **The four token-cost items** the 2026-09-11 survey filed remain unverified and
+  untouched: `mcp.ts:558` serialising every tool result twice, `chat.ts:166` /
+  `providers.ts:295` dropping `body.tools` on the final turn (a full cache miss
+  on the last call of every capped run), `explain_verdict` overlapping
+  `get_alert`, and `get_metrics.rate_meanings` restating the cached prefix. The
+  survey's fifth item is the one this night closed.
+
+**Do not redo**:
+
+- **Do not generate the capability list from `TOOLS` at runtime.** It looks like
+  the tidy fix and it is the wrong one twice over: it would restate the
+  descriptions the schemas already carry — the exact bill X14 spent a pass
+  reducing — and a generated list cannot go stale, so the drift test that is the
+  real deliverable would have nothing to catch. The names are written by hand,
+  grouped by question, and the test is what keeps them honest.
+- **Do not put a fresh number in the operator copy.** "Fourteen lookups" is this
+  same defect with a later expiry date. The copy describes reach; the test
+  forbids counts of `lookups|tools|getters` in the assistant strings.
+- **Do not delete the reverse-direction test** (`names no tool the catalogue does
+  not have`). It passes today and always has — it is a guard, not an assertion
+  about this change: a name left behind after a tool is removed costs the model a
+  step to discover, by calling something that answers `Unknown tool`.
+- **Ruled out: asserting the operator copy names every tool.** The three
+  sentences are prose about reach, not lists of identifiers; mapping tool → prose
+  would be brittle and would force the copy into a shape nobody wants to read.
+
+**State of the week** (Sunday's other half):
+
+- **Seven nights, seven PRs, and the merge queue is the weak point.** #9 and #11
+  sat `dirty` until a session was spent unblocking them (#12). #13 and #14 are
+  open now, from 2026-09-12, and #14 already builds on #13 — the same stacking
+  that produced the conflict last time. **Recommendation: merge #13 then #14
+  before another night touches `styles.css` or `themes.css`.**
+- **There is still no CI workflow** (`.github/workflows` does not exist). The
+  green checks on every PR are Vercel and GitGuardian; **neither runs the suite**.
+  "Checks passed" reads as "the tests ran", and they did not. This is the single
+  highest-value maintenance item left, and it is not a nightly-sized subject —
+  it is a decision for a human about where the suite runs.
+- **Dependencies are clean**: `npm audit` and `npm audit --omit=dev` both report
+  **0 vulnerabilities**. Nothing bumped, per NIGHTLY.md.
+- **`npm install` did NOT rewrite `package-lock.json` this time** (npm 10.9.7,
+  Node 22.22.2), unlike the four previous entries. The `@types/pg`
+  dependencies/devDependencies mismatch is still in the files; it simply did not
+  churn tonight. Still pre-existing, still left alone.
+- **The documentation-drift family is now three for three**: n8n (2026-09), the
+  "published" vocabulary cluster (still open, see the 2026-09-09 entry), and this
+  one. **Recommendation for next week: the "published" cluster.** It is live on
+  the Health tab — `diagLede` describes a diagnostic that no longer exists and
+  `workflowList()` hardcodes `active: true` so the badge is always the same word
+  — and it is the same shape as tonight, with the same fix available (a test that
+  refuses the word in user-facing strings).
+
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 1026 passed | 1 skipped  (1022 before; +4 new, nothing skipped or weakened)
+npm run build       # dist built, 472.51 kB / 139.86 kB gzip (was 472.18 / 139.73: the Guide string grew)
+npm audit           # 0 vulnerabilities
+```
+Checked **RED** first, by stashing `prompt.ts` and `console.ts` alone against the
+finished tests: **exactly 2 of the 4 new tests fail** — all fourteen tool names
+reported as unnamed in the prompt, and `docs.assistant.points[1]` reported for
+*"Seven lookups"*. The other two pass before and after **by design**: the
+reverse-drift guard, and the assertion that widening what the copy says it READS
+did not soften the claim that it cannot act. `VulnPipe/` untouched, its suite not
+run. No model key and no database needed: the prompt is a pure function and the
+panel test mocks `api.assistantState`.
+
+**Rendering checked, not reasoned**: a throwaway probe under `src/__probe__/`
+mounted `Assistant` in jsdom and asserted the new `readOnlyNote` reaches the DOM
+(it sits in `.soc-ai-scroll`, and `.soc-ai-note` has no clamp or fixed height, so
+a longer note scrolls and never pushes the panel). Probe deleted.
+
+**Note on the branch name**: NIGHTLY.md § 5 asks for
+`claude/nightly-YYYY-MM-DD-short-subject`. This session was configured with
+`claude/great-pascal-ypwptf` as its designated branch and an instruction not to
+push elsewhere, so that is where the work went — same resolution as the
+2026-09-10 (second run) entry. The `claude/` prefix, which is the part the
+platform requires, holds either way.
+
+## 2026-09-12 (second run) — Saturday · Interface, clarity, accessibility
+
+**Subject**: `role="tab"` announces a contract to assistive technology — one
+stop in the tab order, arrows choosing inside it, a panel each tab controls.
+`SectionTabs` declared it on four screens and implemented none of the three.
+
+**Result**: PR #14 (branch `claude/great-pascal-889oci`, **based on PR #13's
+branch, not on `main`**).
+
+**Why this subject**: the suite was green on `main` first (1022 passed, 1
+skipped, typecheck clean), so the calendar rule did not preempt. The subject is
+not mine — the first run of tonight (PR #13) found it with its DOM sweep, could
+not fix it in the same PR, and wrote it down under *Found and NOT fixed* as "a
+night of its own". Priority (3): an explicit limitation, already scoped.
+
+**Why the branch is based on PR #13 and not on `main`.** `NIGHTLY.md` § 0.5:
+*a nightly PR still open on the same file — build on it or change subject, do
+not create a conflict.* #13 is tonight's other run; it rewrites the traps table
+in `CLAUDE.md` and adds the day's entry to this file, which is exactly where my
+own two additions go. The 09-11 third run cost a whole session untangling
+precisely that interleaving. **No code file overlaps** — #13 is stylesheets and
+`themes.test.ts`, this is four components — so a rebase onto `main` would
+conflict only in `CLAUDE.md` and `NIGHTLY_LOG.md`, and GitHub retargets the PR
+to `main` on its own once #13 merges.
+
+**What the defect actually was**, measured on the three screens mounted with
+data of the right shape (`SettingsPage`, `IngestionPanel` with the Workflow
+tablist nested inside it, `WorkflowPanel` alone), by a throwaway vitest probe
+run once on the fixed tree and once with the four components `git stash`ed:
+
+| screen | tabs | tab stops | panels | dangling `aria-controls` |
+|---|---|---|---|---|
+| Settings | 9\* | 9 → **1** | 10 / 9 named → **9 / 9** | 0 → 0 |
+| Ingestion (two nested tablists) | 9 | 9 → **2** | 0 → **4** | **9** → **0** |
+| Workflow | 6 | 6 → **1** | 0 → **1** | **6** → **0** |
+
+Two stops on Ingestion after the fix is correct, not a miss: there are two
+tablists on that screen, one stop each. \* Settings shows **9** tabs here and
+**ten** in the product: the probe omits the optional `codeSection` prop, which
+`App` always supplies — and that omission is exactly what exposed the tenth
+panel having no tab, so it is left as the measured figure rather than rounded
+up to the one the product shows.
+
+**What I learned**:
+
+- **The probe found the defect's mirror image, and the brief did not contain
+  it.** I went looking for tabs pointing at panels that are not there. The
+  probe also counted panels, and `panels=10 named-panels=9` on Settings is a
+  `role="tabpanel"` named by a tab that is not in the document: the page
+  pushes its code-analysis TAB only when the caller supplies the section
+  (`if (codeSection)`) and rendered the PANEL unconditionally. **The rule has
+  to be asserted in both directions or half of it is unchecked** — one test
+  walks tabs and resolves `aria-controls`, the other walks panels and resolves
+  `aria-labelledby`. Latent, not operator-visible: `App.tsx` always passes the
+  prop, and the PR says so rather than dressing it up.
+- **The Workflow case is not the same shape as the other three, and forcing it
+  would have been the worse fix.** Its six tabs do not select between panels;
+  they choose which workflow the ONE frame below them describes. Six panels of
+  which five are empty is inventing content to satisfy a pattern — the same
+  mistake as filling a gap with a default. Several controls may point at one
+  region, so they all point at it (`panelId`) and the region is named by
+  whichever tab is selected (`labelledBy`). Both props are optional and default
+  to today's behaviour, so Settings and Tracking are untouched.
+- **Automatic activation is free here and would not be elsewhere.** The arrows
+  move the SELECTION, not only the focus. That is only cheap because rule 2 of
+  the component already mounts every panel and hides them: walking the bar
+  loads nothing, and it is what a click already does.
+- **Up, down and the page keys are deliberately left to the browser.** The bar
+  is sticky above content that scrolls; swallowing them would take the page's
+  own scrolling away from someone navigating by keyboard, which is a worse
+  trade than the one this fix makes. There is a test that pins it, and it is
+  one of the two that pass before AND after by design.
+- **No CSS changed, and the build proves it**: `index-*.css` is 87.68 kB before
+  and after. The JS grew 0.46 kB. The Ingestion change is an attribute swap on
+  divs that already existed; the only new element in the tree is Workflow's
+  wrapper, which carries no class, and `styles.css` has no adjacent-sibling
+  selector and nothing on `[role="tabpanel"]` (grepped both), while `.soc-panel`
+  spaces itself with `margin-bottom` — which collapses through a bare wrapper.
+
+**Do not redo**:
+
+- **Do not give `WorkflowPanel` one panel per workflow.** See above. If someone
+  later decides that section should stop claiming the tab pattern altogether,
+  that is a design call and it is still open — but six empty panels is not the
+  way to close it.
+- **Do not put the pipeline variables inside Workflow's `SectionPanel`.** They
+  are read on every run of every workflow; inside the panel they would announce
+  themselves as belonging to whichever workflow happens to be selected. They
+  are deliberately left outside, with a comment saying why.
+- **Do not add `tabIndex={0}` to the panels.** APG wants a tabpanel focusable
+  only when it holds nothing focusable; all of these hold controls.
+- **Do not translate `SectionTabs.tsx`'s existing French comments.** Everything
+  I wrote in it is English per `NIGHTLY.md`, and the file is now mixed — which
+  is ugly and is still the right trade tonight: 150 lines of re-prose would
+  have buried an 88-line change. It is a real, separate cleanup, and the same
+  is true of `IngestionPanel`, `WorkflowPanel` and `SettingsPage`.
+- **Do not trust `console.log` in a vitest probe.** Vitest swallows it under
+  this config; `process.stderr.write` comes through. Cost ten minutes.
+
+**Still open, and NOT taken tonight** — the rest of PR #13's sweep list is now
+empty, so this is new:
+
+- **The four components carry French comments** (see above). Mechanical, large,
+  and a good Sunday subject since § 7 of `NIGHTLY.md` owns "documentation that
+  describes something other than what the code does".
+- **No test asserts the tab invariants for `TracePanel`.** It has always been
+  correct and the generic pin covers the shape, but it is the one call site of
+  the four that this file does not name.
+
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 1045 passed | 1 skipped  (1035 on PR #13's branch; +10 here)
+npm run build       # dist built, CSS 87.68 kB unchanged, JS 472.64 kB (+0.46 kB)
+```
+Checked **RED** by stashing the four components alone against the finished
+tests: **8 of the 10 fail**. The two that pass before and after do so by
+design — one pins the shape that was already right (a tablist rendered WITH its
+panels, which is what Settings and Tracking do and what nothing here may
+regress), the other pins that the fix does not swallow `ArrowDown`/`PageDown`.
+The one skipped test is the pre-existing `store-contract.test.ts > contrat —
+postgres`, which needs a database. `VulnPipe/` untouched, its suite not run. No
+model key and no database needed: this is all component rendering under jsdom.
+The measurement probe was deleted after use; `npm install` did **not** rewrite
+`package-lock.json` this time.
+
+## 2026-09-12 — Saturday · Interface, clarity, accessibility
+
+**Subject**: the focus ring — the one thing somebody working at the keyboard
+navigates by — was drawn in `var(--accent)` by every rule that draws one, and on
+two of the six themes the accent measures under the 3:1 floor an interface
+element needs.
+
+**Result**: PR #13 (branch `claude/nightly-2026-09-12-focus-ring-contrast`).
+
+**Why this subject**: the suite was green on the default branch first (1022
+passed, 1 skipped, typecheck clean), so the calendar rule did not preempt. Both
+nightly PRs still open (#9, #11) carry code already merged into `main` by #12, so
+there was nothing to conflict with; nothing here touches their files anyway.
+Saturday's reservoir is interface and accessibility, and this is priority (2), a
+real defect with a measurement, not (6) a clarity pass.
+
+**How it was found**, because the method is the transferable part. CLARITY § 7's
+own instruction — mount the screens with data of the right shape rather than
+reviewing them empty — as a throwaway vitest probe that rendered eight panels
+and swept the DOM for heading jumps, unnamed controls, duplicate ids, dangling
+`aria-*` references and closed `<details>` inside accessible names. It found two
+things, and **the one it reported was not the one that mattered**:
+
+- What it flagged: five `HIDDEN-IN-NAME` hits on `<th>` and `<h3>`. **False
+  positives** — jsdom applies no cascade, and `:not([open]) .soc-term-bubble
+  { display: none }` covers `.soc-term` and `.soc-info` both. That trap is
+  properly closed; do not reopen it.
+- What it flagged and IS real, but is not this PR: `IngestionPanel` and
+  `WorkflowPanel` use `SectionTabs` and render **no `SectionPanel` at all**, so
+  nine `aria-controls` on the Ingestion tab point at elements that do not exist;
+  and `SectionTabs` emits `role="tab"` with no roving tabindex and no arrow-key
+  handling, on all four call sites. Written down below rather than fixed.
+- What it did NOT flag, and what this PR is about: the probe cannot see colour.
+  Reading the focus rules by hand while chasing the tab defect showed all
+  fifteen of them written in `var(--accent)` — and the accent is a **dark red on
+  khaki** on Punk.
+
+**Measured**, WCAG 1.4.11 (3:1 for a non-text interface element), every surface
+a ring can land on plus the hairline it replaces on a field:
+
+| theme | worst ratio for `--accent` as a ring | |
+|---|---|---|
+| grayed | 7.59 | ok |
+| punk | **1.24** (on `--line`), 1.61 on `--surface` | **fails** |
+| blued | 4.75 | ok |
+| attck | 4.50 | ok |
+| acme | 3.26 | ok, thinnest margin of the six |
+| dark | **2.75** (on `--line`), 2.91 on `--surface-2` | **fails** |
+
+**What I learned**:
+
+- **The contrast suite measured everything a reader looks at and nothing an
+  operator navigates by.** `themes.test.ts` has five families of ratios — text
+  on ground, text on panel, text on `--hero`, text on the accent, the risk
+  palette, secondary mentions — and every one of them is TEXT. The ring is an
+  *interface* element and had no assertion at all. Same shape as the `--hero`
+  defect this file already records: a token used for a job nobody had measured
+  it for.
+- **The four console fields delete the browser's own ring first**
+  (`.soc-search`, `.soc-sort select`, `.soc-field input/textarea`,
+  `.soc-ai-composer textarea`: `outline: none`, replaced by a 1 px border
+  swap). So on Punk there was no fallback — tabbing into the field where you
+  type the ingestion secret changed nothing anyone could see. That is what
+  takes this from "thin margin" to "no indicator".
+- **The accent was never the right colour for this anyway**, and `styles.css`
+  says so in its own rule 4: the accent means *something is waiting for a
+  human*. A ring on every control spends it everywhere.
+- **The site is a fourth copy of the palette and no test compared it.**
+  `site/shared.css` rewrites the six palettes token for token and says in a
+  comment that dropping one "would make the two drift" — with nothing checking
+  the sentence. Compared them: identical apart from `--shadow`'s leading zeros.
+  A token added on the console side only is exactly that drift, so the site got
+  the same fix and the comparison is now a test.
+
+**Do not redo**:
+
+- **Do not repaint all six rings.** Four themes measure fine with their accent
+  and keeping them is what makes the change targeted rather than a redesign.
+  The RED check that matters is the one that puts the accent back on Punk and
+  Dark only: it fails 2 tests of 66 and names the real numbers.
+- **Do not turn the four `outline: none` rules into real rings in this PR.**
+  The border swap measures fine once the colour does (cream on Punk is 5.98:1
+  against the hairline it replaces), and changing the SHAPE of the indicator is
+  a design decision on all six themes, not a contrast fix.
+- **Do not assert the site and the console are byte-identical.** `--shadow` is
+  written `rgba(0,0,0,.55)` on one side and `rgba(0, 0, 0, 0.55)` on the other.
+  The test normalises whitespace and the leading zero of a decimal: two ways of
+  typing the same colour are not a palette drift, and making one file match the
+  other's typing would be reformatting a file for nothing.
+- **Do not re-run the `HIDDEN-IN-NAME` sweep and believe it.** jsdom has no
+  cascade; a closed `<details>` in a heading is hidden by CSS the sweep cannot
+  see. Two of this project's screen tests read `styles.css` directly for exactly
+  that reason.
+
+**Found and NOT fixed** — the tab pattern, which is a night of its own:
+
+- `SectionTabs` emits `role="tab"` + `aria-controls="soc-subpanel-<id>"`.
+  `SettingsPage` and `TracePanel` render the matching `SectionPanel`;
+  **`IngestionPanel` and `WorkflowPanel` never do** — Ingestion re-implements
+  the `hidden` half as three bare `<div hidden={…}>`. Nine dangling IDREFs on
+  one screen, and a tab whose panel has no role and no accessible name.
+- No roving tabindex and no arrow/Home/End handling anywhere, so a `role="tab"`
+  announces a keyboard contract the component does not keep. On Settings that
+  is ten tab stops before the first setting.
+- Both are in one component plus two call sites. Left out because they are a
+  different defect from the one this PR measures, and because the WorkflowPanel
+  case needs a decision — its "tabs" select which workflow to inspect into one
+  shared region, so either it renders six panels of which five are empty, or it
+  stops claiming the tab pattern. That is a design call, not a fix.
+
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 1035 passed | 1 skipped  (1022 before; +13 new, nothing skipped or weakened)
+npm run build       # dist built, 472.18 kB / 139.73 kB gzip (unchanged: CSS-only change)
+```
+Checked **RED** three ways, because the first way proved the weakest thing:
+1. with the finished tests and the three stylesheets stashed: **13 of 13 fail** —
+   but six of them fail on a MISSING token, which proves nothing about the
+   measurement;
+2. so, with `--focus` put back to the accent on Punk and Dark alone: **exactly 2
+   fail**, `expected 1.87… to be greater than or equal to 3` and `expected
+   2.91… to be greater than or equal to 3`. That is the assertion doing its job,
+   and the other four themes passing is what proves the change is targeted;
+3. and the two site tests, red on a reverted site sheet: the parity test names
+   `--focus dans « punk »: expected undefined to be '#f5e7bd'`, the sweep names
+   `site/shared.css — :focus-visible`.
+
+The sweep test (`aucune règle de mise au point ne dessine en var(--accent)`)
+listed all **15** offending rules before the fix, across all three sheets.
+
+`VulnPipe/` untouched — `dashboard/src/vulnpipe/styles.css` is the console's
+embedded section, not the analysis service, which has no CSS at all. No model
+key and no database needed: the whole subject is static stylesheets.
+
+**Note on the branch name**: this session was handed `claude/great-pascal-2azgk7`
+by its environment, and NIGHTLY.md § 5 mandates
+`claude/nightly-YYYY-MM-DD-short-subject`. Followed NIGHTLY.md, as every entry
+below did; the `claude/` prefix the platform requires is satisfied either way.
+
+**Note**: `npm install` did **not** rewrite `dashboard/package-lock.json` this
+time — the first entry in four where it did not. Nothing was reverted.
+
 ## 2026-09-11 (third run) — Friday · Unblocking PR #9 and PR #11
 
 **Subject**: both open PRs were `mergeable_state: dirty` and neither could be

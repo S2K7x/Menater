@@ -19,8 +19,8 @@
  *     content blocks whose results go back as a USER turn.
  *   - Gemini calls the roles `user` and `model`, wraps everything in `parts`,
  *     and its function declarations reject JSON-Schema keywords it does not
- *     know — `additionalProperties` included, which every one of our seven
- *     tools sets.
+ *     know — `additionalProperties` included, which every one of our tools
+ *     sets.
  *
  * ============================================================================
  * ONE KEY PER PROVIDER, AND THE STORE STAYS A CLOSED LIST
@@ -340,7 +340,7 @@ const anthropic: Provider = {
 /**
  * Gemini's function declarations take an OpenAPI schema SUBSET.
  *
- * `additionalProperties` is not in it, and every one of our seven tools sets it
+ * `additionalProperties` is not in it, and every one of our tools sets it
  * — deliberately, so an over-eager model cannot invent a parameter. Sent as-is
  * the whole request is rejected, so it is stripped here rather than removed
  * from the catalogue: the other three providers enforce it, and losing it
