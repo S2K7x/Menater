@@ -534,6 +534,7 @@ history; rewriting history is how you lose it.
 | ~~C0.20~~ ✅ | **Acknowledgeable notices** — on Alerts and Health. Acknowledged is not hidden: they collapse behind a line that still counts them, they are keyed **by content** so a reworded finding comes back unread, and it is a browser preference |
 | ~~C0.21~~ ✅ | **Setup checklist** — the four things missing before an alert can be triaged, each stated with its consequence, gone once they are done |
 | ~~C0.22~~ ✅ | **Nine test-alert scenarios** — one per PATH rather than per story: no destination, with a hash, malformed, duplicate. A single hard-coded alert only ever proved the wiring |
+| ~~C0.30~~ ✅ | **The tab pattern is kept, not just declared** — `role="tab"` announces a contract: a tablist is ONE stop in the tab order, the arrows choose inside it, and each tab controls a panel that exists. None of the three held. Ingestion and Workflow rendered no `SectionPanel` at all, so **15 `aria-controls` pointed at nothing** (9 on the Ingestion tab, which nests both tablists); there was no roving tabindex anywhere, so Settings put **one stop per tab before the first setting** (9 in the measured mount, ten in the product, which always supplies the code-analysis section); and Settings rendered a code-analysis panel named by a tab it only sometimes creates. Measured on the three screens mounted with data, before and after |
 
 ### C0.23 ✅ — L (Lookup): asking about one value, by hand
 

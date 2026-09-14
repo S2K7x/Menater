@@ -24,6 +24,14 @@
  * accent's contrast, not the background's. A dark accent (Punk) wants it
  * light, a bright accent (Blued, Attck) wants it dark.
  *
+ * `--focus` is the same kind of role, one step further out: it is the RING,
+ * drawn on five different surfaces and over the hairline it replaces, so it
+ * follows the contrast of whatever is behind it rather than the theme's
+ * identity. Four themes can use their accent; Punk and Dark cannot, because
+ * theirs measures under the 3:1 floor an interface element needs — a ring
+ * nobody can see is the whole navigation of somebody working at the keyboard.
+ * A seventh theme measures it before assuming the accent will do.
+ *
  * ============================================================================
  * `--hero` IS AN INSET SURFACE, NOT AN INVERTED ONE
  *
@@ -63,6 +71,9 @@
   --accent: #c3f53c;
   --accent-dim: #9dc72a;
   --accent-fg: #171b21;
+  /* The focus ring. Here it is the accent, which measures 7.59:1 at worst
+     (against `--line`, the border it replaces on a field). */
+  --focus: #c3f53c;
 
   --red: #ff6b6b;
   --red-bg: #3a2226;
@@ -103,6 +114,10 @@
   --accent: #c31f1b;
   --accent-dim: #a01916;
   --accent-fg: #f5e7bd;
+  /* NOT THE ACCENT. This dark red on khaki measures 1.24:1 against `--line`
+     and 1.61:1 on `--surface` — a focus ring nobody can see, on the theme's
+     own ground. The cream of the type clears 5.98:1 everywhere a ring lands. */
+  --focus: #f5e7bd;
 
   --red: #ff997c;
   --red-bg: #4a2a1f;
@@ -143,6 +158,8 @@
   --accent: #c8f24b;
   --accent-dim: #a5cc33;
   --accent-fg: #16249b;
+  /* The accent: 4.75:1 at worst. */
+  --focus: #c8f24b;
 
   --red: #ffb2a8;
   --red-bg: #3a2a92;
@@ -186,6 +203,8 @@
   --accent: #ffdd1c;
   --accent-dim: #d9b800;
   --accent-fg: #5e1406;
+  /* The accent: 4.50:1 at worst. */
+  --focus: #ffdd1c;
 
   --red: #ffa796;
   --red-bg: #6d1a08;
@@ -227,6 +246,9 @@
   --accent: #e01e0b;
   --accent-dim: #b81909;
   --accent-fg: #ffffff;
+  /* The accent: 3.26:1 at worst (against `--line`). Above the floor, and the
+     thinnest margin of the six — lowering this red would take it under. */
+  --focus: #e01e0b;
 
   --red: #c71e10;
   --red-bg: #fbe2de;
@@ -265,6 +287,10 @@
   --accent: #1269f5;
   --accent-dim: #0955cf;
   --accent-fg: #ffffff;
+  /* NOT THE ACCENT. The application blue measures 2.75:1 against `--line` and
+     2.91:1 on `--surface-2`, both under the 3:1 floor for an interface
+     element. The type colour clears 11.80:1. */
+  --focus: #f0f2f5;
 
   --red: #f4636b;
   --red-bg: #33191d;

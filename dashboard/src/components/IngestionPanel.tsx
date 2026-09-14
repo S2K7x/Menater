@@ -41,7 +41,7 @@ import { api, ApiError } from '../lib/api.ts';
 import { useI18n } from '../i18n/context.tsx';
 import { Icon } from './Icon.tsx';
 import { Explain, Fold, PageHead } from './Guidance.tsx';
-import { SectionTabs } from './SectionTabs.tsx';
+import { SectionPanel, SectionTabs } from './SectionTabs.tsx';
 import { SourcesPanel } from './SettingsSetup.tsx';
 import { WorkflowPanel } from './WorkflowPanel.tsx';
 import {
@@ -446,7 +446,7 @@ export function IngestionPanel({ onGuide }: { onGuide?: () => void }) {
       />
 
       {/* --------------------------- Delivery --------------------------- */}
-      <div hidden={section !== 'delivery'}>
+      <SectionPanel id="delivery" active={section === 'delivery'}>
         <section className="soc-panel">
           <h2>{t.choose}</h2>
           <p className="soc-muted">{t.chooseLede}</p>
@@ -519,10 +519,10 @@ export function IngestionPanel({ onGuide }: { onGuide?: () => void }) {
             </div>
           ) : null}
         </section>
-      </div>
+      </SectionPanel>
 
       {/* --------------------------- Sources ---------------------------- */}
-      <div hidden={section !== 'sources'}>
+      <SectionPanel id="sources" active={section === 'sources'}>
         <section className="soc-panel">
           <h2>{t.pushSources}</h2>
           <p className="soc-muted">{t.pushSourcesLede}</p>
@@ -655,16 +655,16 @@ export function IngestionPanel({ onGuide }: { onGuide?: () => void }) {
             </>
           ) : null}
         </section>
-      </div>
+      </SectionPanel>
 
       {/* --------------------------- Pipeline --------------------------- */}
       {/* HIDDEN, NOT UNMOUNTED — the section-tabs rule. The graph holds a
           selected node and a scroll position, and a round trip through the
           other two sections must not reset them. */}
-      <div hidden={section !== 'pipeline'}>
+      <SectionPanel id="pipeline" active={section === 'pipeline'}>
         <p className="soc-muted">{t.sections.pipelineLede}</p>
         <WorkflowPanel />
-      </div>
+      </SectionPanel>
     </>
   );
 }
