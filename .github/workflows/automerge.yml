@@ -1,0 +1,112 @@
+# Merges a pull request once CI has actually passed on it.
+#
+# WHY THIS IS A SEPARATE FILE, TRIGGERED BY `workflow_run`, AND NOT A JOB
+# INSIDE ci.yml. A `workflow_run` workflow always executes the copy that is on
+# the DEFAULT BRANCH, never the copy in the branch under test. As a job inside
+# ci.yml, a pull request editing ci.yml would be editing the rules that decide
+# whether it may merge itself — the check and the thing being checked would be
+# the same file. Here, changing this file only takes effect once it is already
+# on `main`. It also means auto-merge can be switched off (delete or disable
+# this one file) without touching the suite.
+#
+# What it refuses to do:
+#   - merge anything from a FORK, or authored by anyone but the repository
+#     owner. `workflow_run` runs with write permissions, so the gate on who
+#     may reach it is the whole security argument;
+#   - merge a pull request carrying the `hold` label. That label is the manual
+#     override: put it on and this workflow leaves the PR alone;
+#   - merge onto a `main` that this CI run never saw. See below — that is the
+#     case that bit this repository on 2026-09-14.
+
+name: Auto-merge
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  merge:
+    if: >-
+      github.event.workflow_run.conclusion == 'success'
+      && github.event.workflow_run.event == 'pull_request'
+      && github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Merge the pull request this run tested
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          OWNER: ${{ github.repository_owner }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+
+          # The commit CI just went green on, back to the pull request holding
+          # it. Read from the API rather than from the event payload, whose
+          # `pull_requests` array is empty in several documented cases.
+          PR=$(gh api "repos/$REPO/commits/$SHA/pulls" \
+                 --jq '[.[] | select(.state == "open")] | first | .number // empty')
+          if [ -z "$PR" ]; then
+            echo "No open pull request for $SHA — nothing to merge."
+            exit 0
+          fi
+
+          view() { gh pr view "$PR" --repo "$REPO" --json "$1" --jq "$2"; }
+          AUTHOR=$(view author '.author.login')
+          IS_DRAFT=$(view isDraft '.isDraft')
+          BASE_REF=$(view baseRefName '.baseRefName')
+          HOLD=$(view labels '[.labels[].name] | any(. == "hold")')
+
+          echo "PR #$PR by $AUTHOR onto $BASE_REF (draft=$IS_DRAFT, hold=$HOLD)"
+
+          # Who may reach an automatic merge. Anything else is reported and
+          # left open for a human — refusing is always the cheap direction.
+          if [ "$AUTHOR" != "$OWNER" ]; then
+            echo "Author is not the repository owner. Leaving it open."
+            exit 0
+          fi
+          if [ "$HOLD" = "true" ]; then
+            echo "Carries the 'hold' label. Leaving it open, as asked."
+            exit 0
+          fi
+
+          # MERGE ONTO THE BASE THIS RUN ACTUALLY TESTED, OR NOT AT ALL.
+          #
+          # A `pull_request` run tests the PR merged into the base AS IT WAS
+          # WHEN THE RUN STARTED. If the base has moved since, green means
+          # "these changes worked against a `main` that no longer exists".
+          # That is not hypothetical here: on 2026-09-14, PR #13 added a test
+          # refusing any focus ring drawn in `var(--accent)` and PR #17 added
+          # a button doing exactly that. Both were green alone; together they
+          # failed. Updating the branch re-runs CI against the real `main`,
+          # and THAT run is the one allowed to merge.
+          MAIN_SHA=$(gh api "repos/$REPO/commits/$BASE_REF" --jq .sha)
+          BASE_SHA=$(gh pr view "$PR" --repo "$REPO" --json baseRefOid --jq .baseRefOid)
+          if [ "$BASE_SHA" != "$MAIN_SHA" ]; then
+            echo "$BASE_REF moved to $MAIN_SHA since this run. Updating the branch."
+            if gh pr update-branch "$PR" --repo "$REPO"; then
+              echo "Branch updated — CI will run again, and that run decides."
+            else
+              echo "::warning::PR #$PR conflicts with $BASE_REF and needs a human."
+            fi
+            exit 0
+          fi
+
+          # Every nightly PR on this repository is opened as a draft by
+          # convention, so a draft here says nothing about readiness — and
+          # skipping them would make this workflow do nothing at all. `hold`
+          # above is the signal that actually means "not this one".
+          if [ "$IS_DRAFT" = "true" ]; then
+            gh pr ready "$PR" --repo "$REPO"
+          fi
+
+          # A merge commit, which is what this repository's history uses.
+          # The branch is NOT deleted: that is a separate, irreversible tidy-up
+          # nobody asked for.
+          gh pr merge "$PR" --repo "$REPO" --merge
+          echo "Merged #$PR."
