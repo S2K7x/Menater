@@ -170,6 +170,18 @@ export interface Dictionary {
     copyFailed: string;
     openInEditor: (editor: string) => string;
     openInEditorHelp: string;
+    /**
+     * J0.1 — sending a finding into the triage queue.
+     *
+     * The button says what the click DOES ("Send to the triage queue"), never
+     * "triage" alone: this is the one control on the report that leaves the
+     * Code tab and costs a model call downstream.
+     */
+    promote: string;
+    promoteHelp: string;
+    promoteSending: string;
+    promoteNoRun: string;
+    promoteUnreachable: (error: string) => string;
     copyReport: string;
     downloadReport: string;
     exportHelp: string;
@@ -679,6 +691,17 @@ const EN: Dictionary = {
     copyFailed: 'Copy failed. Select the text and copy it by hand.',
     openInEditor: (editor) => `Open in ${editor}`,
     openInEditorHelp: 'Opens the file at the right line, if that editor is installed.',
+    promote: 'Send to the triage queue',
+    promoteHelp:
+      'Opens this flaw as an alert in the Alerts tab, where it is enriched, decided '
+      + 'under the same guardrails as any other alert, and written into the audit '
+      + 'chain. Nothing is sent until you press it, and nothing is fixed by sending it.',
+    promoteSending: 'Sending…',
+    promoteNoRun:
+      'This report is not attached to a scan run, so the alert would have no stable '
+      + 'identity and could not be deduplicated. Run the scan again from this console.',
+    promoteUnreachable: (error) =>
+      `The console could not be reached: ${error}. Nothing entered the queue.`,
     copyReport: 'Copy the report',
     downloadReport: 'Download',
     exportHelp:

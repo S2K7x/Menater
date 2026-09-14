@@ -250,14 +250,26 @@ describe('ReportView', () => {
     expect(document.body.textContent).not.toContain('XXE');
   });
 
+  /**
+   * `getByRole('note')` used to be unambiguous on this card. It stopped being
+   * so when J0.1 added the promote control, whose `Explain` popover is a note
+   * too — so the query is narrowed to the verdict notice rather than relaxed.
+   * The role is still asserted: it is half of the selector.
+   */
+  const verdictNotice = (): HTMLElement => {
+    const found = document.querySelector('p.vp-notice[role="note"]');
+    if (!found) throw new Error('no verdict notice rendered');
+    return found as HTMLElement;
+  };
+
   it('prévient quand un point n a pas été revérifié', () => {
     render(<FindingCard finding={{ ...IDOR_FINDING, evidence: 'not_arbitrated' }} />);
-    expect(screen.getByRole('note').textContent).toContain('could not be double-checked');
+    expect(verdictNotice().textContent).toContain('could not be double-checked');
   });
 
   it('prévient quand la seconde relecture n a pas tranché', () => {
     render(<FindingCard finding={{ ...IDOR_FINDING, claude_verdict: 'needs_human_review' }} />);
-    expect(screen.getByRole('note').textContent).toContain('human check is needed');
+    expect(verdictNotice().textContent).toContain('human check is needed');
   });
 
   it('dit clairement quand il n y a rien à signaler — et ce que ce vide vaut', () => {

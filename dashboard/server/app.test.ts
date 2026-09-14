@@ -257,3 +257,69 @@ describe('service inventory', () => {
     expect(parsed(r).settings.inventory.entries).toEqual([entry]);
   });
 });
+
+/**
+ * J0.1 — the door from a scan report into the triage queue.
+ *
+ * The mapping and the pipeline it feeds are covered in `findings.test.ts`. What
+ * is asserted here is the thing only the request surface can answer: that a
+ * failure the operator could act on comes back in a form the console's own
+ * client will still be holding when it renders it.
+ *
+ * `lib/api.ts` turns any 401 into "log in again", replaces the body of a
+ * 502/503/504 with a generic "the API is not responding", and reads a failed
+ * request's explanation from `error` alone. So a 503 carrying "no database
+ * configured: Settings → Database" arrives as "the API is not responding", and
+ * a 400 naming the field at fault arrives as "no explanation (400)". Both
+ * sentences were computed, and neither would reach the person who can act.
+ */
+describe('promoting a scan finding into the queue', () => {
+  it('does not answer a status whose body the console throws away', async () => {
+    // There is no reachable database here, so this exercises a real failure
+    // rather than a simulated one: the engine mounts (the default config names
+    // a host), `01-Ingestion` runs, and its deduplication step cannot answer.
+    const r = await call('POST', '/api/findings/promote', {
+      body: {
+        scan_run_id: 'scan-001',
+        finding: {
+          vulnerability: 'IDOR', http_method: 'GET', route: '/orders/:id',
+          file: 'src/routes/orders.ts', severity: 'critical',
+        },
+      },
+    });
+
+    expect(r.status).toBe(200);
+    const body = parsed(r);
+    // The pipeline's own answer, and the sentence built from it, both survive
+    // the trip — which is the whole point of not sending a 5xx here.
+    expect(typeof body.response).toBe('string');
+    expect(String(body.response).length).toBeGreaterThan(0);
+    // It names the finding, so an operator with several open reports knows
+    // which one this is about.
+    expect(String(body.response)).toContain('IDOR in GET /orders/:id');
+    // The id is derived, never composed from what the finding sent.
+    expect(String(body.alert_id)).toMatch(/^vulnpipe-[0-9a-f]{20}$/);
+  });
+
+  it('names the field at fault instead of answering "invalid"', async () => {
+    const r = await call('POST', '/api/findings/promote', {
+      body: { scan_run_id: 'scan-001', finding: { vulnerability: 'IDOR' } },
+    });
+
+    expect(r.status).toBe(200);
+    const body = parsed(r);
+    expect(body.ok).toBe(false);
+    expect(body.status).toBe(400);
+    // Every missing part, not the first one it tripped over.
+    const said = `${body.response} ${(body.errors ?? []).join(' ')}`;
+    for (const field of ['route', 'file', 'http_method', 'severity']) {
+      expect(said).toContain(field);
+    }
+  });
+
+  it('answers 404 JSON on a GET, like every other POST-only route', async () => {
+    const r = await call('GET', '/api/findings/promote');
+    expect(r.status).toBe(404);
+    expect(String(r.headers['Content-Type'])).toMatch(/application\/json/);
+  });
+});

@@ -168,6 +168,16 @@ export interface ServerMessages {
     simulateStarted: (scenario: string, status: string) => string;
     /** The pipeline refused the injected alert: its status, and its own reason. */
     simulateRefused: (scenario: string, status: number, detail: string | null) => string;
+    /** J0.1 — no database means a promoted finding has nowhere to go. */
+    promoteNoEngine: string;
+    /** The body was not the shape the route needs, and which part. */
+    promoteInvalid: (errors: string[]) => string;
+    /** The finding entered the pipeline: the run's own status. */
+    promoteStarted: (what: string, status: string) => string;
+    /** The pipeline refused it: its status, and its own reason. */
+    promoteRefused: (what: string, status: number, detail: string | null) => string;
+    /** The engine threw before the pipeline could answer at all. */
+    promoteFailed: (what: string, error: string) => string;
     approverRequired: string;
     engineUnavailable: string;
     approvalUnknownToken: string;
@@ -394,6 +404,34 @@ const EN: ServerMessages = {
       }
       return `Scenario "${scenario}" was not accepted: the pipeline answered ${status}${why}`;
     },
+    promoteNoEngine:
+      'No database configured: the built-in engine is not mounted, so this finding has '
+      + 'nowhere to go. Settings → Database.',
+    promoteInvalid: (errors) =>
+      `This finding could not be turned into an alert: ${errors.join('; ')}.`,
+    promoteStarted: (what, status) =>
+      `"${what}" entered the triage queue (${status}). It is now an alert like any other: `
+      + 'enriched, decided under the guardrails, and audited.',
+    promoteRefused: (what, status, detail) => {
+      // Same rule as `simulateRefused`: the reason the pipeline WROTE, or the
+      // plain statement that it wrote none. Never a placeholder standing in.
+      const why = detail ? ` — ${detail}.` : ', with no reason recorded.';
+      if (status === 0) {
+        return `"${what}" reached no answer in the pipeline: the run broke before `
+          + `deciding${detail ? ` — ${detail}.` : '.'}`;
+      }
+      // A DUPLICATE IS NOT A MALFUNCTION, and here it is the ordinary answer to
+      // pressing the button twice on one finding of one scan. It says what
+      // happened instead of reading like a breakage, and it still refuses to
+      // claim a chain started, because none did.
+      if (status === 200) {
+        return `"${what}" was already sent from this scan, so no second case was opened${why}`;
+      }
+      return `"${what}" was not accepted: the pipeline answered ${status}${why}`;
+    },
+    promoteFailed: (what, error) =>
+      `"${what}" could not be sent: the engine failed before the pipeline answered — `
+      + `${error}. Nothing entered the queue.`,
     approverRequired: 'Your identifier is required: it is logged with the decision.',
     engineUnavailable:
       'The engine is not started: no database is configured, so there is no run to answer.',

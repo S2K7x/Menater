@@ -224,6 +224,12 @@ export function VulnPipeSection({ prefill = null }: { prefill?: ScanPrefill | nu
           report={report}
           target={state.snapshot?.target ?? null}
           /*
+            J0.1 — the run id, so a finding promoted into the triage queue has a
+            stable identity. Two presses on one finding of one scan are then one
+            case, and the same flaw found by a LATER scan can still be triaged.
+          */
+          scanRunId={state.runId}
+          /*
             La couverture vient du snapshot, pas du rapport : c'est le moteur
             qui sait combien d'adresses il a lues et combien lui ont echappe.
             Chaque champ reste nullable jusqu'ici — un scan qui n'a pas dit ce
