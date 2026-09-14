@@ -204,6 +204,14 @@ Reading components does not find them. All six of these did.
 Run it per tab and per sub-tab. The tall ones are the ones to look at, and the
 number is what tells you whether the change worked.
 
+**Kill the transitions before you sample a colour.** `.soc-panel` transitions
+its background on a theme swap, so reading `getComputedStyle` straight after
+setting `data-theme` measures the cross-fade: a sweep did exactly that and
+reported `--faint` at 1.43:1 on `dark`, a colour no palette here contains, over
+a value that is really 3.33. It would have under-reported just as easily.
+`page.addStyleTag({ content: '* { transition: none !important }' })` first, and
+treat a number neither palette can produce as a bug in the ruler.
+
 ### Never review an empty screen
 
 Tracking and Workflow were blank on the test install — no database — and

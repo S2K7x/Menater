@@ -299,22 +299,30 @@ export function CaseView({
             </div>
 
             {/*
-              J0.3 — the code that runs on this machine.
+              J0.3 and J0.1 — the code this case is about: what the service
+              inventory says runs on this machine, or, for a case opened by
+              promoting a scan finding, the target that scan was run on.
 
-              SHOWN ONLY WHEN THERE IS A MATCH, unlike the observables above.
+              SHOWN ONLY WHEN SOMETHING NAMED IT, unlike the observables above.
               An absent observable is a fact about the DETECTION and has to be
               visible; an absent inventory entry is a fact about our own
               configuration, and printing "not listed" on every card of an
               install that has not filled the table in would put a line nobody
               can act on at the top of every incident.
 
-              It always says what matched. "This alert is about repository X"
-              is only checkable next to the value that produced it.
+              It always says what produced the answer. "This alert is about
+              repository X" is only checkable next to the thing that said so —
+              the observable that matched, or the scan this case came out of.
             */}
             {c.repository ? (
               <p className="soc-inv-match">
                 <b>{v.repository.title}</b>
-                <span className="soc-inv-service">{c.repository.service}</span>
+                {/* Only the inventory knows what a team calls a service. A
+                    case opened from a scan has a target and no name, and
+                    printing the target twice would dress one fact as two. */}
+                {c.repository.service ? (
+                  <span className="soc-inv-service">{c.repository.service}</span>
+                ) : null}
                 <code className="soc-inv-target">{c.repository.repository}</code>
                 <span className="soc-inv-why">
                   {v.repository.matchedOn[c.repository.matched_on]} · {c.repository.matched_value}

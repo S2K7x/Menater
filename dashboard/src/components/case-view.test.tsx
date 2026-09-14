@@ -154,4 +154,49 @@ describe('the code that runs on the machine', () => {
     expect(screen.getByText('/srv/src/orders-api')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Analyse this code/ })).toBeNull();
   });
+
+  /**
+   * J0.1's other half — a case opened by promoting a scan finding. It has no
+   * host, so nothing above could ever have named it; what names it is the scan
+   * it came out of.
+   */
+  describe('when the case came out of a scan', () => {
+    const fromScan = () =>
+      kase({
+        host: null,
+        repository: {
+          service: null,
+          repository: '/srv/src/orders-api',
+          matched_on: 'scan_target' as const,
+          matched_value: 'scan-77',
+        },
+      });
+
+    it('names the scan rather than claiming an observable matched', () => {
+      render(<CaseView alertCase={fromScan()} onRefresh={() => {}} />);
+      expect(screen.getByText('/srv/src/orders-api')).toBeTruthy();
+      // "matched on …" would send somebody looking for the observable that did
+      // it, and this case carries none.
+      expect(screen.queryByText(/matched on/)).toBeNull();
+      expect(screen.getByText(/the scan this case came from/).textContent)
+        .toContain('scan-77');
+    });
+
+    it('prints no service, rather than the target a second time', () => {
+      const { container } = render(<CaseView alertCase={fromScan()} onRefresh={() => {}} />);
+      // Nobody has told us what this service is called: the inventory holds
+      // that name and is keyed on machines this alert does not have.
+      expect(container.querySelector('.soc-inv-service')).toBeNull();
+      expect(container.querySelectorAll('.soc-inv-target')).toHaveLength(1);
+    });
+
+    it('hands the scanned target to the Code tab, and starts nothing', () => {
+      const asked: string[] = [];
+      render(
+        <CaseView alertCase={fromScan()} onRefresh={() => {}} onAnalyse={(r) => asked.push(r)} />,
+      );
+      screen.getByRole('button', { name: /Analyse this code/ }).click();
+      expect(asked).toEqual(['/srv/src/orders-api']);
+    });
+  });
 });

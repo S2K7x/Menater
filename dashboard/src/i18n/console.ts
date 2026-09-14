@@ -23,6 +23,7 @@
  */
 
 import type { Locale } from './dictionary.ts';
+import type { CaseRepository } from '../lib/types.ts';
 
 /**
  * Ou une section du Guide se range.
@@ -313,7 +314,12 @@ export interface ConsoleDictionary {
      */
     repository: {
       title: string;
-      matchedOn: Record<'host' | 'dest_ip' | 'source_ip', string>;
+      /**
+       * Keyed off the type rather than a copy of its members, so a new origin
+       * cannot be added to `CaseRepository` without a sentence to explain it
+       * on the card.
+       */
+      matchedOn: Record<CaseRepository['matched_on'], string>;
       /** Says what the button does BEFORE it is pressed: it starts nothing. */
       analyse: string;
       analyseHint: string;
@@ -1429,6 +1435,10 @@ const EN: ConsoleDictionary = {
         host: 'matched on the host',
         dest_ip: 'matched on the destination address',
         source_ip: 'matched on the source address',
+        // Not a match at all: this case IS a finding out of that scan. Saying
+        // "matched" would invite somebody to look for the observable that did
+        // it, and there is none.
+        scan_target: 'the scan this case came from',
       },
       analyse: 'Analyse this code',
       analyseHint:

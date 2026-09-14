@@ -31,7 +31,10 @@ import { ROUTING_WORKFLOWS } from './engine/workflows/routing.ts';
 import { injectAlert } from './injection.ts';
 import { isolationTarget } from './engine/transforms/domain.ts';
 import { UNTRUSTED_ALERT_FIELDS } from './assistant/sanitize.ts';
-import { alertSeverity, findingAlertId, findingToAlert } from './findings.ts';
+import { alertSeverity, findingAlertId, findingToAlert, scanRepository } from './findings.ts';
+import { buildCases } from './engine/cases.ts';
+import { DEFAULT_LOCALE } from './i18n.ts';
+import type { RunRecord, StepRecord } from './engine/types.ts';
 
 const NOW = new Date('2026-09-14T02:00:00.000Z');
 
@@ -305,7 +308,14 @@ describe('a body that is not the shape we hoped', () => {
 // Against the REAL pipeline.
 // ---------------------------------------------------------------------------
 
-/** The whole pipeline, with the database, the model and the network stubbed. */
+/**
+ * The whole pipeline, with the database, the model and the network stubbed.
+ *
+ * The store comes back with the engine because the last tests here go one step
+ * further than acceptance: they read the journal it wrote and hand it to the
+ * REAL `buildCases`, which is the only way to check what an operator ends up
+ * looking at.
+ */
 function assemble(opts: { dedup?: boolean } = {}) {
   const store = new MemoryRunStore();
   const vars = new Map<string, unknown>([
@@ -354,12 +364,19 @@ function assemble(opts: { dedup?: boolean } = {}) {
     now: () => NOW,
   });
   for (const wf of [...PIPELINE_WORKFLOWS, ...ROUTING_WORKFLOWS]) engine.register(wf);
-  return engine;
+  return { engine, store };
+}
+
+/** The journal the engine just wrote, read the way `snapshot.ts` reads it. */
+async function casesOf(store: MemoryRunStore) {
+  const runs: RunRecord[] = await store.recentRuns({ limit: 200 });
+  const steps: Map<string, StepRecord[]> = await store.stepsOfMany(runs.map((r) => r.id));
+  return buildCases(runs, steps, { limit: 200, locale: DEFAULT_LOCALE, now: () => NOW }).cases;
 }
 
 describe('a promoted finding, through the workflows that really run', () => {
   it('is ACCEPTED by 01-Ingestion, like any other alert', async () => {
-    const engine = assemble();
+    const { engine } = assemble();
     const mapped = promote();
     if (!mapped.ok) throw new Error(mapped.errors.join('; '));
 
@@ -375,7 +392,7 @@ describe('a promoted finding, through the workflows that really run', () => {
   });
 
   it('is answered "already seen" when the same finding of the same scan is sent twice', async () => {
-    const engine = assemble({ dedup: true });
+    const { engine } = assemble({ dedup: true });
     const mapped = promote();
     if (!mapped.ok) throw new Error(mapped.errors.join('; '));
 
@@ -400,10 +417,119 @@ describe('a promoted finding, through the workflows that really run', () => {
     expect(outcome.errors.join(' ')).toContain('severity');
 
     // And if one ever got past it, `01-Ingestion` says the same thing.
-    const engine = assemble();
+    const { engine } = assemble();
     const result = await injectAlert(
       engine, { ...alertOf(promote()), severity: 'catastrophic', source: 'vulnpipe' }, 'x');
     expect(result.status).toBe(400);
     expect(result.detail).toContain('invalid_severity');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The way back: which code the case came from.
+// ---------------------------------------------------------------------------
+
+/**
+ * J0.1 shipped naming this hole itself: the scanned target rides in
+ * `extensions`, `snapshot.ts` resolves a repository from the inventory BY
+ * HOSTNAME, and a promoted alert deliberately has no host — so the one case
+ * whose entire origin is a piece of code was the one case that could not say
+ * which code.
+ *
+ * The first test is the one that matters, and it is deliberately the long way
+ * round: a real promotion, through the real workflows, read back by the real
+ * `buildCases`, and only then handed to the reader. `pipeline-to-case.test.ts`
+ * is in this codebase because three field names were read from the same memory
+ * that wrote the fixtures; a fixture of `extensions.vulnpipe` written next to
+ * the function that reads it would prove exactly nothing.
+ */
+describe('the code a promoted case came from', () => {
+  it('is on the case the REAL pipeline and the REAL case builder produce', async () => {
+    const { engine, store } = assemble();
+    const mapped = promote();
+    if (!mapped.ok) throw new Error(mapped.errors.join('; '));
+
+    await injectAlert(engine, { ...mapped.alert, source: 'vulnpipe' }, mapped.alert_id);
+    const kase = (await casesOf(store)).find((c) => c.alert_id === mapped.alert_id);
+    if (!kase) throw new Error('the promotion produced no case');
+
+    // The inventory cannot answer this one — there is nothing to match on —
+    // and that is the whole reason this reader exists.
+    expect(kase.host).toBeNull();
+
+    expect(scanRepository(kase)).toEqual({
+      service: null,
+      repository: 'acme/api',
+      matched_on: 'scan_target',
+      matched_value: 'scan-001',
+    });
+  });
+
+  it('says nothing at all about an alert that came from a log source', () => {
+    expect(scanRepository({ alert_id: 'wazuh-1', extensions: null })).toBeNull();
+    expect(scanRepository({ alert_id: 'wazuh-1', extensions: { srcuser: 'root' } })).toBeNull();
+  });
+
+  /**
+   * `extensions` is an OPEN BAG — the contract keeps every unmapped vendor
+   * field in it — so any source can put a `vulnpipe` key there. Unchecked,
+   * that source would choose what the card calls "the code this case is about"
+   * and what the Code tab's launcher is filled with.
+   *
+   * The alert id is derived from the scan run and the four identity fields, so
+   * it can be recomputed from the bag. A bag that did not produce this alert's
+   * id did not come through `findingToAlert`.
+   */
+  it('refuses a vulnpipe bag the alert id was not derived from', () => {
+    const mapped = promote();
+    if (!mapped.ok) throw new Error(mapped.errors.join('; '));
+    const bag = (mapped.alert.extensions as Record<string, unknown>).vulnpipe;
+
+    // The real bag, pasted onto somebody else's alert.
+    expect(scanRepository({ alert_id: 'wazuh-1', extensions: { vulnpipe: bag } })).toBeNull();
+
+    // And the same bag with the flaw's identity rewritten under the id that
+    // was derived from the original one.
+    expect(scanRepository({
+      alert_id: mapped.alert_id,
+      extensions: { vulnpipe: { ...(bag as Record<string, unknown>), file: 'src/other.ts' } },
+    })).toBeNull();
+  });
+
+  it('answers nothing when the promotion carried no target', () => {
+    const mapped = findingToAlert({ scan_run_id: 'scan-001', finding: finding() }, NOW);
+    if (!mapped.ok) throw new Error(mapped.errors.join('; '));
+
+    // A target nobody sent is not a target to be invented, and this is the
+    // state every promotion was in before the button learned to send one.
+    expect(scanRepository({
+      alert_id: mapped.alert_id,
+      extensions: mapped.alert.extensions as Record<string, unknown>,
+    })).toBeNull();
+  });
+
+  /**
+   * A clipped identity field is still an identity field. The bag then holds a
+   * value the finding never sent — 2,000 characters and a marker — and the
+   * digest has to be taken over THAT, because that is what was hashed.
+   *
+   * Worth saying plainly: this test does not separate reading the bag verbatim
+   * from reading it back through the writer's own `str()`, because `clip` cuts
+   * to exactly its limit before appending, so clipping twice changes nothing.
+   * It pins the property that matters to an operator — a long route does not
+   * cost them the back-reference — and the reason the reader does not lean on
+   * that coincidence is written where the reader is.
+   */
+  it('survives a finding whose identity field was long enough to be clipped', () => {
+    const mapped = promote({ route: `/orders/${'x'.repeat(4000)}` });
+    if (!mapped.ok) throw new Error(mapped.errors.join('; '));
+    const bag = (mapped.alert.extensions as Record<string, unknown>).vulnpipe as
+      Record<string, unknown>;
+    expect(String(bag.route)).toContain('(clipped)');
+
+    expect(scanRepository({
+      alert_id: mapped.alert_id,
+      extensions: mapped.alert.extensions as Record<string, unknown>,
+    })?.repository).toBe('acme/api');
   });
 });
