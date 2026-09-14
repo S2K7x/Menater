@@ -68,7 +68,7 @@ application. Until it is done, the merge is visual.
 
 | # | Item | What it changes |
 |---|---|---|
-| **J0.1** | **A scan creates a case in the queue** — a confirmed critical flaw becomes an alert in the triage queue, with its card, its audit and its human approval | A flaw in the code stops being a report you close; it enters the circuit that gets it handled |
+| ~~**J0.1**~~ ✅ | ~~**A scan creates a case in the queue**~~ — `server/findings.ts` maps a finding to the alert contract, `POST /api/findings/promote` runs it through `01-Ingestion`, and the report carries a *Send to the triage queue* button per finding. A human presses it; nothing promotes itself | A flaw in the code stops being a report you close; it enters the circuit that gets it handled |
 | **J0.2** | **An alert triggers a scan** — an alert whose ATT&CK technique points at a class of flaw (injection, access control) offers to analyse the repository of the service concerned | Bring the incident next to the defect that made it possible, while you have it in front of you |
 | ~~**J0.3**~~ ✅ | ~~**Service ↔ repository inventory**~~ — `server/inventory.ts`, a Settings sub-tab, resolved onto every case in `snapshot.ts`. Exact matching only, ambiguity refused at the save, and the incident card names the code running on the machine it is about — with a jump that opens the Code tab on that target | Without it neither link means anything: nothing said which repository runs on `10.12.4.31` |
 | **J0.4** | **Unified "what threatens this system" view** — one screen stacking, for one asset, its alerts and its flaws | The question the user actually asks, which neither tab answers alone |
@@ -100,9 +100,9 @@ at the top of every incident.
 
 **What it does NOT do, and is honest to say so:**
 
-- **No scan creates a case, and no alert starts a scan.** J0.1 and J0.2 are
-  still open. This is their prerequisite plus the smallest honest consumer —
-  the same move the Lookup tab made in the other direction.
+- **No alert starts a scan.** J0.2 is still open. J0.1 is delivered — see
+  below — and this was its prerequisite plus the smallest honest consumer, the
+  same move the Lookup tab made in the other direction.
 - **The assistant and the MCP catalogue do not read it.** The field is on
   `AlertCase`, so `get_alert` could expose it in a line; it was left out of
   this pass rather than widening a change that touches the fenced surface.
@@ -113,6 +113,49 @@ at the top of every incident.
   considering later: a range is still a declaration, not a resemblance. It
   would need its own ambiguity rule (two overlapping ranges), which is exactly
   what the exact-match version avoids having to solve.
+
+### J0.1 ✅ — a finding enters the queue
+
+**What it is.** Every finding on a scan report carries a *Send to the triage
+queue* button. What it sends is mapped by `server/findings.ts` into the
+canonical alert shape and handed to `injectAlert`, which starts `01-Ingestion` —
+so a code flaw is enriched, decided under the guardrails, put to a human if the
+decision needs one, and sealed into the audit chain, by the same code path and
+the same validator as a Wazuh alert. There is no second pipeline and no second
+set of guardrails.
+
+**Four decisions, and three of them are refusals.**
+
+| Decision | Why the other answer was worse |
+|---|---|
+| **A human presses the button; nothing promotes itself** | A scan that raised its own alerts would spend a model call — and downstream an approval request — on a report nobody had read yet. J0.3 settled the same question in the other direction, and § 8 settles it generally: a scan is spent money, started from a string in a settings file |
+| **The alert names no host** | `isolate_host_temporary` is proposed from `dest_ip ?? host`. A static-analysis finding says a route is exploitable; it says nothing about a machine being compromised. Leaving `host` absent is also simply TRUE — we do not know one — so `isolationTarget()` refuses on its own, with no second safety rule to keep in step |
+| **Everything the repository or the model wrote lands in a fenced field** | You scan code you did not write, so a finding is attacker-influenceable text about attacker-influenceable text. `rule_name`, `raw_log`, `file_path` and `extensions` are all in `UNTRUSTED_ALERT_FIELDS`; `alert_id` is not, so it is DERIVED — a hash — and a test asserts no finding-supplied string survives into it |
+| **The scan run is part of the alert's identity** | Deduplication on `alert_id` has no expiry. Keyed on the flaw alone, a finding fixed in January and regressed in June could never be triaged again, for ever, under a green check. Keyed with the scan, two presses on one finding of one scan are still one case — which is the protection that was actually wanted |
+
+**Everything the operator can see leaves the route as a 200.** `lib/api.ts`
+replaces the body of a 502/503/504 with a generic *"the API is not
+responding"*, and reads a failed request's explanation from `error` alone — so
+a 503 saying *"no database configured: Settings → Database"* would arrive as a
+sentence about the API being down. The status the caller needs travels inside
+the payload, the way `/api/simulate` already sends it.
+
+**What it does NOT do, and is honest to say so:**
+
+- **The case does not name the code it came from.** The scanned target rides in
+  `extensions`, but `snapshot.ts` resolves `repository` from the inventory by
+  hostname — and this alert has no host. The back-reference is the next slice.
+- **No filter on which findings may be promoted.** Everything the arbiter left
+  in `findings` can be sent; what the arbiter dismissed is not in that list to
+  begin with. A second, stricter rule here would hide a flaw from the queue on
+  a policy nobody asked for.
+- **Nothing is promoted in bulk.** One finding, one press. A *send all criticals*
+  button is a reasonable next step and a different decision — it would open
+  cases faster than anyone reads them.
+- **The finding's status in the report does not change.** `finding-status.ts`
+  lives in the browser and tracks fixed / accepted / false alarm; "sent to the
+  queue" is a fourth thing, and wiring it in would have meant touching the
+  status store in a pass that already spans server, report and contract.
 
 ---
 

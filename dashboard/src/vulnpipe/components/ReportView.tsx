@@ -18,6 +18,7 @@ import { reportFileName, reportToMarkdown, type ReportMeta } from '../lib/report
 import { FindingStatusControl, StaleStatusNotice, useStatuses } from './FindingStatus.tsx';
 import { findingKey, statusStats } from '../lib/finding-status.ts';
 import { Fold } from '../../components/Guidance.tsx';
+import { PromoteFinding } from './PromoteFinding.tsx';
 import { Icon } from './Icon.tsx';
 
 export interface ReportFinding {
@@ -233,9 +234,15 @@ export function OpenInEditorLink({
 export function FindingCard({
   finding,
   sourceRoot = null,
+  scanRunId = null,
+  targetLabel = null,
 }: {
   finding: ReportFinding;
   sourceRoot?: string | null;
+  /** J0.1 — the scan this finding came from, part of the alert's identity. */
+  scanRunId?: string | null;
+  /** What was scanned, carried onto the alert it may become. */
+  targetLabel?: string | null;
 }) {
   const { locale, t } = useI18n();
   const { preferences } = usePreferences();
@@ -279,6 +286,11 @@ export function FindingCard({
         <CopyFixPromptButton finding={finding} />
         <OpenInEditorLink finding={finding} sourceRoot={sourceRoot} />
       </div>
+
+      {/* J0.1 — the only control here that leaves the Code tab. Below the
+          read-and-fix actions, because it is a different kind of act: those
+          three help you deal with the flaw, this one hands it to the queue. */}
+      <PromoteFinding finding={finding} scanRunId={scanRunId} target={targetLabel} />
 
       <FindingStatusControl finding={finding} />
 
@@ -573,12 +585,21 @@ export function ReportView({
   report,
   target = null,
   coverage = null,
+  scanRunId = null,
 }: {
   report: SecurityReport;
   /** Cible analysée, pour l'en-tête du rapport exporté. */
   target?: { label: string } | null;
   /** Ce que le scan a couvert. Absent = la couverture n'est pas qualifiable. */
   coverage?: ScanCoverage | null;
+  /**
+   * J0.1 — the run this report came from.
+   *
+   * It is part of the identity of any alert promoted out of it, so without one
+   * the promote button says why it cannot send rather than sending something
+   * that could not be deduplicated.
+   */
+  scanRunId?: string | null;
 }) {
   const { t } = useI18n();
   const { scan_summary: summary, findings } = report;
@@ -626,6 +647,8 @@ export function ReportView({
             key={`${finding.vulnerability}-${finding.http_method}-${finding.route}`}
             finding={finding}
             sourceRoot={report.source_root}
+            scanRunId={scanRunId}
+            targetLabel={target?.label ?? null}
           />
         ))
       )}

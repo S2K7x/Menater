@@ -40,6 +40,7 @@ import { casesRoutes } from './routes/cases.ts';
 import { approvalsRoutes } from './routes/approvals.ts';
 import { opsRoutes } from './routes/ops.ts';
 import { intelRoutes } from './routes/intel.ts';
+import { findingsRoutes } from './routes/findings.ts';
 import { assistantRoutes } from './routes/assistant.ts';
 import { mcpRoutes } from './assistant/mcp.ts';
 import { RuleDbError } from './runtime.ts';
@@ -70,6 +71,11 @@ const ROUTE_GROUPS: RouteGroup[] = [
   // Its three paths all start `/api/intel/`, which no earlier group tests for,
   // and it tests for nothing of theirs.
   intelRoutes,
+  // J0.1. One exact path under `/api/findings/`, a prefix no other group tests
+  // for — and deliberately NOT under `/api/vulnpipe/`, which `app.ts` relays
+  // wholesale to the analysis service: a route added there would be forwarded
+  // to a process that has never heard of the triage pipeline.
+  findingsRoutes,
   // Last, and it costs nothing: its two paths are exact and unique, so no
   // earlier group can swallow them and it can swallow none of theirs.
   assistantRoutes,

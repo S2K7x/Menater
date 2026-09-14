@@ -4,6 +4,124 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-14 — Monday · Feature
+
+**Subject**: J0.1 — a scan finding becomes a case in the triage queue. The
+report carries a *Send to the triage queue* button per finding; what it sends
+runs `01-Ingestion` like any other alert.
+
+**Result**: PR opened (branch `claude/great-pascal-hjxaw5`).
+
+**Why this subject**: Monday is the feature night and the roadmap says J0
+outranks everything. The suite was green on the default branch first (1022
+passed, 1 skipped, typecheck clean), so the calendar rule did not preempt.
+J0.3 was delivered on 2026-09-07 and the roadmap orders it before J0.1 and
+J0.2, so J0.1 was next and is the one the roadmap calls the reason the two
+products share an application.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-hjxaw5` with an instruction not to push anywhere else, as
+the 09-12 and 09-13 sessions were. The `claude/` prefix — the part NIGHTLY.md
+calls mandatory — holds either way. Worth reconciling in the routine's config
+so the two instructions stop disagreeing.
+
+**What I learned**:
+
+- **`getEngine()` is NOT null just because no database is reachable.** It
+  returns `null` only when `config.database.host` or `.database` is BLANK; with
+  a host configured it mounts a pool and the failure appears later, at query
+  time. My first route test assumed the no-engine branch and asserted on its
+  sentence; the real answer was `Database (INSERT): connect ECONNREFUSED
+  127.0.0.1:5432` from the engine throwing inside `engine.start`. **That is how
+  I found a defect in my own route**: the catch branch returned the bare error,
+  so someone with three reports open was told a database was unreachable and
+  not which finding it was about, nor whether it got through. `promoteFailed`
+  names the finding now. Found by running it, not by reading it.
+- **`lib/api.ts` poisons 400 as well as 503, and differently.** The documented
+  trap covers 401/502/503/504; a 400 is not thrown away but its explanation is
+  read from `body.error` ALONE, so a payload carrying `errors: [...]` arrives as
+  "no explanation (400)". Both halves are why this route answers 200 and puts
+  the status inside. `/api/simulate` still answers a real 503 for its no-engine
+  case — same trap, pre-existing, NOT fixed here (see below).
+- **Adding a shared primitive to a screen breaks role queries in files you did
+  not touch.** `Explain` renders `role="note"`; `FindingCard` had exactly one
+  note, and two tests in `ui.test.tsx` used a bare `getByRole('note')`. They
+  went red on *found multiple elements*. The queries were narrowed
+  (`p.vp-notice[role="note"]` — the role is still asserted), not relaxed.
+- **The measurement, since this touches a screen.** Twelve combinations, six
+  themes × the two outcome states, measured in Chromium at 390 px on a
+  throwaway preview page (deleted): contrast of the outcome sentence against
+  the surface behind it is **5.36:1 at worst (Acme), 10.11:1 at best**, all
+  ≥ 4.5; `scrollWidth === clientWidth` on every one, so no horizontal overflow;
+  the button is 44 px tall on a phone.
+
+**The design decision worth arguing with**: the SCAN RUN is part of the
+promoted alert's `alert_id`. Deduplication on `alert_id` has no expiry, so a
+purely content-keyed identity (vulnerability|method|route|file — which is what
+`finding-status.ts` uses, correctly, for the report's own status tracking)
+would mean a flaw fixed in January and regressed in June can never be triaged
+again, silently, for ever. Two presses on one finding of one scan are still one
+case, which is the protection that was actually wanted. The cost: promoting the
+same unfixed flaw after a later scan opens a second case — deliberately, since
+it takes a human press each time. It is in the traps table.
+
+**Do not redo**:
+
+- **Do not key a promoted finding on the flaw alone.** See above.
+- **Do not give the promoted alert a `host`.** `isolate_host_temporary` is
+  proposed from `dest_ip ?? host`; a static-analysis finding says nothing about
+  a machine being compromised, and leaving it absent is also simply true, so
+  `isolationTarget()` refuses on its own. Resolving one from the inventory in
+  reverse would put "cut this server off the network" in front of an approver
+  on the strength of a scanner reading source code.
+- **Do not put finding text in `alert_id`.** It is not in
+  `UNTRUSTED_ALERT_FIELDS`, so it reaches the model unfenced. It is a hash, and
+  a test asserts no supplied string survives into it.
+- **Do not route this through `/api/vulnpipe/*`.** That whole prefix is relayed
+  to the analysis service, which has never heard of the triage pipeline.
+- **Ruled out: a severity filter on which findings may be promoted.** The
+  roadmap line says "a confirmed critical flaw", but what the arbiter dismissed
+  is already absent from `findings`, and a second stricter rule here would hide
+  a real flaw from the queue on a policy nobody asked for. The finding's own
+  verdict and confidence travel on the alert instead.
+- **Ruled out: promoting in bulk.** A *send all criticals* button opens cases
+  faster than anyone reads them. It is a different decision, and it should be
+  somebody's, not mine at 3 a.m.
+
+**Found and NOT fixed** — out of scope, and each would have widened the PR:
+
+- **`POST /api/simulate` answers a real 503** for its no-engine case
+  (`routes/ops.ts`), whose body `lib/api.ts` replaces with "the API is not
+  responding". The sentence it computed — "No database configured… Settings →
+  Database" — never reaches the Health tab. Same trap as the one this PR
+  navigates, one route over. Small, and it needs its own test.
+- **The case a promotion opens does not name the repository it came from.** The
+  target rides in `extensions`, but `snapshot.ts` resolves `repository` from
+  the inventory BY HOSTNAME and this alert deliberately has none. The
+  back-reference is the obvious next slice of J0.1.
+
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 1058 passed | 1 skipped  (1022 before; +36 new, nothing skipped or weakened)
+npm run build       # dist built, 472.75 kB / 139.91 kB gzip
+```
+Checked **RED**: writing `host: route` into the mapping fails exactly three of
+the new tests — the isolation guard, the fenced-field sweep, and the file-path
+one. The end-to-end tests are non-vacuous for a different reason: the last one
+pushes `severity: 'catastrophic'` through the real engine and gets **400
+`invalid_severity`**, so the 202 the others assert is earned rather than
+automatic. The one skipped test is the pre-existing
+`store-contract.test.ts > contrat — postgres`, which needs a database.
+`VulnPipe/` untouched, so its suite was not run. No model key and no database
+needed: the mapping is pure and the pipeline tests stub the database, the model
+and the network, exactly as `injection.test.ts` does.
+
+**Note**: `npm install` did NOT rewrite `dashboard/package-lock.json` this time,
+unlike the four previous entries. Nothing reverted, nothing committed.
+
 ## 2026-09-11 (third run) — Friday · Unblocking PR #9 and PR #11
 
 **Subject**: both open PRs were `mergeable_state: dirty` and neither could be

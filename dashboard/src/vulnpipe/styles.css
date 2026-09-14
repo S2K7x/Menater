@@ -1330,6 +1330,66 @@
 
 .vp-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+/* ---------------------------------------------------------------------------
+   J0.1 — sending a finding to the triage queue.
+
+   Set apart from `.vp-finding-actions` by a rule above it, because it is a
+   different kind of act: those actions help you deal with the flaw where it is,
+   this one hands it to another part of the product and costs a model call.
+
+   The outcome sentence REPORTS, so it stays in the clear (`CLARITY.md` § 3) and
+   is coloured by what happened — `--green` / `--red`, whose contrast against a
+   panel is what `theme/themes.test.ts` measures on all six themes. Nothing here
+   is a literal colour: a hardcoded one would follow none of them.
+--------------------------------------------------------------------------- */
+
+.vp-promote {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.vp-promote-button {
+  padding: 8px 14px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-family: inherit;
+  font-size: 0.86rem;
+  cursor: pointer;
+  /* iOS zooms a field under 16px; a button is not a field, but 44px of target
+     is the rule the rest of the console holds to on a phone. */
+  min-height: 44px;
+}
+
+.vp-promote-button:hover:not(:disabled) { border-color: var(--fg); }
+.vp-promote-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.vp-promote-button:disabled {
+  border-color: var(--line-strong);
+  background: var(--surface-2);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+/* `flex-basis: 100%` so the sentence takes its own line rather than being
+   squeezed beside the button, where a long one would wrap to two characters. */
+.vp-promote-note {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.vp-promote-ok { color: var(--green); }
+.vp-promote-failed { color: var(--red); }
+
 /* Report export: two gestures, copy and download, in the header. */
 .vp-report-export {
   display: flex;
