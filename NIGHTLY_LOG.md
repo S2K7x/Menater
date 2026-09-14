@@ -10,7 +10,14 @@ they were — they are memory about live code, and rewriting them would lose it.
 did not name the code it came from. The card now names it and its *Analyse this
 code* button opens the Code tab on it.
 
-**Result**: PR #__ (branch `claude/great-pascal-kpgbel`).
+**Result**: PR #18 (branch `claude/great-pascal-kpgbel`).
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-kpgbel` with an instruction not to push anywhere else, as
+the 09-12, 09-13 and 09-14 first-run sessions were. The `claude/` prefix — the
+part NIGHTLY.md calls mandatory — holds either way. Still worth reconciling in
+the routine's config: this is the fourth entry saying so.
 
 **Why this subject**: the suite was green on the default branch first (1089
 passed, 1 skipped, typecheck clean), so the calendar rule did not preempt.
