@@ -193,13 +193,16 @@ export interface AlertCase {
   /** Temps entre la reception et la derniere etape connue. Le MTTR du cas. */
   dwell_ms: number | null;
   /**
-   * J0.3 — the code that runs on the machine this alert is about, when the
-   * service inventory names it.
+   * The code this alert is about, when something actually says which.
    *
-   * `null` means the inventory says nothing about this machine — NOT that the
-   * machine runs no code. The card prints the first and must never print the
-   * second. Resolved by the console from a table an operator filled in, never
-   * guessed from an address: see `server/inventory.ts`.
+   * Two things can answer, and neither ever guesses. J0.3: the service
+   * inventory matched an observable against a table an operator filled in
+   * (`server/inventory.ts`). J0.1: this case was opened by promoting a finding
+   * out of a scan, and the scanned target rode along with it
+   * (`scanRepository` in `server/findings.ts`).
+   *
+   * `null` means nothing named it — NOT that the machine runs no code. The
+   * card prints the first and must never print the second.
    */
   repository: CaseRepository | null;
 }
@@ -221,15 +224,33 @@ export interface InventoryEntry {
   repository: string;
 }
 
-/** What the inventory answered for a case, and what made it answer. */
+/**
+ * What answered "which code is this case about", and what made it answer.
+ *
+ * TWO ORIGINS, ONE SHAPE. The inventory matches an observable against a table
+ * an operator filled in (J0.3). A case opened by promoting a scan finding
+ * (J0.1) carries its own answer instead: it IS a finding out of a scan of that
+ * target, so nothing has to be matched at all. One shape because the card says
+ * the same thing either way — here is the code, and here is why we say so.
+ */
 export interface CaseRepository {
-  service: string;
+  /**
+   * What the team calls it, from the inventory entry that matched.
+   *
+   * `null` when nothing named it — which is every promoted finding: the scan
+   * knows the target, and nobody has told us what the service is called.
+   * Absent stays absent rather than being filled with the target again.
+   */
+  service: string | null;
   repository: string;
   /**
-   * Which observable matched. Always shown: "this alert is about repository X"
-   * is only checkable when it also says which value produced the match.
+   * What produced the answer. Always shown: "this alert is about repository X"
+   * is only checkable when it also says what made us say so.
+   *
+   * `scan_target` is not an observable and does not pretend to be one — it is
+   * the case's own origin, and `matched_value` then carries the scan run.
    */
-  matched_on: 'host' | 'dest_ip' | 'source_ip';
+  matched_on: 'host' | 'dest_ip' | 'source_ip' | 'scan_target';
   matched_value: string;
 }
 

@@ -142,9 +142,20 @@ the payload, the way `/api/simulate` already sends it.
 
 **What it does NOT do, and is honest to say so:**
 
-- **The case does not name the code it came from.** The scanned target rides in
-  `extensions`, but `snapshot.ts` resolves `repository` from the inventory by
-  hostname — and this alert has no host. The back-reference is the next slice.
+- ~~**The case does not name the code it came from.**~~ ✅ Delivered.
+  `scanRepository` in `server/findings.ts` reads the scanned target back out of
+  `extensions` — beside the function that writes it — and `snapshot.ts` asks it
+  before it asks the inventory, so the incident card names the code and its
+  *Analyse this code* button opens the Code tab on it. Two things the slice had
+  to settle. **The target that travels is the one that was TYPED**, never the
+  report header's label: that label is shortened for display, and
+  `classifyTarget('src/orders-api')` resolves against the service's working
+  directory — a different directory that exists, with no error. And the alert
+  id, derived from the scan run and the four identity fields, is **recomputed**
+  from the bag before any of it is believed, because `extensions` is an open
+  bag any source can write a `vulnpipe` key into. That is a consistency check
+  and not an authentication — there is no secret in the digest — and what
+  bounds it is J0.3's rule: it resolves, it never acts.
 - **No filter on which findings may be promoted.** Everything the arbiter left
   in `findings` can be sent; what the arbiter dismissed is not in that list to
   begin with. A second, stricter rule here would hide a flaw from the queue on

@@ -53,7 +53,19 @@ import type { CaseRepository, InventoryEntry } from '../src/lib/types.ts';
  */
 export type { InventoryEntry };
 
-export type MatchField = CaseRepository['matched_on'];
+/**
+ * The observables this table can match on — the inventory's half of
+ * `CaseRepository['matched_on']`.
+ *
+ * `scan_target` is the other half and is deliberately excluded: it is not an
+ * observable, nothing here can produce it, and it is answered one layer up by
+ * `scanRepository` in `server/findings.ts`. Written as an `Extract` rather
+ * than as its own list so that a member removed from the type cannot go on
+ * living here.
+ */
+export type MatchField = Extract<
+  CaseRepository['matched_on'], 'host' | 'dest_ip' | 'source_ip'
+>;
 
 /** Same shape as `validateRule`'s: the caller learns which field, and why. */
 export interface InventoryProblem {

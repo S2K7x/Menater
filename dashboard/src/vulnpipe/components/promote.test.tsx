@@ -167,7 +167,7 @@ describe('what the button reports back', () => {
 describe('on the finding card', () => {
   it('is offered beside the actions that deal with the flaw in place', () => {
     stubRoute({ ok: true, response: 'sent' });
-    render(<FindingCard finding={FINDING} scanRunId="scan-001" targetLabel="acme/api" />);
+    render(<FindingCard finding={FINDING} scanRunId="scan-001" scanTarget="acme/api" />);
 
     expect(screen.getByRole('button', { name: /send to the triage queue/i })).toBeTruthy();
   });

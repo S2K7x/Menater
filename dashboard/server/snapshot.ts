@@ -29,6 +29,7 @@ import { demoCases } from './demo.ts';
 import { messages, type Locale } from './i18n.ts';
 import { connectionString, getConfig } from './config.ts';
 import { resolveRepository } from './inventory.ts';
+import { scanRepository } from './findings.ts';
 import { PIPELINE_WORKFLOWS } from './engine/workflows/pipeline.ts';
 import { ROUTING_WORKFLOWS } from './engine/workflows/routing.ts';
 import type {
@@ -294,7 +295,8 @@ export function invalidate(): void {
 }
 
 /**
- * J0.3 — the service inventory, applied to every case.
+ * Which code each case is about — from the scan that opened it, or from the
+ * service inventory.
  *
  * DONE HERE AND NOWHERE ELSE. `buildCases` reads the engine's journal and has
  * no business reading `config.json`; the demonstration set is built without a
@@ -303,6 +305,19 @@ export function invalidate(): void {
  * keeps the console from showing a repository on the queue and none on the
  * card.
  *
+ * THE SCAN ANSWERS FIRST, and the two can hardly disagree: a promoted finding
+ * carries no host, no destination and no source, so the inventory has nothing
+ * to match it on. The order is stated anyway, because "the flaw this case IS"
+ * is a fact about the case's own origin, while the inventory is a declaration
+ * about a machine — and a fact does not lose to a declaration.
+ *
+ * NO EARLY RETURN ON AN EMPTY INVENTORY. There used to be one, and it was
+ * right for as long as the inventory was the only thing that could answer.
+ * Kept, it would have cost the back-reference on exactly the install where it
+ * matters most — the common one, where nobody has filled the table in — for a
+ * kind of case that never needed a table at all, silently and with nothing to
+ * show it.
+ *
  * The inventory is read from the CACHED config, so a save costs nothing; and
  * `saveConfig` already calls `invalidate()`, which is what makes an edited
  * inventory visible on the next refresh instead of up to fifteen seconds
@@ -310,8 +325,13 @@ export function invalidate(): void {
  */
 function withRepositories(snap: ConsoleSnapshot): ConsoleSnapshot {
   const entries = getConfig().inventory.entries;
-  if (entries.length === 0) return snap;
-  snap.cases = snap.cases.map((c) => ({ ...c, repository: resolveRepository(c, entries) }));
+  snap.cases = snap.cases.map((c) => {
+    const repository = scanRepository(c) ?? resolveRepository(c, entries);
+    // A case nothing named keeps the object it already has: `null` is what
+    // `buildCases` wrote, and copying every case to reinstall it would be work
+    // done on every rebuild for every install with no inventory.
+    return repository === null ? c : { ...c, repository };
+  });
   return snap;
 }
 

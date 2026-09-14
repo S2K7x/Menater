@@ -230,6 +230,14 @@ export function VulnPipeSection({ prefill = null }: { prefill?: ScanPrefill | nu
           */
           scanRunId={state.runId}
           /*
+            J0.1 — and the target as it was TYPED, not the header's label.
+            The label is shortened for display (`/srv/src/orders-api` reads
+            `src/orders-api`), and the incident card hands this string back to
+            the launcher: a shortened path resolves against the service's own
+            working directory, which can be a different directory that exists.
+          */
+          scanTarget={state.launchedTarget}
+          /*
             La couverture vient du snapshot, pas du rapport : c'est le moteur
             qui sait combien d'adresses il a lues et combien lui ont echappe.
             Chaque champ reste nullable jusqu'ici — un scan qui n'a pas dit ce

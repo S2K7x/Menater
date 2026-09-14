@@ -38,6 +38,26 @@ export type ScanPhase =
 export interface ScanState {
   phase: ScanPhase;
   runId: string | null;
+  /**
+   * The target as the operator TYPED it, for the run that was launched.
+   *
+   * Not `snapshot.target.label`, which is a display string: for a directory it
+   * is the last two path segments, so `/srv/src/orders-api` shows as
+   * `src/orders-api` — and handing THAT back to a launcher resolves it against
+   * the service's working directory, which on a real machine may well be
+   * another directory that exists. Measured on `classifyTarget`:
+   *
+   *   classifyTarget('/tmp/probe/srv/src/orders-api').label === 'src/orders-api'
+   *   classifyTarget('src/orders-api', '/tmp/probe/cwd').location
+   *     === '/tmp/probe/cwd/src/orders-api'      // a different directory, no error
+   *   classifyTarget('https://github.com/acme/billing/tree/main').label
+   *     === 'acme/billing (main)'                // and that one throws: target not found
+   *
+   * Sending somebody to read the wrong code while an incident is open is the
+   * failure J0.3 refuses resemblance in order to avoid. So what travels onto a
+   * promoted alert is this string, which is the one that was scanned.
+   */
+  launchedTarget: string | null;
   events: StepEvent[];
   snapshot: RunSnapshot | null;
   /** Devis en attente d'acceptation, puis conservé pendant le scan. */
@@ -54,6 +74,7 @@ export interface ScanState {
 const INITIAL: ScanState = {
   phase: 'idle',
   runId: null,
+  launchedTarget: null,
   events: [],
   snapshot: null,
   estimate: null,
@@ -137,6 +158,10 @@ export function useScan() {
     setState((previous) => ({
       ...previous,
       runId: launched.run_id,
+      // Recorded at LAUNCH, beside the run id it belongs to: the two together
+      // are what a promoted finding needs, and neither is recoverable from the
+      // report afterwards.
+      launchedTarget: request.target,
       estimate: launched.estimate ?? previous.estimate,
       notes: launched.notes ?? previous.notes,
     }));

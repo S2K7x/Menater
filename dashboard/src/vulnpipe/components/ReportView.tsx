@@ -235,14 +235,20 @@ export function FindingCard({
   finding,
   sourceRoot = null,
   scanRunId = null,
-  targetLabel = null,
+  scanTarget = null,
 }: {
   finding: ReportFinding;
   sourceRoot?: string | null;
   /** J0.1 — the scan this finding came from, part of the alert's identity. */
   scanRunId?: string | null;
-  /** What was scanned, carried onto the alert it may become. */
-  targetLabel?: string | null;
+  /**
+   * What was scanned, AS IT WAS TYPED — never the report header's display
+   * label. It travels onto the alert this finding may become, and from there
+   * onto the incident card, where it fills the Code tab's launcher in. A
+   * shortened path would fill it with something that resolves elsewhere. See
+   * `ScanState.launchedTarget`.
+   */
+  scanTarget?: string | null;
 }) {
   const { locale, t } = useI18n();
   const { preferences } = usePreferences();
@@ -290,7 +296,7 @@ export function FindingCard({
       {/* J0.1 — the only control here that leaves the Code tab. Below the
           read-and-fix actions, because it is a different kind of act: those
           three help you deal with the flaw, this one hands it to the queue. */}
-      <PromoteFinding finding={finding} scanRunId={scanRunId} target={targetLabel} />
+      <PromoteFinding finding={finding} scanRunId={scanRunId} target={scanTarget} />
 
       <FindingStatusControl finding={finding} />
 
@@ -586,10 +592,20 @@ export function ReportView({
   target = null,
   coverage = null,
   scanRunId = null,
+  scanTarget = null,
 }: {
   report: SecurityReport;
   /** Cible analysée, pour l'en-tête du rapport exporté. */
   target?: { label: string } | null;
+  /**
+   * J0.1 — the same target as it was TYPED, for a finding that is promoted.
+   *
+   * Distinct from `target.label` above, which is a display string and cannot
+   * be scanned again: see `ScanState.launchedTarget`. Two props because they
+   * answer two questions — what to PRINT on a report, and what to hand back to
+   * a launcher.
+   */
+  scanTarget?: string | null;
   /** Ce que le scan a couvert. Absent = la couverture n'est pas qualifiable. */
   coverage?: ScanCoverage | null;
   /**
@@ -648,7 +664,7 @@ export function ReportView({
             finding={finding}
             sourceRoot={report.source_root}
             scanRunId={scanRunId}
-            targetLabel={target?.label ?? null}
+            scanTarget={scanTarget}
           />
         ))
       )}

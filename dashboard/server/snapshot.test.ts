@@ -231,3 +231,50 @@ describe('what the cache is for, and must go on doing', () => {
     expect(reads).toBe(2);
   });
 });
+
+/**
+ * The one funnel every case passes through, and the case it used to skip.
+ *
+ * `withRepositories` returned early when the service inventory was empty —
+ * correct while the inventory was the only thing that could name a repository,
+ * and a silent hole the moment a promoted finding could carry its own. The
+ * install it hurt is the common one: nobody has filled the table in, and the
+ * back-reference that needs no table disappeared with it.
+ *
+ * The config mock above has `inventory: { entries: [] }`, which is exactly
+ * that install. The alert is built by the REAL mapping rather than written out
+ * here, for the reason the whole of `findings.test.ts` exists.
+ */
+describe('which code a case is about', () => {
+  it('reaches a case from its own scan even with an empty inventory', async () => {
+    const { findingToAlert } = await import('./findings.ts');
+    const mapped = findingToAlert({
+      scan_run_id: 'scan-77',
+      target: '/srv/src/orders-api',
+      finding: {
+        severity: 'high', vulnerability: 'IDOR', route: '/orders/:id',
+        http_method: 'GET', file: 'src/routes/orders.ts',
+      },
+    }, new Date('2026-09-14T10:00:00.000Z'));
+    if (!mapped.ok) throw new Error(mapped.errors.join('; '));
+
+    runs = [{ ...run(mapped.alert_id), input: mapped.alert }];
+    const snap = await snapshot(DEFAULT_LOCALE);
+    const kase = snap.cases.find((c) => c.alert_id === mapped.alert_id);
+
+    expect(kase?.repository).toEqual({
+      service: null,
+      repository: '/srv/src/orders-api',
+      matched_on: 'scan_target',
+      matched_value: 'scan-77',
+    });
+  });
+
+  it('says nothing about an ordinary alert when no table names its machine', async () => {
+    runs = [run('A')];
+    const snap = await snapshot(DEFAULT_LOCALE);
+    // `null` is the honest answer and the common one: the inventory says
+    // nothing about this machine, which is not "this machine runs no code".
+    expect(snap.cases[0].repository).toBeNull();
+  });
+});

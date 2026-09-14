@@ -4,6 +4,125 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-14 (second run) — Monday · Feature
+
+**Subject**: J0.1's own stated gap — a case opened by promoting a scan finding
+did not name the code it came from. The card now names it and its *Analyse this
+code* button opens the Code tab on it.
+
+**Result**: PR #__ (branch `claude/great-pascal-kpgbel`).
+
+**Why this subject**: the suite was green on the default branch first (1089
+passed, 1 skipped, typecheck clean), so the calendar rule did not preempt.
+Monday is the feature night and the roadmap says J0 outranks everything; **PR
+#17, merged, is this same day's first run** and its own log entry names the
+back-reference as "the obvious next slice of J0.1". That makes it priority (3),
+an explicit limitation from the roadmap, written by the person who shipped the
+half below it.
+
+**What I learned**:
+
+- **The report's target label is not a target.** `RunSnapshot.target` is
+  `{ kind, label }`, and `label` is `shortLabel()` — the last two path
+  segments. J0.1 put that string on the promoted alert. Probed rather than
+  read, because the consequence is behavioural:
+  `classifyTarget('/tmp/probe/srv/src/orders-api').label === 'src/orders-api'`,
+  and `classifyTarget('src/orders-api', '/tmp/probe/cwd').location ===
+  '/tmp/probe/cwd/src/orders-api'` — **a different directory that exists, no
+  error**. A github label carrying a ref (`acme/billing (main)`) throws
+  *target not found* instead. So surfacing the back-reference without fixing
+  the string would have put "read this code" in front of somebody and named
+  the wrong code. `ScanState.launchedTarget` records what was typed, at launch.
+- **The measurement lied before the code did.** The six-theme contrast sweep
+  reported `--faint` at 1.43:1 on `dark` and 2.10 on `acme`. Both are colours
+  those palettes do not contain: `.soc-panel` transitions its background, and
+  sampling 60 ms after setting `data-theme` reads the cross-fade. Real values,
+  transitions disabled: 3.20–4.09 across all six, which is the ≥3 floor
+  `themes.test.ts` already enforces. **It would have under-reported exactly as
+  easily**, so this is in CLAUDE.md and in CLARITY.md's measurement section.
+- **`clip` is idempotent, and my first comment said it was not.** I wrote
+  `stored()` to read the bag verbatim, justified by "re-clipping would shorten
+  it again". A mutation test (substituting `str()`) went GREEN, which is how I
+  found out: `clip` cuts to exactly the limit before appending its marker, so
+  clipping twice gives the same 2,011 characters. Measured. `stored()` is kept
+  — the digest is over what was STORED, and leaning on that coincidence would
+  tie the back-reference to a property nothing asserts — but the comment and
+  the test now say what is actually true, and say plainly that no test
+  separates the two.
+
+**The design decision worth arguing with**: `scanRepository` recomputes the
+alert id from the bag and refuses a bag that does not reproduce it. `extensions`
+is an open bag — any source can write a `vulnpipe` key — and without the check a
+log source would choose what the card calls "the code this case is about" and
+what the launcher is pre-filled with. **It is a consistency check, not an
+authentication**: there is no secret in the digest, and `target` sits outside it
+(it is not part of the flaw's identity), so a bag keeping a real identity and
+swapping the target still passes. What bounds the cost is J0.3's rule — it
+resolves, it never acts.
+
+**Do not redo**:
+
+- **Do not put `target` into `findingAlertId`.** It would close the hole above
+  and it costs more than it buys: `target` is optional, and the same repository
+  typed two ways would make one flaw two cases. The id's composition is a
+  documented decision (CLAUDE.md, ROADMAP.md § 2) and reopening it is not a
+  night's call.
+- **Do not resolve the service NAME by looking the scanned target up in the
+  inventory.** Tempting — the card would gain the team's word for it — but
+  `normalizeInventory` refuses duplicate IDENTIFIERS, not duplicate
+  repositories, so two entries can name one repository and the resolver would
+  need a tie-break. J0.3 exists precisely so that no tie-break has to be got
+  right. `service: null` and the card prints nothing.
+- **Ruled out: persisting the raw target in the VulnPipe run record.** It would
+  make the back-reference survive a reload, and `ScanResult.target` is
+  `{ kind, label }` on the service side, so it means changing that shape and
+  bumping `RUN_FORMAT_VERSION` — which makes every stored run of the old format
+  ignored wholesale. Far too wide for the gain, and the console already holds
+  the string it needs.
+
+**Found and NOT fixed** — out of scope, each would have widened the PR:
+
+- **`POST /api/simulate` still answers a real 503** for its no-engine case
+  (`routes/ops.ts`), whose body `lib/api.ts` replaces with "the API is not
+  responding". Carried over unfixed from the 09-14 first run's entry; still
+  small, still needs its own test. **Recommended as a next night's subject.**
+- **The Code tab never displays its own run id**, so the card's
+  *the scan this case came from · run-…* is cross-checkable against the case's
+  own `extensions` fold and not against the report. Honest as it stands; a run
+  id on the report header would close it.
+- **A report reopened from a past run has no `launchedTarget`.** Moot today —
+  `api.listRuns` exists and nothing in the interface calls it, so the only way
+  to see a report is to have launched it — but the moment a run history is
+  added, that path promotes with `target: null` and the case silently loses its
+  back-reference. Written down here because it will not look like a regression.
+
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 1103 passed | 1 skipped   (1089 | 1 before; +14, nothing skipped or weakened)
+npm run build       # dist built, 473.57 kB / 140.26 kB gzip
+```
+Checked **RED** by mutation, one at a time, restoring in between:
+
+| Mutation | Result |
+|---|---|
+| `withRepositories` stops asking the scan | `snapshot.test.ts` — *reaches a case from its own scan even with an empty inventory* fails |
+| the section hands back `snapshot.target.label` again (the original defect) | `promoted-target.test.tsx` fails: *expected 'src/orders-api' to be '/srv/src/orders-api'* |
+| the alert-id consistency check is removed | `findings.test.ts` — *refuses a vulnpipe bag the alert id was not derived from* fails |
+| the card prints the service span unconditionally | `case-view.test.tsx` — *prints no service, rather than the target a second time* fails |
+| `stored()` replaced by `str()` | **GREEN** — see "what I learned"; reported rather than hidden |
+
+Screen measured with data, not empty: a throwaway `preview-jump.html` mounting
+`CaseView` twice (one inventory match, one scan origin), Chromium at 375, 390
+and 1280 px × six themes, deleted afterwards. Contrast of the new provenance
+sentence on the surface behind it **3.20–4.09** (secondary mention, floor 3),
+the target `<code>` **5.20–10.21**, `scrollWidth === clientWidth` everywhere,
+jump button 44 px on a phone, `.soc-inv-service` rendered 0 times on the scan
+case and 1 on the inventory case, and the `innerText` heading sweep returns
+`[]`. `VulnPipe/` is untouched, so its suite was not run. No model key and no
+database needed.
+
 ## 2026-09-14 — Monday · Feature
 
 **Subject**: J0.1 — a scan finding becomes a case in the triage queue. The
