@@ -1146,8 +1146,13 @@ export function SettingsPage({
       </SectionPanel>
 
       {/* ---------------- Analyse de code (ex-VulnPipe) ---------------- */}
-      <SectionPanel id="code" active={section === 'code'}>
+      {/* THE PANEL IS AS CONDITIONAL AS ITS TAB. The section above pushes a
+          `code` tab only when the caller supplies the section; rendering the
+          panel unconditionally left an empty region named by a tab that is not
+          in the document — the defect the tabs themselves had, seen from the
+          other end. `App` always passes the prop, so this one was latent. */}
       {codeSection ? (
+      <SectionPanel id="code" active={section === 'code'}>
         <section className="soc-panel">
           <div className="soc-panel-head">
             <div>
@@ -1159,8 +1164,8 @@ export function SettingsPage({
           <p className="soc-muted">{st.code.lede}</p>
           {codeSection}
         </section>
-      ) : null}
       </SectionPanel>
+      ) : null}
 
       {/* Collée en bas, et non reléguée sous le dernier bloc.
           DÉCOUPER LA PAGE A CRÉÉ CE BESOIN : le brouillon est commun aux six
