@@ -1,0 +1,92 @@
+# What runs before anything reaches `main`.
+#
+# WHY THIS FILE EXISTS. Until it did, every pull request on this repository
+# showed green checks that were Vercel and GitGuardian — neither of which runs
+# the suite. "Checks passed" read as "the tests ran", and they had not: four
+# successive nightly PRs filed that as the highest-value maintenance item left.
+# Merging on those checks would have been this product's own defining defect,
+# a failure that shows green, applied to its own delivery path.
+#
+# The two jobs pin the Node version each half is DEPLOYED on (see the
+# Dockerfiles) rather than one version for both: VulnPipe is on 22 because
+# tree-sitter has no linux-arm64 binary and compiles from source against
+# Node 24's C++20 headers, and testing on a runtime you do not ship is a
+# green that vouches for nothing.
+
+name: CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# A new push supersedes the run in flight: the older answer is about code
+# nobody will merge. `main` is never cancelled — its history is the record.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  console:
+    name: Console — typecheck, tests, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'          # dashboard/Dockerfile
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+
+      # `npm ci`, never `npm install`: the lockfile is the claim under test.
+      # This repository's journal records `npm install` rewriting
+      # package-lock.json three nights running (@types/pg moving between
+      # dependencies and devDependencies), and a CI that rewrites its own
+      # lockfile is a CI that tests something the next machine will not get.
+      - run: npm ci
+        working-directory: dashboard
+
+      - run: npm run typecheck
+        working-directory: dashboard
+
+      - run: npm test
+        working-directory: dashboard
+
+      # The build is a third question, not a repeat of the other two: the
+      # suite runs under vitest, and `tsc --noEmit` emits nothing. A Vite
+      # build has failed on code both of them accepted.
+      - run: npm run build
+        working-directory: dashboard
+
+  vulnpipe:
+    name: Code analysis — typecheck, tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'          # VulnPipe/Dockerfile — see the header
+          cache: npm
+          cache-dependency-path: VulnPipe/package-lock.json
+
+      - run: npm ci
+        working-directory: VulnPipe
+
+      - run: npm run typecheck
+        working-directory: VulnPipe
+
+      # NOTE FOR ANYONE RUNNING THIS SUITE AS ROOT — it will fail one test,
+      # and the code is fine. `persistent-cache.test.ts` writes to
+      # /nonexistent-root/ to check that saveCache REPORTS a refusal rather
+      # than throwing; root is allowed to create that directory, so the write
+      # succeeds and the assertion is right to complain. The runner is not
+      # root, so this passes here. Measured, not assumed.
+      - run: npm test
+        working-directory: VulnPipe

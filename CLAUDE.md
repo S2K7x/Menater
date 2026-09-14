@@ -272,6 +272,7 @@ These cost time; they are written down so they do not cost it again.
 | **A display label handed back as an input** | The scan report's target is `{ kind, label }`, and `label` is a SHORT form: `shortLabel()` keeps the last two path segments, so `/srv/src/orders-api` prints `src/orders-api`. J0.1 sent that string onto the promoted alert, and the incident card hands a case's target straight to the Code tab's launcher — where `classifyTarget` tests the disk FIRST and resolves a relative path against the service's own working directory. Probed on Node 22: `classifyTarget('src/orders-api', '/tmp/probe/cwd').location === '/tmp/probe/cwd/src/orders-api'` — **a different directory that exists, no error, no warning**, and somebody reading the wrong code while an incident is open. The github form fails the other way and at least fails loudly: a label carrying a ref, `acme/billing (main)`, throws *target not found*. The rule is not "use `raw`", it is that **a string shortened for display is not an input**, and the two need separate fields the moment one of them travels. `ScanState.launchedTarget` records what was TYPED, at launch, beside the run id it belongs to |
 | **A guard that was right until a second thing could answer** | `withRepositories` returned early when the service inventory was empty — correct, and provably so, while the inventory was the only thing that could name a repository. A promoted finding carries its own target and needs no table, so the early return silently dropped the back-reference on **the install where it mattered most**: the one nobody has filled the table in for. Nothing fails, nothing is logged, and the card simply says less than it knows. Same family as the two correct rules whose INTERSECTION lost data: neither the guard nor the new answerer looks wrong in the file that holds it |
 | **A contrast measured during the theme cross-fade** | `.soc-panel` carries `transition: background var(--theme-swap)`, so sampling `getComputedStyle` 60 ms after `data-theme` changes reads the **blend**, not the theme. It reported `--faint` at **1.43:1** on `dark` and 2.10 on `acme` — colours neither palette contains — over a value that is really 3.33 and 3.60. The dangerous half is not the false red: it is that the same sampling would have reported a genuine failure as a pass, depending only on which theme happened to be measured before it. A measurement is code and can be wrong in both directions; `page.addStyleTag({ content: '* { transition: none !important }' })` before the sweep, and a number neither palette can produce is a bug in the ruler, not a finding |
+| **A green check that never ran the tests** | Every pull request on this repository showed checks passing, and they were Vercel and GitGuardian — a preview deploy and a secret scan. **Neither ran the suite**, and `.github/workflows` did not exist at all. "Checks passed" is read as "the tests ran", so the signal was not merely absent, it was MISLEADING — the product's own defining defect, a failure that shows green, sitting on its delivery path while four successive nightly PRs named it and none could fix it (a CI is a decision about where the suite runs, not a nightly subject). The second half is the one to remember once CI exists: **a `pull_request` run tests the branch merged into the base AS IT WAS WHEN THE RUN STARTED**. Merge two PRs that were each green against an older `main` and you get a red `main` from two green checks — measured here on 2026-09-14, when #13 added a test refusing any focus ring drawn in `var(--accent)` and #17 added a button doing exactly that. Neither PR was wrong; only their MEETING was, and no per-PR check can see it. `automerge.yml` therefore compares the base the run tested against the current `main` and updates the branch instead of merging when they differ |
 
 ---
 
@@ -846,6 +847,39 @@ connectivity*. The diagnostic checks access, publication, chaining, credentials,
 the node contract and the ingestion webhook.
 
 ---
+
+## Continuous integration, and the merge that follows it
+
+`.github/workflows/ci.yml` and `.github/workflows/automerge.yml`.
+
+**CI is the precondition, not a nicety.** Before it existed, merging on the
+checks a PR displayed meant merging on a preview deploy and a secret scan —
+see the traps table. `ci.yml` runs on every pull request and on every push to
+`main`:
+
+| Job | Runs | Node |
+|---|---|---|
+| `console` | `npm ci`, typecheck, suite, **build** | 24 — `dashboard/Dockerfile` |
+| `vulnpipe` | `npm ci`, typecheck, suite | 22 — `VulnPipe/Dockerfile` |
+
+Each half is tested on the Node version it is **deployed** on rather than one
+shared version: testing on a runtime you do not ship is a green that vouches
+for nothing, and VulnPipe is pinned to 22 precisely because tree-sitter
+compiles from source against Node 24's C++20 headers. The build is a third
+question and not a repeat: the suite runs under vitest and `tsc --noEmit`
+emits nothing, so a Vite build has failed on code both of them accepted.
+
+| Point | Detail |
+|---|---|
+| **`npm ci`, never `npm install`** | The lockfile is the claim under test, and this repository's journal records `npm install` rewriting `package-lock.json` three nights running. A CI that rewrites its own lockfile tests something the next machine will not get |
+| **Auto-merge lives in its own file, triggered by `workflow_run`** | Such a workflow always executes the copy on the DEFAULT BRANCH. As a job inside `ci.yml`, a pull request editing `ci.yml` would be editing the rules deciding whether it may merge itself — the check and the checked would be one file. It also means auto-merge can be switched off without touching the suite |
+| **It re-tests rather than merging onto a base it never saw** | The failure mode that is invisible per-PR: two PRs each green against an older `main` can be red together. The base the run tested is compared against the current `main`, and a difference updates the branch — which re-runs CI, and THAT run is the one allowed to merge |
+| **Forks and other authors never reach it** | `workflow_run` carries write permissions, so who may reach it is the whole security argument. Same repository, owner-authored, or it stays open |
+| **`hold` is the manual override** | A nightly PR is opened as a draft by convention, so a draft says nothing about readiness here and skipping drafts would make the workflow do nothing. The `hold` label is the signal that actually means "not this one" |
+| **The branch is not deleted** | An irreversible tidy-up nobody asked for is not part of merging |
+
+**The first install is merged by hand.** `automerge.yml` only runs from the
+default branch, so it cannot merge the pull request that introduces it.
 
 ## Required configuration
 

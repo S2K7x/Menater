@@ -1731,6 +1731,7 @@ Small, known, and written down so it is not rediscovered.
 
 | Subject | Detail |
 |---|---|
+| ~~No CI ran the suite~~ ✅ | ~~`.github/workflows` did not exist~~ — done. Every pull request carried green checks that were Vercel and GitGuardian, and **neither ran the tests**: "checks passed" read as "the tests ran", and they had not. Four successive nightly PRs filed this as the highest-value maintenance item left, and it was tracked in no section of this file. `ci.yml` runs typecheck, suite and build on `dashboard/` (Node 24) and typecheck and suite on `VulnPipe/` (Node 22) — each half on the Node version its own Dockerfile deploys. `automerge.yml` merges a PR once that CI is green, and re-tests rather than merging onto a `main` the run never saw |
 | Two icon sets | `src/components/Icon.tsx` (console) and `src/vulnpipe/components/Icon.tsx` (analysis) have two APIs and two class conventions. Mergeable, not urgent |
 | Dead sections in the analysis dictionary | `t.app`, `t.glossary`, `t.severity` have not been read since the landing page went away. **D4 built the rule that proves it** — `n8n-removed.test.ts` flags a catalogue key no product code mentions — and deliberately pointed it at the two console catalogues only: turning it on `src/i18n/dictionary.ts` means removing whole sections, which is a pass of its own, not a line in a documentation sweep |
 | Flaw statuses in `localStorage` | See V2.5 |
