@@ -12,7 +12,7 @@ header; `fetch` follows redirects by default; so the host we dialled decided
 which host our credential was delivered to. The rule now lives in
 `fetchWithDeadline`.
 
-**Result**: PR #PENDING (branch `claude/great-pascal-uvdd1s`).
+**Result**: PR #20 (branch `claude/great-pascal-uvdd1s`).
 
 **Note on the branch name.** `NIGHTLY.md` § 5 asks for
 `claude/nightly-YYYY-MM-DD-subject`; this session was handed
