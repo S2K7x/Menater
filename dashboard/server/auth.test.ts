@@ -65,6 +65,41 @@ describe('verrou d’accès de la console', () => {
     }
   });
 
+  it('LAISSE PASSER l’interface elle-même — c’était un défaut', () => {
+    // The lock guards data, not the page that asks for it. The login form is a
+    // React component inside the bundle these paths deliver, so refusing them
+    // made a console with a password set impossible to open at all — a fresh
+    // browser got `401 {"error":"Authentication required."}` instead of a page.
+    // Invisible in development, where Vite serves the interface and only the
+    // `/api` calls reach this function.
+    for (const path of [
+      '/', '/index.html', '/favicon.svg',
+      '/assets/index-a1b2c3.js', '/assets/index-a1b2c3.css',
+      // A navigation route is a screen, not a file: the static server falls
+      // back to the shell for it, and it must get that far.
+      '/settings', '/alerts', '/guide',
+      // Starts with the same four letters and is not the API. `static.test.ts`
+      // pins the same boundary on the other side of it.
+      '/apiary.js', '/apis',
+    ]) {
+      expect(requiresAuth(path), path).toBe(false);
+    }
+  });
+
+  it('mais ne relâche RIEN sous /api/, y compris `/api` tout court', () => {
+    // The counterpart of the test above, and what stops it being a hole: the
+    // exemption is "everything the API does not own", so the boundary is the
+    // only thing holding it up.
+    for (const path of [
+      '/api', '/api/', '/api/snapshot', '/api/credentials', '/api/vulnpipe/scans',
+      // Looks like a file, is an API path. The namespace decides, not the
+      // extension — a rule written on suffixes would open these.
+      '/api/settings.json', '/api/cases/index.html',
+    ]) {
+      expect(requiresAuth(path), path).toBe(true);
+    }
+  });
+
   it('n’exempte AUCUNE autre route d’écriture', () => {
     // Le pendant du test précédent : cette liste ne doit pas s'allonger par
     // inadvertance. Une route d'écriture qui y tomberait serait ouverte à tous.

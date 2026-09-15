@@ -113,8 +113,39 @@ const PUBLIC_ROUTES = new Set([
  */
 const INGEST_PATH = /^\/api\/ingest\/(?!sources$)[a-z0-9-]+$/;
 
+/**
+ * The API's namespace — and therefore, by subtraction, the interface's.
+ *
+ * THE LOCK GUARDS DATA, NOT THE PAGE THAT ASKS FOR IT. Everything this console
+ * knows is answered under `/api/`; a path outside it can only be served by
+ * `serveStatic`, which refuses `/api/` by itself and cannot leave its root. So
+ * the files of the built interface — `index.html`, the fingerprinted bundle,
+ * the stylesheet, and every navigation route that falls back to the shell —
+ * carry nothing an unauthenticated visitor could not already read in this
+ * repository, and they are served without a session.
+ *
+ * THIS WAS A DEFECT, and it was the lock locking the operator out. The login
+ * form is a React component INSIDE that bundle (`LoginScreen` in
+ * `src/App.tsx`), so while `requiresAuth` answered `true` for `/`, setting a
+ * console password made the console unopenable: a fresh browser got
+ * `401 {"error":"Authentication required."}` instead of a page, and — sessions
+ * living in memory — a container restart did the same to everyone already in.
+ * The way out was to edit `config.json` on disk.
+ *
+ * It showed nowhere because it could not show in development: there Vite
+ * serves the interface and only the `/api` calls ever reach this function.
+ * Exactly the shape of the `/api/*`-served-the-SPA defect in CLAUDE.md, whose
+ * note reads "only broken in Docker, for want of a `dist/` to serve".
+ *
+ * The subtraction is deliberately the whole rule rather than a list of file
+ * names: a list is the exact-match set that already cost this project the
+ * ingestion endpoints, one Vite output away from going stale.
+ */
+const API_NAMESPACE = /^\/api(\/|$)/;
+
 export function requiresAuth(path: string): boolean {
   if (!getConfig().auth.enabled) return false;
+  if (!API_NAMESPACE.test(path)) return false;
   if (INGEST_PATH.test(path)) return false;
   return !PUBLIC_ROUTES.has(path);
 }
