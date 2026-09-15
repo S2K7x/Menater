@@ -4,6 +4,140 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-15 — Tuesday · Security
+
+**Subject**: a redirect is a reply, and a reply was choosing where this
+console's next request went. Every outbound secret travels in a request
+header; `fetch` follows redirects by default; so the host we dialled decided
+which host our credential was delivered to. The rule now lives in
+`fetchWithDeadline`.
+
+**Result**: PR #20 (branch `claude/great-pascal-uvdd1s`).
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-uvdd1s` with an instruction not to push anywhere else, as
+the 09-12, 09-13 and 09-14 sessions were. The `claude/` prefix — the part
+NIGHTLY.md calls mandatory — holds either way. **Fifth entry saying so**; it is
+a line in the routine's configuration, not a thing a night can fix.
+
+**Why this subject**: the suite was green on the default branch first (1103
+passed, 1 skipped, typecheck clean), so the calendar rule did not preempt.
+Tuesday's listed areas include secret leakage and SSRF, and no PR was open.
+Priority (2): a real, reproducible defect, not a roadmap item — it was tracked
+nowhere.
+
+**What I learned**:
+
+- **A cross-origin redirect strips exactly one header, and it is not the one
+  this console uses.** Measured on Node 22.22.2, two `node:http` servers on two
+  ports, one `302` between them: `authorization` arrives **absent** at the
+  second host (the fetch spec's one rule), `x-api-key` and `x-soc-token` arrive
+  **delivered**. So `Authorization` was safe by an accident of the
+  specification. The poller's credential header is *named by the operator*, the
+  address is *typed by the operator*, and Anthropic's own key header is
+  `x-api-key` — none of them is `Authorization`.
+- **The guard was already written, on the call site that needed it least.**
+  `intel/lookup.ts` carried `redirect: 'manual'` with a comment saying a 3xx
+  "would mean the endpoint moved, which is a thing to notice, not to obey" —
+  on a closed catalogue of hosts *we* chose. It was on **one call site out of
+  eight**, and not on `pwnedRange` forty lines below it in the same file. The
+  poller, where the destination is typed into a form, had none. Same shape as
+  "a fix applied at the front door and not at the two buttons behind it".
+- **Eleven green tests over a reopened hole.** This is the one to carry
+  forward. My first eleven tests drove an injected transport and all passed;
+  deleting `redirect: 'manual'` from the code left **all eleven still green**,
+  because a fake `fetch` ignores that option and hands back whatever Response
+  the fixture wrote. Against the real `fetch`, undici would have followed the
+  redirect itself and delivered the credential before this code ever saw a 3xx.
+  **A fake cannot vouch for an option the fake does not implement.** Two real
+  sockets can; the file now has both, and the mutation is caught.
+- **`redirect: 'manual'` returns the real 3xx**, not an opaque response:
+  status, `Location` and body are all readable (probed). `redirect: 'error'`
+  rejects with cause `"unexpected redirect"`, and undici's own follow caps at
+  20 hops and refuses a non-HTTP(S) `Location` outright (cause `"URL scheme
+  must be a HTTP(S) scheme"`) — so `file://` was never reachable through a
+  redirect, and the finding is narrower than it first looked.
+
+**The design decision worth arguing with**: the rule is **not** "refuse every
+redirect". A hop that stays on the host the caller named is followed, because a
+trailing-slash `301` is the commonest redirect there is and the credential
+travels no further than it already had. That is a deliberate **relaxation** of
+`intel/lookup.ts`'s stance, which refused all of them — said plainly in the
+comment that replaces its line, so a reviewer can overrule it by changing one
+condition. Refused and named: another host, a same-host drop out of TLS, any
+redirect on a write.
+
+**Do not redo**:
+
+- **Do not assert this with a fake transport alone.** See above. The injected
+  `fetchImpl` cannot fail the assertion that matters.
+- **Ruled out: an `allowRedirects` option on `DeadlineOptions`.** No caller
+  wants a different answer, and an escape hatch nobody uses is the dead code
+  that looks load-bearing.
+- **Ruled out: comparing origins as strings.** `next.host !== current.host` on
+  two *parsed* URLs, and the request is then sent to the parsed URL that was
+  compared. Comparing one string and dialling another is where a check and the
+  request it guards come to disagree — `//evil.com`, `https:/\evil.com` and a
+  userinfo `http://good@evil.com` are all handled correctly by the WHATWG
+  parser and would each need their own rule in a string comparison.
+- **Do not put the destination's path or query in the refusal.** A configured
+  endpoint can carry a token in either, and the sentence is written to
+  `soc_run_step` and printed on an incident card. Host alone, the rule
+  `reach()` already follows. A test pins it.
+
+**Found and NOT fixed** — out of scope, each would have widened the PR:
+
+- **`POST /api/simulate` still answers a real 503** for its no-engine case
+  (`routes/ops.ts`), whose body `lib/api.ts` replaces with "the API is not
+  responding". Carried unfixed since the 09-14 entries. Still the best small
+  next subject.
+- **`readBody` refuses an oversized request body with a French sentence**
+  (`respond.ts`: *"Corps de requete trop volumineux."*) and every caller does
+  `.catch(() => null)`, so the sender is told its alert had an *invalid schema*
+  rather than that it was *too large*. Two defects in one line — the language
+  (ROADMAP § 7's engine-French debt) and the swallowed cause — and the second
+  is the one that costs somebody an afternoon.
+- **`findingAlertId` joins its five parts on a literal NUL byte embedded in the
+  source file**, which is why `grep` calls `server/findings.ts` a binary file
+  (also `intel/lookup.ts`, `i18n.ts` and three test files). The separator is
+  correct and the comment is accurate; the hazard is that any tool normalising
+  the file would change every promoted finding's alert id silently. `'\u0000'`
+  would read identically to the compiler and survive an editor.
+- **The engine's `http` node resolves its URL from a `ValueRef` against a scope
+  that includes `ctx.input`** — the alert. The six shipped workflows only ever
+  point it at a pipeline variable, so nothing reaches it today; written down
+  because it is the shape of thing that stops being true quietly.
+
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 1118 passed | 1 skipped   (1103 | 1 before; +15, nothing skipped or weakened)
+npm run build       # dist built, 473.57 kB / 140.26 kB gzip
+```
+Checked **RED** by mutation, one at a time, restoring in between — all against
+`http.test.ts` + `poller.test.ts` (62 tests):
+
+| Mutation | Result |
+|---|---|
+| delete `redirect: 'manual'` (undici follows again) | RED — *never delivers the header to the host a real 302 pointed at* |
+| `next.hostname` instead of `next.host` (port ignored) | RED — same test, two ports on 127.0.0.1 |
+| allow a redirect on a write | RED — *never replays a POST body at a redirect* |
+| allow the same-host TLS downgrade | RED — *refuses a same-host redirect that drops out of TLS* |
+| drop `release(res)` on the refused 3xx | RED — *releases the body of the redirect it refused* |
+| `MAX_REDIRECTS` raised to 5000 | RED — *stops a redirect loop instead of spinning on it* |
+| name `next.href` instead of `next.host` | RED — *names the destination by HOST alone* |
+
+The module was also loaded under `node --experimental-strip-types` (the runtime
+the service actually uses, where the compiler and vitest both lie) and driven
+against a live socket: the operator's sentence comes out as *"the address
+answered HTTP 302 and redirected to attacker.example. This console does not
+follow a redirect off the host it was pointed at…"*. Probes written to
+`dashboard/scripts/`, run, output pasted into the file headers, deleted.
+`VulnPipe/` is untouched, so its suite was not run. No model key, no database
+and no network egress needed: every socket in these tests is on 127.0.0.1.
+
 ## 2026-09-14 (second run) — Monday · Feature
 
 **Subject**: J0.1's own stated gap — a case opened by promoting a scan finding

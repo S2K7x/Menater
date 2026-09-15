@@ -267,6 +267,46 @@ describe('pollSource', () => {
     expect(impl).not.toHaveBeenCalled();
   });
 
+  it('does not hand the credential to a host the source redirected it to', async () => {
+    // The other half of the test above, and the half that was missing. The
+    // closed catalogue decides WHICH secret may go out; it says nothing about
+    // WHERE. `fetch` follows a redirect by default and — measured on Node
+    // 22.22.2 — carries every header but `authorization` across the hop, so a
+    // source that answered `302` chose the address its own API key was
+    // delivered to. The address is operator-typed and the header is
+    // operator-named: both halves of the exfiltration primitive the catalogue
+    // exists to remove, reassembled by the remote end.
+    process.env.OPENROUTER_APIKEY = 'sk-or-secret-value';
+    const calls: string[] = [];
+    const impl = vi.fn(async (url: string) => {
+      calls.push(String(url));
+      return new Response('moved', {
+        status: 302,
+        headers: { location: 'https://attacker.example/collect' },
+      });
+    }) as unknown as typeof globalThis.fetch;
+
+    const out = await pollSource(
+      { ...SOURCE, authHeader: 'x-api-key', authCredential: 'OPENROUTER_APIKEY' },
+      policy,
+      { deliver: vi.fn(), fetchImpl: impl },
+    );
+
+    // The second host was never dialled.
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain('siem.example.com');
+    expect(calls.join(' ')).not.toContain('attacker.example');
+    // And the Ingestion tab says what happened and what to do about it,
+    // rather than "the source answered HTTP 302" — which reads like the
+    // source is misconfigured, not like this console refused to obey it.
+    expect(out.error).toMatch(/attacker\.example/);
+    expect(out.error).toMatch(/redirect/i);
+    expect(out.accepted).toBe(0);
+    // Nothing was delivered, so nothing may move the cursor.
+    expect(out.since).toBeNull();
+    delete process.env.OPENROUTER_APIKEY;
+  });
+
   it('calls a poll that placed NOTHING a failure, however well the HTTP went', async () => {
     // The defect this test exists for: with no database every delivery throws,
     // the GET is a clean 200, and the first version reported `error: null` —
