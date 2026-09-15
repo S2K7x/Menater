@@ -4,6 +4,140 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-15 (second run) — Tuesday · Security
+
+**Subject**: the access lock refused the interface itself. `requiresAuth`
+answered `true` for `/`, and the login form is a React component inside the
+bundle it was refusing — so setting a console password made the console
+impossible to open. The lock now guards data (`/api/`), not the page that asks
+for it.
+
+**Result**: PR #21 (branch `claude/great-pascal-0z4tau`).
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-0z4tau` with an instruction not to push anywhere else, as
+the 09-12, 09-13, 09-14 and 09-15 first-run sessions were. The `claude/`
+prefix — the part NIGHTLY.md calls mandatory — holds either way. **Sixth entry
+saying so**; it is a line in the routine's configuration, not a thing a night
+can fix.
+
+**Why this subject**: the suite was green on the default branch first (1118
+passed, 1 skipped, typecheck clean), so the calendar rule did not preempt. This
+is the SECOND Tuesday run of the day — the first shipped the redirect fix
+(PR #20, merged) — so its subject was spent and no PR was open. Tuesday's second
+listed area is *authz and public routes (`PUBLIC_ROUTES`)*, which is exactly
+where this sits. Priority (2): a real, reproducible defect, tracked nowhere in
+`ROADMAP.md` or in this file.
+
+**What I learned**:
+
+- **The lock's own feature was the thing it broke, and only in Docker.** With
+  `auth.enabled`, `GET /`, `GET /index.html` and `GET /assets/index-*.js` all
+  answered `401 {"error":"Authentication required.","auth_required":true}`.
+  `LoginScreen` lives in `src/App.tsx`, i.e. inside the bundle being refused,
+  so there was no way to log in at all; and sessions live in memory, so a
+  container restart locked out everyone already signed in. The way back was
+  editing `config.json` on disk. **It cannot show in development** — Vite serves
+  the interface on 5174 and only the `/api` calls cross `handleRequest`, which
+  is why the SPA loads fine there and only the data 401s (the in-app login
+  screen then appears, and everything looks correct). Same shape as the
+  `/api/*`-served-the-SPA trap, reversed, and with the same note: only broken in
+  the normal deployment mode.
+- **The operator who enables it is the one person who does not see it.** Their
+  page is already loaded; `lib/api.ts` turns the first 401 into
+  `AuthRequiredError`, the in-app login screen renders, they log in, and it
+  works. The breakage starts at the next full page load — theirs or anyone
+  else's. That is why a feature this central had no bug report.
+- **Every route in this console is under `/api/`.** Verified by enumerating
+  them rather than assuming: 29 exact literals across the route groups, plus
+  `/api/approvals/:token/resume` (regex), `/api/cases/` (prefix), `/api/mcp`,
+  `/api/ingest/:source` and the `/api/vulnpipe` relay prefix — and
+  `server/api.ts` is `createServer(handleRequest)` with nothing else attached.
+  So "not `/api/`" provably reaches nothing but `serveStatic`, which refuses
+  `/api/` by itself and cannot leave its root. **That enumeration is the whole
+  safety argument for the fix**, and it is the thing to re-run if a route is
+  ever added outside the namespace.
+- **The bundle carries no secret, checked rather than assumed.** Built `dist/`
+  is five files. The only `import.meta.env` reads are `VITE_API_URL` and
+  `VITE_VULNPIPE_API_URL`, both base URLs and neither set in the Dockerfile; the
+  `password`/`secret`/`token` matches in the bundle are all UI *labels*, and
+  there is no long hex or base64 literal in it. Serving it unauthenticated
+  discloses the console's own source, which is already in this repository.
+
+**The design decision worth arguing with**: the exemption is written as the
+whole subtraction — `API_NAMESPACE = /^\/api(\/|$)/`, and anything that does
+not match is the interface — rather than as a list of servable file names or
+extensions. A list is precisely the exact-match `PUBLIC_ROUTES` set that already
+cost this project every ingestion endpoint, and it would go stale the first time
+Vite emits a new output kind. A reviewer who wants the narrower rule changes one
+regex.
+
+**Do not redo**:
+
+- **Do not exempt by file extension.** It is the obvious wrong fix and it fails
+  in both directions: `/settings` is a screen and not a file, so it stays locked
+  and the SPA's own navigation breaks on reload; and `/api/settings.json` would
+  be opened. Kept as mutation M4 — it turns four assertions red, which is how I
+  know the tests separate the two rules.
+- **Do not try to serve a separate minimal login page.** The SPA *is* the login
+  UI; a second one is a second thing to keep in step, and this project's own
+  rule against a second implementation of a live rule applies.
+- **Ruled out: giving `requiresAuth` the HTTP method.** A non-GET to a non-API
+  path now falls to the JSON 404 instead of the 401 — the body is a constant
+  string and discloses nothing, and `serveStatic` is only called for GET/HEAD
+  anyway. Passing a method through would widen the signature for no behaviour.
+- **Do not assume the test harness proves delivery.** `serveStatic` answers a
+  GET by piping a read stream; a fake `res` that only records `end()` reports an
+  **empty body** for exactly the files these tests exist to prove are served.
+  `app-locked.test.ts` uses a real `node:stream` `Writable` and waits on
+  `finish`. Same family as the 09-15 first-run lesson about a fake that cannot
+  vouch for an option it does not implement.
+
+**Found and NOT fixed** — carried from the first run of the day, still open, and
+each would have widened this PR:
+
+- **`POST /api/simulate` still answers a real 503** for its no-engine case
+  (`routes/ops.ts`), whose body `lib/api.ts` replaces with "the API is not
+  responding". Carried since 09-14. Still the best small next subject.
+- **`readBody` refuses an oversized body with a French sentence**
+  (`respond.ts`) and every caller does `.catch(() => null)`, so the sender is
+  told its alert had an *invalid schema* rather than that it was *too large*.
+- **`findingAlertId` joins its parts on a literal NUL byte** embedded in the
+  source file. `'\u0000'` would read identically and survive an editor.
+- **`server/auth.test.ts` and `server/static.test.ts` are in French**, headers
+  and test names both — ROADMAP § 7's known debt. I added my two cases to
+  `auth.test.ts` in English rather than translating the file around them: a
+  translation pass is its own subject and would have drowned a nine-line fix.
+
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 1142 passed | 1 skipped   (1118 | 1 before; +24, nothing skipped or weakened)
+npm run build       # dist built, 473.57 kB / 140.26 kB gzip
+```
+Checked **RED** first: the four shell assertions in `app-locked.test.ts` failed
+with `expected 401 to be 200` before the change, while its 18 `/api/` refusals
+already passed. Then by mutation, one at a time, restoring in between (30 tests
+across `auth.test.ts` + `app-locked.test.ts`):
+
+| Mutation | Result |
+|---|---|
+| delete the `API_NAMESPACE` guard (the original defect) | RED — the shell, the bundle, a navigation route |
+| `/^\/api/` without the boundary | RED — `/apiary.js` locked, the boundary `static.test.ts` also pins |
+| exempt everything (`if (true) return false`) | RED — `/api/snapshot` answers 200, and three more |
+| exempt by extension instead of namespace (the plausible wrong fix) | RED — `/settings` still locked AND `/api/settings.json` opened |
+
+Also driven against the **real service** under `node --experimental-strip-types`
+(the runtime that refuses syntax the compiler and vitest accept), lock on, real
+`dist/`, over a live socket on 127.0.0.1: `/` → `200 text/html 2945 B`, the real
+`index-*.js` → `200 473577 B`, `/api/snapshot` and `/api/credentials` → `401`
+with `auth_required`, and both `/../../../../etc/passwd` and its `%2e%2e%2f`
+form → `200` of **2945 bytes**, i.e. the shell, never the file. Probe deleted.
+`VulnPipe/` is untouched, so its suite was not run. No model key, no database
+and no network egress needed.
+
 ## 2026-09-15 — Tuesday · Security
 
 **Subject**: a redirect is a reply, and a reply was choosing where this
