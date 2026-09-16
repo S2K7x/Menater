@@ -11,7 +11,7 @@ for its size left the console as three different sentences, none of which said
 it was the size — and one of them said the opposite, reporting a refused save
 as a save.
 
-**Result**: PR (branch `claude/great-pascal-2bv7om`).
+**Result**: PR #22 (branch `claude/great-pascal-2bv7om`).
 
 **Note on the branch name.** `NIGHTLY.md` § 5 asks for
 `claude/nightly-YYYY-MM-DD-subject`; this session was handed
