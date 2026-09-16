@@ -266,12 +266,15 @@ describe('service inventory', () => {
  * failure the operator could act on comes back in a form the console's own
  * client will still be holding when it renders it.
  *
- * `lib/api.ts` turns any 401 into "log in again", replaces the body of a
- * 502/503/504 with a generic "the API is not responding", and reads a failed
- * request's explanation from `error` alone. So a 503 carrying "no database
- * configured: Settings → Database" arrives as "the API is not responding", and
- * a 400 naming the field at fault arrives as "no explanation (400)". Both
- * sentences were computed, and neither would reach the person who can act.
+ * `lib/api.ts` turns any 401 into "log in again", and reads a failed request's
+ * explanation from `error` alone — so a 400 whose body names the fields at
+ * fault under `errors` still arrives as "no explanation (400)". A sentence
+ * that was computed and does not reach the person who can act is the same as
+ * one nobody wrote, which is why this route answers 200 and puts the status
+ * inside the body.
+ *
+ * The other half of that trap is gone: a 502/503/504 no longer loses a body
+ * that names a reason — see `src/lib/api-named-failures.test.ts`.
  */
 describe('promoting a scan finding into the queue', () => {
   it('does not answer a status whose body the console throws away', async () => {

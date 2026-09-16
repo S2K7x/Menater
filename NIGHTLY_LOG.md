@@ -4,6 +4,124 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-16 (second run) — Wednesday · Tests and QA
+
+**Subject**: the console computes a sentence naming what an operator must go
+and fix, and its own browser client throws that sentence away and prints
+*"start the console server"* — over a server that had just answered.
+
+**Result**: PR (branch `claude/great-pascal-of6fat`).
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-of6fat` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Eighth entry saying so**; it is a line in the
+routine's configuration, not a thing a night can fix. Also worth reconciling:
+this is the SECOND run carrying the date 2026-09-16, and the entry above is the
+first. Nothing was redone — that one fixed the request-body refusal, this one
+fixes what it explicitly carried forward.
+
+**Why this subject**: the suite was green on the default branch first (1151
+passed, 1 skipped, typecheck clean, build clean), so the calendar rule did not
+preempt, and no pull request was open. The 09-14, 09-15 and 09-16 entries each
+carried the same unfixed item — *`POST /api/simulate` still answers a real 503
+whose body `lib/api.ts` replaces* — and the last one called it "still the best
+small next subject". Wednesday's brief is the failure paths, and its named rule
+is *a failure must never look like a success*: this one is worse than that, it
+looks like a DIFFERENT failure, and the advice it gives is wrong.
+
+**What I learned**:
+
+- **The defect is four routes wide, not one.** Grepping for the status rather
+  than for the button found `/api/rules` (×4, the tab and its dry run),
+  `POST /api/approvals/:token/resume` and `POST /api/replay`, plus the
+  catch-all in `app.ts` that turns a `RuleDbError` into a 503 — that last one
+  carrying the sentence `describePgError` exists to recover, since `pg` reports
+  `ECONNREFUSED` with an EMPTY message. So the fix is one line of reading in
+  `call()`, not four route edits; a list of routes is the exact-match set that
+  already cost this project every ingestion endpoint.
+- **The rule was already written forty lines down in the same file.**
+  `pwnedRange` cannot use `call()` — its route answers plain text — so it reads
+  its own errors, and its comment says *"a JSON body here carries the named
+  reason, and throwing it away for a generic sentence would lose the only
+  useful half of the answer."* `call()`, which every other route goes through,
+  did exactly that. Same shape as `readCapped` being careful about everything
+  the inbound cap was not.
+- **The generic sentence is right for the case it was written for, and I
+  measured that rather than assuming it.** Probe (written, run, deleted):
+  Vite 8.2.1, proxy pointed at a dead upstream, `POST /api/rules` →
+  `{"status": 502, "contentType": "text/plain", "body": ""}`. An empty body,
+  so there is nothing to surface and the sentence stays. That is what the four
+  control tests pin, and mutation M3 — deleting the special case altogether,
+  the plausible "just let it fall through" fix — turns all four red.
+- **`/api/simulate` needed the other answer, not the same one.** Its body is
+  `{ ok, response }` and the Health tab prints `response` where the answer
+  goes; its own neighbouring catch already answers **200** for an engine that
+  THROWS. Teaching the generic HTTP client one route's field name would have
+  been the wrong fix; the route was simply the odd branch out of its own file.
+- **A test can pass on `undefined`.** My first draft asserted against
+  `messages('en').rulesNoDatabase` — the catalogue is `messages(locale).api`,
+  so every one of those was `toThrow(undefined)`, which passes for ANY error.
+  Three green tests proving nothing, in a file written to prove something. The
+  RED-first rule caught it only because one neighbouring assertion failed and
+  made me read the others.
+- **`getEngine()` is not null merely because no database answers** — the
+  09-14 entry says so and it cost me a red test anyway: with the suite's
+  default config a host IS named, so the no-engine branch is unreachable and
+  what you get is `Database (INSERT): connect ECONNREFUSED`. The test writes
+  its own `config.json` through `saveConfig` to reach each state.
+
+**Do not redo**:
+
+- **Do not point the "database refuses" test at the default coordinates.**
+  Port 5432 is a real Postgres on some machines and nothing on others, which is
+  a test whose result depends on whose laptop it runs on — the flakiness this
+  suite removed once already. It uses `127.0.0.1:1`: privileged, so nothing can
+  be listening, and refused in about a millisecond.
+- **Do not surface a blank `error`.** An empty banner says strictly less than
+  the generic sentence; mutation M2 (dropping the `.trim()` guard) is red.
+- **Ruled out: changing the four routes' status codes to 409**, the way the
+  assistant's were. It fixes the routes somebody remembers and leaves the
+  catch-all in `app.ts` — which is reachable from any route — still poisoned,
+  and 503 is genuinely the right code for a database that refuses.
+- **Ruled out: teaching `call()` to read `response` as well as `error`.** That
+  is one route's envelope leaking into the shared client.
+
+**Found and NOT fixed** — carried:
+
+- **The 401 half of the same trap.** A route forwarding an upstream's 401 still
+  reaches the operator as "Authentication required" and sends them to the login
+  screen. Nothing forwards one today (the assistant answers 409), so it is a
+  loaded gun rather than a bug, and fixing it means touching the login flow.
+- **The 400 half**, first written down on 09-14: a failed request's explanation
+  is read from `body.error` alone, so a 400 whose body names the fields at
+  fault under `errors` arrives as "no explanation (400)".
+- **`findingAlertId` joins its parts on a literal NUL byte** embedded in the
+  source file. `'\u0000'` would read identically and survive an editor.
+- **`server/auth.test.ts` and `server/static.test.ts` are in French**, headers
+  and test names both — ROADMAP § 7's known debt.
+
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 1161 passed | 1 skipped   (1151 | 1 before; +10, nothing skipped or weakened)
+npm run build       # dist built, 473.66 kB / 140.30 kB gzip (473.57 before)
+```
+Checked **RED** first: 6 of the 10 new assertions failed before the change
+(`expected [Function] to throw error matching /ECONNREFUSED/ but got 'The
+console server is not answering. …'`). The other four are the controls and pass
+in both directions on purpose. Then by mutation, one at a time, restoring in
+between:
+
+| Mutation | Result |
+|---|---|
+| M1 — `call()` back to the unconditional generic sentence | 5 red |
+| M2 — a blank `error` counts as a reason | 1 red (the control that pins it) |
+| M3 — delete the 502/503/504 special case entirely | 4 red (all the controls) |
+| M4 — `/api/simulate` back to 503 | 1 red |
+
 ## 2026-09-16 — Wednesday · Tests and QA
 
 **Subject**: the request body limit worked; its ANSWER did not. A body refused

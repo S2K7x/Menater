@@ -64,24 +64,46 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
   } catch {
     throw new ApiError(t().errors.apiUnreachable);
   }
-  // 502/503/504 viennent du proxy Vite quand l'API n'ecoute pas : le corps
-  // n'est pas du JSON et le code de statut ne dirait rien a un analyste.
   if (res.status === 401) {
     // Le verrou de la console : traite a part pour que l'interface puisse
     // afficher l'ecran de connexion au lieu d'un message d'erreur.
     throw new AuthRequiredError(t().errors.authRequired);
   }
-  if (res.status === 502 || res.status === 503 || res.status === 504) {
-    throw new ApiError(t().errors.apiNotResponding);
-  }
 
   const text = await res.text();
   let body: any = null;
+  let parsed = false;
   try {
     body = text ? JSON.parse(text) : null;
+    parsed = true;
   } catch {
-    throw new ApiError(t().errors.unreadable);
+    // Handled below: on a 502/503/504 an unparseable body is the signature of
+    // the case the generic sentence describes, so it is not an error on its own.
   }
+
+  /**
+   * 502/503/504 come from the Vite dev proxy when the API is not listening:
+   * measured on Vite 8.2.1 against a dead upstream, it answers 502 with an
+   * EMPTY `text/plain` body. Nothing named a reason, so the status code alone
+   * would tell an analyst nothing and the generic sentence is what to say.
+   *
+   * BUT THE CONSOLE ANSWERS 503 TOO, and never for that reason: no database
+   * configured, the engine therefore not mounted, a configured database
+   * refusing the connection. Each of those carries a sentence the server
+   * WROTE, naming what an operator has to go and fix — and replacing it with
+   * "start the console server" sent them to restart a server that had just
+   * answered them. `pwnedRange` below already reads its own errors this way,
+   * for the one route that cannot use `call()`; this is the same rule on the
+   * twenty that can.
+   */
+  if (res.status === 502 || res.status === 503 || res.status === 504) {
+    const named = parsed && typeof body?.error === 'string' && body.error.trim() !== ''
+      ? body.error
+      : null;
+    throw new ApiError(named ?? t().errors.apiNotResponding);
+  }
+
+  if (!parsed) throw new ApiError(t().errors.unreadable);
   if (!res.ok) {
     throw new ApiError(body?.error ?? t().errors.noExplanation(res.status));
   }
