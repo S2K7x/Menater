@@ -47,6 +47,7 @@
 
 import { describeFetchError, fetchWithDeadline } from '../http.ts';
 import { mapLimit } from '../limit.ts';
+import { humanBytes } from '../respond.ts';
 import { isManagedCredential } from '../credentials.ts';
 import { mappingFor, normalize } from '../engine/transforms/normalize.ts';
 import { readPath } from '../engine/values.ts';
@@ -163,19 +164,6 @@ async function drain(res: Response): Promise<void> {
 }
 
 export class ResponseTooLarge extends Error {}
-
-/**
- * A byte count someone can read out loud.
- *
- * `max / 1024 / 1024` printed "over 0.00048828125 MB" for a 500-byte cap in a
- * test, and would print the same kind of thing to an operator the day somebody
- * lowers the constant. A limit nobody can read is a limit nobody can act on.
- */
-function humanBytes(n: number): string {
-  if (n >= 1024 * 1024) return `${Math.round(n / 1024 / 1024)} MB`;
-  if (n >= 1024) return `${Math.round(n / 1024)} kB`;
-  return `${n} bytes`;
-}
 
 /**
  * The response body, as text, refusing anything past `max` bytes.

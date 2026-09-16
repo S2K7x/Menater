@@ -57,6 +57,48 @@ export function json(
 const MAX_BODY_BYTES = 256 * 1024;
 
 /**
+ * A byte count someone can read out loud.
+ *
+ * `max / 1024 / 1024` printed "over 0.00048828125 MB" for a 500-byte cap, and
+ * would print the same kind of thing to an operator the day somebody lowers a
+ * constant. A limit nobody can read is a limit nobody can act on.
+ *
+ * It lives here rather than beside either refusal because this console refuses
+ * a size in two directions — a request body it will not read, and a polled
+ * source's response it will not buffer — and two spellings of one number is
+ * how the two start disagreeing.
+ */
+export function humanBytes(n: number): string {
+  if (n >= 1024 * 1024) return `${Math.round(n / 1024 / 1024)} MB`;
+  if (n >= 1024) return `${Math.round(n / 1024)} kB`;
+  return `${n} bytes`;
+}
+
+/**
+ * A body refused for its SIZE.
+ *
+ * Its own class rather than a plain `Error`, because what a route can do about
+ * it is the opposite of what it can do about an unreadable body. A stream that
+ * died mid-transfer leaves a route nothing to pass on; this is a refusal WE
+ * made, before anything was read, for a reason the sender can act on. Told
+ * apart, it becomes a 413 naming the cap; conflated, it became a verdict about
+ * fields nobody had looked at.
+ *
+ * No parameter property (`constructor(readonly limit: number)`): the service
+ * runs under `node --experimental-strip-types`, which refuses that syntax at
+ * startup while `tsc` and vitest accept it.
+ */
+export class BodyTooLarge extends Error {
+  /** The cap that was enforced, so the answer can name it rather than guess. */
+  limit: number;
+
+  constructor(limit: number) {
+    super(`request body over ${humanBytes(limit)}`);
+    this.limit = limit;
+  }
+}
+
+/**
  * Reads a JSON request body.
  *
  * An unreadable body yields `{}` rather than throwing. That holds only because
@@ -64,13 +106,21 @@ const MAX_BODY_BYTES = 256 * 1024;
  * before reading it, the ingestion routes reject an alert whose identity
  * fields are missing, and both name what was wrong. A route that skipped that
  * validation would silently act on an empty object.
+ *
+ * A body over the cap is the one thing that does throw: there is no validation
+ * to fall back on, because nothing was read.
  */
 export async function readBody(req: any): Promise<any> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of req) {
     size += (chunk as Buffer).length;
-    if (size > MAX_BODY_BYTES) throw new Error('Corps de requete trop volumineux.');
+    if (size > MAX_BODY_BYTES) {
+      // DISCARD WHAT IS ALREADY HELD before refusing, rather than politely
+      // finishing an accumulation we have already decided to throw away.
+      chunks.length = 0;
+      throw new BodyTooLarge(MAX_BODY_BYTES);
+    }
     chunks.push(chunk as Buffer);
   }
   if (!chunks.length) return {};
@@ -78,5 +128,25 @@ export async function readBody(req: any): Promise<any> {
     return JSON.parse(Buffer.concat(chunks).toString('utf8'));
   } catch {
     return {};
+  }
+}
+
+/**
+ * The body, or `null` for one the route can answer without.
+ *
+ * Three routes read their body this way — the two ingestion endpoints and the
+ * promote route — because each still has something to say when the body is
+ * missing: they name the identity fields an alert needs. Written as
+ * `readBody(req).catch(() => null)`, that also swallowed the size refusal, and
+ * the sender was then told its alert was missing fields that were present and
+ * merely unread. Only the unreadable body is `null`; a refusal we made travels
+ * on to the one place that can word it.
+ */
+export async function readBodyOrNull(req: any): Promise<any | null> {
+  try {
+    return await readBody(req);
+  } catch (err) {
+    if (err instanceof BodyTooLarge) throw err;
+    return null;
   }
 }

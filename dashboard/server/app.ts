@@ -28,7 +28,7 @@
  * ============================================================================
  */
 
-import { json } from './respond.ts';
+import { BodyTooLarge, humanBytes, json } from './respond.ts';
 import { UI_ROOT } from './env.ts';
 import type { Ctx, RouteGroup } from './routes/context.ts';
 import { authRoutes } from './routes/auth.ts';
@@ -138,6 +138,13 @@ export async function handleRequest(req: any, res: any): Promise<unknown> {
     }
     return json(res, 404, { error: am.unknownRoute });
   } catch (err) {
+    // A BODY WE REFUSED IS THE SENDER'S TO FIX, so it leaves as a 413 naming
+    // the cap. The last net below would call it a 500 — a server fault for a
+    // sender fault — and print the raw message, which for this one was French.
+    // Nothing read it, so the sentence says nothing about what it held.
+    if (err instanceof BodyTooLarge) {
+      return json(res, 413, { error: am.bodyTooLarge(humanBytes(err.limit)) });
+    }
     // A database that does not answer is a 503 NAMING the database, not a 500
     // carrying pg's message — which on `ECONNREFUSED` is the empty string.
     if (err instanceof RuleDbError) {

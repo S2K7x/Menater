@@ -32,7 +32,7 @@
  * ============================================================================
  */
 
-import { json, readBody } from '../respond.ts';
+import { json, readBodyOrNull } from '../respond.ts';
 import { invalidate } from '../snapshot.ts';
 import { getEngine } from '../runtime.ts';
 import { injectAlert } from '../injection.ts';
@@ -43,7 +43,7 @@ export async function findingsRoutes(c: Ctx): Promise<boolean> {
   const { req, res, path, am } = c;
 
   if (req.method === 'POST' && path === '/api/findings/promote') {
-    const body = await readBody(req).catch(() => null);
+    const body = await readBodyOrNull(req);
     const mapped = findingToAlert(body ?? {}, new Date());
 
     // EVERYTHING THE OPERATOR CAN SEE LEAVES AS A 200, and the failure is in
