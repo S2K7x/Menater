@@ -83,7 +83,15 @@ export async function opsRoutes(c: Ctx): Promise<boolean> {
 
       const engine = getEngine();
       if (!engine) {
-        return json(res, 503, {
+        // 200, IN THIS ROUTE'S OWN ENVELOPE — `{ ok: false, response }`, which
+        // the Health tab prints where the answer goes. It used to be a 503, and
+        // `lib/api.ts` replaces the body of a 503 with "start the console
+        // server": the one sentence naming what to fix — no database, so no
+        // engine, so nowhere for the alert to go — never reached the screen,
+        // and the operator was sent to restart a server that had just answered.
+        // The catch below already answers 200 for an engine that THROWS, so
+        // this was the odd branch out of its own file.
+        return json(res, 200, {
           ok: false,
           status: 0,
           alert_id: String(alert.alert_id),
