@@ -184,6 +184,11 @@ export interface ServerMessages {
     approvalFailed: (error: string) => string;
     approvalSent: string;
     unknownRoute: string;
+    /**
+     * The body was refused for its SIZE, before anything read it — so the
+     * sentence says nothing about what it contained.
+     */
+    bodyTooLarge: (limit: string) => string;
     replayUnknownCase: (id: string) => string;
     replayNoPayload: (id: string) => string;
     replaySent: (id: string) => string;
@@ -443,6 +448,12 @@ const EN: ServerMessages = {
       + 'out and the alert will be escalated.',
     approvalSent: 'Decision relayed to the pipeline.',
     unknownRoute: 'Unknown route.',
+    // NOT a verdict on the body. It was refused before being read, so naming
+    // a missing field here would state a diagnosis nobody made — which is
+    // what the three routes that swallowed this refusal used to do.
+    bodyTooLarge: (limit) =>
+      `Request body over ${limit}. It was refused before being read, so nothing `
+      + 'here is a statement about what it contained.',
     replayUnknownCase: (id) =>
       `Case ${id} is outside the execution window: the console does not hold its original payload.`,
     replayNoPayload: (id) =>

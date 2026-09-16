@@ -5,7 +5,7 @@
  * for why the ORDER these groups are tried in is part of the behaviour.
  */
 
-import { json, readBody } from '../respond.ts';
+import { json, readBodyOrNull } from '../respond.ts';
 import { invalidate } from '../snapshot.ts';
 import { getEngine } from '../runtime.ts';
 import { handleAlert } from '../webhook.ts';
@@ -53,7 +53,7 @@ export async function ingestRoutes(c: Ctx): Promise<boolean> {
 
     if (req.method === 'PUT' && path === '/api/ingestion/policy') {
       const { policy, error } = normalizePolicyInput(
-        await readBody(req).catch(() => null),
+        await readBodyOrNull(req),
         getConfig().ingestion,
       );
       // 400 AND THE SENTENCE. `normalizeRuleInput` is in this codebase because
@@ -104,7 +104,7 @@ export async function ingestRoutes(c: Ctx): Promise<boolean> {
             + `${MAPPINGS.map((m) => m.source).join(', ')}.` });
       }
       const conf = getConfig();
-      const normalized = normalize(mapping, await readBody(req).catch(() => null));
+      const normalized = normalize(mapping, await readBodyOrNull(req));
       const result = await handleAlert(
         {
           mode: conf.webhook.mode,

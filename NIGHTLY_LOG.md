@@ -4,6 +4,134 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-16 — Wednesday · Tests and QA
+
+**Subject**: the request body limit worked; its ANSWER did not. A body refused
+for its size left the console as three different sentences, none of which said
+it was the size — and one of them said the opposite, reporting a refused save
+as a save.
+
+**Result**: PR #22 (branch `claude/great-pascal-2bv7om`).
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-2bv7om` with an instruction not to push anywhere else, as
+the 09-12 through 09-15 sessions were. The `claude/` prefix — the part
+NIGHTLY.md calls mandatory — holds either way. **Seventh entry saying so**; it
+is a line in the routine's configuration, not a thing a night can fix.
+
+**Why this subject**: the suite was green on the default branch first (1142
+passed, 1 skipped, typecheck clean, build clean), so the calendar rule did not
+preempt, and no pull request was open. Wednesday's brief is the FAILURE paths,
+and its named rule is *hunt the places where a `catch` returns green*. There
+were four `.catch(() => null)` on the request body; one of them literally
+returned green. Priority (2): a real, reproducible defect, tracked nowhere.
+
+**What I learned**:
+
+- **The cap was tested; the sentence never was.** `readBody` has thrown on
+  256 kB since the request-body trap was written into `CLAUDE.md`, and it
+  throws correctly. Nothing anywhere asserted what a sender is TOLD, so three
+  different wrong answers lived side by side for the cap's whole life. Measured
+  before touching anything, by driving `handleRequest` with a 307 kB body:
+
+  | Route | Before |
+  |---|---|
+  | `PUT /api/ingestion/policy` | **200** `{"policy":{…}}` |
+  | `POST /api/findings/promote` | **200** `{"ok":false,"errors":["scan_run_id: a non-empty string is required","finding: an object is required"]}` |
+  | `POST /api/ingest/wazuh`, `/api/webhook/soc/alert` | the door's own answer, computed on a body nobody read |
+  | `POST /api/auth/login`, `/api/rules`, and 13 more | **500** `{"error":"Corps de requete trop volumineux."}` |
+
+- **The 200 is the one to remember.** `normalizePolicyInput(null, current)`
+  treats an absent body as *change nothing* and reports success — which is
+  right for the input it was designed for and catastrophic for a refusal
+  disguised as that input. Neither function is wrong in the file that holds it;
+  the same shape as *two correct rules whose INTERSECTION loses data*.
+
+- **The answer already existed in this repository, pointing the other way.**
+  `readCapped` in `ingest/poller.ts` caps a polled source's RESPONSE and is
+  careful about every one of these: its own error class, an English sentence,
+  the byte count through `humanBytes`, the held chunks discarded before
+  refusing. The inbound half had simply never been read next to it. **The
+  mirror of a rule is not the rule.**
+
+- **`humanBytes` was private to `poller.ts`.** Moved to `respond.ts` and
+  imported by both, rather than typed a second time: this project's own note
+  about `withRetry` and `fetchWithDeadline` is that a primitive re-typed by
+  hand is a primitive that will eventually be forgotten. That is the one part
+  of the diff that is a move rather than a fix, and it is eight lines.
+
+- **The class had to be written the long way.** `constructor(readonly limit:
+  number)` compiles under `tsc` and vitest and breaks the service at startup;
+  the field is declared and then assigned. Proved by running the real service
+  under `node --experimental-strip-types`, not by trusting the note.
+
+**Do not redo**:
+
+- **Do not simply delete the three `.catch(() => null)`.** They are load-bearing
+  for the case they were written for: a request stream that dies mid-transfer
+  leaves a route nothing to pass on, and the ingestion endpoints still have
+  something to say (the identity fields an alert needs). `readBodyOrNull` keeps
+  `null` for exactly that and rethrows only the refusal we made. A test pins
+  both halves.
+- **Do not lower `MAX_BODY_BYTES`.** It looks like the safe direction and it is
+  the plausible wrong fix — a cap low enough that a real Sysmon alert is refused
+  turns a diagnosis into a data-loss bug. Kept as mutation M4: a 64 kB cap turns
+  three assertions red, which is how I know the tests separate *refuse loudly*
+  from *refuse more*.
+- **Ruled out: giving the ingestion endpoints their own `{status, reason,
+  detail}` 413.** Their other refusals use that envelope, so it was tempting.
+  It would mean the size rule living in two places — the exact defect this PR
+  removes — and `lib/api.ts` reads `body.error`, which is what puts the sentence
+  on screen. One shape, one place, worded from the `api` catalogue.
+- **Ruled out: refusing on `Content-Length` before reading.** It is a claim by
+  the other end; `readCapped` uses it only to refuse EARLY and never to let
+  anything through, and inbound there is nothing to save — the loop already
+  stops at the first chunk over the cap.
+
+**Found and NOT fixed** — carried, and each would have widened this PR:
+
+- **`POST /api/simulate` still answers a real 503** for its no-engine case
+  (`routes/ops.ts`), whose body `lib/api.ts` replaces with "the API is not
+  responding". Carried since 09-14, third time it is written down. Still the
+  best small next subject.
+- **`findingAlertId` joins its parts on a literal NUL byte** embedded in the
+  source file. `'\u0000'` would read identically and survive an editor.
+- **`server/auth.test.ts` and `server/static.test.ts` are in French**, headers
+  and test names both — ROADMAP § 7's known debt.
+- **`POST /api/mcp` gets the 413 as plain JSON, not as a JSON-RPC error
+  envelope.** Left alone deliberately: the refusal is at the HTTP layer, before
+  a request id exists to answer, and the endpoint is off by default.
+
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 1151 passed | 1 skipped   (1142 | 1 before; +9, nothing skipped or weakened)
+npm run build       # dist built, 473.57 kB / 140.26 kB gzip
+```
+Checked **RED** first: 8 of the 9 new assertions failed before the change
+(`expected 200 to be 413`, `expected 503 to be 413`, `expected 500 to be 413`,
+`expected 'Corps de requete trop volumineux.' to contain '256 kB'`). The ninth —
+a 200 kB body still accepted — passed before and after, on purpose: it is the
+control. Then by mutation, one at a time, restoring in between:
+
+| Mutation | Result |
+|---|---|
+| drop the `BodyTooLarge` branch in `app.ts` (the original defect) | RED — 4 |
+| `readBodyOrNull` swallows the size refusal again | RED — 4 |
+| word the cap as raw bytes instead of `humanBytes` | RED — 1 |
+| lower the cap to 64 kB (the plausible wrong fix) | RED — 3 |
+
+Also driven against the **real service** under `node --experimental-strip-types`
+over a live socket on 127.0.0.1:4477, with a 307 313-byte body: all six routes
+answered `413 {"error":"Request body over 256 kB. It was refused before being
+read, so nothing here is a statement about what it contained."}`, a 204 832-byte
+policy write still answered `200` and applied `delivery: pull`, and the server
+log carried **no** `[menater] uncaught error` line. Probe deleted.
+`VulnPipe/` is untouched, so its suite was not run. No model key, no database
+and no network egress needed.
+
 ## 2026-09-15 (second run) — Tuesday · Security
 
 **Subject**: the access lock refused the interface itself. `requiresAuth`
