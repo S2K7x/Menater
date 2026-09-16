@@ -10,7 +10,7 @@ they were — they are memory about live code, and rewriting them would lose it.
 and fix, and its own browser client throws that sentence away and prints
 *"start the console server"* — over a server that had just answered.
 
-**Result**: PR (branch `claude/great-pascal-of6fat`).
+**Result**: PR #23 (branch `claude/great-pascal-of6fat`).
 
 **Note on the branch name.** `NIGHTLY.md` § 5 asks for
 `claude/nightly-YYYY-MM-DD-subject`; this session was handed
