@@ -11,7 +11,7 @@ browser client read one of them, so five precise sentences about a tuning rule
 — and the sentence telling an approver their decision did not stick — reached
 the operator as *"The console server answered 400 with no explanation."*
 
-**Result**: PR (branch `claude/great-pascal-v5czqe`).
+**Result**: PR #24 (branch `claude/great-pascal-v5czqe`).
 
 **Note on the branch name.** `NIGHTLY.md` § 5 asks for
 `claude/nightly-YYYY-MM-DD-subject`; this session was handed
