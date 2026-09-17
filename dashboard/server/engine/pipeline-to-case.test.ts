@@ -34,6 +34,7 @@ import { controlHandlers } from './nodes/control.ts';
 import { PIPELINE_WORKFLOWS } from './workflows/pipeline.ts';
 import { ROUTING_WORKFLOWS } from './workflows/routing.ts';
 import { buildCases } from './cases.ts';
+import { computeMetrics } from '../snapshot.ts';
 import { DEFAULT_LOCALE } from '../i18n.ts';
 import type { RunRecord, StepRecord } from './types.ts';
 
@@ -46,18 +47,23 @@ const NOW = new Date('2026-09-04T10:00:00.000Z');
  * transform, every guardrail and every wire is the real one, which is the only
  * way a field-name mismatch can surface.
  */
-function assemble(opts: { rules?: unknown[]; dedup?: boolean } = {}) {
+function assemble(opts: { rules?: unknown[]; dedup?: boolean; live?: boolean } = {}) {
   const store = new MemoryRunStore();
+  /** Every address the pipeline dialled, so a live run can be checked. */
+  const calls: string[] = [];
   const vars = new Map<string, unknown>([
-    ['pipeline.shadowMode', true],
-    ['approval.timeoutMinutes', 30],
+    ['pipeline.shadowMode', opts.live !== true],
+    // DELIBERATELY NOT 30 when live. `cases.ts` invented 30 when it could not
+    // read the deadline, so a test configured at 30 would have agreed with the
+    // defect by coincidence.
+    ['approval.timeoutMinutes', opts.live === true ? 45 : 30],
     ['isolation.ttlMinutes', 60],
     ['shadow.exitThreshold', 50],
     ['slack.approvalChannel', '#soc-approvals'],
     ['slack.escalationChannel', '#soc-escalation'],
     ['slack.warningsChannel', '#soc-warnings'],
     ['slack.criticalChannel', '#soc-critical'],
-    ['endpoint.isolation', ''],
+    ['endpoint.isolation', opts.live === true ? 'https://edr.test/isolate' : ''],
     ['endpoint.ticket', ''],
     ['errors.windowMinutes', 60],
     ['errors.systemicThreshold', 5],
@@ -74,8 +80,19 @@ function assemble(opts: { rules?: unknown[]; dedup?: boolean } = {}) {
     vars: () => vars,
     now: () => NOW,
     // No model key: the pipeline takes its fail-safe verdict, which is the
-    // state a fresh install is actually in.
-    secret: () => undefined,
+    // state a fresh install is actually in. A live run needs the chat
+    // credential and nothing else: the approval wait is reached only through a
+    // request that was POSTED, so without it the graph escalates instead.
+    secret: (name: string) => (opts.live === true && name === 'slack.botToken' ? 'xoxb-test' : undefined),
+    // The wait's token, fixed so the test can answer the question the pipeline
+    // asked, exactly as the console's approval route does.
+    newToken: () => 'approval-token',
+    fetch: (async (url: string) => {
+      calls.push(String(url));
+      return new Response('{"ok":true,"ts":"1"}', {
+        status: 200, headers: { 'content-type': 'application/json' },
+      });
+    }) as unknown as typeof globalThis.fetch,
     query: async (sql: string) => {
       if (sql.includes('soc_ingested_alerts')) return [{ is_duplicate: opts.dedup === true }];
       if (sql.includes('soc_tuning_rule')) return (opts.rules ?? []) as never[];
@@ -106,7 +123,7 @@ function assemble(opts: { rules?: unknown[]; dedup?: boolean } = {}) {
     now: () => NOW,
   });
   for (const wf of [...PIPELINE_WORKFLOWS, ...ROUTING_WORKFLOWS]) engine.register(wf);
-  return { engine, store };
+  return { engine, store, calls };
 }
 
 /** Every run the store holds, with its steps — what `snapshot.ts` reads. */
@@ -274,5 +291,153 @@ describe('a tuning rule that closes an alert', () => {
     // from the field the transform actually writes.
     expect(cases[0].routing_outcome).toBe('allow');
     expect(cases[0].state).toBe('closed');
+  });
+});
+
+/* ==========================================================================
+ * THE APPROVAL, WHICH ONLY EXISTS ONCE AN INSTALL HAS LEFT SHADOW MODE
+ *
+ * Everything above runs in shadow mode, because that is the default — and the
+ * `request` / `attente` / `interpret` branch of `04-Action-Routing` sits behind
+ * the `shadow` if-node, so none of it was ever driven here. That is precisely
+ * where the field-name defect this whole file exists to close came back: the
+ * console read the settled approval under three names `interpretApproval` does
+ * not write, and the request under two `buildApprovalRequest` does not write.
+ *
+ * The cost lands on the only installs where an action can touch a real
+ * machine, and on the one number CLAUDE.md says gates leaving shadow mode:
+ * `human_disagreement_rate` counts `outcome === 'rejected'`, and every settled
+ * approval read as rejected.
+ * ========================================================================== */
+
+/** Answering the question the pipeline stopped to ask. */
+async function answer(engine: Engine, decision: 'approve' | 'reject') {
+  return engine.resumeWait('approval-token', {
+    decision,
+    approver: 'alice',
+    reason: 'Owner confirmed the maintenance window.',
+  });
+}
+
+describe('an alert put to a human, end to end', () => {
+  it('records the approval a human gave, not the opposite of it', async () => {
+    const { engine, store, calls } = assemble({ live: true });
+    await engine.start('01-ingestion', { ...ALERT, source: 'generic' }, ALERT.alert_id);
+    // The request was posted, so the run is waiting on a person.
+    expect(calls).toContain('https://slack.com/api/chat.postMessage');
+    await answer(engine, 'approve');
+
+    const { cases } = await collect(store);
+    const ap = cases[0].approval;
+    expect(ap).not.toBeNull();
+
+    // WHAT THE HUMAN DID. `interpretApproval` returns it under `approval`, and
+    // the reader was looking for a top-level `approved` that does not exist —
+    // so this was `rejected`, on a case whose action had just been executed.
+    expect(ap!.outcome).toBe('approved');
+    expect(cases[0].executed).toBe(true);
+    expect(calls).toContain('https://edr.test/isolate');
+
+    // WHO, AND WHY. Both are on the card; both read `null` and rendered as
+    // "by unknown" and "no reason given".
+    expect(ap!.approver?.slack_username).toBe('alice');
+    expect(ap!.human_reasoning).toBe('Owner confirmed the maintenance window.');
+
+    // WHY THEY WERE ASKED. `buildApprovalRequest` writes `approval_triggers`;
+    // read as `triggers` it was always `[]`, so the block naming the reasons
+    // never rendered — the approver authorised an action without seeing them.
+    expect(ap!.triggers.length).toBeGreaterThan(0);
+    expect(ap!.triggers.join(' ')).toMatch(/fallback decision/);
+
+    // HOW LONG THEY HAD. `ttl_minutes` on the request; read as
+    // `timeout_minutes` it fell to a hardcoded 30 — a deadline nobody set,
+    // printed on the card as though it were the configured one.
+    expect(ap!.timeout_minutes).toBe(45);
+  });
+
+  it('quotes the deadline an approver actually has, while they still have it', async () => {
+    // The state the card is read in: the run is waiting, nobody has answered,
+    // and the screen says how long there is. Nothing on the request carried
+    // that number, so the card printed a hardcoded 30 — which is the DEFAULT
+    // value of `approval.timeoutMinutes`, so it agreed with itself on a fresh
+    // install and was silently wrong for anyone who had changed it. The
+    // neighbouring `ttl_minutes` is not it: that is how long an isolation lasts.
+    const { engine, store } = assemble({ live: true });
+    await engine.start('01-ingestion', { ...ALERT, source: 'generic' }, ALERT.alert_id);
+
+    const { cases } = await collect(store);
+    expect(cases[0].state).toBe('awaiting_approval');
+    expect(cases[0].approval!.outcome).toBe('pending');
+    expect(cases[0].approval!.timeout_minutes).toBe(45);
+    expect(cases[0].approval!.triggers.length).toBeGreaterThan(0);
+  });
+
+  it('still records a refusal as a refusal', async () => {
+    // The control. Without it, hard-coding `approved` would pass the test
+    // above — the defect being fixed is a constant, so the fix must not be one.
+    const { engine, store, calls } = assemble({ live: true });
+    await engine.start('01-ingestion', { ...ALERT, source: 'generic' }, ALERT.alert_id);
+    await answer(engine, 'reject');
+
+    const { cases } = await collect(store);
+    expect(cases[0].approval!.outcome).toBe('rejected');
+    expect(cases[0].approval!.approver?.slack_username).toBe('alice');
+    expect(cases[0].executed).toBe(false);
+    expect(calls).not.toContain('https://edr.test/isolate');
+  });
+
+  it('reports what `interpret` decided, not what the branch below it did', async () => {
+    /*
+     * `rejected` and `timeout` are the branches TAKEN BECAUSE OF `interpret`'s
+     * answer, so neither may overwrite it — otherwise the card cannot ever
+     * disagree with the branch, and a disagreement is exactly what a defect
+     * upstream of `interpret` looks like.
+     *
+     * There is one today, and it is why this test resumes with THE PAYLOAD THE
+     * CONSOLE ACTUALLY SENDS rather than the transform's own vocabulary:
+     * `routes/approvals.ts` posts `{ approved, human_reasoning, approver: {…} }`
+     * and `interpretApproval` reads `payload.decision`, so a human pressing
+     * "approve" is interpreted as SILENCE. That is not fixed here — it changes
+     * what the pipeline executes on the irreversible-action path, and it is
+     * written up for a human to decide.
+     *
+     * So this asserts the RULE and not the value: whatever `interpret`
+     * concluded is what the card says. It holds today, and it goes on holding
+     * the day the payload mismatch is fixed.
+     */
+    const { engine, store } = assemble({ live: true });
+    await engine.start('01-ingestion', { ...ALERT, source: 'generic' }, ALERT.alert_id);
+    await engine.resumeWait('approval-token', {
+      approved: true,
+      human_reasoning: 'Owner confirmed the maintenance window.',
+      approver: {
+        slack_username: 'alice', slack_user_id: null,
+        responded_at: NOW.toISOString(),
+        identity_source: 'console_self_declared', signature_verified: false,
+      },
+    });
+
+    const runs = await store.recentRuns({ limit: 200 });
+    const routing = runs.find((r) => r.workflowId === '04-action-routing')!;
+    const steps = await store.stepsOf(routing.id);
+    const interpreted = steps.find((st) => st.nodeId === 'interpret')!.output as { outcome: string };
+
+    const { cases } = await collect(store);
+    expect(cases[0].approval!.outcome).toBe(interpreted.outcome);
+  });
+
+  it('does not report 100% human disagreement over a human who agreed', async () => {
+    // The sharpest cost, and the reason this is not a cosmetic defect.
+    // CLAUDE.md § Measurement: `human_disagreement_rate` is "the only
+    // false-positive proxy observable without ground truth" and "THIS is the
+    // one that gates leaving shadow mode". It counts cases whose approval
+    // outcome is `rejected` — so with every settled approval read as rejected,
+    // it reported 100 the moment anybody approved anything.
+    const { engine, store } = assemble({ live: true });
+    await engine.start('01-ingestion', { ...ALERT, source: 'generic' }, ALERT.alert_id);
+    await answer(engine, 'approve');
+
+    const { cases } = await collect(store);
+    expect(computeMetrics(cases).human_disagreement_rate_pct).toBe(0);
   });
 });

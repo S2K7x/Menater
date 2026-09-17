@@ -26,7 +26,7 @@ import { cleanup, screen } from '@testing-library/react';
 
 import { render } from '../vulnpipe/test-utils.tsx';
 import { CaseView } from './CaseView.tsx';
-import type { AlertCase } from '../lib/types.ts';
+import type { AlertCase, Approval } from '../lib/types.ts';
 
 afterEach(cleanup);
 
@@ -198,5 +198,66 @@ describe('the code that runs on the machine', () => {
       screen.getByRole('button', { name: /Analyse this code/ }).click();
       expect(asked).toEqual(['/srv/src/orders-api']);
     });
+  });
+});
+
+/* ==========================================================================
+ * THE APPROVAL BANNER, WHOSE "ACCEPTED" BRANCH HAD NEVER RENDERED
+ *
+ * These cases are written by hand on purpose, and that is safe HERE: the
+ * boundary under test is `AlertCase` → screen, and `AlertCase` is a declared
+ * type. The boundary that a hand-written fixture cannot police is the one
+ * above it — a node's output → `AlertCase` — and that is why the approval is
+ * driven through the real pipeline in `engine/pipeline-to-case.test.ts`.
+ *
+ * It mattered: `cases.ts` read the settled approval under names the transform
+ * does not write, so `outcome` was `rejected` for every answer a human gave,
+ * `approver` was `null` and `triggers` was empty. Everything below rendered
+ * one way and only one way — an orange warning saying "Declined by unknown",
+ * with no reason and no list of why the person had been asked.
+ * ========================================================================== */
+
+const APPROVED: Approval = {
+  requested_action: 'isolate_host_temporary',
+  intent: 'Isolate srv-bastion-01 while the session is investigated.',
+  blast_radius: 'The host loses network access. Sessions are cut.',
+  rollback_plan: 'Reverts by itself after the TTL, or by hand.',
+  triggers: ['confidence 0.71 < 0.85', 'a containment action is proposed'],
+  outcome: 'approved',
+  approver: {
+    slack_username: 'alice', slack_user_id: null,
+    responded_at: '2026-08-23T12:01:00.000Z',
+    identity_source: 'self_declared', signature_verified: false,
+  },
+  human_reasoning: 'Confirmed with the owner: this login was not theirs.',
+  timeout_minutes: 45,
+  requested_at: '2026-08-23T11:55:00.000Z',
+};
+
+describe('an answered approval says what the human actually answered', () => {
+  it('reads as accepted, by the person who accepted it, for their reason', () => {
+    render(<CaseView alertCase={kase({ state: 'closed', executed: true, approval: APPROVED })} onRefresh={() => {}} />);
+
+    expect(screen.getByText('Accepted by alice')).toBeTruthy();
+    expect(screen.getByText(/Confirmed with the owner/)).toBeTruthy();
+    // The two sentences the card used to show instead, on every approval.
+    expect(screen.queryByText('Declined by unknown')).toBeNull();
+    expect(screen.queryByText('No reason given.')).toBeNull();
+  });
+
+  it('shows why the person was asked, which is the case for asking them', () => {
+    render(<CaseView alertCase={kase({ state: 'closed', executed: true, approval: APPROVED })} onRefresh={() => {}} />);
+
+    expect(screen.getByText('Why you are being asked')).toBeTruthy();
+    expect(screen.getByText(/confidence 0.71 < 0.85/)).toBeTruthy();
+  });
+
+  it('still reads as declined when it was declined', () => {
+    // The control: the defect was a constant, so the fix must not be one.
+    const declined: Approval = { ...APPROVED, outcome: 'rejected' };
+    render(<CaseView alertCase={kase({ state: 'closed', approval: declined })} onRefresh={() => {}} />);
+
+    expect(screen.getByText('Declined by alice')).toBeTruthy();
+    expect(screen.queryByText('Accepted by alice')).toBeNull();
   });
 });

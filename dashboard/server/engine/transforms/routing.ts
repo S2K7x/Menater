@@ -268,7 +268,19 @@ export interface ApprovalRequest {
   blast_radius: string;
   rollback_plan: string;
   data_lineage: string[];
+  /** How long an APPROVED isolation lasts before it reverts itself. */
   ttl_minutes: number;
+  /**
+   * How long the approver has to answer, before silence escalates the alert.
+   *
+   * A DIFFERENT NUMBER FROM `ttl_minutes`, and it is carried here because the
+   * console shows it on the card while the approval is still pending. Only the
+   * Slack and Discord texts used to quote it, so the request said the deadline
+   * to a chat client and not to the screen the approver is looking at — and
+   * `cases.ts` printed a hardcoded 30 instead, which agrees with the default
+   * and is wrong for everyone who changed it.
+   */
+  timeout_minutes: number;
   resume_url: string;
   requested_at: string;
   slack: { channel: string; text: string; blocks: unknown[] };
@@ -399,6 +411,7 @@ export function buildApprovalRequest(
     rollback_plan: spec.rollback_plan,
     data_lineage: d.data_lineage,
     ttl_minutes: vars.ttlMinutes,
+    timeout_minutes: vars.timeoutMinutes,
     resume_url: resumeUrl,
     requested_at: now().toISOString(),
     discord: {
