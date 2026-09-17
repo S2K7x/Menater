@@ -13,7 +13,7 @@ filed as a REFUSAL, by nobody, for no reason, and
 `human_disagreement_rate_pct` — the rate `CLAUDE.md` § Measurement calls the
 one that gates leaving shadow mode — read **100** whenever anybody agreed.
 
-**Result**: PR #PENDING (branch `claude/great-pascal-o9vfso`).
+**Result**: PR #25 (branch `claude/great-pascal-o9vfso`).
 
 **Note on the branch name.** `NIGHTLY.md` § 5 asks for
 `claude/nightly-YYYY-MM-DD-subject`; this session was handed
