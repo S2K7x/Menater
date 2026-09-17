@@ -4,6 +4,131 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-17 — Thursday · Bugs and technical debt
+
+**Subject**: the server names what is wrong under three different keys and the
+browser client read one of them, so five precise sentences about a tuning rule
+— and the sentence telling an approver their decision did not stick — reached
+the operator as *"The console server answered 400 with no explanation."*
+
+**Result**: PR (branch `claude/great-pascal-v5czqe`).
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-v5czqe` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Ninth entry saying so**; it is a line in the
+routine's configuration, not a thing a night can fix.
+
+**Why this subject**: the suite was green on the default branch first (1161
+passed, 1 skipped, typecheck clean, build clean), so the calendar rule did not
+preempt, and no pull request was open. Thursday's reservoir is *§ 7 plus
+anything noted here without fixing it*, and this was the oldest carried item:
+first written down on 09-14, repeated on 09-15, 09-16 and 09-16 (second run),
+and named in `ROADMAP.md` § 7 in the row the 09-16 run added. It is the last
+unfixed half of the poisoned-status-codes trap that anything reaches today.
+
+**What I learned**:
+
+- **It is three keys, not one, and I measured that before writing anything.**
+  A probe drove the real handler through the real client and printed what each
+  route sends against what the client shows. `POST /api/rules` and
+  `PUT /api/rules/:id` → `400 {"problems":[{field, detail} × 5]}`; the database
+  probe → `400 {"ok":false,"detail":"Host missing."}`; an approval being
+  answered → `500 {"ok":false,"detail":"The decision could not be recorded:
+  … Without it the run will time out and the alert will be escalated."}`. All
+  four arrived as *"…with no explanation."* The approval one is the worst
+  place in this console to lose a sentence: the discarded half names the cause
+  AND what happens next.
+- **The screen already had the code, and it had never run.** `RulesPage.save()`
+  does `(e as { problems?: RuleProblem[] })?.problems` and renders one line per
+  entry, under a comment saying that showing "invalid" instead would throw the
+  useful half away. `call()` threw a plain `ApiError`, so that branch received
+  `undefined` for its whole life and the `else` beside it ran every time. Dead
+  code that LOOKS load-bearing — the trap this table already carries as
+  `refang()`'s unreachable first rule — on the screen where a team writes what
+  stops reaching a human.
+- **Two more live shapes fell out of writing the guard, neither of them the
+  subject.** The 4xx branch had no non-empty check at all, so an `error` of
+  `"  "` painted a **blank banner** — the 5xx branch above it had that guard
+  and nothing else did, which is the whole argument for one reader rather than
+  two. And `body?.error` was never tested for being a string: `/api/mcp`
+  answers a JSON-RPC envelope whose `error` is an OBJECT, so `[object Object]`
+  was one browser call away. Both are pinned as controls.
+- **`ApiError` arrives through `await import()` in that test file**, so it is a
+  value binding and `e as ApiError` does not typecheck. `InstanceType<typeof
+  ApiError>`. Green under vitest, three errors under `tsc` — the gate caught
+  it, not the suite.
+- **A shared sentence made an unscoped `getByText` ambiguous.** The editor's
+  own owner help text reads almost exactly like the server's refusal, so the
+  render test found two nodes. Narrowed the query to the banner rather than
+  loosening the assertion — same resolution as the `role="note"` entry in the
+  traps table.
+
+**Do not redo**:
+
+- **Do not read `errors` (plural) in `call()`.** It is tempting because
+  `rejectionBody` and `injection.ts` use it — but nothing that goes through
+  this client answers it. `POST /api/findings/promote` deliberately answers
+  **200** with `{ok:false, errors}` precisely so it never depends on this path,
+  and the ingestion 400s answer an appliance, not a browser. Handling it here
+  would be error handling for a case that cannot occur.
+- **Do not let the joined `problems` list displace `error`.** The settings
+  inventory 400 sends BOTH: `error` is a sentence composed for a human out of
+  the same list. Mutation M3 reverses the precedence and is red.
+- **Ruled out: fixing the four routes instead of the client.** A list of
+  routes is the exact-match set that already cost this project every ingestion
+  endpoint, and the catch-all in `app.ts` is reachable from any of them.
+- **Ruled out: touching `RulesPage`.** Its code was right; it was being handed
+  nothing. The whole diff outside the tests is in `lib/api.ts`.
+- **Do not point the rules tests at a database that might exist.** They use
+  `127.0.0.1:1` (privileged, refused in ~1 ms) and rely on the rules routes
+  validating the body BEFORE they dial — so the 400 is reached without a socket
+  and the no-database 503 does not short-circuit it.
+
+**Found and NOT fixed** — carried:
+
+- **The 401 half of the same trap.** A route forwarding an upstream's 401 still
+  reaches the operator as "Authentication required" and sends them to the login
+  screen. Nothing forwards one today (the assistant answers 409), so it is a
+  loaded gun rather than a bug, and fixing it means touching the login flow.
+  With this PR it is the ONLY half left.
+- **The rules list error is French**: a refusing database renders
+  *« Base de données (règles): connect ECONNREFUSED »* in `RulesPage`'s error
+  panel. Seen while building the render test. That is § 7's "the built-in
+  engine writes French", ~90 strings, its own pass.
+- **`findingAlertId` joins its parts on a literal NUL byte** embedded in the
+  source file. `'\u0000'` would read identically and survive an editor.
+- **`server/auth.test.ts` and `server/static.test.ts` are in French**, headers
+  and test names both — § 7's known debt.
+
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 1171 passed | 1 skipped   (1161 | 1 before; +10, nothing skipped or weakened)
+npm run build       # dist built, 474.09 kB / 140.44 kB gzip (473.66 before)
+```
+Checked **RED** first: 7 of the 8 new assertions in `api-named-failures.test.ts`
+failed before the change (`expected [Function] to throw error matching /A rule
+needs a name/ but got 'The console server answered 400 with …'`, and the two
+controls that got `'  '` and `'[object Object]'` — which is how I know those
+two shapes were live and not hypothetical). The render test fails with `Unable
+to find an element with the text: /A rule needs a name/`. Then by mutation, one
+at a time, restoring in between:
+
+| Mutation | Result |
+|---|---|
+| M1 — `namedReason` reads `error` only (the original defect) | RED — 5 |
+| M2 — drop the non-empty-string guard | RED — 3 (the blank banner and `[object Object]` controls) |
+| M3 — the joined list displaces a composed `error` | RED — 1 |
+| M4 — the message travels, the structured list does not | RED — 1 (the banner) |
+
+The probe was deleted. `VulnPipe/` is untouched, so its suite was not run; no
+server file changed, so nothing needed driving under
+`node --experimental-strip-types`. No model key, no database and no network
+egress needed.
+
 ## 2026-09-16 (second run) — Wednesday · Tests and QA
 
 **Subject**: the console computes a sentence naming what an operator must go

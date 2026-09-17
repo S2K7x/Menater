@@ -11,7 +11,7 @@ import { getCurrentLocale } from '../i18n/context.tsx';
 import type { Locale } from '../i18n/dictionary.ts';
 import type {
   AlertCase, AuthStatus, ConsoleSnapshot, Diagnostics, ReplayResult,
-  CredentialsPayload, IngestSourcesPayload, RuleTemplate, RuleTestResult,
+  CredentialsPayload, IngestSourcesPayload, RuleProblem, RuleTemplate, RuleTestResult,
   SettingsPayload, TestResult, TuningRule,
 } from './types.ts';
 import type {
@@ -50,9 +50,70 @@ function withLocale(path: string): string {
   return `${path}${path.includes('?') ? '&' : '?'}locale=${locale()}`;
 }
 
-export class ApiError extends Error {}
+export class ApiError extends Error {
+  /**
+   * The per-field refusals, when the server named them one by one.
+   *
+   * `RulesPage` renders one line per entry and has read this since it was
+   * written; until `namedReason` existed it always received `undefined`.
+   *
+   * Declared then assigned rather than taken as a constructor parameter
+   * property: `erasableSyntaxOnly` refuses that syntax here.
+   */
+  problems?: RuleProblem[];
+}
 /** Distincte d'ApiError : elle declenche l'ecran de connexion, pas un bandeau. */
 export class AuthRequiredError extends ApiError {}
+
+/** A reason is a non-empty string. Anything else is not one. */
+function saying(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() !== '' ? value : null;
+}
+
+/**
+ * The reason the SERVER wrote, in the shapes this API actually answers.
+ *
+ * `error` is the common key, and it was the only one read — so the other two
+ * left the client as "the console server answered 400 with no explanation",
+ * over a body that explained it in full:
+ *
+ * - `problems`, one `{ field, detail }` per thing wrong with a tuning rule,
+ *   from `POST /api/rules` and `PUT /api/rules/:id`;
+ * - `detail`, from `POST /api/approvals/:token/resume` and the database probe —
+ *   the approval one naming the cause AND that the alert will be escalated.
+ *
+ * `error` wins when both are present: the settings route composes a sentence
+ * for a human out of the same list, and a raw join must not displace it.
+ *
+ * The string test is not decoration. `POST /api/mcp` answers a JSON-RPC
+ * envelope whose `error` is an OBJECT, and the previous `body?.error ??` would
+ * have put `[object Object]` on screen; a blank `error` put an empty banner
+ * there, which says less than the generic sentence does. That guard existed on
+ * the 5xx branch below and nowhere else — hence one reader for both.
+ */
+function namedReason(body: unknown): { message: string; problems?: RuleProblem[] } | null {
+  const b = body as Record<string, unknown> | null | undefined;
+  const problems = (Array.isArray(b?.problems) ? b.problems : [])
+    .filter((p): p is RuleProblem => saying((p as RuleProblem | null)?.detail) !== null)
+    .map((p) => ({ field: saying(p.field) ?? '', detail: p.detail }));
+
+  // `field: detail` is the spelling `inventoryRefused` already uses server
+  // side; a second one here is how two spellings of one sentence start to
+  // disagree.
+  const listed = problems.length > 0
+    ? problems.map((p) => (p.field ? `${p.field}: ${p.detail}` : p.detail)).join('; ')
+    : null;
+
+  const message = saying(b?.error) ?? listed ?? saying(b?.detail);
+  if (!message) return null;
+  return problems.length > 0 ? { message, problems } : { message };
+}
+
+function refused(fallback: string, named: ReturnType<typeof namedReason>): ApiError {
+  const err = new ApiError(named?.message ?? fallback);
+  if (named?.problems) err.problems = named.problems;
+  return err;
+}
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
@@ -97,15 +158,15 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
    * twenty that can.
    */
   if (res.status === 502 || res.status === 503 || res.status === 504) {
-    const named = parsed && typeof body?.error === 'string' && body.error.trim() !== ''
-      ? body.error
-      : null;
-    throw new ApiError(named ?? t().errors.apiNotResponding);
+    throw refused(t().errors.apiNotResponding, parsed ? namedReason(body) : null);
   }
 
   if (!parsed) throw new ApiError(t().errors.unreadable);
   if (!res.ok) {
-    throw new ApiError(body?.error ?? t().errors.noExplanation(res.status));
+    // EVERY key a route names a reason under, not the one that was remembered.
+    // Read the header of `api-named-failures.test.ts` for what each of them
+    // cost on screen.
+    throw refused(t().errors.noExplanation(res.status), namedReason(body));
   }
   return body as T;
 }
