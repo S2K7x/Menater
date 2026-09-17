@@ -36,6 +36,36 @@
  * So these tests put the REAL request handler behind the REAL client and
  * assert the sentence that reaches the screen — not a fixture mapping a status
  * to a message.
+ *
+ * ============================================================================
+ * THE SECOND HALF, AND THE SAME TRAP
+ *
+ * The 5xx fix left the sentence for every OTHER refusal read from `body.error`
+ * alone — and this server names a reason under three different keys. Measured
+ * by driving the real handler through the real client, before the fix:
+ *
+ *   POST /api/rules        400 {"problems":[{"field":"name","detail":"A rule
+ *                              needs a name: …"}, …5 of them]}
+ *                          → "The console server answered 400 with no explanation."
+ *   PUT  /api/rules/:id    400 {"problems":[…]}                → the same
+ *   POST /api/settings/test/database
+ *                          400 {"ok":false,"detail":"Host missing."}
+ *                                                              → the same
+ *   POST /api/approvals/:token/resume
+ *                          500 {"ok":false,"detail":"The decision could not be
+ *                              recorded: … Without it the run will time out and
+ *                              the alert will be escalated."}
+ *                          → "The console server answered 500 with no explanation."
+ *
+ * The last one is the worst place in the console to lose a sentence: somebody
+ * has just answered the question the pipeline stopped to ask, and what was
+ * thrown away names both the cause AND what happens next.
+ *
+ * And `RulesPage` has read `err.problems` since it was written, to render one
+ * line per field — `call()` threw a plain `ApiError`, so that array never
+ * arrived and the branch under its comment had never once run. Dead code that
+ * looks load-bearing, on the screen where an operator writes the rules that
+ * decide what stops reaching a human.
  * ============================================================================
  */
 
@@ -55,6 +85,9 @@ const { saveConfig } = await import('../../server/config.ts');
 const { messages } = await import('../../server/i18n.ts');
 const { api, ApiError } = await import('./api.ts');
 const { consoleDictionary } = await import('../i18n/console.ts');
+/** `ApiError` is a value binding here (dynamic import), so annotating needs this. */
+type Refusal = InstanceType<typeof ApiError>;
+type Problem = { field: string; detail: string };
 
 afterAll(() => rmSync(SCRATCH, { recursive: true, force: true }));
 
@@ -221,5 +254,105 @@ describe('the sentence the rule was written for is untouched', () => {
   it('keeps it for a 504 with no body, the shape a gateway times out with', async () => {
     vi.stubGlobal('fetch', async () => new Response(null, { status: 504 }));
     await expect(api.rules()).rejects.toThrow(GENERIC);
+  });
+});
+
+/**
+ * The 4xx half. Same rule, other keys.
+ *
+ * A configured-but-refusing database is used on purpose: `getRuleStore()`
+ * answers whether a database is CONFIGURED, and the rules routes validate the
+ * body BEFORE they dial it — so these 400s are reached without a socket ever
+ * being opened, and without the no-database 503 short-circuiting them first.
+ */
+describe('a refusal the server explained under a key that was not `error`', () => {
+  beforeEach(() => databaseRefuses());
+
+  it('gives the rules editor the sentences it wrote, not "no explanation"', async () => {
+    const bad = api.createRule({ name: '', conditions: 'nope' as never });
+    await expect(bad).rejects.toThrow(/A rule needs a name/);
+    await expect(api.createRule({ name: '', conditions: 'nope' as never }))
+      .rejects.toThrow(/Conditions must be a list/);
+    await expect(api.createRule({ name: '', conditions: 'nope' as never }))
+      .rejects.not.toThrow(consoleDictionary('en').errors.noExplanation(400));
+  });
+
+  it('hands the per-field list to the banner that has always tried to render it', async () => {
+    // `RulesPage` does `(e as { problems?: RuleProblem[] })?.problems` and
+    // renders one line per entry. It received `undefined` for its whole life.
+    const err = await api.createRule({ name: '', conditions: 'nope' as never })
+      .then(() => null, (e: unknown) => e as Refusal);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(Array.isArray(err!.problems)).toBe(true);
+    // One per field the server named, each carrying the sentence and the field.
+    expect(err!.problems!.length).toBeGreaterThan(1);
+    expect(err!.problems!.map((p: Problem) => p.field)).toContain('name');
+    expect(err!.problems!.every((p: Problem) => typeof p.detail === 'string' && p.detail !== '')).toBe(true);
+  });
+
+  it('does it on the UPDATE route too, which refuses through the same validator', async () => {
+    // Two routes, so that a fix on the one somebody remembers is not mistaken
+    // for the rule. This is the defect the ingestion endpoints already paid for.
+    await expect(
+      api.updateRule('11111111-1111-1111-1111-111111111111', { name: '', priority: 'high' as never }),
+    ).rejects.toThrow(/Priority must be a number/);
+  });
+
+  it('tells the approver why their decision did not stick, and what follows', async () => {
+    // The sentence lost here carries the CONSEQUENCE: the run will time out and
+    // the alert will be escalated. "No explanation (500)" says neither half.
+    const decision = api.resume('tok-x', { decision: 'approve', approver: 'alice', reason: '' });
+    await expect(decision).rejects.toThrow(/escalated/);
+    await expect(
+      api.resume('tok-x', { decision: 'approve', approver: 'alice', reason: '' }),
+    ).rejects.toThrow(/ECONNREFUSED/);
+  });
+
+  it('names what the database probe is missing instead of the status code', async () => {
+    await expect(api.testDatabase({ host: '' })).rejects.toThrow(am.hostMissing);
+  });
+});
+
+describe('what must NOT start being surfaced', () => {
+  beforeEach(() => databaseRefuses());
+
+  it('keeps "no explanation" when the body names nothing at all', async () => {
+    // The generic sentence is right here: there is genuinely nothing to say,
+    // and a blank banner says less than it does.
+    vi.stubGlobal('fetch', async () =>
+      new Response(JSON.stringify({ ok: false }), {
+        status: 400, headers: { 'Content-Type': 'application/json' },
+      }));
+    await expect(api.rules()).rejects.toThrow(consoleDictionary('en').errors.noExplanation(400));
+  });
+
+  it('keeps it when every key present is blank', async () => {
+    vi.stubGlobal('fetch', async () =>
+      new Response(JSON.stringify({ error: '  ', detail: '', problems: [{ field: 'x', detail: ' ' }] }), {
+        status: 400, headers: { 'Content-Type': 'application/json' },
+      }));
+    await expect(api.rules()).rejects.toThrow(consoleDictionary('en').errors.noExplanation(400));
+  });
+
+  it('never puts [object Object] on screen for an `error` that is not a string', async () => {
+    // `POST /api/mcp` answers a JSON-RPC envelope whose `error` is an object.
+    // No browser call reaches it today; the cast that would have printed
+    // "[object Object]" was one route away from being reachable.
+    vi.stubGlobal('fetch', async () =>
+      new Response(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32600, message: 'Empty batch.' } }), {
+        status: 400, headers: { 'Content-Type': 'application/json' },
+      }));
+    await expect(api.rules()).rejects.toThrow(consoleDictionary('en').errors.noExplanation(400));
+    await expect(api.rules()).rejects.not.toThrow(/object Object/);
+  });
+
+  it('leaves a refusal that already carried `error` exactly as it was', async () => {
+    // The inventory 400 sends `error` AND `problems`. `error` is the sentence
+    // the server composed for a human; the list must not displace it.
+    const refused = await api.saveSettings({ inventory: [] })
+      .then(() => null, (e: unknown) => e as Refusal);
+    expect(refused!.message).toBe(
+      am.inventoryRefused(['inventory: Send the list as { "entries": [ … ] }.']),
+    );
   });
 });
