@@ -90,7 +90,15 @@ function percentile(values: number[], p: number): number | null {
   return sorted[idx];
 }
 
-function computeMetrics(cases: AlertCase[]): Metrics {
+/**
+ * The metrics, from the same cases the queue shows.
+ *
+ * Exported for `engine/pipeline-to-case.test.ts`: `human_disagreement_rate_pct`
+ * is derived from a field the case builder reads out of a node output, so the
+ * only honest way to check it is to run the real pipeline and measure the real
+ * function rather than restate its arithmetic in a fixture.
+ */
+export function computeMetrics(cases: AlertCase[]): Metrics {
   const byVerdict: Record<string, number> = {};
   const bySeverity: Record<string, number> = {};
   const confidences: number[] = [];

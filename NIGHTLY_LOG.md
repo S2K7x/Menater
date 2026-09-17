@@ -4,6 +4,186 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-17 (second run) — Thursday · Bugs and technical debt
+
+**Subject**: the incident card read the settled approval under three names
+`interpretApproval` does not write, and the request under two
+`buildApprovalRequest` does not write — so every approval a human ever gave was
+filed as a REFUSAL, by nobody, for no reason, and
+`human_disagreement_rate_pct` — the rate `CLAUDE.md` § Measurement calls the
+one that gates leaving shadow mode — read **100** whenever anybody agreed.
+
+**Result**: PR #25 (branch `claude/great-pascal-o9vfso`).
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-o9vfso` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Tenth entry saying so**; it is a line in the
+routine's configuration, not a thing a night can fix. This is also the SECOND
+run carrying 2026-09-17; the entry below is the first, and nothing was redone.
+
+**Why this subject**: the suite was green on the default branch first (1171
+passed, 1 skipped, typecheck clean, build clean), so the calendar rule did not
+preempt, and no pull request was open. Thursday's priority order puts *a real,
+reproducible bug* above *a roadmap limitation*, and three candidates were
+measured before one was chosen — see **Found and NOT fixed**. This one won on
+cost: it is wrong on the card an operator approves an action from, and it
+poisons the single number that decides whether this console may ever act.
+
+**What I learned**:
+
+- **The console said the opposite of what the human did, and I measured it end
+  to end before writing a line.** `interpretApproval` returns
+  `{ outcome, proposed_action, approval }`; `cases.ts` read `interpreted.approved`,
+  `interpreted.approver` and `interpreted.human_reasoning`, all of which live
+  one level down under `approval`. `approved === true` is therefore false for
+  every answer there has ever been, so the card rendered the orange
+  `soc-banner-warn` — *« Declined by unknown »*, *« No reason given »* — on a
+  case whose action had just been EXECUTED. The `a.approvedBy(...)` branch of
+  `CaseView.tsx` had never once been reachable: dead code that looks
+  load-bearing, on the screen where somebody authorises isolating a host.
+- **Two more on the request, and the second is subtler than the first.** The
+  reasons a person is asked are `approval_triggers`, read as `triggers`, so
+  `approval.triggers.length > 0` was never true and the *« why you are being
+  asked »* block never rendered — the approver saw no reason for the question.
+  The deadline was worse: **it was on the request under no name at all.**
+  `ttl_minutes` sitting beside it is `isolation.ttlMinutes`, how long an
+  isolation LASTS, and reading it would have swapped one wrong number for a
+  more plausible one — I nearly did, and the test caught it
+  (`expected 60 to be 45`). The card printed a hardcoded `30`, which is the
+  DEFAULT of `approval.timeoutMinutes`: **a default that agrees with the
+  default**, right on a fresh install and silently wrong for anyone who changed
+  it. Fixed at the producer — `buildApprovalRequest` now writes
+  `timeout_minutes`, a number it already quoted to Slack and to nobody else.
+- **Why `pipeline-to-case.test.ts` was green, and this is the lesson.** That
+  file exists to END this exact class of defect: it runs the real workflows
+  through the real engine so no fixture is written by hand. Every test in it
+  ran in **shadow mode**, which is the default — and the whole
+  `request` / `attente` / `interpret` branch of 04 sits behind the `shadow`
+  if-node. So the approval path had never been driven through it once. *A test
+  written to close a trap has to be driven through the state where the trap
+  lives*, and this trap lives only on installs that have gone live, which are
+  the only installs where an action can touch a real machine.
+- **The ORDER of the reads is part of the fix.** `interpret` is the node that
+  DECIDES; `rejected` and `timeout` are the branches taken because of its
+  answer. Read first, it was overwritten by `refused`, which means the card
+  could never disagree with the branch — and a disagreement is exactly what a
+  defect upstream of `interpret` looks like. There is one (below), and it is
+  now visible because of this ordering.
+- **`computeMetrics` had to be exported to be measured honestly.** Restating
+  `pct(rejected, reviewed)` in a fixture would have agreed with itself. Driven
+  from the real pipeline it printed `expected 100 to be +0`, which is the whole
+  claim in one line.
+
+**Do not redo**:
+
+- **Do not read `ttl_minutes` for the approval deadline.** It is
+  `isolation.ttlMinutes`. The two are different numbers on the same object and
+  they now carry doc comments saying which is which.
+- **Do not hand-write the approval fixture to test `cases.ts`.** That is the
+  failure mode of `cases.test.ts`, which stayed green through all of this
+  because its fixtures are written in the READER's vocabulary. The three new
+  tests in `case-view.test.tsx` DO hand-write an `Approval` — that is safe and
+  deliberate, because the boundary they test is `AlertCase` → screen and
+  `AlertCase` is a declared type. They also pass on `main`: they guard a branch
+  the fix makes reachable, they are not the red-before-green evidence.
+- **Ruled out: fixing the resume-payload mismatch in the same PR.** It changes
+  what the pipeline EXECUTES on the irreversible-action path, and it carries a
+  second question about `identity_source` (below). Fixing the reader first is
+  the right order, because the reader is what makes the other one visible.
+- **Ruled out: making `Approval['timeout_minutes']` nullable** so an unknown
+  deadline could be shown as unknown. It ripples into `CaseView.tsx` and the
+  catalogue, and carrying the number on the request removes the gap at its
+  source instead. The `: 30` fallback survives in `cases.ts` for a shape the
+  producer can no longer emit.
+
+**Found and NOT fixed** — carried. The first three were each measured tonight
+and each could have been the night's subject:
+
+- **An approval answered in the console is interpreted as SILENCE.**
+  `routes/approvals.ts` posts `{ approved, human_reasoning, approver: {…} }`;
+  `interpretApproval` reads `payload.decision` / `.approver` (a string) /
+  `.reason`. Driven through the real pipeline with the route's own payload: a
+  human pressing **approve** gives `timeout_escalated`, the graph takes
+  `rejected`, `https://edr.test/isolate` is never called — and the audit row,
+  append-only and immutable, records `routing_outcome: "rejected"`,
+  `action_taken: "none"`, `"reason": "Action refused by a human."` **An
+  explicit yes, written into the hash chain as a refusal.** It fails safe on
+  the action and lies in the record. ROADMAP § 7 carries it, with the
+  `identity_source` question attached: the route deliberately builds
+  `console_self_declared` and `interpretApproval` throws it away and writes
+  `self_declared`, so translating naively loses a documented decision. **This
+  is the best next subject**, and it is a *Decision for a human* first.
+- **Nothing calls `sweepExpiredWaits()` or `engine.resume()` outside the
+  tests.** Grepped exhaustively. No scheduler exists — `setInterval` is in
+  `ingest/poller.ts` and `auth.ts` and nowhere else. So the approval timeout
+  never fires: the Slack request promises escalation after 30 minutes and the
+  run stays `waiting` for ever, invisible on Tracking too because `awaiting`
+  short-circuits the verdict ladder. And with no `resume()` at start-up, crash
+  recovery is dead in production. ROADMAP § 7.
+- **The Settings database test button answers about a port the console would
+  never dial.** Measured through the real handler and the real client: a
+  cleared port field sends `0` and gets **200** *« Connection refused »* (save
+  clamps 0 to 5432, so the button diagnosed a port that cannot exist), and
+  `70000` / `-1` / `5432.5` throw `RangeError ERR_SOCKET_BAD_PORT`
+  synchronously inside `tcpProbe`'s promise executor — uncaught, so **500**
+  with Node's own message. `saveConfig` clamps the same value ten lines away.
+  ROADMAP § 7, with the fix shape (a named 400, not a clamp). Small, and it
+  needs its own test file: `server/probes.ts` has none at all.
+- **The poller's cursor is a MAX over the delivered prefix, which is only the
+  delivered frontier if the source answers oldest-first.** Read and confirmed
+  in `ingest/poller.ts` (`newestTimestamp(normalized.slice(0, accepted))`, and
+  `batch = items.slice(0, policy.pull.batchSize)` drops the remainder with no
+  count and no error) — **not demonstrated with a failing test, so treat it as
+  a strong lead rather than an established defect.** Nothing anywhere states,
+  checks or asks for an ordering. With a newest-first source and a response
+  longer than `batchSize`, the newest N are delivered, the cursor jumps to the
+  newest of all, and everything older is behind it for ever under `error: null`
+  — property 1 of that file's own header ("THE CURSOR ONLY MOVES ON DATA WE
+  RECEIVED"). Candidate fix: order by timestamp ascending BEFORE slicing, which
+  is a no-op for an already-ascending source and makes the prefix meaningful;
+  note that a ceiling-based fix instead risks a cursor that never advances,
+  which must then be said on screen or it is a new silent failure.
+- **`src/lib/types.ts:85` still documents `identity_source` as
+  `n8n_form_self_declared`.** A stale name in a comment, so `n8n-removed.test.ts`
+  (which walks the catalogues) cannot see it. Not fixed: a one-line drive-by in
+  a PR about approvals is noise.
+- **`server/auth.test.ts`, `server/static.test.ts` and `case-view.test.tsx` are
+  in French**, headers and test names both — § 7's known debt. My three cases
+  were added to `case-view.test.tsx` in English rather than translating the
+  file around them.
+- **`findingAlertId` joins its parts on a literal NUL byte** embedded in the
+  source file. `'\u0000'` would read identically and survive an editor.
+
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 1179 passed | 1 skipped   (1171 | 1 before; +8, nothing skipped or weakened)
+npm run build       # dist built, 474.09 kB / 140.44 kB gzip (unchanged — the fix is server-side)
+```
+The three changed server modules were also loaded under
+`node --experimental-strip-types`, the runtime the service actually uses.
+
+Checked **RED** first: the three end-to-end assertions failed before the change
+— `expected 'rejected' to be 'approved'`, `expected undefined to be 'alice'`,
+and `expected 100 to be +0` on the disagreement rate. Then the deadline
+assertion caught my own first attempt at the fix (`expected 60 to be 45`, the
+isolation TTL). Then by mutation, one at a time, restoring in between:
+
+| Mutation | Result |
+|---|---|
+| M1 — the interpret block back to the top-level `approved` (the original defect) | RED — 4 |
+| M2 — `triggers` read as `triggers` again | RED — 2 |
+| M3 — the request stops carrying `timeout_minutes` | RED — 2 |
+| M4 — `interpret` read BEFORE the branches, so `rejected` overwrites it | RED — 1 |
+
+Both exploratory probes were deleted. `VulnPipe/` is untouched, so its suite was
+not run. No model key, no database and no network egress needed: the pipeline
+test stubs the database, the model and `fetch`, and the run takes the fail-safe
+verdict exactly as a fresh install does.
+
 ## 2026-09-17 — Thursday · Bugs and technical debt
 
 **Subject**: the server names what is wrong under three different keys and the

@@ -464,13 +464,23 @@ export function buildCases(
       const shadow = outputOf(steps, 'shadow-count');
 
       if (request) {
-        const ap = rec(request.approval ?? request);
+        // `buildApprovalRequest` returns a FLAT `ApprovalRequest`: there is no
+        // `request.approval` to reach for first, so that branch had never once
+        // run — and under it, two fields were read under names nothing writes.
+        // The list of reasons is `approval_triggers`, read here as `triggers`,
+        // so it was always empty. The deadline was worse: nothing on the
+        // request carried it at all — `ttl_minutes` beside it is how long an
+        // isolation LASTS — so the card printed a hardcoded 30, which is the
+        // default value and therefore right until somebody changes it.
+        // `buildApprovalRequest` now writes the deadline it already quotes to
+        // Slack.
+        const ap = rec(request);
         c.approval = {
           requested_action: (ap.requested_action ?? ap.proposed_action) as Approval['requested_action'],
           intent: str(ap.intent),
           blast_radius: str(ap.blast_radius),
           rollback_plan: str(ap.rollback_plan),
-          triggers: Array.isArray(ap.triggers) ? (ap.triggers as string[]) : [],
+          triggers: Array.isArray(ap.approval_triggers) ? (ap.approval_triggers as string[]) : [],
           outcome: 'pending',
           approver: null,
           human_reasoning: null,
@@ -479,14 +489,32 @@ export function buildCases(
         };
       }
       if (c.approval) {
-        if (interpreted) {
-          const approved = rec(interpreted).approved === true;
-          c.approval.outcome = approved ? 'approved' : 'rejected';
-          c.approval.approver = (rec(interpreted).approver ?? null) as Approval['approver'];
-          c.approval.human_reasoning = str(rec(interpreted).human_reasoning) || null;
-        }
         if (refused) c.approval.outcome = 'rejected';
         if (timedOut) c.approval.outcome = 'timeout_escalated';
+        // READ LAST, BECAUSE `interpret` IS THE NODE THAT DECIDES. `rejected`
+        // and `timeout` are the branches taken because of its answer, so
+        // neither may overwrite it.
+        //
+        // And its answer lives under `approval`: `interpretApproval` returns
+        // `{ outcome, proposed_action, approval }` and no top-level `approved`.
+        // Read for one, `approved === true` was false for every answer a human
+        // ever gave — so an approval was filed as a REFUSAL, by nobody, for no
+        // reason, on a case whose action had just been executed. And
+        // `human_disagreement_rate` — the rate CLAUDE.md § Measurement calls
+        // the one that gates leaving shadow mode — counts exactly that field,
+        // so it read 100 the moment anybody approved anything.
+        if (interpreted) {
+          const settled = rec(rec(interpreted).approval);
+          const outcome = str(rec(interpreted).outcome);
+          // An outcome outside the three the transform can produce leaves the
+          // branch above standing: this console shows no pipeline value it
+          // cannot name.
+          if (outcome === 'approved' || outcome === 'rejected' || outcome === 'timeout_escalated') {
+            c.approval.outcome = outcome;
+          }
+          c.approval.approver = (settled.approver ?? null) as Approval['approver'];
+          c.approval.human_reasoning = str(settled.human_reasoning) || null;
+        }
       }
 
       // NEVER ASKED MEANS NO APPROVAL, not a pending one.
