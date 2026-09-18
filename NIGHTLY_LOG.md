@@ -4,6 +4,129 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-18 (second run) — Friday · Performance and cost
+
+**Subject**: `trace.chains[].payload` carried the whole original alert to every
+open tab so the browser could read one boolean off it — and the copy it carried
+was, separately, invalid as the input it exists to be, so the replay button
+refused most of the cases it was offered on.
+
+**Result**: PR #27 (branch `claude/great-pascal-61p2mi`).
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-61p2mi` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Twelfth entry saying so**; it is a line in the
+routine's configuration, not a thing a night can fix. This is also the SECOND
+run carrying 2026-09-18; the entry below is the first, and nothing was redone —
+its own "Found and NOT fixed" list is where I started, and I did not take any of
+its four items (see **Do not redo**).
+
+**Why this subject**: the suite was green on the default branch first (1191
+passed, 1 skipped, typecheck clean, build clean), so the calendar rule did not
+preempt, and no pull request was open. It is an explicit `ROADMAP` § 7
+limitation, which NIGHTLY.md's priority order inside a theme puts ABOVE the
+measured optimisation I would otherwise have gone looking for — and it is the
+one § 7 item that is about cost, so it sits squarely in Friday's reservoir.
+
+**Measured**, through the REAL pipeline (the `pipeline-to-case.test.ts`
+harness: real workflows, real engine, real `buildCases`; only the database, the
+model and the network stubbed), with Wazuh-shaped logs carrying per-alert
+entropy:
+
+| window | raw | gzipped |
+|---|---|---|
+| 24 alerts / 120 runs (**default**) | 162,113 → 144,696 (−17,417 B, −10.7%) | 15,952 → 13,608 (−2,344 B, **−14.7%**) |
+| 100 alerts / 500 runs (ceiling) | 672,640 → 599,854 (−72,786 B, −10.8%) | 61,374 → 54,979 (−6,395 B, −10.4%) |
+| 24 alerts, ~60 B logs (this row's original scale) | 134,907 → 129,893 (−3.7%) | 12,856 → 11,909 (−947 B, **−7.4%**) |
+
+**What I learned**:
+
+- **`ROADMAP` § 7 said "negligible once gzipped", and that was an assumption
+  nobody had run.** It is wrong in the direction that matters: the compressed
+  saving is proportionally LARGER than the raw one at the default window. The
+  reason is DEFLATE's 32,768-byte sliding window — the case's `raw_log` and the
+  chain's copy of it sit **85,644 B apart** at the default window and 351,637 B
+  at the ceiling, so gzip never sees the two together and cannot collapse one
+  onto the other. I measured that distance explicitly rather than inferring it,
+  because "gzip will absorb a duplicate" is true only inside the window and the
+  whole row rested on it. Checked at the short-log scale too, so the finding is
+  not an artefact of my logs being bigger than the ones first measured.
+- **The field was also broken as the thing it exists for, and that is the half
+  I did not go looking for.** It stored the observables through the incident
+  card's display fallback — `str(v, '—')` — and those five fields are
+  re-INJECTED at the entry point on a replay. The entry point's validator
+  refuses a destination that is present and not an address, correctly:
+  `400 — invalid_dest_ip: not an IPv4/IPv6 literal`. So **the Tracking tab's
+  replay button refused every alert carrying no destination address**, which
+  `CLAUDE.md` § 2 bis says is most real detections. Reproduced on unmodified
+  `main` before claiming it (stash, run, restore). It is the `shortLabel` trap
+  of J0.1 in a second place: a string shaped for a screen it never actually
+  reached, handed back as input.
+- **The route's own sentence says "replayed" either way.** The pipeline's 400
+  was sitting inside `detail`, composed and never read by any test — the same
+  shape as the `respond-400` / `injectAlert` defects this repository has
+  already paid for twice. `replay-route.test.ts` therefore asserts on what the
+  ENGINE received, read back out of the run journal, and not on what the route
+  printed. That is what turned a size change into a bug fix: driving the real
+  handler is what produced the 400, and `replayPayload` alone would never have.
+- **A `WeakMap` keyed on the trace, and it is the third time this argument is
+  made in this codebase** (the response memo, the inventory index). A rebuilt
+  snapshot is a different object, so no rebuilt trace can be answered out of the
+  previous one's alerts and there is no invalidation anybody can forget; the
+  alerts are collected with the trace instead of living for the process's
+  lifetime, which matters when each one holds a raw log. A test pins that
+  second half by asking one trace for another trace's alert.
+
+**Do not redo**:
+
+- **Do not read `chain.payload` anywhere.** It is gone from the wire on purpose.
+  The server-side way in is `replayPayload(trace, alertId)` in
+  `server/engine/cases.ts`; the browser has `replayable: boolean` and that is
+  everything it ever used.
+- **Do not put the payload back to "keep the shapes symmetrical"**, and do not
+  send it under another name: the test reads the SERIALISED trace and counts
+  occurrences of the raw log, so a renamed field fails it, which is deliberate.
+- **Do not store a display fallback in `ReplayPayload`.** `observed()` is
+  beside `str()` in the same file for exactly that reason; the em dash is what
+  the entry point rejects.
+- **Do not export `observable()` from `transforms/ingestion.ts`** to save the
+  four duplicated lines. It is private to that module and widening a
+  transform's surface to avoid a four-line helper is the wrong trade; the two
+  are pinned by tests on both sides.
+- **I did not take any of the four items the first 09-18 run carried forward**
+  (`mcp.ts` indentation, the Anthropic `tools`-dropped-on-the-final-turn cache
+  miss, `explain_verdict` duplication, the `cases.ts` hot path). The § 7
+  limitation outranks them in NIGHTLY.md's order, and they are all still open
+  and still correctly described there. The Anthropic one still cannot be probed
+  from this environment — no model key — so it still must not ship on a hunch.
+
+**Found and NOT fixed**:
+
+- `str(v, '—')` is used for display elsewhere in `cases.ts` and that is right
+  there; I changed only the two call sites whose value is re-injected. I did
+  not sweep for other places where a display fallback reaches an input, and it
+  would be worth a night: the family has now cost this project twice.
+
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 1203 passed | 1 skipped  (1191 before; +12 new, nothing skipped or weakened)
+npm run build       # dist built, 474.10 kB / 140.44 kB gzip (client untouched beyond one field name)
+```
+Checked **RED** first: all 6 tests of `trace-payload.test.ts` failed before the
+change — including `expected 2 to be 1` on the count of copies of the raw log,
+which is the duplication itself, produced by the real pipeline — and
+`replay-route.test.ts` failed `expected 400 to be 202` on unmodified `main`,
+which is the replay bug. Four mutations, each red: the payload put back on the
+wire (3 fail), the payloads never registered (6 fail), the em dash restored
+(4 fail), `replayable` hardcoded `true` (1 fail). `VulnPipe/` untouched, its
+suite not run. No model key and no database needed: the engine runs on
+`MemoryRunStore` and the route test mocks `runtime.ts` onto it. The three
+measurement probes were written under `dashboard/scripts/`, run, and deleted.
+
 ## 2026-09-18 — Friday · Performance and cost
 
 **Subject**: the snapshot cache saved the database walk and paid for the

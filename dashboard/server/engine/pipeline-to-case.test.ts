@@ -33,7 +33,7 @@ import { ioHandlers } from './nodes/io.ts';
 import { controlHandlers } from './nodes/control.ts';
 import { PIPELINE_WORKFLOWS } from './workflows/pipeline.ts';
 import { ROUTING_WORKFLOWS } from './workflows/routing.ts';
-import { buildCases } from './cases.ts';
+import { buildCases, replayPayload } from './cases.ts';
 import { computeMetrics } from '../snapshot.ts';
 import { DEFAULT_LOCALE } from '../i18n.ts';
 import type { RunRecord, StepRecord } from './types.ts';
@@ -209,9 +209,12 @@ describe('a valid alert, end to end, as the console shows it', () => {
     expect(trace.counts.complete).toBe(1);
     expect(trace.chains[0].missing).toHaveLength(0);
     // The payload is held, so a replay would replay the real alert rather than
-    // one reconstructed from memory.
-    expect(trace.chains[0].payload).not.toBeNull();
-    expect(trace.chains[0].payload!.rule_name).toBe(ALERT.rule_name);
+    // one reconstructed from memory. It is held SERVER-SIDE: the chain says
+    // only that a replay is possible, and `POST /api/replay` reads the alert
+    // back through `replayPayload` — see `trace-payload.test.ts`.
+    expect(trace.chains[0].replayable).toBe(true);
+    expect(replayPayload(trace, ALERT.alert_id)).not.toBeNull();
+    expect(replayPayload(trace, ALERT.alert_id)!.rule_name).toBe(ALERT.rule_name);
   });
 });
 

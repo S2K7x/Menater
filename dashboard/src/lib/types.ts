@@ -589,17 +589,21 @@ export interface TraceChain {
   /** L'etape ou la chaine s'arrete sans raison. Renseigne pour `broken`. */
   break_at: ChainStep | null;
   /**
-   * Charge utile d'origine, relue depuis le webhook de 01. Absente quand le
-   * cas n'est jamais passe par 01 : on ne rejoue alors rien, plutot que de
-   * rejouer une alerte reconstituee de memoire.
+   * Whether the console still holds the alert as the webhook received it, and
+   * can therefore replay it.
+   *
+   * THE PAYLOAD ITSELF DOES NOT TRAVEL. It used to — the five fields, all the
+   * way to the browser — and the only thing read off it here was this
+   * boolean: `POST /api/replay` re-reads the alert SERVER-side out of the same
+   * snapshot, so the browser sends an `alert_id` and nothing else. `raw_log`
+   * dominated it, which made the chain a second copy of attacker-composed text
+   * on the wire, for nothing: the case already carries it. See
+   * `replayPayload` in `server/engine/cases.ts`.
+   *
+   * `false` means the case never went through 01 — nothing is then replayed,
+   * rather than replaying an alert reconstructed from memory.
    */
-  payload: {
-    source_ip: string;
-    dest_ip: string;
-    rule_name: string;
-    severity: Severity;
-    raw_log: string;
-  } | null;
+  replayable: boolean;
 }
 
 /**
