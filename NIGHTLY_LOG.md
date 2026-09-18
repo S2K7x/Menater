@@ -4,6 +4,144 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-18 — Friday · Performance and cost
+
+**Subject**: the snapshot cache saved the database walk and paid for the
+ENCODING again on every answer. `json()` re-ran `JSON.stringify` and
+`gzipSync` over an object the cache was handing back unchanged — **6.12 ms of
+blocked event loop per request**, on the single thread that also serves the
+ingestion webhook.
+
+**Result**: PR (branch `claude/great-pascal-af3zs4`).
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-af3zs4` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Eleventh entry saying so**; it is a line in the
+routine's configuration, not a thing a night can fix.
+
+**Why this subject**: the suite was green on the default branch first (1179
+passed, 1 skipped, typecheck clean, build clean), so the calendar rule did not
+preempt, and no pull request was open. This is an explicit `ROADMAP` § 7
+limitation, which NIGHTLY.md's priority order inside a theme puts ABOVE a
+measured optimisation I would have had to go looking for — and the 09-11 entry
+had already ruled out the wrong fix for it (*« do not make `gzipSync` async:
+the compression is not the waste, the REPETITION is »*), so the approach was
+pre-argued rather than invented tonight.
+
+**Measured**, through the REAL `json()` with a fake `res`, median of three
+rounds of 200 (fresh) and 2,000 (repeat) calls, on a synthetic window built
+from `demoCases` with per-case entropy so it compresses like log text:
+
+| | bytes | ms/request |
+|---|---|---|
+| payload | 563,315 raw → 48,396 gzip (11.6:1) | — |
+| before — a new body object per request | | **6.08 – 6.14 ms** |
+| after — the same object answered again | | **0.0001 – 0.0006 ms** (0.1–0.6 µs) |
+
+The synthetic payload is a faithful stand-in and that was checked, not assumed:
+the real pipeline's figures in § 7 are 563.9 kB / 45.3 kB and 2.76 ms + 3.73 ms,
+mine are 563.3 kB / 48.4 kB and 2.49 ms + 3.35 ms. My first version of the probe
+cloned seven demo cases unchanged and compressed **52:1**, which would have
+understated the gzip cost by 43% — a payload that is the right SIZE is not the
+right payload.
+
+**What I learned**:
+
+- **The saving was worth nothing until the caller stopped copying**, and I
+  nearly shipped the half that does nothing. The memo keys on the body's
+  identity; `routes/cases.ts` composed `{ ...snap, refresh_seconds }`, a NEW
+  object on every request, so it would have missed every single time while the
+  unit test went green. That is the *per-request nonce in a cached prefix* trap
+  rebuilt in the response layer. The cadence travels on the snapshot now —
+  `ConsoleSnapshot` had always declared the field, the route was the odd one
+  out.
+- **Identity, not content, and that is the safety argument rather than a
+  convenience.** A body that changed is necessarily a different object:
+  `rebuild()` builds a new snapshot and every other route composes a fresh
+  literal. So there is no invalidation for anybody to forget. Keying on content
+  would mean hashing bytes that have not been produced yet, which is the work
+  being avoided. A `WeakMap` so the ~600 kB of buffers is collected with the
+  snapshot instead of held for the process's life.
+- **The new invariant is the price, and it is worth stating out loud**: a route
+  must never answer twice with an object it MUTATED in between. I grepped every
+  `json(res, …)` call site whose body is not a literal — `mcp.ts`, `assistant`,
+  `intel`, `ingest`, `ops`, `cases` — and every one builds a fresh object or
+  hands back an immutable slice of the cached snapshot. The three mutations
+  inside `snapshot.ts` (`health.workflows`, `cases`, `refresh_seconds`) all run
+  in the rebuild chain, before anything is published.
+- **The compressed form is kept BESIDE the raw one, never instead of it.** The
+  next caller may send `accept-encoding: identity`, and a memo that let one
+  form displace the other would answer it with bytes it cannot read. A test
+  drives both orders on the same object.
+- **It scales with READERS, not with polls, and the honest half is that one tab
+  saves nothing.** TTL is 15 s and the default cadence 20 s, so a single tab
+  gets a rebuilt object each time and there is nothing to reuse. Ten tabs at
+  the 5 s minimum — the § 7 case — share one encoding across the cache's
+  fifteen seconds, i.e. roughly 29 requests out of 30. The first answer after
+  every rebuild still pays the full 6.12 ms; that is unchanged and cannot be
+  removed, only shared.
+
+**Do not redo**:
+
+- **Do not make `gzipSync` asynchronous.** Ruled out on 2026-09-11 with a
+  measurement and ruled out again by this fix: it removes neither the
+  stringify nor the compression, and it puts a concurrency question into a
+  function every route calls.
+- **Do not replace the `WeakMap` with a one-slot `lastBody` memo.** It would
+  pass every test in the new file and hold the last 563 kB payload for the life
+  of the process, which is the one thing the `WeakMap` is there to avoid.
+- **Do not key the memo on content.** See above: the hash costs the work.
+- **Do not take `refresh_seconds` back out of the snapshot** to "keep the route
+  concern in the route". That copy is the whole reason the memo would miss, and
+  the field is declared on `ConsoleSnapshot`. `refreshSeconds` is in `cacheKey`
+  as well as relying on `saveConfig` → `invalidate()`, because a setting that
+  looks applied and is not is the defect this console refuses everywhere else.
+
+**Found and NOT fixed** — carried for a future Friday. All four come from the
+2026-09-11 token-cost survey and **none is independently verified by me**; I
+measured only tonight's subject:
+
+- `mcp.ts:558` pretty-prints every tool result into `content[0].text`
+  (`JSON.stringify(result, null, 2)`) and sends the same data again as
+  `structuredContent`. The duplication is what the spec asks for; the
+  INDENTATION is not, and that block is what a model reads. Reported as
+  11,191 B where 5,123 B would do. Smallest possible diff of the four.
+- `chat.ts` / `providers.ts` drop `body.tools` entirely on the final turn, which
+  changes the head of the Anthropic prefix and should cost a full cache miss on
+  the schemas plus the stable system prompt. **Read the code tonight and it is
+  real**, but it fires only on a CAPPED run, so it is worth less than the survey
+  implies — and the fix (`tool_choice: { type: 'none' }` with `tools` kept)
+  asserts a shape of the Anthropic API that **cannot be probed from this
+  environment**, which has no model key. Do not ship it on a hunch.
+- `explain_verdict` re-sends what `get_alert` just sent, and `get_metrics`'s
+  `rate_meanings` restates a paragraph already in the cached prefix.
+- The `cases.ts` hot-path items (`outputOf` rescanning the step array per node
+  id, `Date.parse` ~13k times per rebuild, six `filter` passes, `tagAttack` not
+  stopping at three matches) and `stepsOfMany`'s unfiltered `SELECT *`. Still
+  one file, still a night of their own, and still the file a wrong
+  "optimisation" would damage most.
+
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 1191 passed | 1 skipped  (1179 before; +12 new, nothing skipped or weakened)
+npm run build       # dist built, 474.09 kB / 140.44 kB gzip (unchanged: server-side change)
+node --experimental-strip-types -e "import('./server/respond.ts')…"   # loads and answers
+```
+Checked **RED** first: 4 of the 8 unit tests failed before the change
+(`expected 2 to be 1` on the serialisation count, the gzip count, the
+raw-after-gzip answer and the status guard), and the route test failed
+separately after the unit half was green — `expected 2 to be 1` on gzip —
+which is what proved the route's spread was defeating the memo. Four
+mutations, each red: gzip recomputed per answer, the raw memo removed, the
+route's spread restored, `withRefreshRate` removed. `VulnPipe/` untouched, its
+suite not run. No model key and no database needed: the snapshot falls back to
+the sample set and the probe is pure. Both measurement probes were written
+under `dashboard/scripts/`, run, and deleted.
+
 ## 2026-09-17 (second run) — Thursday · Bugs and technical debt
 
 **Subject**: the incident card read the settled approval under three names

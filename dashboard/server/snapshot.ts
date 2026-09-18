@@ -79,8 +79,14 @@ let inFlight: { key: string; promise: Promise<ConsoleSnapshot> } | null = null;
  */
 const cacheKey = (locale: Locale) => {
   const d = getConfig().database;
+  // The refresh cadence is in the key because it is now baked INTO the
+  // snapshot (see `withRefreshRate`). `saveConfig` calls `invalidate()`, so
+  // this is belt and braces — and it is the half that cannot be forgotten by
+  // a future writer, which is what stops "a setting that looks applied and is
+  // not" from being rebuilt here.
   return `${d.host}:${d.port}/${d.database}`
-    + `|${getConfig().console.forceDemo}|${getConfig().console.executionWindow}|${locale}`;
+    + `|${getConfig().console.forceDemo}|${getConfig().console.executionWindow}`
+    + `|${getConfig().console.refreshSeconds}|${locale}`;
 };
 
 function percentile(values: number[], p: number): number | null {
@@ -365,10 +371,26 @@ function withRepositories(snap: ConsoleSnapshot): ConsoleSnapshot {
  * PUBLISHING it to everyone else for the next fifteen seconds.
  * ============================================================================
  */
+/**
+ * The refresh cadence travels ON the snapshot.
+ *
+ * `ConsoleSnapshot` has always declared the field; the route was the odd one
+ * out, composing `{ ...snap, refresh_seconds }` — a NEW object on every
+ * request. That is what stopped `json()` from recognising an answer it had
+ * already encoded, so the cached queue was serialised and gzipped again for
+ * every poll of every open tab. Set here, in the one place every build path
+ * passes through, rather than in the four `buildSnapshot` returns.
+ */
+function withRefreshRate(snap: ConsoleSnapshot): ConsoleSnapshot {
+  snap.refresh_seconds = getConfig().console.refreshSeconds;
+  return snap;
+}
+
 function rebuild(locale: Locale, key: string): Promise<ConsoleSnapshot> {
   if (inFlight && inFlight.key === key) return inFlight.promise;
   const promise = buildSnapshot(locale)
     .then(withRepositories)
+    .then(withRefreshRate)
     .then((snap) => {
       if (inFlight?.promise === promise) cache = { at: Date.now(), key, snapshot: snap };
       return snap;
