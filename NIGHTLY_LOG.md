@@ -12,7 +12,7 @@ ENCODING again on every answer. `json()` re-ran `JSON.stringify` and
 blocked event loop per request**, on the single thread that also serves the
 ingestion webhook.
 
-**Result**: PR (branch `claude/great-pascal-af3zs4`).
+**Result**: PR #26 (branch `claude/great-pascal-af3zs4`).
 
 **Note on the branch name.** `NIGHTLY.md` § 5 asks for
 `claude/nightly-YYYY-MM-DD-subject`; this session was handed
