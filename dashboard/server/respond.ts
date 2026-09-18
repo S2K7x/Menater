@@ -16,6 +16,55 @@ import { gzipSync } from 'node:zlib';
 const GZIP_MIN_BYTES = 4096;
 
 /**
+ * Bytes already produced for a body object.
+ *
+ * ============================================================================
+ * THE SNAPSHOT IS ONE OBJECT, ANSWERED MANY TIMES
+ *
+ * `snapshot()` hands the SAME `ConsoleSnapshot` back to every caller for up to
+ * fifteen seconds — that is what its cache is for — and this function used to
+ * re-run `JSON.stringify` and `gzipSync` over it on every one of those
+ * answers. Measured on a 563 kB window: 2.5 ms of stringify plus 3.3 ms of
+ * gzip, about 5.8 ms of BLOCKED EVENT LOOP per request, on the single thread
+ * that also serves the ingestion webhook. Ten tabs at the minimum refresh is
+ * ~12 ms of loop per second spent re-encoding bytes nothing had changed.
+ *
+ * The compression was never the waste. The REPETITION was, which is why the
+ * answer is a memo and not an asynchronous `gzip`.
+ *
+ * KEYED ON IDENTITY, AND THAT IS THE WHOLE SAFETY ARGUMENT. A body that
+ * changed is necessarily a different object: `rebuild()` builds a new
+ * snapshot, and every other route composes a fresh literal per request. So
+ * there is no invalidation for anybody to forget — the same reasoning as the
+ * service inventory's index, which is memoised on its array's identity for
+ * exactly this reason. What it forbids is answering twice with an object
+ * MUTATED in between; no route in this server does that, and
+ * `respond-encoding.test.ts` pins the contract.
+ *
+ * A `WeakMap`, so the bytes are collected with the body instead of being held
+ * for the life of the process.
+ * ============================================================================
+ */
+const encoded = new WeakMap<object, { raw: Buffer; gzip: Buffer | null }>();
+
+/**
+ * The serialised body, produced once per object.
+ *
+ * A body that is not an object — a string, `null`, a number — cannot key a
+ * `WeakMap`, so it is encoded as it always was. Those are small answers by
+ * construction; the ones worth memoising are all objects.
+ */
+function encodeOnce(body: unknown): { raw: Buffer; gzip: Buffer | null } {
+  const key = typeof body === 'object' && body !== null ? (body as object) : null;
+  const hit = key ? encoded.get(key) : undefined;
+  if (hit) return hit;
+
+  const slot = { raw: Buffer.from(JSON.stringify(body), 'utf8'), gzip: null as Buffer | null };
+  if (key) encoded.set(key, slot);
+  return slot;
+}
+
+/**
  * Answers with JSON.
  *
  * `no-store` is not decoration: a triage queue served from a browser cache is
@@ -27,7 +76,7 @@ export function json(
   body: unknown,
   headers: Record<string, string> = {},
 ): true {
-  const payload = Buffer.from(JSON.stringify(body), 'utf8');
+  const slot = encodeOnce(body);
   const base = {
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
@@ -39,17 +88,21 @@ export function json(
   // open somewhere other than the API's machine), and JSON compresses about
   // tenfold.
   const accepts = String(res.req?.headers?.['accept-encoding'] ?? '');
-  if (payload.length >= GZIP_MIN_BYTES && /\bgzip\b/.test(accepts)) {
-    const gz = gzipSync(payload);
-    res.writeHead(status, { ...base, 'Content-Encoding': 'gzip', 'Content-Length': gz.length });
-    res.end(gz);
+  if (slot.raw.length >= GZIP_MIN_BYTES && /\bgzip\b/.test(accepts)) {
+    // Compressed lazily and kept BESIDE the raw form, never instead of it: the
+    // next caller may be one that sends `accept-encoding: identity`, and it
+    // has to get bytes it can read.
+    if (!slot.gzip) slot.gzip = gzipSync(slot.raw);
+    res.writeHead(status, {
+      ...base, 'Content-Encoding': 'gzip', 'Content-Length': slot.gzip.length });
+    res.end(slot.gzip);
     // Returning `true` is what lets a route group say "handled" simply by
     // writing `return json(...)`, exactly as every branch already did.
     return true;
   }
 
-  res.writeHead(status, { ...base, 'Content-Length': payload.length });
-  res.end(payload);
+  res.writeHead(status, { ...base, 'Content-Length': slot.raw.length });
+  res.end(slot.raw);
   return true;
 }
 

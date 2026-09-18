@@ -183,6 +183,27 @@ describe('what the cache is for, and must go on doing', () => {
   });
 
   /**
+   * The same OBJECT, not merely the same data — and that is now load-bearing
+   * rather than incidental. `json()` encodes a body once per object identity,
+   * so handing back a copy would pay for the serialisation and the gzip of a
+   * 563 kB payload again on every poll of every open tab. See
+   * `respond-encoding.test.ts`.
+   */
+  it('hands back the same object, which is what lets the answer be encoded once', async () => {
+    runs = [run('A')];
+    expect(await snapshot(DEFAULT_LOCALE)).toBe(await snapshot(DEFAULT_LOCALE));
+  });
+
+  /**
+   * Carried ON the snapshot rather than bolted onto it by the route, for the
+   * reason above: `{ ...snap, refresh_seconds }` was a new object per request.
+   */
+  it('carries the refresh cadence the screen reads', async () => {
+    runs = [run('A')];
+    expect((await snapshot(DEFAULT_LOCALE)).refresh_seconds).toBe(20);
+  });
+
+  /**
    * A rebuild nothing disowned is the ordinary case, and it MUST publish: a
    * cache that never fills is the tenfold read above, arrived at from the other
    * side.

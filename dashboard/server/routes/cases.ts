@@ -7,16 +7,20 @@
 
 import { json } from '../respond.ts';
 import { snapshot } from '../snapshot.ts';
-import {
-  getConfig } from '../config.ts';
 import type { Ctx } from './context.ts';
 
 export async function casesRoutes(c: Ctx): Promise<boolean> {
   const { req, res, url, path, locale, am } = c;
 
     if (req.method === 'GET' && path === '/api/snapshot') {
+      // THE CACHED OBJECT ITSELF, not a copy of it. `json()` encodes a body
+      // once per object identity, and the snapshot is the same object for
+      // every caller until it is rebuilt — spreading it here to bolt on
+      // `refresh_seconds` produced a new object per request and paid for the
+      // serialisation and the gzip again every time. The cadence is on the
+      // snapshot now; see `withRefreshRate`.
       const snap = await snapshot(locale, url.searchParams.get('force') === '1');
-      return json(res, 200, { ...snap, refresh_seconds: getConfig().console.refreshSeconds });
+      return json(res, 200, snap);
     }
 
     if (req.method === 'GET' && path.startsWith('/api/cases/')) {
