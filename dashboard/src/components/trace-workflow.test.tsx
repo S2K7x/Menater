@@ -90,7 +90,7 @@ describe('une valeur hors catalogue se rend telle quelle, jamais « undefined »
           chains: [{
             alert_id: 'ALT-1', received_at: '2026-09-04T08:55:00Z',
             last_activity_at: '2026-09-04T09:00:00Z', idle_ms: 1000,
-            verdict: 'complete', missing: [], terminal_reason: null, break_at: null, payload: null,
+            verdict: 'complete', missing: [], terminal_reason: null, break_at: null, replayable: false,
             steps: [step({ status: 'quarantined' as never, handoff: 'deferred' as never })],
           }] as never,
         })}

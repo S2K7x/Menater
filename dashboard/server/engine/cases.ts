@@ -49,6 +49,63 @@ import { messages, type Locale } from '../i18n.ts';
 import { tagAttack } from './attack.ts';
 import type { RunRecord, StepRecord } from './types.ts';
 
+/**
+ * The alert as the webhook received it, kept for `POST /api/replay`.
+ *
+ * ============================================================================
+ * IT IS HELD HERE AND IT DOES NOT TRAVEL
+ *
+ * This used to be `TraceChain.payload`, serialised into every snapshot and
+ * sent to every open tab. The browser read one thing off it —
+ * `if (!chain.payload)`, to decide whether to offer the replay button — and
+ * the replay route re-reads the alert on THIS side anyway, out of its own
+ * snapshot, because the browser posts an `alert_id` and nothing more.
+ *
+ * `raw_log` dominates the five fields, so the chain was carrying a SECOND copy
+ * of attacker-composed text the case already holds. gzip does not absorb it:
+ * the two copies sit tens of kilobytes apart in the body, far outside
+ * DEFLATE's 32 KiB window.
+ *
+ * KEYED ON THE TRACE THE PAYLOADS BELONG TO, in a `WeakMap`, for the reason
+ * the response memo and the inventory index are keyed the same way: a snapshot
+ * that has been rebuilt is a DIFFERENT object, so no rebuilt trace can be
+ * answered out of the previous one's alerts and there is no invalidation
+ * anybody can forget. The alerts are collected with the trace instead of
+ * living for the process's lifetime, which matters when each one carries a raw
+ * log.
+ * ============================================================================
+ */
+export interface ReplayPayload {
+  /**
+   * THE OBSERVABLES ARE NULLABLE, and that is not tidiness: these five fields
+   * are re-injected at the entry point, so they are INPUT, and the contract
+   * says an absent observable is `null` and never invented. They were stored
+   * through the card's display fallback — an em dash — and the entry point's
+   * own validator refuses a destination that is present and not an address
+   * (`invalid_dest_ip`), which it is right to do. Since most detections carry
+   * no destination, the replay button refused most of the cases it was offered
+   * on. A string shaped for a screen is not an input.
+   */
+  source_ip: string | null;
+  dest_ip: string | null;
+  rule_name: string;
+  severity: Severity;
+  raw_log: string;
+}
+
+const REPLAY_PAYLOADS = new WeakMap<TraceReport, Map<string, ReplayPayload>>();
+
+/**
+ * The alert behind one chain, or `null` when the console never saw it.
+ *
+ * `null` is the answer that makes `POST /api/replay` refuse, and refusing is
+ * the point: replaying a guessed alert would produce a case that resembles the
+ * original without being one.
+ */
+export function replayPayload(trace: TraceReport, alertId: string): ReplayPayload | null {
+  return REPLAY_PAYLOADS.get(trace)?.get(alertId) ?? null;
+}
+
 /** Workflow id → the label the interface shows. */
 export const WORKFLOW_LABELS: Record<string, string> = {
   '01-ingestion': '01-Ingestion',
@@ -107,6 +164,20 @@ const ran = (steps: StepRecord[], nodeId: string): boolean => steps.some((s) => 
 
 const str = (v: unknown, fallback = ''): string =>
   typeof v === 'string' && v.trim() !== '' ? v : fallback;
+
+/**
+ * An observable as the entry point reads one: the trimmed value, or `null`.
+ *
+ * Same rule as `observable()` in `transforms/ingestion.ts`, applied on the way
+ * back out. Not imported from there because it is private to that module, and
+ * exporting it to save four lines would widen the transform's surface for no
+ * gain.
+ */
+const observed = (v: unknown): string | null => {
+  if (v === undefined || v === null) return null;
+  const t = String(v).trim();
+  return t === '' ? null : t;
+};
 
 /**
  * A number that may have arrived as a string.
@@ -333,7 +404,7 @@ export function buildCases(
   const chains = new Map<string, TraceStep[]>();
   const executions: TraceExecution[] = [];
   const orphans: TraceExecution[] = [];
-  const payloads = new Map<string, TraceChain['payload']>();
+  const payloads = new Map<string, ReplayPayload>();
 
   // Oldest first: a case is a story, and the stages have to read in the order
   // they happened rather than in the order the query returned them.
@@ -419,9 +490,11 @@ export function buildCases(
       const alert = rec(run.input);
       applyAlertFields(c, alert);
       c.received_at = run.startedAt;
+      // AS THE WEBHOOK RECEIVED IT, not as a card would print it: this is
+      // replayed through the entry point, so it is input. See `ReplayPayload`.
       payloads.set(alertId, {
-        source_ip: str(alert.source_ip, '—'),
-        dest_ip: str(alert.dest_ip, '—'),
+        source_ip: observed(alert.source_ip),
+        dest_ip: observed(alert.dest_ip),
         rule_name: str(alert.rule_name),
         severity: asSeverity(alert.severity),
         raw_log: str(alert.raw_log),
@@ -663,7 +736,7 @@ export function buildCases(
       missing: CHAIN_STEPS.filter((w) => !steps.some((s) => s.workflow === w)),
       terminal_reason: complete ? 'audited' : null,
       break_at: broken ? broken.workflow : null,
-      payload: payloads.get(alertId) ?? null,
+      replayable: payloads.has(alertId),
     } as TraceChain;
   });
 
@@ -683,26 +756,29 @@ export function buildCases(
   };
   counts.attention = counts.broken + counts.stalled + counts.orphans;
 
-  return {
-    cases: list,
-    trace: {
-      generated_at: now.toISOString(),
-      window: {
-        limit: opts.limit,
-        inspected: runs.length,
-        attached: runs.length - orphans.length,
-        oldest_at: times.length ? new Date(Math.min(...times)).toISOString() : null,
-        newest_at: times.length ? new Date(Math.max(...times)).toISOString() : null,
-        // The window is FULL, so older runs exist that this view knows nothing
-        // about. Saying so beats letting someone read "no broken chain" as a
-        // statement about their whole history.
-        truncated: runs.length >= opts.limit,
-      },
-      stall_after_ms: STALL_AFTER_MS,
-      chains: traceChains,
-      orphans,
-      executions,
-      counts,
+  const trace: TraceReport = {
+    generated_at: now.toISOString(),
+    window: {
+      limit: opts.limit,
+      inspected: runs.length,
+      attached: runs.length - orphans.length,
+      oldest_at: times.length ? new Date(Math.min(...times)).toISOString() : null,
+      newest_at: times.length ? new Date(Math.max(...times)).toISOString() : null,
+      // The window is FULL, so older runs exist that this view knows nothing
+      // about. Saying so beats letting someone read "no broken chain" as a
+      // statement about their whole history.
+      truncated: runs.length >= opts.limit,
     },
+    stall_after_ms: STALL_AFTER_MS,
+    chains: traceChains,
+    orphans,
+    executions,
+    counts,
   };
+
+  // The alerts stay HERE, against the trace they belong to, instead of riding
+  // to the browser inside it. `replayPayload` is the only way back to them.
+  REPLAY_PAYLOADS.set(trace, payloads);
+
+  return { cases: list, trace };
 }

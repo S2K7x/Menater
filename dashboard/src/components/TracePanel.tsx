@@ -132,7 +132,7 @@ function ReplayBox({ chain, onDone }: { chain: TraceChain; onDone: () => void })
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
 
-  if (!chain.payload) {
+  if (!chain.replayable) {
     return <p className="soc-faint soc-trace-noreplay">{t.replayNoPayload}</p>;
   }
 

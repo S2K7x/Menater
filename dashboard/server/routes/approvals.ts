@@ -8,6 +8,7 @@
 import { json, readBody } from '../respond.ts';
 import { invalidate, snapshot } from '../snapshot.ts';
 import { injectAlert } from '../injection.ts';
+import { replayPayload } from '../engine/cases.ts';
 import { getEngine } from '../runtime.ts';
 import type { Ctx } from './context.ts';
 
@@ -99,12 +100,17 @@ export async function approvalsRoutes(c: Ctx): Promise<boolean> {
       const snap = await snapshot(locale);
       const chain = snap.trace.chains.find((ch) => ch.alert_id === sourceId);
       if (!chain) return json(res, 404, { ok: false, error: am.replayUnknownCase(sourceId) });
-      if (!chain.payload) return json(res, 409, { ok: false, error: am.replayNoPayload(sourceId) });
+      // THE ALERT NEVER LEFT THIS PROCESS. The chain carries `replayable`; the
+      // five fields are read back out of the same snapshot, which is what lets
+      // the browser post an `alert_id` and nothing else — and what keeps a
+      // second copy of the raw log off the wire. See `replayPayload`.
+      const payload = replayPayload(snap.trace, sourceId);
+      if (!payload) return json(res, 409, { ok: false, error: am.replayNoPayload(sourceId) });
 
       const sameId = body.same_id === true;
       const stamp = new Date().toISOString();
       const alertId = sameId ? sourceId : `${sourceId}-r${Date.now().toString(36)}`;
-      const alert = { alert_id: alertId, ...chain.payload, timestamp: stamp };
+      const alert = { alert_id: alertId, ...payload, timestamp: stamp };
 
       try {
         // STRAIGHT INTO THE ENGINE, not back out through an HTTP round trip to
