@@ -13,7 +13,7 @@ replay, a manual lookup, a save — and the assistant's entire output arrives th
 way. **None of it was announced.** For somebody working with a screen reader, a
 refusal and a success were the same thing: silence.
 
-**Result**: PR #PENDING (branch `claude/great-pascal-3u0xwh`).
+**Result**: PR #28 (branch `claude/great-pascal-3u0xwh`).
 
 **Note on the branch name.** `NIGHTLY.md` § 5 asks for
 `claude/nightly-YYYY-MM-DD-subject`; this session was handed
