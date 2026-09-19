@@ -4,6 +4,136 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-19 (second run) — Saturday · Interface, clarity, accessibility
+
+**Subject**: two buttons on every tuning-rule row hold a drawing and nothing
+else — **edit** and **delete** — so they reached assistive technology with no
+accessible name at all. A screen-reader user walking the rules list heard
+« Disable, button. button. button. » per row, and the way to learn which one
+DELETES the rule was to press it.
+
+**Result**: PR #29 (branch `claude/great-pascal-3q1j9t`).
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-3q1j9t` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Fourteenth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject**: the suite was green on the default branch first (1212
+passed, 1 skipped, typecheck clean, build clean), so the calendar rule did not
+preempt, and no pull request was open. This is the SECOND run carrying
+2026-09-19; the entry below is the first (PR #28, live regions), and nothing
+was redone — I started from its *Found and NOT fixed* list and took none of its
+four items (see **Do not redo**). Saturday's reservoir is interface and
+accessibility, and this is priority (2), a real defect with a measurement, not
+(6) a clarity pass. WCAG 2.2 § 4.1.2 (Name, Role, Value), level A.
+
+**How it was found**: a throwaway vitest probe that mounted thirteen screens
+with data of the right shape and swept each for unnamed controls, duplicate
+ids, dangling `aria-*` IDREFs and heading jumps. Eleven screens came back
+clean; `RulesPage` came back with two. Cross-checked against all **155**
+`<Icon>` uses in the application: those two are the only ones sitting in a
+control with no neighbouring text. The probe was deleted;
+`icon-controls.test.tsx` is what stays.
+
+**Measured in real Chromium** (Playwright, `page.accessibility.snapshot()`), on
+the markup the component actually renders — dumped from the mounted component,
+not hand-written:
+
+```
+BEFORE (main)     button accessible names: "Disable", "", ""
+AFTER (this PR)   button accessible names: "Disable", "Edit rule “…”", "Delete rule “…”"
+```
+
+**What I learned**:
+
+- **A contract a component documents about ITSELF is not a test of its
+  callers.** `Icon`'s header says a captionless glyph is decorative, carries
+  `aria-hidden`, and is labelled by « le texte voisin ». It keeps that promise
+  exactly — and it is right to, because it is what stops « New rule » being
+  announced as « check New rule ». Keeping it just moves the whole obligation
+  onto the caller, where nothing was checking. The fix therefore had to be a
+  test over RENDERED screens, not a rule inside `Icon`.
+- **The rule already existed one file over.** `Assistant.tsx` gives its
+  icon-only send button an `aria-label`. That is the fourth time this project
+  has recorded the same shape — the live regions of PR #28, `readCapped`,
+  `redirect: 'manual'` on one call site of eight. *The mirror of a rule is not
+  the rule.*
+- **Use the real name computation, not your own.** My first sweep read
+  `aria-label` / `<label for>` / text by hand. That would have agreed with
+  whatever the fix happened to write. The test uses Testing Library's
+  `{ name: /\S/ }` filter, which is `dom-accessibility-api`, and the
+  before/after number comes from Chromium itself.
+- **A repeated control needs the ROW in its name.** « Edit » and « Delete »
+  alone would have passed the WCAG check and still been useless: twenty
+  identical pairs, one of which deletes. A test refuses the constant label, so
+  it is not left to the next person's good intentions.
+
+**Do not redo**:
+
+- **Do not give `Icon` a default `title`.** That is the plausible wrong fix: it
+  announces the drawing beside the word it decorates, so « Save rule » is read
+  as « check Save rule » on every button in the console. Mutation-tested — the
+  boundary test goes red on it, and it passes before AND after the real fix, on
+  purpose.
+- **Do not label the edit/delete pair with a constant** (`aria-label="Delete"`).
+  Mutation-tested; one test is written for exactly that.
+- **Do not chase the responsive-table pattern. I measured it and it is fine.**
+  `.soc-queue` and `.soc-table-compact` set `display: block` / `grid` / `flex`
+  on `table`, `tbody`, `tr` and `td` at ≤ 760 px, which is the classic
+  role-stripping trap — so I probed it in Chromium before believing it. It
+  **preserves** `table` / `row` / `cell`, and it folds the `::before`
+  `data-label` INTO the cell's accessible name (`cell "State awaiting"`). Only
+  `tbody` loses `rowgroup`, and `thead` is legitimately gone. This was my
+  first-choice subject and it died on the measurement; that is the night's
+  cheapest result and it is written here so nobody pays for it twice. *(Not
+  checked on Firefox or WebKit — I only have Chromium here, and I am not
+  claiming what I did not run.)*
+- **Do not relabel the enable/disable toggle.** It HAS a name, so it is not the
+  level-A failure this PR fixes; making its visible text row-specific is a
+  visual change and a different (AA, 2.4.6) question. Left alone deliberately.
+- **Do not trust a hand-rolled accessible-name function.** See above.
+
+**Found and NOT fixed**:
+
+- **The console's tables have no accessible name.** `soc-queue` and
+  `soc-table` carry no `<caption>` and no `aria-label`, while
+  `vulnpipe/components/UsagePanel.tsx` uses `<caption>` twice — the same
+  one-half-of-the-product shape again. Not a level-A failure, so it did not
+  outrank this one; it is a real, scoped Saturday subject.
+- **The enable/disable toggle repeats identically per row**, as above.
+- **`SettingsPage` and `MetricsPanel` were not swept.** Their fixtures did not
+  mount in the probe's budget (`SettingsPayload` is deep, `Metrics` needs a
+  shape I did not chase). Eleven of thirteen screens were swept; the two that
+  were not are named here rather than quietly counted as clean.
+- **`Assistant`'s open/close toggle carries `aria-expanded` with no
+  `aria-controls`.** Legal — `aria-expanded` does not require it — so not a
+  defect, but noted since the sweep flagged it.
+- The four items PR #28 left open are untouched, deliberately: the Ingestion
+  tab's « Poll now » announcement, the assistant's `aria-busy`, the big result
+  panels, and the re-audit of `src/vulnpipe/`'s 22 regions.
+
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors                     (exit 0)
+npm test            # 1219 passed | 1 skipped      (1212 before; +7 new, nothing skipped or weakened)
+npm run build       # dist built, CSS 88.54 kB UNCHANGED (same hash index-bEjOKBpv.css), JS 474.54 → 474.68 kB
+```
+Checked **RED** by reverting the two source files and keeping the tests: **3 of
+7 fail**. The four that pass do so by design — the boundary control, and the
+three other row-rendering screens (queue, incident card, trace log), which were
+already clean and whose passing is what shows the defect was contained to one
+screen. Two mutations, each caught by exactly the test written for it: a
+constant `aria-label` with no rule name (1 fail), and `Icon` defaulting its
+`title` to the icon name (1 fail). The CSS being byte-identical is the claim
+that this changes nothing anyone can see. The one skipped test is the
+pre-existing `store-contract.test.ts > contrat — postgres`, which needs a
+database. `VulnPipe/` untouched, its suite not run. No model key and no database
+needed. `npm ci` did not rewrite `package-lock.json`. Probes deleted.
+
 ## 2026-09-19 — Saturday · Interface, clarity, accessibility
 
 **Subject**: eight screens of this console answer a question by writing a

@@ -278,6 +278,7 @@ deletion.
 | The focus ring drawn in `--accent` | The accent is reserved for *waiting for a human*, and on two of the six themes it measures under 3:1 against the surfaces a ring lands on — 1.24:1 on Punk against the very border it replaces. A ring is an **interface** element (WCAG 1.4.11), not text: `--focus` is its own role token, and the suite measures it |
 | A live region created together with its first message | Some screen readers announce it, others miss it, and « sometimes » is not a guarantee. `Announce` is a WRAPPER that is always in the DOM, so the region pre-exists the sentence |
 | A live region on a STANDING condition | The console re-renders on every poll: a broken chain, a warning about a setting's value or a guarantee printed above a field would be re-announced for as long as it lasts. A permanent alarm stops being read — the rule the Tracking tab already applies to the diagnostic probe. Regions are for what APPEARED BECAUSE SOMEBODY ACTED |
+| A control whose whole content is an `Icon` | `Icon` keeps a captionless glyph `aria-hidden` on purpose — that is what stops « New rule » being read as « check New rule ». So a button holding an icon and nothing else has **no accessible name at all**: it reaches assistive technology as « button ». Give it an `aria-label` from the catalogue, the way `Assistant.tsx` does; do **not** give the icon a `title`, which announces the drawing beside every word it decorates. And when the control repeats per row, the label names the ROW — twenty identical « Delete » buttons name nothing, and one of them is the one that deletes |
 
 The full table, with the story behind each, is in **CLAUDE.md**.
 
@@ -298,9 +299,12 @@ The full table, with the story behind each, is in **CLAUDE.md**.
    overflow?
 10. Does every sentence a **button** produces land in an `Announce`, and does
     nothing standing land in one?
-11. Is the rule you just applied **written as a test**?
-12. `npm run typecheck && npm run test && npm run build`.
-13. Did you record the decision in **ROADMAP.md**, and the trap in
+11. Does every new control have an **accessible name** — including one whose
+    whole content is an `Icon`, which carries none of its own? And if it
+    repeats per row, does the name say **which row**?
+12. Is the rule you just applied **written as a test**?
+13. `npm run typecheck && npm run test && npm run build`.
+14. Did you record the decision in **ROADMAP.md**, and the trap in
     **CLAUDE.md**?
 
 ---

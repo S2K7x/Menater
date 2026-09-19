@@ -545,6 +545,16 @@ export interface ConsoleDictionary {
     /** ACTION verbs, distinct from the `disabled` status pill: a button that
      *  reads like a state leaves you guessing whether it describes or acts. */
     enable: string; disable: string;
+    /**
+     * The WHOLE accessible name of the two icon-only controls on a row.
+     *
+     * They hold a drawing and nothing else, so nothing else names them, and
+     * `Icon` keeps a captionless glyph `aria-hidden` on purpose. The rule is
+     * part of the name because the pair repeats once per row: « Delete » on
+     * its own, twenty times over, does not say which rule is about to go.
+     */
+    editRule: (name: string) => string;
+    removeRule: (name: string) => string;
     testTitle: string;
     /** Sur le pli du banc d'essai : contre quoi l'alerte sera confrontee. */
     testAgainst: (n: number) => string;
@@ -1796,6 +1806,8 @@ const EN: ConsoleDictionary = {
     disabled: 'Disabled',
     enable: 'Enable',
     disable: 'Disable',
+    editRule: (name) => `Edit rule “${name}”`,
+    removeRule: (name) => `Delete rule “${name}”`,
     testAgainst: (n) => (n === 1 ? 'against 1 active rule' : `against ${n} active rules`),
     testTitle: 'Try it on an alert',
     testLede:
