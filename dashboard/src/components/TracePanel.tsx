@@ -43,7 +43,7 @@ import { useMemo, useState } from 'react';
 import { api, ApiError, clock, humanDuration, timeAgo } from '../lib/api.ts';
 import { useI18n } from '../i18n/context.tsx';
 import { Icon } from './Icon.tsx';
-import { Explain } from './Guidance.tsx';
+import { Announce, Explain } from './Guidance.tsx';
 import { SectionPanel, SectionTabs, type SectionTabItem } from './SectionTabs.tsx';
 import type {
   ChainVerdict, OrphanReason, TraceChain, TraceExecution, TraceReport,
@@ -172,15 +172,17 @@ function ReplayBox({ chain, onDone }: { chain: TraceChain; onDone: () => void })
         {busy ? t.replaying : t.replay}
       </button>{' '}
       <Explain label={t.replay}>{t.replayLede}</Explain>
-      {result ? (
-        <div
-          className={`soc-banner ${result.ok ? 'soc-banner-ok' : 'soc-banner-error'}`}
-          style={{ marginTop: 10 }}
-        >
-          <Icon name={result.ok ? 'check' : 'alert'} size={16} />
-          <p>{result.text}</p>
-        </div>
-      ) : null}
+      <Announce>
+        {result ? (
+          <div
+            className={`soc-banner ${result.ok ? 'soc-banner-ok' : 'soc-banner-error'}`}
+            style={{ marginTop: 10 }}
+          >
+            <Icon name={result.ok ? 'check' : 'alert'} size={16} />
+            <p>{result.text}</p>
+          </div>
+        ) : null}
+      </Announce>
     </div>
   );
 }

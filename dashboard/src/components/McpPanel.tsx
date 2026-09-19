@@ -37,6 +37,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
+import { Announce } from './Guidance.tsx';
 import { Icon } from './Icon.tsx';
 import { api, ApiError } from '../lib/api.ts';
 import { useI18n } from '../i18n/context.tsx';
@@ -241,12 +242,14 @@ export function McpPanel({
         </button>
       </div>
       {state?.token_set ? <p className="soc-faint">{t.regenerateWarning}</p> : null}
-      {error ? (
-        <div className="soc-banner soc-banner-error">
-          <Icon name="alert" size={16} />
-          <p>{error}</p>
-        </div>
-      ) : null}
+      <Announce>
+        {error ? (
+          <div className="soc-banner soc-banner-error">
+            <Icon name="alert" size={16} />
+            <p>{error}</p>
+          </div>
+        ) : null}
+      </Announce>
 
       {token ? (
         <>
@@ -321,12 +324,14 @@ export function McpPanel({
           {testing ? t.testing : t.test}
         </button>
       </div>
-      {test ? (
-        <div className={`soc-banner ${test.ok ? 'soc-banner-ok' : 'soc-banner-error'}`}>
-          <Icon name={test.ok ? 'check' : 'alert'} size={16} />
-          <p>{test.detail}</p>
-        </div>
-      ) : null}
+      <Announce>
+        {test ? (
+          <div className={`soc-banner ${test.ok ? 'soc-banner-ok' : 'soc-banner-error'}`}>
+            <Icon name={test.ok ? 'check' : 'alert'} size={16} />
+            <p>{test.detail}</p>
+          </div>
+        ) : null}
+      </Announce>
 
       {/* --- What they are actually opening -------------------------------- */}
       {state ? (

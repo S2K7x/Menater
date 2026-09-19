@@ -209,7 +209,17 @@ export function Assistant({
             </div>
           </header>
 
-          <div className="soc-ai-scroll" ref={scroller}>
+          {/*
+            THE THREAD IS A LOG, AND IT SAYS SO.
+            An answer arrives here between two and twenty seconds after the
+            question, in a container nobody is looking at while they wait —
+            which for somebody working with a screen reader made this panel's
+            only output silent. `role="log"` is the shape for it rather than a
+            bare `status`: additions are announced in the order they arrive,
+            and the transcript above them is not re-read every time (a `status`
+            region is atomic, so the whole conversation would be).
+          */}
+          <div className="soc-ai-scroll" ref={scroller} role="log" aria-live="polite">
             {thread.length === 0 ? (
               <div className="soc-ai-intro">
                 <p>{a.emptyLede}</p>

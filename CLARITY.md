@@ -136,6 +136,7 @@ halves** of the application, VulnPipe included. A second implementation under a
 | `soc-titled` | A heading and its disc, side by side | The disc is the heading's **sibling** — §8 |
 | `NothingFound` | An empty result that has to say what it covered | The pattern generalises: an absence needs a scope |
 | `SectionBoundary` | Anything lazily loaded | Keeps a chunk failure inside its tab |
+| `Announce` | The slot an ANSWER lands in — what a button just produced | Always in the DOM, empty or not; polite; one region per answer slot. A standing condition never goes in one — §8 |
 
 **`Explain` vs `Term`:** `Term` dresses a word that is written on screen.
 `Explain` attaches to a title, or to a value whose name is no longer written
@@ -275,6 +276,8 @@ deletion.
 | The same help printed once per component instance | The provider form renders twice, so its two help paragraphs appeared twice each. Invisible in the code, obvious on screen |
 | A number that skips (`04, 05, 06, 07, 10`) | Number by **reading order**, and keep it stable under a filter |
 | The focus ring drawn in `--accent` | The accent is reserved for *waiting for a human*, and on two of the six themes it measures under 3:1 against the surfaces a ring lands on — 1.24:1 on Punk against the very border it replaces. A ring is an **interface** element (WCAG 1.4.11), not text: `--focus` is its own role token, and the suite measures it |
+| A live region created together with its first message | Some screen readers announce it, others miss it, and « sometimes » is not a guarantee. `Announce` is a WRAPPER that is always in the DOM, so the region pre-exists the sentence |
+| A live region on a STANDING condition | The console re-renders on every poll: a broken chain, a warning about a setting's value or a guarantee printed above a field would be re-announced for as long as it lasts. A permanent alarm stops being read — the rule the Tracking tab already applies to the diagnostic probe. Regions are for what APPEARED BECAUSE SOMEBODY ACTED |
 
 The full table, with the story behind each, is in **CLAUDE.md**.
 
@@ -293,9 +296,11 @@ The full table, with the story behind each, is in **CLAUDE.md**.
 8. Do headings and `<th>` still come back **empty** from the `innerText` sweep?
 9. Does it hold at **390 px** and in a **dark** theme, with no horizontal
    overflow?
-10. Is the rule you just applied **written as a test**?
-11. `npm run typecheck && npm run test && npm run build`.
-12. Did you record the decision in **ROADMAP.md**, and the trap in
+10. Does every sentence a **button** produces land in an `Announce`, and does
+    nothing standing land in one?
+11. Is the rule you just applied **written as a test**?
+12. `npm run typecheck && npm run test && npm run build`.
+13. Did you record the decision in **ROADMAP.md**, and the trap in
     **CLAUDE.md**?
 
 ---

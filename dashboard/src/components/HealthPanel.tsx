@@ -29,7 +29,7 @@ import type { Check, Diagnostics, HealthReport } from '../lib/types.ts';
 import { api, ApiError, humanDuration } from '../lib/api.ts';
 import { useI18n } from '../i18n/context.tsx';
 import { Icon, type IconName } from './Icon.tsx';
-import { Explain, Fold } from './Guidance.tsx';
+import { Announce, Explain, Fold } from './Guidance.tsx';
 import { NoticeList } from './Notices.tsx';
 
 /** Seuls la classe CSS et l'icone sont figees : le libelle vient du catalogue. */
@@ -239,12 +239,14 @@ export function HealthPanel({
           </button>
         </div>
 
-        {diagError ? (
-          <div className="soc-banner soc-banner-error" style={{ marginTop: 14 }}>
-            <Icon name="alert" size={16} />
-            <p>{diagError}</p>
-          </div>
-        ) : null}
+        <Announce>
+          {diagError ? (
+            <div className="soc-banner soc-banner-error" style={{ marginTop: 14 }}>
+              <Icon name="alert" size={16} />
+              <p>{diagError}</p>
+            </div>
+          ) : null}
+        </Announce>
 
         {diag ? <DiagnosticsResult diag={diag} /> : null}
       </section>
@@ -339,18 +341,26 @@ export function HealthPanel({
                 ))}
               </div>
             </div>
-            {message ? (
-              <div className={`soc-banner ${message.ok ? 'soc-banner-ok' : 'soc-banner-error'}`} style={{ marginTop: 12 }}>
-                <Icon name={message.ok ? 'check' : 'alert'} size={16} />
-                <p>{message.text}</p>
-              </div>
-            ) : null}
-            {following ? (
-              <div className="soc-banner soc-banner-warn" style={{ marginTop: 12 }}>
-                <Icon name="clock" size={16} />
-                <p>{following}</p>
-              </div>
-            ) : null}
+            {/* TWO REGIONS, NOT ONE. The verdict settles once; the follow-up
+                line advances every few seconds for up to forty-five. Sharing a
+                region would re-read the verdict at every step, because
+                `role="status"` is atomic. */}
+            <Announce>
+              {message ? (
+                <div className={`soc-banner ${message.ok ? 'soc-banner-ok' : 'soc-banner-error'}`} style={{ marginTop: 12 }}>
+                  <Icon name={message.ok ? 'check' : 'alert'} size={16} />
+                  <p>{message.text}</p>
+                </div>
+              ) : null}
+            </Announce>
+            <Announce>
+              {following ? (
+                <div className="soc-banner soc-banner-warn" style={{ marginTop: 12 }}>
+                  <Icon name="clock" size={16} />
+                  <p>{following}</p>
+                </div>
+              ) : null}
+            </Announce>
             {lastInjected && onOpenCase ? (
               <button
                 type="button"

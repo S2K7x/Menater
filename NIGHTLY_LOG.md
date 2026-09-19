@@ -4,6 +4,133 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-19 — Saturday · Interface, clarity, accessibility
+
+**Subject**: eight screens of this console answer a question by writing a
+sentence into a panel — the connectivity diagnostic, the test-alert injection,
+the MCP self-test, the tuning-rule dry run, the database probe, the chain
+replay, a manual lookup, a save — and the assistant's entire output arrives that
+way. **None of it was announced.** For somebody working with a screen reader, a
+refusal and a success were the same thing: silence.
+
+**Result**: PR #PENDING (branch `claude/great-pascal-3u0xwh`).
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-3u0xwh` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Thirteenth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject**: the suite was green on the default branch first (1203
+passed, 1 skipped, typecheck clean, build clean), so the calendar rule did not
+preempt, and no pull request was open. Saturday's reservoir is interface and
+accessibility, and this is priority (2) — a real defect with a measurement, not
+(6) a clarity pass. It is a WCAG 2.2 AA failure (4.1.3 Status Messages) and, in
+this product's own vocabulary, a failure that shows green.
+
+**How it was found**, because the method is the transferable part: CLARITY § 7's
+instruction — mount the screens with data of the right shape rather than reading
+components — as a throwaway vitest probe that DROVE each screen (stubbed `api`,
+`userEvent` click, wait for the sentence) and then walked up from the sentence
+looking for a live region. Three screens, three `SILENT`. The grep that framed
+it: `role="status"|role="alert"|aria-live` occurs **0** times in
+`src/components/` and **22** times in `src/vulnpipe/` — the other half of the
+same application, which had also written the rule down in a comment beside one
+of them. The probe was deleted; `status-messages.test.tsx` is what stays.
+
+**What I learned**:
+
+- **The rule already existed, in the other half of the product.**
+  `vulnpipe/components/PromoteFinding.tsx`: *« `role="status"` and not an alert:
+  it is the result of something the person just did, and it must be announced
+  without stealing focus from the report they are reading. »* The console half
+  had never been read next to it. Same shape as `readCapped` being careful about
+  everything the inbound cap was not, and as `redirect: 'manual'` living on one
+  call site out of eight. **The mirror of a rule is not the rule.**
+- **A live region has to pre-exist its first message.** One created in the same
+  breath as the sentence it holds is announced by some screen readers and missed
+  by others — so `Announce` is a WRAPPER that is always in the DOM, not an
+  attribute on a conditional banner. « Sometimes » is not a guarantee, and this
+  is the decision the whole primitive turns on. The Health test asserts the
+  region exists BEFORE the click, and the mutation that makes it conditional is
+  caught by that one assertion alone.
+- **`role="status"` is ATOMIC, which decides how many regions you need.** The
+  injection's verdict settles once; the follow-up line advances every few
+  seconds for up to forty-five. In one region the verdict would be re-read at
+  every step. Two regions, and the reason is in the code.
+- **The boundary is half the fix.** A standing condition must NOT be in a
+  region: the console re-renders on every poll, so a broken chain or a warning
+  about a setting's value would be re-announced for as long as it lasts — the
+  permanent alarm this product refuses on the Tracking tab. Two of the nine
+  tests claim that side and pass before AND after, on purpose: they are what
+  stops the next person "finishing the job" by sprinkling roles everywhere.
+- **`.soc-actions` is a flex row with a `gap`, and that decided one site.** An
+  always-present region there is an extra flex item — a 10 px gap, and at 375 px
+  a possible extra flex line. So the pipeline variables' save CONFIRMATION is
+  deliberately not announced (its failure is), because moving it out of the row
+  is a visual change and this is not a screen pass. Verified the other way for
+  the eight regions that did ship: a throwaway probe printed each region's
+  parent (`section.soc-panel`, `div.soc-health-item`, `div.soc-fold-body`,
+  `div.soc-trace-replay`, a classless `div`, and `<main>`), and every one of
+  them is a block container with padding — checked against `styles.css`, not
+  assumed. **The build proves it: the CSS is byte-identical**, same content hash
+  (`index-bEjOKBpv.css`, 88.54 kB) before and after.
+
+**Do not redo**:
+
+- **Do not put a live region on a standing condition** — a `soc-banner` rendered
+  from polled data, a warning about a setting's current value, the Lookup tab's
+  « the password never leaves this browser ». Two tests fail if you do.
+- **Do not turn `Announce` into a conditional render** to avoid the empty
+  `<div>`. That is the exact half-measure it exists to refuse, and it is
+  mutation-tested.
+- **Do not make it `role="alert"`.** Assertive interrupts; the operator pressed
+  the button and is waiting. A test pins `status`.
+- **Do not wrap the assistant's bubbles individually** — the scroll container is
+  `role="log"`, which reads additions in order without re-reading the
+  transcript. A `status` there would re-read the whole conversation on every
+  answer.
+- **Do not "finish" this by wrapping the big result PANELS** (the diagnostic's
+  check table, the Lookup verdict card). Announcing forty rows politely is noise;
+  what those need is a summary or focus management, and that is a design
+  decision, not an attribute.
+- **Do not add a class to the region.** It has no CSS and needs none; the
+  semantics are the element.
+
+**Found and NOT fixed**:
+
+- **The Ingestion tab's « Poll now » button.** Its answer lands in the
+  per-source standing state (last poll, last error), which the background poller
+  also rewrites. Announcing it means announcing every background poll, and not
+  announcing it leaves a diagnostic button silent. That is a real question and
+  it needs a state that distinguishes the two, which is more than an attribute.
+- **The assistant's « Thinking… » indicator** is inside the `log` region, so it
+  is announced — which is right — but there is no `aria-busy` on the panel and
+  no announcement when a request is merely slow.
+- **The big result panels**, as above.
+- **`src/vulnpipe/`'s own regions were not re-audited.** They exist and they are
+  the precedent this PR follows; whether all 22 are on the right side of the
+  standing/action boundary was not checked.
+
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 1212 passed | 1 skipped  (1203 before; +9 new, nothing skipped or weakened)
+npm run build       # dist built, CSS 88.54 kB UNCHANGED (same hash), JS 474.10 → 474.54 kB
+```
+Checked **RED** by reverting the eight call sites and keeping the primitive and
+the tests: **7 of 9 fail**. The two that pass are the boundary controls, by
+design. Four mutations, each caught: `Announce` rendering no region (6 fail —
+the seventh is the assistant, which does not go through it), rendering the
+region only when it has children (1), `role="alert"` instead of `status` (1),
+and the region widened onto a standing condition (1). The one skipped test is
+the pre-existing `store-contract.test.ts > contrat — postgres`, which needs a
+database. `VulnPipe/` untouched, its suite not run. No model key and no database
+needed: this is all component rendering under jsdom. `npm ci` did not rewrite
+`package-lock.json`.
+
 ## 2026-09-18 (second run) — Friday · Performance and cost
 
 **Subject**: `trace.chains[].payload` carried the whole original alert to every
