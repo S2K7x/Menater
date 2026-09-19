@@ -10,7 +10,7 @@
  * « faux positif », « confiance 0.83 ». Rien ne disait ce qu'on regardait, ni
  * ce qu'on était censé en faire.
  *
- * Cinq réponses, du général au particulier :
+ * Six réponses, du général au particulier :
  *
  *   PageHead  — chaque onglet dit ce qu'il montre et à quoi ça sert, avec un
  *               lien direct vers la section du Guide qui le détaille.
@@ -23,6 +23,9 @@
  *               un clic au lieu d'être écrite en permanence sous son titre.
  *   Fold      — le repli : une pièce qu'on consulte parfois — un log brut, deux
  *               empreintes — annonce sa taille et sort du balayage.
+ *   Announce  — the slot an answer lands in. A sentence produced by a button
+ *               is announced to somebody who is not watching the place it
+ *               appears; a standing condition never is.
  *
  * ============================================================================
  * LA FRONTIÈRE, ET ELLE EST TESTÉE
@@ -331,6 +334,66 @@ function seen(): boolean {
     // La revoir une fois de trop est moins grave que de ne jamais la voir.
     return false;
   }
+}
+
+/* ==========================================================================
+ * Ce qui arrive apres qu'on a appuye
+ * ========================================================================== */
+
+/**
+ * The slot an answer appears in, announced to whoever is not watching it.
+ *
+ * ============================================================================
+ * WHY THIS EXISTS
+ *
+ * Six screens of this console answer a question by writing a sentence into a
+ * panel: the connectivity diagnostic, the test-alert injection, the MCP
+ * self-test, the tuning-rule dry run, the database probe, the chain replay, a
+ * manual lookup, a save. The operator presses, waits, and a line appears
+ * somewhere on the page — sometimes forty-five seconds later, usually not
+ * where the button was.
+ *
+ * None of it was announced. `role="status"` appeared ZERO times in
+ * `src/components/`, while the other half of the same application used it
+ * twenty-two times and had written the rule down in a comment beside one of
+ * them: « `role="status"` and not an alert: it is the result of something the
+ * person just did, and it must be announced without stealing focus ». The rule
+ * existed, on one half of one product — the shape this repository has paid for
+ * before.
+ *
+ * ============================================================================
+ * THREE DECISIONS
+ *
+ *  1. THE REGION IS ALWAYS IN THE DOM, EMPTY OR NOT. A live region created in
+ *     the same breath as its first message is announced by some screen readers
+ *     and missed by others, and « sometimes » is not a guarantee. That is why
+ *     this is a wrapper and not an attribute on the banner: the banner is
+ *     conditional, the region is not.
+ *
+ *  2. POLITE, NEVER ASSERTIVE. Someone who just pressed a button is waiting
+ *     for this sentence; interrupting them to deliver what they asked for buys
+ *     nothing and costs the reading they were in the middle of. `role="status"`
+ *     carries `aria-live="polite"` and `aria-atomic="true"` by itself, which is
+ *     exactly right for a one-sentence answer.
+ *
+ *  3. ONE REGION PER ANSWER SLOT. `aria-atomic` re-reads the WHOLE region on
+ *     any change, so a verdict and a progress line that advances every few
+ *     seconds must not share one — the verdict would be repeated at every
+ *     step.
+ *
+ * WHAT MUST NOT GO IN ONE: a standing condition. A broken chain read off the
+ * snapshot, a warning about a setting's value, a guarantee printed above a
+ * field — the console re-renders on every poll, and a permanent announcement
+ * is the permanent alarm this project already refuses on the Tracking tab.
+ * `status-messages.test.tsx` claims both sides.
+ * ============================================================================
+ */
+export function Announce({ children }: { children?: ReactNode }) {
+  // No class: the semantics ARE the element, and an empty <div> in a block
+  // container occupies nothing. Checked against the stylesheet — the banners
+  // space themselves with `margin-bottom`, which collapses through a bare
+  // wrapper, and no selector here reaches a banner through a combinator.
+  return <div role="status">{children}</div>;
 }
 
 /**

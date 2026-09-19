@@ -30,7 +30,7 @@ import type { Settings, SettingsPayload, TestResult } from '../lib/types.ts';
 import { api, ApiError } from '../lib/api.ts';
 import { useI18n } from '../i18n/context.tsx';
 import { Icon } from './Icon.tsx';
-import { Fold } from './Guidance.tsx';
+import { Announce, Fold } from './Guidance.tsx';
 import { SectionPanel, SectionTabs, type SectionTabItem } from './SectionTabs.tsx';
 import type { AssistantProvider } from '../lib/types.ts';
 import { McpPanel } from './McpPanel.tsx';
@@ -203,15 +203,17 @@ function TestButton({
         <Icon name="activity" size={14} />
         {busy ? c.settings.testing : label}
       </button>
-      {result ? (
-        <div className={`soc-banner ${result.ok ? 'soc-banner-ok' : 'soc-banner-error'}`} style={{ marginTop: 10 }}>
-          <Icon name={result.ok ? 'check' : 'alert'} size={16} />
-          <p>
-            {result.detail}
-            {result.caveat ? <><br /><span className="soc-faint">{result.caveat}</span></> : null}
-          </p>
-        </div>
-      ) : null}
+      <Announce>
+        {result ? (
+          <div className={`soc-banner ${result.ok ? 'soc-banner-ok' : 'soc-banner-error'}`} style={{ marginTop: 10 }}>
+            <Icon name={result.ok ? 'check' : 'alert'} size={16} />
+            <p>
+              {result.detail}
+              {result.caveat ? <><br /><span className="soc-faint">{result.caveat}</span></> : null}
+            </p>
+          </div>
+        ) : null}
+      </Announce>
     </div>
   );
 }
@@ -541,18 +543,20 @@ export function SettingsPage({
         label={st.sectionsLabel}
       />
 
-      {error ? (
-        <div className="soc-banner soc-banner-error">
-          <Icon name="alert" size={16} />
-          <p>{error}</p>
-        </div>
-      ) : null}
-      {saved ? (
-        <div className="soc-banner soc-banner-ok">
-          <Icon name="check" size={16} />
-          <p>{st.savedNote}</p>
-        </div>
-      ) : null}
+      <Announce>
+        {error ? (
+          <div className="soc-banner soc-banner-error">
+            <Icon name="alert" size={16} />
+            <p>{error}</p>
+          </div>
+        ) : null}
+        {saved ? (
+          <div className="soc-banner soc-banner-ok">
+            <Icon name="check" size={16} />
+            <p>{st.savedNote}</p>
+          </div>
+        ) : null}
+      </Announce>
 
       {/* ---------------- Accès ---------------- */}
       <SectionPanel id="access" active={section === 'access'}>

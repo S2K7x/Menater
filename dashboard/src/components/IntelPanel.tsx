@@ -39,7 +39,7 @@ import { useI18n } from '../i18n/context.tsx';
 import type {
   IntelProvider, IntelResult, IntelSource, ObservableKind,
 } from '../lib/types.ts';
-import { Explain, Fold } from './Guidance.tsx';
+import { Announce, Explain, Fold } from './Guidance.tsx';
 import { Icon } from './Icon.tsx';
 
 /* ==========================================================================
@@ -301,30 +301,32 @@ function PasswordPanel() {
         </button>
       </form>
 
-      {error ? (
-        <div className="soc-banner soc-banner-error">
-          <Icon name="alert" size={16} />
-          <p>{error}</p>
-        </div>
-      ) : null}
-
-      {result ? (
-        result.count > 0 ? (
+      <Announce>
+        {error ? (
           <div className="soc-banner soc-banner-error">
             <Icon name="alert" size={16} />
-            <p>
-              <b>{t.pwnedTitle}</b> — {t.pwnedText(result.count)} {t.pwnedAdvice}
-            </p>
+            <p>{error}</p>
           </div>
-        ) : (
-          <div className="soc-banner soc-banner-ok">
-            <Icon name="check" size={16} />
-            <p>
-              <b>{t.safeTitle}</b> — {t.safeText}
-            </p>
-          </div>
-        )
-      ) : null}
+        ) : null}
+
+        {result ? (
+          result.count > 0 ? (
+            <div className="soc-banner soc-banner-error">
+              <Icon name="alert" size={16} />
+              <p>
+                <b>{t.pwnedTitle}</b> — {t.pwnedText(result.count)} {t.pwnedAdvice}
+              </p>
+            </div>
+          ) : (
+            <div className="soc-banner soc-banner-ok">
+              <Icon name="check" size={16} />
+              <p>
+                <b>{t.safeTitle}</b> — {t.safeText}
+              </p>
+            </div>
+          )
+        ) : null}
+      </Announce>
     </section>
   );
 }
@@ -498,12 +500,14 @@ export function IntelPanel({ prefill }: { prefill?: { value: string; n: number }
         ) : null}
       </section>
 
-      {error ? (
-        <div className="soc-banner soc-banner-error">
-          <Icon name="alert" size={16} />
-          <p>{error}</p>
-        </div>
-      ) : null}
+      <Announce>
+        {error ? (
+          <div className="soc-banner soc-banner-error">
+            <Icon name="alert" size={16} />
+            <p>{error}</p>
+          </div>
+        ) : null}
+      </Announce>
 
       {result ? (
         <section className={`soc-panel soc-intel-verdict soc-intel-verdict-${result.verdict}`}>

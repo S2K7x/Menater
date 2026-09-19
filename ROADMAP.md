@@ -691,6 +691,31 @@ stayed exactly where it was.*
 **What R does not do.** It adds no per-user layout preference; that is C1.5. It
 leaves the eight facts of a triage row intact: the table got shorter, not poorer.
 
+### C0.30 ✅ — An answer that arrives while nobody is looking at it
+
+*Eight screens of this console answer a question by writing a sentence into a
+panel — the connectivity diagnostic, the test-alert injection, the MCP
+self-test, the tuning-rule dry run, the database probe, the chain replay, a
+manual lookup, a save, the assistant. Press, wait, and a line appears
+somewhere on the page, often far from the button and sometimes forty-five
+seconds later. **None of it was announced.** `role="status"`, `role="alert"`
+and `aria-live` appeared **zero** times in `src/components/`, while the other
+half of the same application used them **twenty-two** times.*
+
+| # | Feature | What it changes |
+|---|---|---|
+| ~~R43~~ ✅ | **`Announce`, the slot an answer lands in** — a live region that is ALWAYS in the DOM, in `Guidance.tsx` beside `Explain` and `Fold`. A region created in the same breath as its first message is announced by some screen readers and missed by others, which is why this is a wrapper and not an attribute on a conditional banner. `role="status"`: polite, because somebody who just pressed a button is waiting for this sentence, and atomic, which is right for one sentence and is why a verdict and a progress line that advances every few seconds get **one region each** | Seven answers that were silent are announced; measured by driving the real screens |
+| ~~R44~~ ✅ | **The assistant's thread is a `log`** — its entire output arrives asynchronously into a scroll container nobody is watching while they wait. `role="log"` rather than a `status`: additions are read in the order they arrive and the transcript above them is not re-read every time | The one feature whose only output is asynchronous stops being silent |
+| ~~R45~~ ✅ | **And the boundary, which is half of it** — a standing condition is deliberately NOT in a region: a broken chain read off the snapshot, a warning about a setting's value, the guarantee printed above the Lookup field. The console re-renders on every poll, and a permanent announcement is the permanent alarm this project already refuses on the Tracking tab. Two tests claim that side, so the fix cannot be widened into noise | `status-messages.test.tsx`, nine tests, seven red before the change and four mutations each red |
+
+**The rule was already written down, in the other half of the product.**
+`vulnpipe/components/PromoteFinding.tsx` carries it in a comment — *« `role="status"`
+and not an alert: it is the result of something the person just did, and it must
+be announced without stealing focus »* — and the console half had never been read
+next to it. Same shape as the inbound body cap that `readCapped` had got right
+pointing outward, and as the `redirect: 'manual'` that lived on one call site out
+of eight.
+
 ### C0.29 ✅ — Re-reading the pass: five defects it had introduced
 
 *A readability pass that adds a shared primitive to nine screens gets to be

@@ -23,7 +23,7 @@ import type {
 } from '../lib/types.ts';
 import { api, ApiError } from '../lib/api.ts';
 import { useI18n } from '../i18n/context.tsx';
-import { Fold } from './Guidance.tsx';
+import { Announce, Fold } from './Guidance.tsx';
 import { Icon } from './Icon.tsx';
 
 const OPERATORS: RuleOperator[] = [
@@ -323,16 +323,18 @@ function RuleEditor({
     <section className="soc-panel">
       <h3 style={{ marginTop: 0 }}>{rule.id ? rule.name : t.add}</h3>
 
-      {problems.length > 0 ? (
-        <div className="soc-banner soc-banner-error">
-          <Icon name="alert" size={16} />
-          <p>
-            {/* Each problem names its field AND what goes wrong if it stands.
-                A bare "invalid" would throw the useful half away. */}
-            {problems.map((p, i) => <span key={i} style={{ display: 'block' }}>{p.detail}</span>)}
-          </p>
-        </div>
-      ) : null}
+      <Announce>
+        {problems.length > 0 ? (
+          <div className="soc-banner soc-banner-error">
+            <Icon name="alert" size={16} />
+            <p>
+              {/* Each problem names its field AND what goes wrong if it stands.
+                  A bare "invalid" would throw the useful half away. */}
+              {problems.map((p, i) => <span key={i} style={{ display: 'block' }}>{p.detail}</span>)}
+            </p>
+          </div>
+        ) : null}
+      </Announce>
 
       <label className="soc-field">
         <span>{t.name}</span>
@@ -519,24 +521,26 @@ function RuleTester({ activeRules }: { activeRules: number }) {
         </button>
       </div>
 
-      {error ? (
-        <div className="soc-banner soc-banner-error">
-          <Icon name="alert" size={16} /><p>{error}</p>
-        </div>
-      ) : null}
+      <Announce>
+        {error ? (
+          <div className="soc-banner soc-banner-error">
+            <Icon name="alert" size={16} /><p>{error}</p>
+          </div>
+        ) : null}
 
-      {result ? (
-        <div className={`soc-banner ${result.matched ? 'soc-banner-warn' : 'soc-banner-ok'}`}>
-          <Icon name={result.matched ? 'alert' : 'check'} size={16} />
-          <p>
-            {result.matched ? t.testMatched(result.matched.name) : t.testNoMatch}
-            {result.note ? <span style={{ display: 'block' }}>{result.note}</span> : null}
-            {result.expired.length > 0 ? (
-              <span style={{ display: 'block' }}>{t.expired}: {result.expired.join(', ')}</span>
-            ) : null}
-          </p>
-        </div>
-      ) : null}
+        {result ? (
+          <div className={`soc-banner ${result.matched ? 'soc-banner-warn' : 'soc-banner-ok'}`}>
+            <Icon name={result.matched ? 'alert' : 'check'} size={16} />
+            <p>
+              {result.matched ? t.testMatched(result.matched.name) : t.testNoMatch}
+              {result.note ? <span style={{ display: 'block' }}>{result.note}</span> : null}
+              {result.expired.length > 0 ? (
+                <span style={{ display: 'block' }}>{t.expired}: {result.expired.join(', ')}</span>
+              ) : null}
+            </p>
+          </div>
+        ) : null}
+      </Announce>
       </Fold>
     </section>
   );

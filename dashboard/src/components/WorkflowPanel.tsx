@@ -40,7 +40,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/api.ts';
 import { useI18n } from '../i18n/context.tsx';
 import { Icon } from './Icon.tsx';
-import { Explain } from './Guidance.tsx';
+import { Announce, Explain } from './Guidance.tsx';
 import { SectionPanel, SectionTabs } from './SectionTabs.tsx';
 
 export interface WfNode {
@@ -347,9 +347,11 @@ function Variables({
         ))}
       </div>
 
-      {error ? (
-        <div className="soc-banner soc-banner-error"><Icon name="alert" size={16} /><p>{error}</p></div>
-      ) : null}
+      <Announce>
+        {error ? (
+          <div className="soc-banner soc-banner-error"><Icon name="alert" size={16} /><p>{error}</p></div>
+        ) : null}
+      </Announce>
 
       <div className="soc-actions">
         <button type="button" className="soc-primary" onClick={save} disabled={busy || !dirty}>
@@ -359,6 +361,12 @@ function Variables({
         <button type="button" className="soc-secondary" onClick={() => setDraft(values)} disabled={busy || !dirty}>
           <Icon name="refresh" size={15} /> {c.common.retry}
         </button>
+        {/* NOT in a region, deliberately. `.soc-actions` is a flex row with a
+            `gap`, so an always-present live region there is an extra flex item
+            — and a region that is not always present is the half-measure this
+            primitive exists to refuse. Moving the note out of the row is a
+            visual change, which belongs to a screen pass and not to this one.
+            The save's FAILURE is announced, above. */}
         {saved ? <span className="soc-wf-saved">{t.varsSaved}</span> : null}
       </div>
     </section>
