@@ -691,6 +691,34 @@ stayed exactly where it was.*
 **What R does not do.** It adds no per-user layout preference; that is C1.5. It
 leaves the eight facts of a triage row intact: the table got shorter, not poorer.
 
+### C0.31 ✅ — Two buttons whose whole content is a drawing
+
+*`Icon` states its own contract in its header: a captionless glyph is
+decorative, it carries `aria-hidden`, and the label is « porte par le texte
+voisin ». It keeps that contract — which is what stops « New rule » being read
+as « check New rule ». It also puts the whole obligation on the caller, and
+across **155** `<Icon>` uses in this application exactly two controls have no
+neighbouring text: **edit** and **delete**, on every tuning-rule row.*
+
+| # | Feature | What it changes |
+|---|---|---|
+| ~~R46~~ ✅ | **The icon-only row controls are named, and named with the rule** — `aria-label` from the catalogue (`rules.editRule` / `rules.removeRule`), the way `Assistant.tsx` already named its icon-only send button. The rule's name is IN the label because the pair repeats once per row: « Delete », twenty times over, does not say which rule is about to go — and « Edit »/« Delete » alone is refused by a test, not left to good intentions. No visual change: the built stylesheet is byte-identical | Measured in real Chromium on the rendered markup: `"Disable", "", ""` → `"Disable", "Edit rule “…”", "Delete rule “…”"` |
+
+**Why it is not cosmetic.** A screen-reader user walking the rules list heard
+« Disable, button. button. button. » on every row — three controls, two
+anonymous, and the way to find out which one DELETES was to press it. WCAG 2.2
+§ 4.1.2 (Name, Role, Value), level A, on the screen § 2 ter calls the one where
+a team writes the rules deciding what stops reaching a human.
+
+**And the rule already existed one file over**, in `Assistant.tsx`. Same shape
+as the live regions of C0.30, as `readCapped`, as `redirect: 'manual'` on one
+call site out of eight: **the mirror of a rule is not the rule.**
+
+**The boundary is half the fix.** The plausible wrong answer is a `title` on
+every `Icon`, which announces the drawing BESIDE the word it decorates and
+turns « Save rule » into « check Save rule » across the console. A test claims
+that side and passes before and after, on purpose.
+
 ### C0.30 ✅ — An answer that arrives while nobody is looking at it
 
 *Eight screens of this console answer a question by writing a sentence into a

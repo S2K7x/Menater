@@ -268,9 +268,15 @@ export function RulesPage() {
                     <button type="button" className="soc-secondary" onClick={() => toggle(r)}>
                       {r.enabled ? t.disable : t.enable}
                     </button>
+                    {/* These two hold a drawing and nothing else, and `Icon`
+                        keeps a captionless glyph `aria-hidden` — so without a
+                        label they reach assistive technology as « button,
+                        button », one of them the one that DELETES. The rule is
+                        named in each because the pair repeats once per row. */}
                     <button
                       type="button"
                       className="soc-secondary"
+                      aria-label={t.editRule(r.name)}
                       onClick={() => {
                         setProblems([]);
                         setEditing({ ...r, expires_at: r.expires_at ? r.expires_at.slice(0, 10) : null });
@@ -278,7 +284,12 @@ export function RulesPage() {
                     >
                       <Icon name="sliders" size={14} />
                     </button>
-                    <button type="button" className="soc-secondary" onClick={() => remove(r)}>
+                    <button
+                      type="button"
+                      className="soc-secondary"
+                      aria-label={t.removeRule(r.name)}
+                      onClick={() => remove(r)}
+                    >
                       <Icon name="cross" size={14} />
                     </button>
                   </div>
