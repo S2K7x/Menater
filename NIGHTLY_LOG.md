@@ -4,6 +4,195 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-20 (second run) — Sunday · Maintenance and state of the project
+
+**Subject**: `VulnPipe/package-lock.json` described the **console**, not
+VulnPipe — its root `packages[""]` block carried the dashboard's
+devDependency list — and behind that frozen tree sat **five published
+advisories, three of them in production dependencies**. Both are closed.
+
+**Result**: PR #31 (branch `claude/great-pascal-msi1ol`).
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-msi1ol` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Sixteenth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject**: the calendar rule did not preempt tonight — both suites
+were green on unmodified `main` (console 1219 passed | 1 skipped, VulnPipe
+365 passed, both typechecks clean, build clean) and no pull request was open.
+So Sunday's own reservoir applied, and its first line is *dependencies: only
+known vulnerabilities*. The entry above this one — the earlier run of the same
+night — had named exactly this as the deferred item, with one question left
+open: *whether VulnPipe's own use of the MCP SDK reaches the vulnerable code
+paths was NOT established, and should be, since it decides the urgency.* That
+question is answered below, and answering it changed the fix.
+
+**What was actually wrong**, measured:
+
+| | before | after |
+|---|---|---|
+| lock root `devDependencies` | **13 entries** — the dashboard's list | 3 — VulnPipe's own |
+| `fast-uri` | 3.1.5 — 4 advisories, **CVSS 7.5** | **3.1.8** |
+| `hono` | 4.13.2 — 3 moderate | **4.13.8** |
+| `qs` | 6.15.3 — 2 moderate | **6.16.0** |
+| `vitest` (dev) | 4.1.10 — GHSA-82fw-gwwq-j7x9 | **4.1.11** |
+| `npm audit` | 5 (4 moderate, 1 high) | **0** |
+
+**What I learned**:
+
+- **The previous night's recommendation was wrong, and would have failed
+  silently.** It said to bump `@modelcontextprotocol/sdk`. **1.30.0 is the
+  latest published version** — checked against the registry, not assumed. Every
+  one of the five fixes is inside a caret range the tree ALREADY declares
+  (`hono: ^4.11.4`, `qs: ^6.14.0`, `fast-uri: ^3.0.1`, `vitest: ^4.1.10`), so
+  no manifest change closes anything and the whole fix is a lockfile refresh.
+  A recommendation written from an advisory list is a hypothesis; the registry
+  is the measurement.
+- **The contamination is what made the advisories unfixable in practice.** Not
+  a cosmetic mismatch: `npm update fast-uri hono qs --package-lock-only` on the
+  contaminated lock pruned **595 lines before changing a single version**, so
+  the one command that closes a published advisory produced a diff nobody would
+  dare review. Regenerate first, then update, and the version change stands on
+  its own.
+- **`npm ci` does not report this, and that is why it survived.** It reconciles
+  against `package.json`, installs the real 189-package tree, exits 0, and
+  rewrites nothing. So the suite, the typecheck and CI were all green over a
+  lockfile making its claim about the wrong package — and the lockfile is the
+  claim under test *precisely because* CI runs `npm ci` and never
+  `npm install`. Checked, not assumed: of the ten phantom entries, **none was
+  installed** (`jsdom` and `vite` are present, but as vitest's own transitives).
+- **My first reachability instrument was a broken ruler, and it lied in the
+  dangerous direction.** An ESM `load` hook reported `fast-uri: 0` on every
+  entry point — which would have argued the one HIGH advisory was unreachable
+  and not worth the change. It does not see CJS `require()` chains, and
+  `ajv/dist/core.js` pulls `./runtime/uri` that way. Reading Node's CJS require
+  cache after the import gives the truth: **`fast-uri` loads 3 modules on both
+  SDK entry points VulnPipe imports** (`server/mcp.js` via `McpServer`,
+  `client/index.js` via `Client`), through 63 modules of `ajv`. Same family as
+  the contrast measured during the theme cross-fade: *an instrument that reads
+  zero everywhere is a bug in the ruler, not a finding* — and the thing that
+  exposed it was a **control** (`server/streamableHttp.js`, which VulnPipe does
+  NOT import, loads `hono`), i.e. proving the instrument can produce a non-zero
+  before trusting a zero.
+- **`hono`, `express` and `qs` load zero modules on every entry point VulnPipe
+  uses**, on both instruments. VulnPipe speaks stdio and in-memory and never
+  imports the HTTP transport, so those five moderate advisories were latent
+  rather than live. They are fixed anyway — the refresh is free once the
+  lockfile is honest — but the urgency was in `fast-uri`, and that is the one
+  that is actually loaded into the process.
+- **npm 10.9.7 cannot resolve `vitest@4.1.11` in this half.** It crashes in
+  arborist's peer-set walk — `TypeError: Cannot read properties of null
+  (reading 'edgesOut')`, at `#loadPeerSet`, while fetching
+  `@vitest/browser-playwright@5.0.1` / `@vitejs/devtools-vitest` — on
+  `npm update vitest`, on `npm install --save-dev vitest@4.1.11`, and both
+  before and after the root block was repaired, so the contamination is not the
+  cause. **The console's tree resolves the same bump cleanly on the same npm**,
+  which is how I know it is the tree and not the version. npm 12.0.2 resolves
+  it; the result is still `lockfileVersion` 3 with no npm-12-only fields, and
+  the crash writes nothing, so a failed attempt costs nothing.
+
+**Do not redo**:
+
+- **Do not recommend bumping `@modelcontextprotocol/sdk` for these advisories.**
+  It is already latest; the transitives are what move.
+- **Do not measure module reachability with an ESM `load` hook alone.** It
+  misses CJS `require()` chains and will tell you `fast-uri` is not loaded.
+  Read `createRequire(import.meta.url).cache` after the import, and always run
+  a control that is expected to be non-zero.
+- **Do not run `npm update`/`npm audit fix` on a contaminated lock and commit
+  the result.** Regenerate the root with `npm install --package-lock-only`
+  first, or the version bump arrives inside a 595-line prune.
+- **Do not retry the vitest bump under npm 10.** Three spellings were tried and
+  all three crash identically. Use npm 12 for the resolution, then verify with
+  `npm ci` under npm 10 — which is what CI runs.
+- **Do not add an `npm audit` step to CI to guard this.** Considered and
+  rejected: it needs the network on every run and it goes red on advisories
+  published after the commit, i.e. a check that fails for reasons the pull
+  request did not cause. The lockfile test guards the shape; the advisories are
+  a Sunday job.
+- **Do not assert minimum transitive versions in `lockfile.test.ts`.** Also
+  considered and rejected: it duplicates `npm audit` in a form that goes stale
+  and that a reviewer cannot tell from a real invariant.
+
+**Found and NOT fixed**, deliberately:
+
+- **The `/nonexistent/…` locks in both `vitest.config.ts` files** — flagged by
+  the entry below this one, still unfixed, still a latent shape rather than a
+  demonstrated bug. Not tonight's subject and not worth widening a dependency
+  PR for.
+- **`@types/pg` is in both `dependencies` and `devDependencies`** in
+  `dashboard/package.json`. The new test compares each block against the lock
+  and both agree, so it passes — correctly, because the lock faithfully
+  describes the manifest. The manifest itself is the odd one. Left alone: it is
+  a console question and this PR is VulnPipe's.
+- **VulnPipe's test files are French.** Everything I wrote is English,
+  including the new file. Translating them is a pass of its own.
+
+**State of the week** (Sunday's other half, done properly this time since the
+suite was green):
+
+- **Eight nights, eight PRs.** #23 → #30 all merged, none open at the start of
+  tonight, #31 opened by this run. `automerge.yml` continues to do its job;
+  the merge queue has not been the recommendation for two weeks now.
+- **Dependencies are clean for the first time in this journal's memory:**
+  `npm audit` reports **0 vulnerabilities on both halves**, production and dev.
+  The standing recommendation from last week is closed. Note what closed it was
+  not a version bump anybody would have called urgent — it was repairing the
+  lockfile so the bump could be seen.
+- **The one thing CI still cannot see.** Last week's entry observed that CI is
+  green on a UID-dependent test, so a suite running as one UID cannot catch a
+  UID-dependent defect. Tonight adds the neighbouring one: **CI cannot catch a
+  lockfile that describes the wrong package either**, because `npm ci` silently
+  reconciles it. Both were found by a human-ish sweep, not by the pipeline.
+  `src/lockfile.test.ts` closes the second; the first is closed by the entry
+  below. I do not recommend a third guard on speculation — I recommend that
+  next Sunday keeps doing this sweep, since two for two is the evidence.
+- **Recommendation for next week**: ROADMAP § 7 carries two live defects that
+  are worth more than anything I found tonight, and both are on the approval
+  path, i.e. the only path where this console can act irreversibly — **an
+  approval answered in the console is interpreted as SILENCE** (a human's
+  explicit yes written into the append-only hash chain as
+  `routing_outcome: "rejected"`), and **nothing calls `sweepExpiredWaits()` or
+  `engine.resume()` outside the tests** (so the 30-minute escalation the Slack
+  message promises never fires, and an interrupted run stays `running` for
+  ever). They are Monday or Thursday work, not Sunday's, and the first is a
+  correctness defect in the product's most sensitive record.
+- **`npm ci` did not rewrite either `package-lock.json`** (npm 10.9.7, Node
+  22.22.2), before or after the change, and the new lock is byte-stable across
+  two consecutive `npm ci` runs.
+
+**Verified**:
+```
+cd VulnPipe
+npm run typecheck   # 0 errors
+npm test            # 371 passed (371)   — was 365; +6 from src/lockfile.test.ts
+npm audit           # found 0 vulnerabilities   — was 5 (4 moderate, 1 high)
+npm ci              # exit 0 under npm 10.9.7, lock unchanged, stable across runs
+cd ../dashboard
+npm run typecheck   # 0 errors
+npm test            # 1219 passed | 1 skipped   (unchanged: nothing in dashboard/ was touched)
+npm run build       # dist built, CSS 88.54 kB, JS 474.68 kB  (unchanged)
+npm audit           # found 0 vulnerabilities
+```
+Checked **RED** first, against `main`'s lockfile with the new test in place:
+`1 failed | 5 passed`, the failure being exactly
+`pins the declared devDependencies, and only those` —
+`AssertionError: expected { …(13) } to deeply equal { '@types/node': '^26.2.0', …(2) }`.
+Three mutations against the finished test, **each caught by exactly one
+assertion** (`1 failed | 5 passed` every time): a lock claiming `zod: ^3.0.0`
+where the manifest asks `^4.4.3`, a lock `name` of `menater-console`, and the
+contaminated devDependency block itself. The lockfile was restored
+byte-identically after each (`diff -q` clean). The console's three assertions
+pass **before and after** — deliberate, and stated in the test header.
+**No production code was touched**: the diff is one lockfile, one new test file,
+and three documents. Reachability was measured with two throwaway probes
+(an ESM `load` hook and a CJS-require-cache reader) written outside the
+repository except for one runner file inside `VulnPipe/`, which was deleted;
+`git status` shows no stray file. No model key and no database needed.
+
 ## 2026-09-20 — Sunday · Maintenance and state of the project
 
 **Subject**: **the VulnPipe suite was red on the default branch**, so
