@@ -4,6 +4,183 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-20 — Sunday · Maintenance and state of the project
+
+**Subject**: **the VulnPipe suite was red on the default branch**, so
+NIGHTLY.md's overriding rule preempted Sunday's reservoir. One test —
+`persistent-cache.test.ts > ne fait pas échouer un scan réussi quand le disque
+refuse` — provoked its "the disk refuses" case by naming
+`/nonexistent-root/cache.json` and **assuming nobody could create it**. That is
+a claim about the UID running the suite, not about the code.
+
+**Result**: PR #PENDING (branch `claude/great-pascal-rz5sbu`).
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-rz5sbu` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Fifteenth entry saying so**; it is a line in the
+routine's configuration, not a thing a night can fix.
+
+**Why this subject**: it is not a choice. `cd VulnPipe && npm test` was
+**1 failed | 364 passed** on unmodified `main`, and the calendar rule says a red
+suite is the night's only task whatever the day. The console half was green
+throughout (1219 passed, 1 skipped, typecheck clean, build clean) and no pull
+request was open. Sunday's own reservoir is reported below under **State of the
+week** rather than coded, which is what the rule requires.
+
+**What the failure actually was** — measured, by driving the real `saveCache`
+under two UIDs on Node 22.22.2, not by reading it:
+
+| UID | old premise (`/nonexistent-root/cache.json`) | new premise (a path under a regular file) |
+|---|---|---|
+| 65534 (`nobody`) | `written=0  why="EACCES: permission denied, mkdir '/nonexistent-root'"` → **test passes** | `written=0  why="ENOTDIR: …"` |
+| 0 (`root`) | `written=1  why=null`, **and `/nonexistent-root/cache.json` now exists** → **test fails** | `written=0  why="ENOTDIR: …"` |
+
+**What I learned**:
+
+- **The code under test was never wrong.** `saveCache` did exactly what its
+  header promises in both runs. What the red reported was its own premise
+  evaporating: at uid 0, `mkdirSync(dirname(file), { recursive: true })` creates
+  `/nonexistent-root/` and the write succeeds. **A test can only report a
+  failure of the code if the failure it borrowed is still there.**
+- **The suite passed or failed on WHO RAN IT, and that is why nobody had seen
+  it.** Checked rather than assumed: CI is `ubuntu-latest`, which runs as
+  `runner`, and **both Dockerfiles set `USER node`** — so the test is green
+  everywhere this project is normally exercised, and red for anyone running it
+  as root: a container shell, a devcontainer, this routine. My first draft of
+  the fix's comment claimed the opposite (« uid 0, the uid every container in
+  this project runs as »); `grep -n USER */Dockerfile` refuted it before it
+  shipped. **The environment you are standing in is not the environment the
+  project runs in**, and one grep is the whole difference.
+- **The second cost is the one nobody was looking for: it wrote outside its own
+  tree.** `/nonexistent-root/cache.json`, mode 0600, at the filesystem root of
+  whatever machine ran it — while the file's own header promises *« chaque test
+  écrit dans son propre dossier temporaire : la suite ne touche jamais l'état du
+  développeur »*. The header vouched for every test in the file and the one test
+  that escaped the tmpdir is the one that escaped the header. Same shape as the
+  2026-09-13 entry's *« my own test vouched for the strings it was hunting »*,
+  and the same family as the two locks in `vitest.config.ts` (the developer's
+  `config.json`, the developer's `.vulnpipe/` cache) — which is to say this
+  project has now paid for the third variant of one lesson.
+- **The plausible wrong fix rebuilds the defect inside its own repair**, and it
+  was probed, not reasoned: `chmod 0o500` on a directory then writing into it
+  **SUCCEEDS as root** (CAP_DAC_OVERRIDE). Any permission-based refusal is the
+  same bug with a different spelling. `ENOTDIR` — a path under a regular file —
+  is structural: no UID can create it, so the refusal holds for all of them.
+- **A premise that can evaporate must be asserted.** The test now also asserts
+  `why` contains `ENOTDIR`. Without it the test goes green again the day the
+  premise stops holding for some other reason, while no longer exercising a
+  write refusal at all — green over nothing, which is the defect this product
+  exists to refuse.
+
+**Do not redo**:
+
+- **Do not make a test's failure case depend on a permission**, a UID, a
+  read-only directory, `/root`, `/proc` or any path outside its own `mkdtemp`.
+  Probed: `chmod 0o500` is a no-op against root.
+- **Do not "simplify" the new premise to `join(occupied, 'cache.json')`** (one
+  level, not two). It also refuses — probed: `EEXIST: file already exists,
+  mkdir '…/occupied-by-a-file'` — but `EEXIST` reads as a name clash, where
+  `ENOTDIR` says *this path cannot be a directory for anyone*, which is the
+  property the test is leaning on. The asserted code would have to change with it.
+- **Do not delete the `toContain('ENOTDIR')` assertion** as redundant with
+  `toBeTruthy()`. It is the only thing pinning that a write refusal is still
+  what is being provoked.
+- **Do not "fix" this by relaxing the assertions** — `written` is 0 or the code
+  swallowed a failure. Both mutations below prove the test still earns its place.
+- **Do not try to run the suite under `setpriv` to check this.** I tried;
+  vitest needs to write `node_modules/.vite-temp` and its own `TMPDIR` tree, and
+  fighting that is not the measurement. Driving the exported function directly
+  under `node --experimental-strip-types` answers the same question in one file.
+
+**Found and NOT fixed**, deliberately:
+
+- **`VULNPIPE_CACHE_DIR: '/nonexistent/vulnpipe-tests'` in
+  `VulnPipe/vitest.config.ts`, and the three `/nonexistent/…` locks in
+  `dashboard/vitest.config.ts`, rest on the same assumption.** They are locks
+  against reading/writing the DEVELOPER's state, and they still do that job —
+  but as root a write to them creates `/nonexistent/` rather than being refused.
+  Nothing created it during tonight's runs, so this is a latent shape and not a
+  demonstrated bug, and NIGHTLY.md's rule says a hunch from reading is not a bug.
+  Named here so the next night starts with it rather than rediscovering it.
+- **The VulnPipe comments are French and I did not translate them.** CLAUDE.md
+  is English-only; everything I WROTE tonight is English, including inside that
+  French file. Translating the file is a pass of its own and would have drowned
+  a nine-line fix.
+
+**State of the week** (Sunday's other half — reported, not coded, because the
+red suite took the night):
+
+- **Seven nights, seven PRs, all merged, none open.** #23 → #29 all landed. This
+  is the first Sunday in three where the merge queue is not the recommendation:
+  the last two Sundays both opened with "five open PRs" and "merge #13 then
+  #14". **`automerge.yml` is working**, and it is the thing that changed.
+- **CI exists and runs the suite** — the item the last two Sundays named as the
+  single highest-value maintenance decision, closed by #19. Tonight is the first
+  evidence it was worth it in a direction nobody predicted: CI is green on this
+  test, so **CI is not what would have caught tonight's defect**. A suite that
+  only ever runs as one UID cannot see a UID-dependent test.
+- **Dependencies — this is the one thing needing a human, and it is new.**
+  `dashboard`: **0 vulnerabilities**, both with and without dev dependencies.
+  `VulnPipe`: **5 (4 moderate, 1 high)**, of which **3 are in production
+  dependencies**. All three arrive through ONE direct dependency,
+  `@modelcontextprotocol/sdk@1.30.0`, which pulls `express`, `hono` and `ajv`
+  transitively — VulnPipe declares five production dependencies and none of them
+  is any of those:
+  - `fast-uri` **high, CVSS 7.5 ×4** (SSRF via malformed IPv6 normalization and
+    via repeated hostname percent-decoding; host confusion ×2) ← `ajv@8.20.0`
+  - `hono` moderate ×3 (`toSSG()` writes outside the output directory;
+    `parseBody()` memory exhaustion; query-parser cache-key differential)
+  - `qs` moderate ×2 (array-limit bypass; DoS via attacker-controlled `isBuffer`)
+  - dev-only: `vitest` 4.1.10 ← path traversal / arbitrary file read via
+    `@vitest/mocker` (GHSA-82fw-gwwq-j7x9, range `≤ 4.1.10`). **The console
+    already runs 4.1.11 and is out of range**; VulnPipe is one patch behind its
+    own other half.
+  `npm audit` claims `fixAvailable: true` for all five. **Not taken tonight**:
+  the red suite was the night's only task, and a dependency bump in the half
+  pinned to Node 22 for tree-sitter is its own reviewable PR. **Recommendation
+  for next week, and the first "known vulnerability" bump this journal has had
+  cause to recommend**: `@modelcontextprotocol/sdk` (closes all three production
+  advisories at once) and `vitest` → 4.1.11 to match the console. Whether
+  VulnPipe's own use of the MCP SDK reaches the vulnerable code paths was NOT
+  established tonight, and should be, since it decides the urgency.
+- **`npm ci` did not rewrite either `package-lock.json`** (npm 10.9.7, Node
+  22.22.2). The `@types/pg` dependencies/devDependencies mismatch is still in
+  the files and still left alone.
+- **Documentation drift, one found and fixed:** `CLAUDE.md` and `README.md` both
+  quoted the console suite at **953 tests**. It is 1219 passed + 1 skipped —
+  28% low, and both were corrected, since the count is about the suite that is
+  tonight's subject. Noted against the 2026-09-13 lesson (*"do not put a fresh
+  number in the operator copy"*): these are developer command listings, not
+  operator copy, and a number that is wrong by a quarter is worse than one that
+  will drift again.
+
+**Verified**:
+```
+cd VulnPipe
+npm run typecheck   # 0 errors
+npm test            # 365 passed (365)   — was 1 failed | 364 passed on main
+cd ../dashboard
+npm run typecheck   # 0 errors
+npm test            # 1219 passed | 1 skipped   (unchanged: nothing in dashboard/ was touched)
+npm run build       # dist built, CSS 88.54 kB, JS 474.68 kB  (unchanged)
+npm audit           # dashboard 0 vulnerabilities; VulnPipe 5 (see above)
+```
+Checked **RED** first: the failure is the one that opened the night, on
+unmodified `main`, in this environment — `AssertionError: expected 1 to be +0`,
+and it left `/nonexistent-root/cache.json` behind, which I removed. Two
+mutations of `persistent-cache.ts` against the finished test, **each caught by
+exactly that one test and nothing else** (1 failed | 21 passed both times): the
+`catch` reporting `written: entries.length` instead of `0`, and `saveCache`
+rethrowing instead of returning the reason. The implementation was restored
+byte-for-byte after each (`git diff --stat` empty). **One file of production
+code was not touched at all** — the diff is one test, two docs and this journal.
+`dashboard/` untouched; its gate was run anyway, on this tree, and is quoted
+above. No model key and no database needed. The three probes
+(`probe-fs.mjs`, `probe-mkdir.mjs`, the two-UID `probe.ts`) were written outside
+the repository, run, and deleted; `git status` shows no stray file.
+
 ## 2026-09-19 (second run) — Saturday · Interface, clarity, accessibility
 
 **Subject**: two buttons on every tuning-rule row hold a drawing and nothing

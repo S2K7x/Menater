@@ -205,11 +205,30 @@ describe('Ce qui doit être refusé', () => {
   it('ne fait pas échouer un scan réussi quand le disque refuse', () => {
     const source = new BoundedLru<string>(10);
     source.set('a', 'A');
-    // Chemin non écrivable : `saveCache` doit renvoyer la raison, pas lever.
-    const outcome = saveCache(source, { path: '/nonexistent-root/cache.json', kind: 'verdicts' });
+
+    // The refusal has to be STRUCTURAL, never a permission the process happens
+    // not to hold. This test used to name `/nonexistent-root/cache.json` and
+    // assume nobody could create it. That is a claim about the UID running the
+    // suite, not about the code: true for an ordinary user, false for root —
+    // and as root `saveCache` duly created the directory AT THE FILESYSTEM
+    // ROOT, wrote the cache into it, and the test reported that success as a
+    // failure of the code under test. So the suite passed or failed on who ran
+    // it, and wrote outside its own tree while doing so. A path UNDER a regular
+    // file cannot be created by any UID, so the refusal below holds for all of
+    // them, and it stays inside `dir` — which is what this file's header
+    // promises of every test in it.
+    const occupied = join(dir, 'occupied-by-a-file');
+    writeFileSync(occupied, 'not a directory');
+    const unwritable = join(occupied, 'sub', 'cache.json');
+
+    const outcome = saveCache(source, { path: unwritable, kind: 'verdicts' });
 
     expect(outcome.written).toBe(0);
     expect(outcome.why).toBeTruthy();
+    // Names the refusal it provoked. Without this the test would go green again
+    // the day the premise stops holding for some OTHER reason, and a green test
+    // that no longer exercises a write refusal proves nothing.
+    expect(outcome.why).toContain('ENOTDIR');
   });
 });
 
