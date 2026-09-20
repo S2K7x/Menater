@@ -13,7 +13,7 @@ refuse` — provoked its "the disk refuses" case by naming
 `/nonexistent-root/cache.json` and **assuming nobody could create it**. That is
 a claim about the UID running the suite, not about the code.
 
-**Result**: PR #PENDING (branch `claude/great-pascal-rz5sbu`).
+**Result**: PR #30 (branch `claude/great-pascal-rz5sbu`).
 
 **Note on the branch name.** `NIGHTLY.md` § 5 asks for
 `claude/nightly-YYYY-MM-DD-subject`; this session was handed
