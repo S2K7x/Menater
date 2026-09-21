@@ -34,7 +34,26 @@ export async function approvalsRoutes(c: Ctx): Promise<boolean> {
      * ======================================================================
      */
     if (req.method === 'POST' && /^\/api\/approvals\/[^/]+\/resume$/.test(path)) {
-      const token = path.split('/')[3];
+      /*
+       * THE PATH SEGMENT IS A RUN ID, AND THAT IS NOT A DETAIL.
+       *
+       * It used to be read as the engine's wait TOKEN, which nothing on the
+       * browser side has ever held: `src/lib/api.ts` names the parameter
+       * `executionId` and `CaseView` passes `approval.execution_id`, a run id.
+       * Two ends agreeing and the middle reading a third thing — the same
+       * shape as the vocabulary defect below, one field over — and the visible
+       * cost was that the approve and reject buttons were disabled on every
+       * real case.
+       *
+       * The run id is what wins, not the token, and the reason is the token
+       * itself: it resolves a wait exactly once and irreversibly, so it is a
+       * VERB. Carrying it to the browser would put it on the incident card,
+       * which `get_alert` answers to a model whose context also holds
+       * attacker-composed log text, and to every MCP client — a catalogue kept
+       * closed and read-only so that an injected instruction finds no verb to
+       * reach for. Run ids already travel there, on every stage line.
+       */
+      const runId = path.split('/')[3];
       const body = await readBody(req);
       const approver = String(body.approver ?? '').trim();
       if (!approver) return json(res, 400, { error: am.approverRequired });
@@ -79,16 +98,18 @@ export async function approvalsRoutes(c: Ctx): Promise<boolean> {
          * able to author `signature_verified: true` would be writing an
          * authentication that never happened into the audit chain.
          */
-        const run = await engine.resumeWait(token, {
+        const run = await engine.resumeRun(runId, {
           decision,
           approver,
           reason: String(body.reason ?? '').trim(),
         });
         invalidate();
-        // An unknown or already-resolved token is not an error to shout about:
-        // two operators pressing the same button is the normal race, and the
-        // first answer stands. Saying so beats a 500 that suggests the
-        // decision was lost.
+        // An unknown run, or one whose wait somebody has already settled, is
+        // not an error to shout about: two operators pressing the same button
+        // is the normal race, and the first answer stands. `openWaitOfRun`
+        // answers `null` for both, and the sentence says exactly that — which
+        // it could not while an already-settled token came back as a run and
+        // the second presser was told their decision had been relayed.
         if (!run) return json(res, 404, { ok: false, detail: am.approvalUnknownToken });
         return json(res, 200, { ok: true, run_id: run.id, detail: am.approvalSent });
       } catch (err) {

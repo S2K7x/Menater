@@ -51,7 +51,7 @@
  *   POST /api/settings/test/database
  *                          400 {"ok":false,"detail":"Host missing."}
  *                                                              → the same
- *   POST /api/approvals/:token/resume
+ *   POST /api/approvals/:runId/resume
  *                          500 {"ok":false,"detail":"The decision could not be
  *                              recorded: … Without it the run will time out and
  *                              the alert will be escalated."}

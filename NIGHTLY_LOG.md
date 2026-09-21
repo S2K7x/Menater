@@ -4,6 +4,123 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-21 (second run) — Monday · Feature
+
+**Subject**: **the approve and reject buttons were disabled on every real
+case** — `ROADMAP.md` § 7, opened by the previous run of this same day and
+named there as the obvious next night. With the approval payload fixed, the
+console still could not answer an approval at all.
+
+**Result**: PR #33 (branch `claude/great-pascal-wvxr07`).
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-wvxr07` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Eighteenth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject**: the calendar rule did not preempt — `main` was green
+(typecheck 0, 1228 passed | 1 skipped, build clean) and no pull request was
+open. Inside Monday's theme NIGHTLY.md ranks *a real, reproducible bug* above
+*an explicit limitation*, and this one is both: it is the § 7 row the previous
+run wrote, measured rather than read, on the only path where a human authorises
+an irreversible action.
+
+**What was actually wrong**, measured through the real pipeline and the real
+route:
+
+| | before | after |
+|---|---|---|
+| `approval.execution_id` on a live wait | `undefined` | the `04-action-routing` run id |
+| `canSubmit` with a name typed | `false` — both buttons disabled | `true` |
+| identifier the route reads | wait token (`crypto.randomUUID()`) | run id |
+| second of two simultaneous presses | **200, "Decision relayed"** | 404, *"the first answer stands"* |
+| tests of `approval-route.test.ts` red on `main` | 10 of 13 | 0 |
+
+**What I learned**:
+
+- **The plausible fix was the dangerous one.** The client has always named the
+  parameter `executionId` and passed a run id; the route read a wait token. The
+  obvious repair is to put the token on the case — and a wait token resolves an
+  approval **once and irreversibly**, so it is a verb, not a name. The case is
+  answered by `get_alert` (`sections: ['approval']`) to a model whose context
+  also holds attacker-composed log text, and by `POST /api/mcp` to any holder
+  of a read-only bearer token. The catalogue is closed and verbless on purpose;
+  that fix would have posted one through the fence. Run ids already travel
+  there on every stage line, so naming the run costs nothing new.
+- **`pg-store.ts` was NOT the blocker the previous run feared.**
+  `store-contract.test.ts` is written once and run against both
+  implementations, Postgres only when `MENATER_TEST_PG` names a database. The
+  four new contract tests therefore verify the memory half here and the SQL
+  half on any machine with a database, which is this repository's own answer to
+  "cannot be verified without Postgres". The SQL itself
+  (`WHERE run_id = $1 AND resumed_at IS NULL ORDER BY created_at LIMIT 1`) is
+  covered by the existing `soc_run_wait_run_idx`, and `created_at` already
+  exists on the table — it was in the schema and in neither implementation's
+  reach until now.
+- **A control can be disabled for two reasons at once, and say neither.** The
+  other term of `canSubmit` is the operator's own name, so the greyed-out
+  button read as *you have not typed your identifier yet*. I deliberately did
+  NOT add a sentence explaining the third state: after the fix
+  `execution_id` is always written for a case the pipeline produced, so a note
+  about its absence would be error handling for a state that no longer occurs
+  — which `NIGHTLY.md` § 3 forbids and which would age into a lie.
+- **A test that names the identifier itself cannot see this defect.** The route
+  test now reads it off `buildCases`, the way the browser does. That single
+  change is what turns 10 of its 13 tests red on `main`: a card that carries no
+  identifier is a route nobody can call, and asserting on a hand-written run id
+  would have hidden exactly that.
+
+**Found and NOT fixed**:
+
+- **Nothing calls `sweepExpiredWaits()` or `engine.resume()` outside the
+  tests** — still true, still the next § 7 row, and now the sharper one: with
+  the buttons live, the console can answer an approval, but an approval nobody
+  answers still waits for ever rather than escalating at its deadline. Slack's
+  own message promises the opposite. Where the scheduler lives is a decision
+  (one per process, and the console can run more than one), which is why it is
+  not a line to slip into this PR.
+- The database test button's unclamped port (§ 7) is untouched.
+
+**Do not redo**:
+
+- **Do not put the wait token on the case**, under any name. See above: it is a
+  verb on a surface that is read by a model. `case-view.test.tsx` and
+  `approval-route.test.ts` both carry a standing assertion against it, and both
+  pass before AND after on purpose.
+- **Do not make the route accept either a token or a run id.** One identifier.
+  An endpoint that guesses which of two things it was handed is the ambiguity
+  this project refuses everywhere else, and `waitByToken` stays engine API with
+  exactly one production caller: `Engine.resumeRun`.
+- **Do not read the run's wait without the `resumed_at IS NULL` filter.** It
+  looks like a harmless widening and it re-opens a settled approval to a second
+  answer; the store then throws, so the operator gets a 500 about a decision
+  that was recorded correctly. Mutation 3 catches it.
+- **Do not add an explanatory note under the disabled buttons** (see above).
+
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 1238 passed | 1 skipped   — was 1228 | 1 (+10, all new)
+npm run build       # dist built, CSS 88.54 kB, JS 474.68 kB (unchanged)
+node --experimental-strip-types -e "import(...)"   # the five changed server
+                    # modules load: the service runs under strip-types, which
+                    # refuses syntax tsc and vitest both accept
+```
+Checked **RED** first: the four `store-contract` tests fail with
+`store.openWaitOfRun is not a function`, and **10 of the 13** tests in
+`server/approval-route.test.ts` fail once the identifier is read off the case
+the console renders. Five mutations against the finished change, all five
+caught by the assertion that should catch it: `execution_id` dropped from the
+case (10 red), the route reverted to `resumeWait` on the path segment (9 red),
+`openWaitOfRun` ignoring `resumedAt` (2 red — the contract test and the
+two-operator race), `openWaitOfRun` ignoring `runId` (1 red), and the panel
+posting an identifier of its own instead of the card's (1 red). No model key
+and no database needed; no probe script was left behind and `git status` shows
+no stray file.
+
 ## 2026-09-21 — Monday · Feature
 
 **Subject**: **an approval answered in the console was interpreted as SILENCE**

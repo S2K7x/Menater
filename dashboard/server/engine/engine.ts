@@ -206,6 +206,25 @@ export class Engine {
     return resumed;
   }
 
+  /**
+   * Answers the approval a run is holding open, named by the RUN.
+   *
+   * The console has the run id — it is on the incident card, and on every
+   * stage line — and it never has the token, which resolves a wait once and
+   * irreversibly. Resolving the one into the other is this side's job; see
+   * `RunStore.openWaitOfRun`.
+   *
+   * `null` means there is no open question under that name: an unknown run, a
+   * run that never waited on anybody, or a wait somebody else has already
+   * answered. All three are the same thing to answer — the first answer
+   * stands — and none of them is an error to shout about.
+   */
+  async resumeRun(runId: string, payload: unknown): Promise<RunRecord | null> {
+    const wait = await this.store.openWaitOfRun(runId);
+    if (!wait) return null;
+    return this.resumeWait(wait.token, payload);
+  }
+
   /** Reprend une exécution suspendue, sur présentation de son jeton. */
   async resumeWait(token: string, payload: unknown): Promise<RunRecord | null> {
     const wait = await this.store.waitByToken(token);

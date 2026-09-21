@@ -21,8 +21,9 @@
  * ============================================================================
  */
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, screen } from '@testing-library/react';
+import { userEvent } from '@testing-library/user-event';
 
 import { render } from '../vulnpipe/test-utils.tsx';
 import { CaseView } from './CaseView.tsx';
@@ -259,5 +260,94 @@ describe('an answered approval says what the human actually answered', () => {
 
     expect(screen.getByText('Declined by alice')).toBeTruthy();
     expect(screen.queryByText('Accepted by alice')).toBeNull();
+  });
+});
+
+/* ==========================================================================
+ * THE TWO BUTTONS, AND WHETHER ANYBODY CAN PRESS THEM
+ *
+ * `ApprovalPanel` computes `canSubmit = approver.trim() && Boolean(execId)
+ * && !busy`, with `execId = approval.execution_id`. `cases.ts` did not write
+ * that field, so both controls rendered disabled on every case the pipeline
+ * produced — and nothing said why, because the other term of the same `&&` is
+ * the operator's own name: a greyed-out button is indistinguishable from "you
+ * have not typed your identifier yet". Only `demo.ts` set it, which is why the
+ * screen looked right in demonstration mode.
+ *
+ * The server half — that `buildCases` writes the field, and that the route
+ * accepts what it writes — is driven through the real pipeline in
+ * `server/approval-route.test.ts`. What only a mount can show is the link
+ * between them: that this panel posts the identifier the card carries, to the
+ * address the route answers on.
+ * ========================================================================== */
+
+const PENDING: Approval = {
+  ...APPROVED,
+  outcome: 'pending',
+  approver: null,
+  human_reasoning: null,
+  // A run id, as `cases.ts` writes it. NEVER a wait token: that one resolves
+  // the approval once and irreversibly, and this object is answered to the
+  // assistant and to every MCP client.
+  execution_id: 'run-04-7f3c',
+};
+
+describe('an approval still waiting for an answer', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('posts the identifier the card carries, to the run it belongs to', async () => {
+    /*
+     * Both tests here pass before the fix as well as after, and deliberately:
+     * this panel was never the wrong half. What they pin is the LINK — that
+     * the address is built out of `approval.execution_id` and nothing else —
+     * so the server-side fix cannot be undone by a panel that starts sending
+     * something of its own. The red half of the change is in
+     * `server/approval-route.test.ts`, where the field did not exist.
+     */
+    const seen: string[] = [];
+    vi.stubGlobal('fetch', async (url: unknown) => {
+      seen.push(String(url));
+      return new Response(JSON.stringify({ ok: true, detail: 'Decision relayed to the pipeline.' }), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      });
+    });
+
+    const user = userEvent.setup();
+    render(<CaseView alertCase={kase({ approval: PENDING })} onRefresh={() => {}} />);
+
+    const accept = screen.getByRole('button', { name: /Accept/ });
+    // The defect, from the operator's side: before their name is typed the
+    // button is legitimately disabled — and it stayed disabled afterwards.
+    expect(accept.hasAttribute('disabled')).toBe(true);
+
+    await user.type(screen.getByPlaceholderText('@first.last'), 'alice');
+    expect(accept.hasAttribute('disabled')).toBe(false);
+
+    await user.click(accept);
+    expect(seen).toEqual(['/api/approvals/run-04-7f3c/resume']);
+  });
+
+  it('refuses to answer an approval it has no identifier for', async () => {
+    /*
+     * The control, and it claims the other side on purpose: it passes before
+     * the fix as well as after. A panel that submitted anyway would post
+     * `/api/approvals/undefined/resume` — a request about nothing, answered
+     * 404, reported to the operator as a decision that did not land. Refusing
+     * is right; what was wrong is that the field was never filled.
+     */
+    const seen: string[] = [];
+    vi.stubGlobal('fetch', async (url: unknown) => {
+      seen.push(String(url));
+      return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+
+    const user = userEvent.setup();
+    const orphan: Approval = { ...PENDING, execution_id: null };
+    render(<CaseView alertCase={kase({ approval: orphan })} onRefresh={() => {}} />);
+
+    await user.type(screen.getByPlaceholderText('@first.last'), 'alice');
+    const accept = screen.getByRole('button', { name: /Accept/ });
+    expect(accept.hasAttribute('disabled')).toBe(true);
+    expect(seen).toEqual([]);
   });
 });

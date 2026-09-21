@@ -559,6 +559,15 @@ export function buildCases(
           human_reasoning: null,
           timeout_minutes: typeof ap.timeout_minutes === 'number' ? ap.timeout_minutes : 30,
           requested_at: str(ap.requested_at) || run.startedAt,
+          // WHAT THE TWO BUTTONS POST. `CaseView` reads this field and refuses
+          // to submit without it, and nothing wrote it — so both controls
+          // rendered disabled on every case the pipeline produced, and only
+          // there, since `demo.ts` sets it. It is the RUN holding the wait,
+          // never the wait's token: the token resolves the approval once and
+          // irreversibly, and this object is answered by `get_alert` to a model
+          // reading attacker-composed logs. `POST /api/approvals/:runId/resume`
+          // does the resolving on the server, where the token stays.
+          execution_id: run.id,
         };
       }
       if (c.approval) {

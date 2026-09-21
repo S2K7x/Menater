@@ -85,6 +85,26 @@ export interface RunStore {
 
   createWait(wait: WaitRecord): Promise<void>;
   waitByToken(token: string): Promise<WaitRecord | null>;
+
+  /**
+   * The wait a run is still holding open — the question a human can answer.
+   *
+   * ==========================================================================
+   * THE TOKEN IS A VERB, AND IT MUST NOT LEAVE THIS PROCESS
+   *
+   * The console answers an approval by naming the RUN, never the token:
+   * `waitByToken` resolves a capability, and resolving one is irreversible.
+   * The incident card that would have had to carry a token is read by the
+   * assistant's `get_alert` and by every MCP client — a catalogue that is
+   * closed and read-only precisely so that an injected instruction arrives at
+   * a model holding no verb. Run ids already travel there.
+   *
+   * So the lookup lives here, on the far side of the boundary, and it answers
+   * `null` for a wait already settled: the first answer stands, and there is
+   * no second question to resolve.
+   * ==========================================================================
+   */
+  openWaitOfRun(runId: string): Promise<WaitRecord | null>;
   resolveWait(token: string, payload: unknown): Promise<void>;
   /** Attentes dont l'échéance est dépassée et que personne n'a tranchées. */
   expiredWaits(now: string): Promise<WaitRecord[]>;
@@ -219,6 +239,17 @@ export class MemoryRunStore implements RunStore {
   async waitByToken(token: string): Promise<WaitRecord | null> {
     const wait = this.waits.get(token);
     return wait ? MemoryRunStore.copy(wait) : null;
+  }
+
+  async openWaitOfRun(runId: string): Promise<WaitRecord | null> {
+    // Insertion order, which is creation order — the same order the SQL side
+    // gets from `ORDER BY created_at`. A run holds one open wait in this
+    // pipeline; taking the oldest keeps the two implementations identical if
+    // one ever holds two.
+    for (const wait of this.waits.values()) {
+      if (wait.runId === runId && !wait.resumedAt) return MemoryRunStore.copy(wait);
+    }
+    return null;
   }
 
   async resolveWait(token: string, payload: unknown): Promise<void> {
