@@ -13,7 +13,7 @@
  * It writes NOTHING into the pipeline except on an explicit human action, and
  * the only three writes it can perform are reversible:
  *   - `POST /api/simulate` injects a test alert into the pipeline;
- *   - `POST /api/approvals/:token/resume` answers the approval a run is
+ *   - `POST /api/approvals/:runId/resume` answers the approval a run is
  *     waiting on;
  *   - `POST /api/replay` re-runs the original payload of an alert whose chain
  *     broke — and refuses when that payload is not known, rather than

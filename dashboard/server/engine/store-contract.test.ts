@@ -231,6 +231,63 @@ function contract(name: string, make: () => Promise<RunStore>) {
       expect(tokens).toEqual(['passee']);
     });
 
+    /*
+     * The open wait of a run — the question a human can still answer.
+     *
+     * The console never holds the token. It holds the RUN id, which the
+     * incident card already carries, and the server resolves it here: a wait
+     * token is a one-shot, irreversible capability, and the case it would ride
+     * on is read by the assistant and by every MCP client. Resolving it in the
+     * store is what keeps it inside this process.
+     */
+    it('reads back the OPEN wait of a run — the one a human can still answer', async () => {
+      const r = run();
+      await store.createRun(r);
+      await store.createWait({
+        runId: r.id, nodeId: 'wait', token: 'open-1',
+        deadline: new Date('2026-08-24T10:30:00Z').toISOString(),
+        resumedAt: null, payload: null,
+      });
+      expect(await store.openWaitOfRun(r.id)).toMatchObject({ token: 'open-1', runId: r.id });
+    });
+
+    it('answers null once that wait has been settled — it is not open any more', async () => {
+      // The second press of two operators on one button. The first answer
+      // stands; there is no second question to resolve.
+      const r = run();
+      await store.createRun(r);
+      await store.createWait({
+        runId: r.id, nodeId: 'wait', token: 'open-2',
+        deadline: new Date('2026-08-24T10:30:00Z').toISOString(),
+        resumedAt: null, payload: null,
+      });
+      await store.resolveWait('open-2', { decision: 'approve' });
+      expect(await store.openWaitOfRun(r.id)).toBeNull();
+    });
+
+    it('answers null for a run that never waited on anybody', async () => {
+      const r = run();
+      await store.createRun(r);
+      expect(await store.openWaitOfRun(r.id)).toBeNull();
+      expect(await store.openWaitOfRun('never-existed')).toBeNull();
+    });
+
+    it('does not hand one run the wait of another', async () => {
+      // The whole point of resolving server-side is that the caller names a
+      // run and receives that run's question, never a neighbour's.
+      const a = run();
+      const b = run();
+      await store.createRun(a);
+      await store.createRun(b);
+      await store.createWait({
+        runId: b.id, nodeId: 'wait', token: 'open-3',
+        deadline: new Date('2026-08-24T10:30:00Z').toISOString(),
+        resumedAt: null, payload: null,
+      });
+      expect(await store.openWaitOfRun(a.id)).toBeNull();
+      expect((await store.openWaitOfRun(b.id))?.token).toBe('open-3');
+    });
+
     // --- Verrou -----------------------------------------------------------
 
     it('accorde le verrou une seule fois', async () => {

@@ -69,7 +69,7 @@ counted, and each one is deliberate:
 
 | Route | Effect |
 |---|---|
-| `POST /api/approvals/:executionId/resume` | Relays an approval decision to the form holding the run |
+| `POST /api/approvals/:runId/resume` | Answers the approval that run is holding open. The path names the RUN — the wait token resolves the approval once and irreversibly, and never leaves the server |
 | `POST /api/simulate` | Injects a test alert into **the console's own pipeline** — one of nine scenarios, **creates a real case** |
 | `POST /api/diagnostics` | Probes the webhook with a deliberately invalid payload — **creates no case** |
 | `POST /api/replay` | Replays an alert whose chain broke. **Refuses** if the original payload is unknown, rather than replaying a reconstructed alert |

@@ -314,6 +314,18 @@ export class PgRunStore implements RunStore {
     return rows[0] ? toWait(rows[0]) : null;
   }
 
+  async openWaitOfRun(runId: string): Promise<WaitRecord | null> {
+    // `soc_run_wait_run_idx` covers the lookup. `resumed_at IS NULL` is the
+    // whole contract: a settled wait is not an open question, and answering it
+    // twice would be the one thing `resolveWait` exists to make impossible.
+    const rows = await this.q(
+      `SELECT * FROM soc_run_wait WHERE run_id = $1 AND resumed_at IS NULL
+         ORDER BY created_at LIMIT 1`,
+      [runId],
+    );
+    return rows[0] ? toWait(rows[0]) : null;
+  }
+
   async resolveWait(token: string, payload: unknown): Promise<void> {
     // `WHERE resumed_at IS NULL` DANS l'UPDATE : c'est la base qui garantit
     // qu'une attente ne se tranche qu'une fois. Un double clic, un lien

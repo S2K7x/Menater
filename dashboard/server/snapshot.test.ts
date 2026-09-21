@@ -115,7 +115,7 @@ describe('a rebuild that invalidate() disowned', () => {
     // and is waiting for the answer.
     const inFlight = snapshot(DEFAULT_LOCALE);
 
-    // The write lands. This is `POST /api/approvals/:token/resume`.
+    // The write lands. This is `POST /api/approvals/:runId/resume`.
     runs = [run('BEFORE'), run('AFTER')];
     invalidate();
 
