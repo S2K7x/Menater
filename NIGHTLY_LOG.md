@@ -4,6 +4,147 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-21 — Monday · Feature
+
+**Subject**: **an approval answered in the console was interpreted as SILENCE**
+— `ROADMAP.md` § 7, named by last night's hand-off as the highest-value item
+left and as Monday work. A human pressing *approve* had the action refused and
+the refusal sealed into the append-only audit chain.
+
+**Result**: PR #32 (branch `claude/great-pascal-b8rnja`).
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-b8rnja` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Seventeenth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject**: the calendar rule did not preempt — `main` was green
+(typecheck 0, 1219 passed | 1 skipped, build clean) and no pull request was
+open. Monday's reservoir is `ROADMAP.md`, and inside the theme NIGHTLY.md ranks
+*a real, reproducible bug* above *an explicit limitation*. J0.2 (an alert
+offering a scan) is the open J0 item, but this defect writes a false record
+into the product's only tamper-evidence, on the one path where the console can
+act irreversibly. It won.
+
+**What was actually wrong**, measured through the real route over the real
+pipeline:
+
+| | before | after |
+|---|---|---|
+| `interpret` outcome on *approve* | `timeout_escalated` | `approved` |
+| `interpret` outcome on *reject* | `timeout_escalated` | `rejected` |
+| approved containment dialled | **never** | `https://edr.test/isolate` |
+| audit record | `routing_outcome: "rejected"`, `"Action refused by a human."` | the branch the human chose |
+| `human_disagreement_rate_pct` | **`null`** | `0` on agreement, `100` on refusal |
+| unrecognised decision | forwarded, token spent, filed as silence | **400**, wait still open |
+
+**What I learned**:
+
+- **Both ends of the conversation were already right.** `src/lib/api.ts` posts
+  `{ decision, approver, reason }` and `interpretApproval` reads those three
+  names. `routes/approvals.ts`, sitting between them, translated into a third
+  form nothing read. That is why no unit test of either side could have caught
+  it, and why the fix is smaller than the row describing it — the route was the
+  only party inventing words.
+- **This row's own claim about the metric was out of date, and the truth is
+  worse.** It said `human_disagreement_rate` read 100; that was true before the
+  reader fix (#29). Measured now: `computeMetrics` counts only outcomes
+  `approved` or `rejected`, so every settled approval reading `timeout_escalated`
+  left the denominator at **0** and the rate read **`null`** — no number at all,
+  on the figure § Measurement calls the gate for leaving shadow mode.
+- **The vocabulary question in the roadmap row answers the other way round from
+  the obvious.** It read as *which spelling wins*; it is really *which side of
+  the boundary may author a record*. The route was building the approver record
+  — `identity_source` and `signature_verified` included — on the side a payload
+  can reach. The guardrail mints it now, and the value is
+  `console_self_declared`, which `CLAUDE.md` and `dashboard/README.md` have
+  documented all along while **nothing produced it**: the route built it and
+  `interpretApproval` threw it away.
+- **A decision must stay a WORD.** `approve`, `reject` and *nobody answered* are
+  three facts; the moment the route reduced them to `approved: boolean` the
+  third had nowhere to live. An unrecognised answer is now a named 400 at the
+  route rather than a forward, because `resolveWait` is irreversible: forwarding
+  spends the token and files a silence that never happened.
+
+**Found and NOT fixed** — and this one matters more than anything I shipped:
+
+- **The approve and reject buttons are disabled on every real case.** Found
+  while verifying the fix reaches production, and measured, not read:
+  `CaseView` needs `approval.execution_id` and **`cases.ts` never writes that
+  field**. Driving the real pipeline to a live wait gives
+  `state: 'awaiting_approval'`, `approval` present, `execution_id: undefined`,
+  so `Boolean(execId)` is `false` and both buttons render `disabled` — with no
+  explanation, since the other term of the same `&&` is the operator's own
+  name. Only `demo.ts` sets it, which is why the screen looks right in demo
+  mode. **And the identifier is the same disagreement one field over**:
+  `api.ts` names the parameter `executionId`, `CaseView` passes a RUN id, the
+  route reads the path segment as a wait TOKEN — engine tokens are
+  `crypto.randomUUID()`, so even a populated `execution_id` answers 404.
+  Deliberately left: choosing between shipping the token to every open tab (a
+  capability, in the snapshot) and resolving a run id server-side (a new store
+  method, hence `pg-store.ts`, which **cannot be verified without a database
+  and this environment has none**) is a decision, not a typo. New § 7 row, and
+  it is the obvious next night. The second option is almost certainly right —
+  the Slack `resume_url` already identifies a run and never the token.
+- **The order matters and was deliberate.** Fixing the button first would have
+  handed operators a working control that writes a lie into an immutable
+  record. Fixing the payload first is the safe half to ship alone.
+
+**Do not redo**:
+
+- **Do not "fix" this by translating `interpretApproval` to the route's shape.**
+  That was the obvious reading of the roadmap row and it is backwards: it would
+  let a transport author `signature_verified: true` into the hash chain, and it
+  would collapse three states into a boolean.
+- **Do not add a test asserting the route forwards nothing extra.** Tried as
+  mutation 4 (`{ ...body, decision, approver }`): it is **behaviour-preserving**,
+  precisely because the guardrail mints the record. A test that failed on it
+  would be testing implementation, not behaviour. The guarantee is held — and
+  tested — at the transform.
+- **Do not check the minting from the route alone.** Measured: a transform that
+  reads `identity_source` off the payload passes every route-level test in the
+  file, because the route composes the payload field by field. It takes a
+  direct `interpretApproval` call to catch it, which is why the file has both.
+- **Do not write an `ApprovalRequest` fixture for that direct call.** It is read
+  out of the run journal instead — a hand-written one is the fixture written
+  from the same memory as the reader, the defect `pipeline-to-case.test.ts`
+  exists to close.
+
+**Why the existing suite was green over this**: `pipeline-to-case.test.ts` was
+written to close exactly this class and drives a live approval, but through
+`engine.resumeWait` with the TRANSFORM's vocabulary — the route was never in the
+path. Its one test that did use the route's payload asserted the *rule* (the
+card cannot disagree with `interpret`) rather than the value, and said in its
+own header that the mismatch was unfixed. That comment is now corrected; the
+payload is kept, because `resumeWait` is engine API and it is still the shape
+that drives `interpret` to an outcome the branch below it does not imply.
+
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 1228 passed | 1 skipped   — was 1219 | 1 (+9, all new)
+npm run build       # dist built, CSS 88.54 kB, JS 474.68 kB (unchanged)
+node --experimental-strip-types -e "import(...)"   # the three changed server
+                    # modules load: the service runs under strip-types, which
+                    # refuses syntax tsc and vitest both accept
+```
+Checked **RED** first: all nine tests of `server/approval-route.test.ts` fail on
+unmodified `main`, with the exact signatures the roadmap row predicted
+(`expected 'timeout_escalated' to be 'approved'`, `expected 'rejected' not to be
+'rejected'` on the audit record, `expected null to be +0` on the metric).
+Five mutations against the finished change, four caught, each by the assertion
+that should catch it: the route reverted to the boolean vocabulary (**8 of 9**
+red), the named 400 removed (1 red), the guardrail copying the label off the
+wire (1 red — and green before the direct-call test was added, which is how I
+know the route test does not stand in for it), `decision` hard-coded to
+`'approve'` (1 red, the refusal control). The fifth is the behaviour-preserving
+one described above. No model key and no database needed; the one throwaway
+probe (`scripts/probe-approval-token.ts`, which measured the disabled button)
+was deleted and `git status` shows no stray file.
+
 ## 2026-09-20 (second run) — Sunday · Maintenance and state of the project
 
 **Subject**: `VulnPipe/package-lock.json` described the **console**, not

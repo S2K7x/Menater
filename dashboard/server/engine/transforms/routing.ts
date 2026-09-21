@@ -446,11 +446,18 @@ export interface ApprovalRecord {
     slack_username: string | null;
     responded_at: string;
     /**
-     * `self_declared` : LE JETON PROUVE QU'ON DÉTIENT LE LIEN, PAS QU'ON EST
-     * UNTEL. Le dire explicitement vaut mieux que de laisser croire à une
-     * authentification. L'audit porte cette mention.
+     * THE TOKEN PROVES SOMEBODY HOLDS THE LINK, NOT THAT THEY ARE ANYBODY.
+     * Saying so explicitly beats letting an audit row imply an authentication
+     * that never happened, so the record carries the mention.
+     *
+     * It is MINTED HERE and never read off the payload: the wire carries a
+     * claim — a decision, a name, a reason — and a transport able to author
+     * this field could write a verified identity into the hash chain. The
+     * value is the one `CLAUDE.md` and `dashboard/README.md` document; it was
+     * being built by `routes/approvals.ts`, on the side of the boundary that
+     * must not own it, and discarded here.
      */
-    identity_source: 'self_declared';
+    identity_source: 'console_self_declared';
     signature_verified: false;
   } | null;
   human_reasoning: string | null;
@@ -484,7 +491,7 @@ export function interpretApproval(
     approver = {
       slack_username: (p.approver ?? '').trim() || null,
       responded_at: now().toISOString(),
-      identity_source: 'self_declared',
+      identity_source: 'console_self_declared',
       signature_verified: false,
     };
     reasoning = (p.reason ?? '').trim() || null;

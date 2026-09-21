@@ -396,17 +396,17 @@ describe('an alert put to a human, end to end', () => {
      * disagree with the branch, and a disagreement is exactly what a defect
      * upstream of `interpret` looks like.
      *
-     * There is one today, and it is why this test resumes with THE PAYLOAD THE
-     * CONSOLE ACTUALLY SENDS rather than the transform's own vocabulary:
-     * `routes/approvals.ts` posts `{ approved, human_reasoning, approver: {…} }`
-     * and `interpretApproval` reads `payload.decision`, so a human pressing
-     * "approve" is interpreted as SILENCE. That is not fixed here — it changes
-     * what the pipeline executes on the irreversible-action path, and it is
-     * written up for a human to decide.
+     * There WAS one, and this payload is what it looked like:
+     * `routes/approvals.ts` posted `{ approved, human_reasoning, approver: {…} }`
+     * while `interpretApproval` read `payload.decision`, so a human pressing
+     * "approve" was interpreted as SILENCE. The route speaks the pipeline's
+     * vocabulary now and would refuse this body with a 400 — see
+     * `server/approval-route.test.ts`, which drives the real route.
      *
-     * So this asserts the RULE and not the value: whatever `interpret`
-     * concluded is what the card says. It holds today, and it goes on holding
-     * the day the payload mismatch is fixed.
+     * The payload is KEPT here, because `resumeWait` is engine API and this is
+     * the shape that still drives `interpret` to an outcome the branch below
+     * it does not imply. That is the only way to check the rule rather than
+     * the value: whatever `interpret` concluded is what the card says.
      */
     const { engine, store } = assemble({ live: true });
     await engine.start('01-ingestion', { ...ALERT, source: 'generic' }, ALERT.alert_id);
