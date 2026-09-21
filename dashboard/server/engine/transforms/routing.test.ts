@@ -184,8 +184,12 @@ describe('04 — issue de l’approbation : trois cas distincts', () => {
   it('marque l’identité comme DÉCLARATIVE, jamais authentifiée', () => {
     // Le jeton prouve qu'on détient le lien, pas qu'on est untel. Le dire
     // explicitement vaut mieux que de laisser croire à une authentification.
+    // The label is the one CLAUDE.md and dashboard/README.md document, and it
+    // is MINTED here: `routes/approvals.ts` used to build it on the transport
+    // side, where a payload could have authored it, and this function threw
+    // that record away. See `server/approval-route.test.ts`.
     const r = interpretApproval(request(), { decision: 'approve', approver: 'x' }, 30, NOW);
-    expect(r.approval.approver?.identity_source).toBe('self_declared');
+    expect(r.approval.approver?.identity_source).toBe('console_self_declared');
     expect(r.approval.approver?.signature_verified).toBe(false);
   });
 

@@ -39,23 +39,50 @@ export async function approvalsRoutes(c: Ctx): Promise<boolean> {
       const approver = String(body.approver ?? '').trim();
       if (!approver) return json(res, 400, { error: am.approverRequired });
 
+      /*
+       * THREE STATES, AND THE ROUTE IS WHERE THE THIRD ONE IS PROTECTED.
+       *
+       * `approve`, `reject` and "nobody answered" are three different facts,
+       * and only the last one may ever be written as a timeout. A word this
+       * route does not recognise is none of the three: forwarding it spends
+       * the token — `resolveWait` is irreversible — and files the run as a
+       * silence that never happened. Refused here, named, and the question
+       * stays open for a real answer.
+       *
+       * It is also why the decision does not travel as a BOOLEAN: a boolean
+       * has no room for the state where nobody spoke.
+       */
+      const decision = String(body.decision ?? '');
+      if (decision !== 'approve' && decision !== 'reject') {
+        return json(res, 400, { error: am.approvalDecisionInvalid });
+      }
+
       const engine = getEngine();
       if (!engine) return json(res, 503, { ok: false, error: am.engineUnavailable });
 
-      const approved = body.decision === 'approve';
       try {
+        /*
+         * THE VOCABULARY IS THE PIPELINE'S, AND THIS ROUTE SPEAKS IT.
+         *
+         * It used to translate into a third one — `{ approved,
+         * human_reasoning, approver: {…} }` — that nothing on the far side
+         * read. `interpretApproval` reads `decision`, `approver` and `reason`,
+         * which is also exactly what the browser posts here, so the route was
+         * the only party in the conversation inventing words. The cost was not
+         * a failed request: `p.decision` was `undefined`, so a human's
+         * explicit yes was interpreted as SILENCE and sealed into the
+         * append-only chain as a refusal.
+         *
+         * AND IT SENDS A CLAIM, NOT A RECORD. The approver record — including
+         * the label saying the identity is self-declared — is minted by
+         * `interpretApproval`, on the far side of the boundary. A transport
+         * able to author `signature_verified: true` would be writing an
+         * authentication that never happened into the audit chain.
+         */
         const run = await engine.resumeWait(token, {
-          approved,
-          human_reasoning: String(body.reason ?? '').trim() || null,
-          approver: {
-            slack_username: approver,
-            slack_user_id: null,
-            responded_at: new Date().toISOString(),
-            // NAMED FOR WHAT IT IS. The console has one shared password; it
-            // proves somebody could open the console, not who they are.
-            identity_source: 'console_self_declared',
-            signature_verified: false,
-          },
+          decision,
+          approver,
+          reason: String(body.reason ?? '').trim(),
         });
         invalidate();
         // An unknown or already-resolved token is not an error to shout about:

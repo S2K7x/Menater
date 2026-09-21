@@ -161,7 +161,7 @@ export function demoCases(locale: Locale): AlertCase[] {
       rollback_plan: dm.shortRollback,
       triggers: [dm.triggerContainment('isolate_host_temporary')],
       outcome: 'approved',
-      approver: { slack_username: '@shai', slack_user_id: null, responded_at: at(22), identity_source: 'self_declared', signature_verified: false },
+      approver: { slack_username: '@shai', slack_user_id: null, responded_at: at(22), identity_source: 'console_self_declared', signature_verified: false },
       human_reasoning: dm.approvedReason,
       timeout_minutes: 30, requested_at: at(23), execution_id: 'demo-done',
     },

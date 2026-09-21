@@ -179,6 +179,8 @@ export interface ServerMessages {
     /** The engine threw before the pipeline could answer at all. */
     promoteFailed: (what: string, error: string) => string;
     approverRequired: string;
+    /** The answer was neither of the two words a decision can be. */
+    approvalDecisionInvalid: string;
     engineUnavailable: string;
     approvalUnknownToken: string;
     approvalFailed: (error: string) => string;
@@ -438,6 +440,11 @@ const EN: ServerMessages = {
       `"${what}" could not be sent: the engine failed before the pipeline answered — `
       + `${error}. Nothing entered the queue.`,
     approverRequired: 'Your identifier is required: it is logged with the decision.',
+    // NOT forwarded as a silence. Says which two words are the answer, and
+    // that the question is still open — the approval was not spent.
+    approvalDecisionInvalid:
+      'The decision must be "approve" or "reject". Nothing was recorded, and '
+      + 'the approval is still waiting for an answer.',
     engineUnavailable:
       'The engine is not started: no database is configured, so there is no run to answer.',
     approvalUnknownToken:

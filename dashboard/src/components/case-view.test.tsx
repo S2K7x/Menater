@@ -227,7 +227,7 @@ const APPROVED: Approval = {
   approver: {
     slack_username: 'alice', slack_user_id: null,
     responded_at: '2026-08-23T12:01:00.000Z',
-    identity_source: 'self_declared', signature_verified: false,
+    identity_source: 'console_self_declared', signature_verified: false,
   },
   human_reasoning: 'Confirmed with the owner: this login was not theirs.',
   timeout_minutes: 45,
