@@ -11,7 +11,7 @@ case** — `ROADMAP.md` § 7, opened by the previous run of this same day and
 named there as the obvious next night. With the approval payload fixed, the
 console still could not answer an approval at all.
 
-**Result**: PR #TBD (branch `claude/great-pascal-wvxr07`).
+**Result**: PR #33 (branch `claude/great-pascal-wvxr07`).
 
 **Note on the branch name.** `NIGHTLY.md` § 5 asks for
 `claude/nightly-YYYY-MM-DD-subject`; this session was handed
