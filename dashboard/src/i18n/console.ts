@@ -1203,9 +1203,13 @@ const EN: ConsoleDictionary = {
       backingOff: (delay) =>
         `Backing off after repeated failures \u2014 next automatic attempt in about ${delay}. `
         + '\u201cPoll now\u201d ignores the wait.',
+      // Two things land in this counter now — an item with no alert id, and
+      // one nested deeper than the pipeline can read — so the sentence names
+      // the possibilities instead of asserting the one it used to be sure of.
       unusable: (count) =>
-        `${count} item${count === 1 ? '' : 's'} carried no alert id and could not be read. `
-        + 'They were counted, not silently skipped.',
+        `${count} item${count === 1 ? '' : 's'} could not be turned into an alert: `
+        + 'no alert id, or nesting past what the pipeline can read. '
+        + `${count === 1 ? 'It was' : 'They were'} counted, not silently skipped.`,
     },
   },
 

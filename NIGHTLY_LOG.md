@@ -4,6 +4,143 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-22 (second run) — Tuesday · Security
+
+**Subject**: **a cap on BYTES, in front of a limit that is about DEPTH** —
+`ROADMAP.md` § 7, the row the previous run of this same day wrote and named
+*"the best next subject"*. An unauthenticated caller could make the ingestion
+endpoint answer `500` carrying V8's own message; a polled source could kill the
+process.
+
+**Result**: PR #35 (branch `claude/great-pascal-2q0cmw`).
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-2q0cmw` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Twentieth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject**: the calendar rule did not preempt — `main` was green
+(typecheck 0, 1255 passed | 1 skipped, build clean) and no pull request was
+open. It is priority (2) *and* (3): a real, reproducible bug AND an explicit
+roadmap limitation, handed over by the previous run with the reproduction
+already written down. Tuesday's listed areas name *denial of service (body
+sizes, concurrency, quotas)* first among the ones it touches.
+
+**What was actually wrong**, measured on Node 22.22.2 over real sockets under
+`node --experimental-strip-types`:
+
+| | before | after |
+|---|---|---|
+| `POST /api/ingest/generic`, 117 kB body, 60 000 deep, **no `x-soc-token`** | **`500 {"error":"Maximum call stack size exceeded"}`** | `400 payload_too_deep`, naming the cap |
+| the same on `/api/webhook/soc/alert` | **500**, same message | `400`, same sentence |
+| the same nesting under an UNMAPPED key (rides in `extensions`) | **500** | `400` |
+| `pollSource()` on a source answering one such item | **throws out of the function** | resolves, `unusable: 1`, `accepted: 0` |
+| the same, with two good items beside it in the batch | **all three lost** | `G1` and `G2` delivered, `accepted: 2` |
+| a shallow alert with no token (the control) | `401` | `401` |
+
+**What I learned**:
+
+- **The asymmetry is the whole bug, and it is a V8 fact worth keeping.**
+  `JSON.parse` is iterative and `JSON.stringify` is recursive, so the parser
+  hands the rest of the process structures the serialiser cannot survive.
+  Measured: parse is fine at **200 000** levels, stringify gives up at
+  **4 165**. A cap on BYTES says nothing about the shape inside them.
+- **That 4 165 is not a constant, and a fix that treats it as one moves with
+  the machine.** The same probe under `--stack-size=2000` answers **8 500** —
+  it is whatever stack is left at the moment of the call. So the cap has to be
+  a policy number chosen against real data, not a measured maximum: the nine
+  injection scenarios are **2** levels deep, a Wazuh alert with MITRE arrays
+  and agent metadata is **5**, the deepest JSON in the repository is **5**.
+  64 is an order of magnitude above the first and two below the second.
+- **The second door was the expensive one.** The § 7 row described the push
+  route. `pollSource()` is the other caller of `normalize`, and there the
+  `RangeError` escaped the function — so `fail()`, which records the error,
+  backs the source off and shows it on the Ingestion tab, never ran. It escaped
+  `tick()` too, which the timer calls as `void this.tick()`, and I measured
+  what Node 22 does with that rather than assuming: **the process terminates.**
+  One over-deep item from a polled source crash-loops the console.
+- **A mutation caught my test claiming something that is not true.** I wrote
+  *"the guard does not recurse, because a recursive depth check overflows on
+  its own input"* and built a test for it. Mutated to a recursive check, the
+  test went **GREEN** — a recursive check that compares depth BEFORE descending
+  is bounded at `limit` frames and is perfectly safe. The real hazard is
+  measure-then-compare (walk the whole structure, then compare the maximum),
+  which is the obvious way to write it and overflows; that mutation is red, in
+  both a recursive and an iterative form. The comment and the test now say the
+  true thing. **A plausible-sounding rule is not a tested rule.**
+- **Widening a counter obliges you to re-read its sentence.** `unusable` on a
+  poll outcome had one cause when it was worded — *"carried no alert id and
+  could not be read"* — and a refused payload often has an alert id. Left
+  alone, the Ingestion tab would have printed a diagnosis nobody made, which is
+  the exact shape `readBodyOrNull` exists to remove at the other door.
+
+**Do not redo**:
+
+- **Do not put the floor on the mapped fields.** Tried as mutation M6 and red:
+  `extensions` keeps every unmapped vendor key whole, so a field-level guard
+  refuses `raw_log` and waves the same nesting through as `vendor_blob` — and
+  `pg-store`, `decision.ts`'s prompt builder and `sanitize.ts`'s fence all
+  serialise what arrives. One door, checked once, before anything is copied.
+- **Do not put the check in `readBody` instead.** It looks more general and it
+  is less: the poller's items come from `JSON.parse(readCapped(res, …))` and
+  never touch `readBody`, so the crash-loop door would have stayed open. I
+  checked the other direction too — of the routes that read a body, `/api/rules`
+  coerces through `String()` (`text()` in `tuning.ts`), `/api/findings/promote`
+  and `/api/simulate` never serialise the body, so `normalize` is the only
+  place the depth reaches a recursive serialiser.
+- **Do not fail the whole poll on one bad item.** It replaces the batch's good
+  alerts with nothing, which is the harsher half of the same mistake. Counted
+  `unusable`, which is the channel that already exists for *"read, could not be
+  turned into an alert, counted and shown"*.
+- **Do not refuse the deep body AFTER the shared secret** to avoid telling an
+  unauthenticated caller anything. This route already decides two other
+  refusals about the request itself before `handleAlert` sees a token — an
+  unknown source is a `404` and an over-large body a `413` — so moving this one
+  would make it the odd case, and the "oracle" it closes is that the endpoint
+  exists, which the 404 and the 413 announce anyway.
+
+**Found and NOT fixed**:
+
+- **`unusable` still does not say WHY.** Two causes now share one counter and
+  one sentence, so the tab names both possibilities rather than the one that
+  happened. Splitting it into two counters is right and it is a wider change —
+  `PollOutcome`, `lib/ingestion.ts`, the catalogue and the panel — than this
+  subject needed. Named in the PR.
+- The two leads the previous run left are untouched and still stand: the login
+  throttle collapsing to one bucket behind the tunnel (an architecture decision
+  for a human), and `attempts` in `auth.ts` never being swept.
+
+**Verified**:
+```
+cd dashboard
+npm ci              # the container starts with no node_modules
+npm run typecheck   # 0 errors
+npm test            # 1268 passed | 1 skipped   — was 1255 | 1 (+13, nothing skipped or weakened)
+npm run build       # dist built, CSS 88.54 kB, JS 474.75 kB
+```
+Checked **RED** first: 8 of the 11 tests then in `server/payload-depth.test.ts`
+fail before the change. Then by mutation, one at a time, restoring in between:
+
+| Mutation | Result |
+|---|---|
+| the guard removed (the original defect) | RED — 9 of 12 |
+| `depth >= limit` instead of `>` (off by one) | RED — 2, the two boundary tests |
+| the cap lowered to 3 (the plausible over-fix) | RED — the Wazuh control |
+| a recursive check that compares before descending | **GREEN — the test was wrong**; see above |
+| measure-then-compare, recursive | RED — 4, with `RangeError` in the log |
+| measure-then-compare, iterative (no early exit) | RED — 9 |
+| the route guarded, the POLLER left alone | RED — 2 |
+| the floor on the mapped fields only | RED — 2 |
+
+Both changed server modules were also loaded and driven under
+`node --experimental-strip-types` — the runtime the service uses, where `tsc`
+and vitest both lie — over live sockets on 127.0.0.1. No model key, no database
+and no network egress needed. `VulnPipe/` is untouched, so its suite was not
+run. Probes were written to the session scratchpad, never the repository;
+`git status` shows no stray file.
+
 ## 2026-09-22 — Tuesday · Security
 
 **Subject**: **two guards that named a door instead of the work behind it** —
