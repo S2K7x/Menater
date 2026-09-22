@@ -231,14 +231,99 @@ export function mappingFor(source: string): SourceMapping | null {
 }
 
 /**
- * Applies a mapping. Never throws: a payload it cannot read produces missing
- * identity fields, which `validateAlertSchema` turns into a named rejection.
+ * The deepest nesting a payload may carry.
+ *
+ * NOT A MEASURED MAXIMUM, A POLICY NUMBER, and the difference is the whole
+ * reason it is this low. `JSON.stringify` is recursive in V8 while `JSON.parse`
+ * is not, so the parser hands this function structures the serialiser cannot
+ * survive: measured on Node 22.22.2, parse is still fine at 200 000 levels and
+ * stringify gives up at 4 165. That 4 165 is not a constant either — it is a
+ * property of the stack left at the moment of the call, and the same probe
+ * under `--stack-size=2000` answers 8 500. A floor set just under whatever V8
+ * happened to allow would therefore move with the machine.
+ *
+ * 64 is chosen against real data instead: the nine alerts the Health tab
+ * injects are 2 levels deep, a Wazuh alert carrying MITRE arrays and agent
+ * metadata is 5, and the deepest JSON this repository ships is 5. So it is an
+ * order of magnitude above anything a source legitimately sends, and two below
+ * the lowest point V8 has been seen to fail at.
+ */
+export const MAX_PAYLOAD_DEPTH = 64;
+
+/**
+ * A payload refused for its NESTING.
+ *
+ * Its own class, and for the reason `BodyTooLarge` is one: this is a refusal
+ * WE made, about something the sender can act on, and conflated with an
+ * ordinary unreadable body it became a verdict about identity fields nobody
+ * had looked at. Told apart, it becomes a named 400 quoting the cap.
+ *
+ * No parameter property (`constructor(readonly limit: number)`): the service
+ * runs under `node --experimental-strip-types`, which refuses that syntax at
+ * startup while `tsc` and vitest accept it.
+ */
+export class PayloadTooDeep extends Error {
+  /** The cap that was enforced, so the answer can name it rather than guess. */
+  limit: number;
+
+  constructor(limit: number) {
+    super(`payload nested more than ${limit} levels deep`);
+    this.limit = limit;
+  }
+}
+
+/**
+ * Whether a value is nested past `limit`. The body itself counts as level 1.
+ *
+ * IT REFUSES BEFORE IT DESCENDS, and that — not the explicit stack — is the
+ * property that matters. The obvious way to write this is to measure the
+ * depth and then compare it, which walks the whole structure first and
+ * overflows on exactly the payload it exists to refuse: the defect rebuilt
+ * inside its own repair, a shape this project has paid for before. Checked on
+ * the way down instead, the walk stops at `limit + 1` levels, so refusing a
+ * 200 000-deep body costs sixty-five steps rather than a traversal of it —
+ * which is also what bounds the work an attacker can buy with one request.
+ *
+ * The stack is explicit for belt and braces: with the comparison in the right
+ * place a recursive form is bounded too (measured — it holds `limit` frames
+ * and no more), but then the guard's safety depends on where a future edit
+ * leaves that one line. Iterating makes the frame depth independent of the
+ * payload whatever happens to the comparison.
+ */
+function exceedsDepth(value: unknown, limit: number): boolean {
+  const stack: { node: unknown; depth: number }[] = [{ node: value, depth: 1 }];
+  while (stack.length > 0) {
+    const { node, depth } = stack.pop()!;
+    if (depth > limit) return true;
+    if (node === null || typeof node !== 'object') continue;
+    for (const child of Array.isArray(node) ? node : Object.values(node)) {
+      stack.push({ node: child, depth: depth + 1 });
+    }
+  }
+  return false;
+}
+
+/**
+ * Applies a mapping.
+ *
+ * Throws `PayloadTooDeep`, and nothing else: a payload it cannot READ still
+ * produces missing identity fields, which `validateAlertSchema` turns into a
+ * named rejection. One it cannot SERIALISE is a different fact and has to be
+ * one — reporting it as missing fields would tell a sender its alert lacked
+ * what it had in fact sent.
+ *
+ * THE FLOOR IS ON THE WHOLE PAYLOAD, not on the fields this table maps.
+ * `extensions` keeps every unmapped vendor key, whole, so a guard on the
+ * mapped fields alone would let the nesting through under any other name — and
+ * the run journal, the model prompt and the assistant's fence all serialise
+ * what arrives. One door, checked once, before anything is copied.
  */
 export function normalize(
   mapping: SourceMapping,
   input: unknown,
 ): Record<string, unknown> {
   const body = (input ?? {}) as Record<string, unknown>;
+  if (exceedsDepth(body, MAX_PAYLOAD_DEPTH)) throw new PayloadTooDeep(MAX_PAYLOAD_DEPTH);
   const out: Record<string, unknown> = {};
 
   for (const [canonical, paths] of Object.entries(mapping.fields)) {
