@@ -131,6 +131,28 @@ function originAllowed(req: any): boolean {
  * call them a thousand times without noticing. Deliberately simple — a fixed
  * window, one counter, no dependency. It bounds the damage; it is not a quota
  * system, and it does not pretend to be.
+ *
+ * ============================================================================
+ * IT COUNTS WORK, NOT A METHOD NAME — AND IT USED TO COUNT ONE DOOR OF TWO
+ *
+ * `tools/call` is not the only way to run a getter. `readResource` runs
+ * `runTool` for eight of the nine `menater://` URIs — its own comment insists
+ * on it, "every branch goes through `runTool`, NOT around it" — so
+ * `resources/read` is the same work under another method name, and it was not
+ * counted at all. Measured on the real endpoint: 400 `tools/call` gave 120
+ * served and 280 refused; 400 `resources/read` gave 400 served, 0 refused.
+ *
+ * In BULK, because a JSON-RPC batch is one request dispatched with
+ * `Promise.all` over whatever fits in the 256 kB body: a single 179 kB batch
+ * of 2,000 `resources/read` served all 2,000 and blocked the event loop for
+ * 123 ms — on the single thread that also answers the ingestion webhook. A
+ * per-call cap a loop respects is worth nothing when one body carries two
+ * thousand calls.
+ *
+ * What is deliberately NOT counted is in `dispatch`: the catalogue listings,
+ * which are constants, and `completion/complete`, which is one call per
+ * KEYSTROKE. Tests claim both sides.
+ * ============================================================================
  */
 const RATE_WINDOW_MS = 60_000;
 const RATE_MAX_CALLS = 120;
@@ -145,6 +167,13 @@ function rateLimited(now: number): boolean {
   callsInWindow += 1;
   return callsInWindow > RATE_MAX_CALLS;
 }
+
+/**
+ * ONE sentence for both doors. Two spellings of one cap is how the two come to
+ * disagree — the rule `humanBytes` already carries for the body limit.
+ */
+const rateLimitMessage = () =>
+  `Rate limit: more than ${RATE_MAX_CALLS} tool calls in a minute. Slow down and retry.`;
 
 /** Test seam: a fixed window with a module-level counter needs a way back. */
 export function resetMcpRateLimit(): void {
@@ -545,11 +574,7 @@ async function dispatch(msg: RpcRequest, locale: any): Promise<unknown | null> {
         return rpcError(id, INVALID_PARAMS, 'arguments must be an object.');
       }
       if (rateLimited(Date.now())) {
-        return rpcError(
-          id,
-          INVALID_REQUEST,
-          `Rate limit: more than ${RATE_MAX_CALLS} tool calls in a minute. Slow down and retry.`,
-        );
+        return rpcError(id, INVALID_REQUEST, rateLimitMessage());
       }
 
       const fence = newFence();
@@ -619,6 +644,20 @@ async function dispatch(msg: RpcRequest, locale: any): Promise<unknown | null> {
 
     case 'resources/read': {
       const uri = String((msg.params as any)?.uri ?? '');
+      /**
+       * THE SAME CAP AS `tools/call`, because this is the same work: eight of
+       * the nine resources are a `runTool` behind `readResource`.
+       *
+       * Charged BEFORE the URI is resolved, and that is the one place this
+       * differs from `tools/call`, where `TOOL_BY_NAME` had already told us the
+       * name was real for nothing. The resource vocabulary is `readResource`'s
+       * own switch; copying it here to spare a client's typo one unit of a
+       * hundred-and-twenty-a-minute budget would be a second list to keep in
+       * step, which is the trade this product refuses everywhere else.
+       */
+      if (rateLimited(Date.now())) {
+        return rpcError(id, INVALID_REQUEST, rateLimitMessage());
+      }
       const read = await readResource(uri, locale);
       if (read === null) return rpcError(id, INVALID_PARAMS, `Unknown resource: ${uri}`);
       return rpcResult(id, {

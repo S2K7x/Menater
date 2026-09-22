@@ -4,6 +4,174 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-22 — Tuesday · Security
+
+**Subject**: **two guards that named a door instead of the work behind it** —
+the console did its most expensive read for callers it had just refused at the
+ingestion endpoint, and the MCP cap counted one of the two paths to the same
+fourteen getters.
+
+**Result**: PR #34 (branch `claude/great-pascal-9u9p8e`).
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-9u9p8e` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Nineteenth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject**: the calendar rule did not preempt — `main` was green
+(typecheck 0, 1238 passed | 1 skipped, build clean) and no pull request was
+open. Tuesday's listed areas include *authz and public routes
+(`PUBLIC_ROUTES`, `/api/ingest/*`)* and *denial of service (body sizes,
+concurrency, quotas)*, and both defects are priority (2): real, reproducible,
+tracked nowhere.
+
+**What was actually wrong**, measured over real sockets against the real
+service under `node --experimental-strip-types`:
+
+| | before | after |
+|---|---|---|
+| 30 unauthenticated `POST /api/ingest/generic`, answered `401` | **30 / 30 snapshot rebuilds** | 0 / 30 |
+| 400 `tools/call` on `/api/mcp` | 120 served, 280 refused | unchanged |
+| 400 `resources/read`, the same `runTool` | **400 served, 0 refused** | 120 served, 280 refused |
+| one 179 kB JSON-RPC batch of 2,000 `resources/read` | **2,000 served, 123 ms of blocked event loop** | 120 served, 17 ms, 2 ms stall |
+
+**What I learned**:
+
+- **Two accurate comments can describe one uncounted path.** `rateLimited`
+  says it exists because *"an agent in a loop is exactly the client that will
+  call them a thousand times without noticing"*; `readResource` says *"every
+  branch goes through `runTool`, NOT around it"*. Both true, and together they
+  say the cap misses `resources/read` — which nobody read as a sentence,
+  because the two lines are four hundred apart in the same file. The way to
+  find a second door is to grep for the other CALLERS of the thing the guard
+  protects, not to re-read the guard.
+- **A status code cannot answer "did anything change", in either direction.**
+  The obvious fix for the ingestion half is `if (result.status === 202)
+  invalidate()`. It is wrong twice: three of the four door refusals are `503`
+  and the PIPELINE answers a 503 of its own when deduplication is unavailable,
+  and a `400` for a missing field is an alert that DID run and shows in the
+  Tracking tab. `WebhookResult.ran` is set where the engine is actually
+  started. Fishing the reason back out of `body.run_id` would have been *"a
+  node's output under a field name you remembered"*.
+- **Asserting the CALL would have let a wrong fix pass.**
+  `refused-ingest.test.ts` does not spy on `invalidate()`; it takes two
+  snapshots around the refused request and compares them by IDENTITY, because
+  a live cache hands back the same object. A fix that merely moved the call
+  elsewhere still fails it.
+- **A cap test that sends one batch cannot see a per-batch reset.** My first
+  batch test asserted "some of this batch was refused" and "the next call is
+  refused" — and the mutation `resetMcpRateLimit()` at the top of the batch
+  branch passed all of it, because 400 calls still overflow a freshly reset
+  budget. The window is a MINUTE, not a request, so the assertion has to be a
+  SECOND batch being refused outright. Five of six mutations were caught on the
+  first pass; this was the sixth, and it is the one worth remembering.
+- **An invalidated hypothesis, recorded so nobody re-runs it.** I expected a
+  TOCTOU on the login throttle: `throttle(ip)` is checked, then `await
+  readBody(req)` yields, then `recordFailure(ip)` lands — so concurrent
+  requests should all pass the check. Measured with 200 requests on 200
+  separate sockets: **exactly 8 guesses get through**, the designed cap.
+  `verifyPassword` is `scryptSync`, which blocks the event loop for **35 ms**,
+  so the handlers are serialised by the very thing that makes them expensive.
+  The rate limiter is safe by an accident of the hash being synchronous.
+- **The "secrets never come back out" guarantee holds, measured not read.** I
+  planted a distinct sentinel in all 17 secrets the console holds (the auth
+  hash, the database password, the ingestion secret, the tunnel and MCP
+  tokens, all 12 managed credentials), then swept 44 answers — every GET route,
+  the diagnostics and simulate POSTs, all 9 MCP resources, `initialize`,
+  `tools/list`, `prompts/list` and all 14 tools driven directly. **0 leaks.**
+
+**Found and NOT fixed** — each verified by me tonight, not taken on trust:
+
+- **`normalize()` breaks its own "never throws" contract, unauthenticated, and
+  answers a 500 carrying V8's message.** `routes/ingest.ts` calls
+  `normalize(mapping, await readBodyOrNull(req))` **before** `handleAlert` looks
+  at the shared secret, and `normalize` does `JSON.stringify(v)` with no depth
+  floor. Reproduced over a real socket, console lock ON, **no `x-soc-token` at
+  all**: a 117 kB body of `{"raw_log":[[[…60 000 deep…]]]}` — inside the 256 kB
+  cap, because the cap is on BYTES — gives `RangeError: Maximum call stack size
+  exceeded`, logged as an uncaught error and answered
+  `500 {"error":"Maximum call stack size exceeded"}`. A server-fault code for a
+  sender fault plus an internal message to an unauthenticated caller. **It is
+  now `ROADMAP.md` § 7 and it is the best next subject** — the fix is a depth
+  floor plus a named 400, in the shape `BodyTooLarge` already has.
+- **The login throttle collapses to ONE bucket behind the tunnel.** `app.ts:100`
+  is `req.socket.remoteAddress` and nothing in the tree reads
+  `X-Forwarded-For` (grepped). Under the documented `cloudflared` deployment
+  every external request shares one address, so 8 wrong passwords lock **every**
+  operator out for five minutes, repeatable. **I deliberately did not fix it**:
+  the remedy is to trust a forwarded header, and trusting one without a
+  trusted-proxy list is a worse hole than the one it closes (anyone spoofs the
+  header and evades the throttle entirely). That is an architecture decision for
+  a human, not a night's edit.
+- **`attempts` in `auth.ts` is never swept.** `throttle()` deletes only when
+  `rec.until` is truthy, and a record with 1–7 failures has `until === 0`, so it
+  is permanent; `sweep()` iterates `sessions`, not this map. One failed login
+  per source address is one permanent entry, and it accrues even on an install
+  with no password set. Small, unbounded, unauthenticated — worth a line, not a
+  night.
+- **`tokenMatches` in `mcp.ts` returns early on a length mismatch** while
+  `secretMatches` in `webhook.ts` deliberately does a dummy `timingSafeEqual`
+  first *"so the length itself does not leak either"*. The mirror of a rule is
+  not the rule — but the token is server-generated at a fixed length and the
+  difference is sub-microsecond, so I could not demonstrate wrong behaviour and
+  did not touch it.
+
+**Do not redo**:
+
+- **Do not key `invalidate()` on the status code.** See above: `503` means two
+  opposite things and `400` means a run exists. Mutation M2 (`ran: true` on the
+  401) and M3 (`ran: false` everywhere) are both caught, the second by the
+  mirror assertion, which is there precisely so a "fix" that deletes the call
+  cannot pass.
+- **Do not copy `readResource`'s URI vocabulary up into `dispatch`** to let an
+  unknown URI dodge the cap. The cap is charged before the URI is resolved, on
+  purpose: a second list of resource names is a second thing to keep in step,
+  and the whole cost of the asymmetry is that a client's typo spends one unit
+  of a hundred and twenty a minute.
+- **Do not meter `completion/complete`.** One call per KEYSTROKE, and an alert
+  id is eighteen characters; metering it makes the console's own suggestions
+  the thing that exhausts the budget. A test claims that side and passes before
+  AND after, as does one for the catalogue listings.
+- **Do not chase the login-throttle TOCTOU.** Measured, it does not exist; see
+  above.
+- **Ruled out for tonight: the VulnPipe egress findings.** A sweep reported that
+  `VULNPIPE_LLM_BASE_URL` is settable over HTTP and becomes the destination for
+  a call carrying `authorization: Bearer` and the analysed source code, and that
+  VulnPipe's three LLM `fetch` calls never got the console's `redirect: 'manual'`
+  primitive. **I did not verify either claim**, so they are written here as
+  leads and NOT in `ROADMAP.md`. They are also the other half of the product and
+  a whole subject; the first one turns on whether that service is reachable at
+  all in the shipped compose file, which is the thing to check first.
+
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 1255 passed | 1 skipped   — was 1238 | 1 (+17, nothing skipped or weakened)
+npm run build       # dist built, CSS 88.54 kB, JS 474.68 kB (unchanged)
+```
+Checked **RED** first: 6 of the 8 tests in `server/refused-ingest.test.ts` fail
+before the change, and 4 of the 6 new ones in `server/assistant/mcp.test.ts`.
+Then by mutation, one at a time, restoring in between:
+
+| Mutation | Result |
+|---|---|
+| `invalidate()` unconditional again (the original defect) | RED — 6 of 8 |
+| the 401 branch reports `ran: true` | RED — 4 |
+| nothing ever ran (`ran: false` everywhere — the plausible over-fix) | RED — 3, incl. the mirror |
+| the cap dropped from `resources/read` (the original defect) | RED — 4 |
+| `completion/complete` metered too (the plausible over-fix) | RED — the boundary control |
+| the budget reset per batch | **GREEN at first — the test was too weak**; red once it asserts a second batch |
+
+Both changed server modules were loaded and driven under
+`node --experimental-strip-types` — the runtime the service uses, where `tsc`
+and vitest both lie — over live sockets on 127.0.0.1. No model key, no database
+and no network egress needed. `VulnPipe/` is untouched, so its suite was not
+run. Probes were written to the session scratchpad, never the repository;
+`git status` shows no stray file.
+
 ## 2026-09-21 (second run) — Monday · Feature
 
 **Subject**: **the approve and reject buttons were disabled on every real

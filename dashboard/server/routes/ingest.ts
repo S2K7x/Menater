@@ -117,8 +117,20 @@ export async function ingestRoutes(c: Ctx): Promise<boolean> {
         normalized,
         sourceName,
       );
-      // An alert received changes what the console must show.
-      invalidate();
+      /**
+       * An alert received changes what the console must show. ONE REFUSED AT
+       * THE DOOR DOES NOT — and it used to throw the cache away all the same.
+       *
+       * `invalidate()` drops `cache` AND `inFlight`, so the next reader waits
+       * on a full walk of the run journal and concurrent readers stop sharing
+       * one. These two paths sit outside the console's lock by design, which
+       * means an unauthenticated caller — answered 401, holding no credential
+       * at all — could spend the most expensive thing this console does, once
+       * per request and with no rate limit, on the single thread that also
+       * serves the alerts. The attacker sees a 401; the operator sees a
+       * console that got slow.
+       */
+      if (result.ran) invalidate();
 
       // N5 — WHICH LANE THIS ALERT SHOULD HAVE TAKEN, said in the reply.
       //
