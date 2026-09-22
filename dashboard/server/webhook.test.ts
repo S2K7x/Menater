@@ -182,3 +182,65 @@ describe('readAlertId', () => {
     }
   });
 });
+
+/* -------------------------------------------------------------------------
+ * `ran` — did this alert reach the engine
+ *
+ * The caller's real question is not the status code. `routes/ingest.ts` has to
+ * decide whether anything changed that the console must show, and it used to
+ * answer "always" — so every refusal at this door threw away the snapshot
+ * cache. See `refused-ingest.test.ts` for what that cost; these claim the flag
+ * itself, at the one place that knows.
+ *
+ * The status cannot stand in for it, in BOTH directions: three refusals here
+ * are `503` and the pipeline answers a `503` of its own when deduplication is
+ * unavailable, while a `400` for a missing field is an alert that DID run and
+ * is visible in the Tracking tab.
+ * ---------------------------------------------------------------------- */
+
+describe('`ran` — whether a run now exists', () => {
+  it('is false for each of the four refusals before the engine', async () => {
+    const closed = await handleAlert(deps({ mode: 'off' }), auth, alert);
+    expect([closed.status, closed.ran]).toEqual([503, false]);
+
+    const noSecret = await handleAlert(deps({ secret: '' }), auth, alert);
+    expect([noSecret.status, noSecret.ran]).toEqual([503, false]);
+
+    const wrongToken = await handleAlert(deps(), { 'x-soc-token': 'wrong' }, alert);
+    expect([wrongToken.status, wrongToken.ran]).toEqual([401, false]);
+
+    const noEngine = await handleAlert(deps({ engine: null }), auth, alert);
+    expect([noEngine.status, noEngine.ran]).toEqual([503, false]);
+  });
+
+  it('is true once the engine has been started, whatever the pipeline then decided', async () => {
+    const accepted = await handleAlert(deps(), auth, alert);
+    expect([accepted.status, accepted.ran]).toEqual([202, true]);
+
+    // A REJECTION IS A RUN. `01-Ingestion` answers 400 naming the missing
+    // fields, and that run is in the journal — a console that did not rebuild
+    // would not show it.
+    const rejected = await handleAlert(
+      deps({ engine: engine(undefined, async () => ({ status: 400, body: { status: 'rejected' } })) }),
+      auth,
+      alert,
+    );
+    expect([rejected.status, rejected.ran]).toEqual([400, true]);
+
+    // And so is a duplicate: the dedup table was written to.
+    const duplicate = await handleAlert(
+      deps({ engine: engine(undefined, async () => ({ status: 200, body: { status: 'duplicate' } })) }),
+      auth,
+      alert,
+    );
+    expect([duplicate.status, duplicate.ran]).toEqual([200, true]);
+  });
+
+  it('is true when the engine THREW, because it can throw after writing', async () => {
+    // Conservative on purpose, and it costs only a spare rebuild: a missed one
+    // shows a stale queue. This line is reachable only past the secret.
+    const boom = vi.fn(async () => { throw new Error('connection refused'); });
+    const r = await handleAlert(deps({ engine: engine(boom as never) }), auth, alert);
+    expect([r.status, r.ran]).toEqual([500, true]);
+  });
+});
