@@ -11,7 +11,7 @@ the console did its most expensive read for callers it had just refused at the
 ingestion endpoint, and the MCP cap counted one of the two paths to the same
 fourteen getters.
 
-**Result**: PR #PENDING (branch `claude/great-pascal-9u9p8e`).
+**Result**: PR #34 (branch `claude/great-pascal-9u9p8e`).
 
 **Note on the branch name.** `NIGHTLY.md` § 5 asks for
 `claude/nightly-YYYY-MM-DD-subject`; this session was handed
