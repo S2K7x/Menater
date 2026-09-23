@@ -28,7 +28,7 @@
  * ============================================================================
  */
 
-import { BodyTooLarge, humanBytes, json } from './respond.ts';
+import { BodyTooLarge, MalformedBody, humanBytes, json } from './respond.ts';
 import { UI_ROOT } from './env.ts';
 import type { Ctx, RouteGroup } from './routes/context.ts';
 import { authRoutes } from './routes/auth.ts';
@@ -144,6 +144,14 @@ export async function handleRequest(req: any, res: any): Promise<unknown> {
     // Nothing read it, so the sentence says nothing about what it held.
     if (err instanceof BodyTooLarge) {
       return json(res, 413, { error: am.bodyTooLarge(humanBytes(err.limit)) });
+    }
+    // A BODY WE COULD NOT READ IS ALSO THE SENDER'S TO FIX, and it is a 400:
+    // the bytes arrived, they are simply not a body this API can read. The
+    // answer names which of the two it was and nothing else — a verdict about
+    // the fields it should have carried would be a diagnosis nobody made.
+    if (err instanceof MalformedBody) {
+      return json(res, 400, {
+        error: err.reason === 'not_json' ? am.bodyNotJson : am.bodyNotAnObject });
     }
     // A database that does not answer is a 503 NAMING the database, not a 500
     // carrying pg's message — which on `ECONNREFUSED` is the empty string.

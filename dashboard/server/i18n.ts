@@ -191,6 +191,13 @@ export interface ServerMessages {
      * sentence says nothing about what it contained.
      */
     bodyTooLarge: (limit: string) => string;
+    /**
+     * The body arrived and does not parse. Same rule as the size refusal: it
+     * says what WE refused, never what the body should have held.
+     */
+    bodyNotJson: string;
+    /** The body parses and is not an object — `null`, a number, a string. */
+    bodyNotAnObject: string;
     replayUnknownCase: (id: string) => string;
     replayNoPayload: (id: string) => string;
     replaySent: (id: string) => string;
@@ -461,6 +468,16 @@ const EN: ServerMessages = {
     bodyTooLarge: (limit) =>
       `Request body over ${limit}. It was refused before being read, so nothing `
       + 'here is a statement about what it contained.',
+    // NOT "invalid": the sender is told which half is wrong, because the two
+    // have different fixes — a truncated or form-encoded body on one side, a
+    // client posting a bare value on the other. V8's own message names an
+    // offset in a buffer nobody else can see, so it is not forwarded.
+    bodyNotJson:
+      'The request body is not valid JSON. Nothing in it was read, so nothing '
+      + 'here is a statement about what it contained.',
+    bodyNotAnObject:
+      'The request body must be a JSON object. It parsed, and a value with no '
+      + 'fields is not something any route here can read.',
     replayUnknownCase: (id) =>
       `Case ${id} is outside the execution window: the console does not hold its original payload.`,
     replayNoPayload: (id) =>
