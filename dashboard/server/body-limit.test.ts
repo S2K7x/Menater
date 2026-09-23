@@ -37,7 +37,7 @@ process.env.MENATER_CONFIG = join(SCRATCH, 'config.json');
 
 // Imported AFTER the variable above: `CONFIG_PATH` is a module constant.
 const { handleRequest } = await import('./app.ts');
-const { BodyTooLarge, readBody, readBodyOrNull, humanBytes } = await import('./respond.ts');
+const { BodyTooLarge, MalformedBody, readBody, readBodyOrNull, humanBytes } = await import('./respond.ts');
 
 afterAll(() => rmSync(SCRATCH, { recursive: true, force: true }));
 
@@ -155,8 +155,10 @@ describe('readBodyOrNull', () => {
     // A socket that dies mid-transfer tells a route nothing it can pass on,
     // and the three callers that use this form depend on that staying true.
     await expect(readBodyOrNull(request(null, new Error('aborted')))).resolves.toBeNull();
-    // Unreadable JSON keeps its own answer: `{}`, decided inside `readBody`.
-    await expect(readBodyOrNull(request(Buffer.from('{oops')))).resolves.toEqual({});
+    // Unreadable JSON is NOT that case: it used to be answered `{}` here, and
+    // the three callers then described a body nobody had read. It travels on
+    // like the size refusal above — `malformed-body.test.ts` owns that half.
+    await expect(readBodyOrNull(request(Buffer.from('{oops')))).rejects.toBeInstanceOf(MalformedBody);
   });
 
   it('lets a refusal WE made travel on', async () => {

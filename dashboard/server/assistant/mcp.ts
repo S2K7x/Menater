@@ -50,7 +50,7 @@
 
 import { timingSafeEqual } from 'node:crypto';
 
-import { json, readBody } from '../respond.ts';
+import { MalformedBody, json, readBody } from '../respond.ts';
 import { getConfig } from '../config.ts';
 import { newFence } from './sanitize.ts';
 import { TOOLS, TOOL_BY_NAME, runTool } from './tools.ts';
@@ -761,9 +761,23 @@ export async function mcpRoutes(c: Ctx): Promise<boolean> {
     return json(res, 405, { error: 'Method not allowed.' }, { Allow: 'POST' });
   }
 
-  const body = await readBody(req);
-  if (body === null || typeof body !== 'object') {
-    return json(res, 400, rpcError(null, PARSE_ERROR, 'Body is not JSON.'));
+  /**
+   * A JSON-RPC client is owed a JSON-RPC answer, including about its own body.
+   * `readBody` refuses an unreadable one for the whole API — which is right,
+   * and outside this endpoint it leaves as a plain `{error}` — so the refusal
+   * is caught here and re-worded in the protocol the caller speaks. The two
+   * codes are not interchangeable: bytes that do not parse are -32700, and a
+   * body that parses to something other than a request object or a batch is a
+   * valid document making an invalid request, which is -32600.
+   */
+  let body: unknown;
+  try {
+    body = await readBody(req);
+  } catch (err) {
+    if (!(err instanceof MalformedBody)) throw err;
+    return err.reason === 'not_json'
+      ? json(res, 400, rpcError(null, PARSE_ERROR, 'Body is not JSON.'))
+      : json(res, 400, rpcError(null, INVALID_REQUEST, 'Body is not a JSON-RPC request object or batch.'));
   }
 
   // A batch: allowed by 2025-03-26, removed in 2025-06-18. Accepted either way

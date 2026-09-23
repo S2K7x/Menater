@@ -4,6 +4,134 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-23 — Wednesday · Tests and QA
+
+**Subject**: **a `catch` that turned an unreadable body into an empty one.**
+`readBody` mapped a `JSON.parse` failure to `{}` under a header vouching that
+this was safe "because EVERY route validates what it received". Nobody had
+measured the claim; it is false in both directions.
+
+**Result**: PR #36 (branch `claude/great-pascal-wwa1wt`).
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-wwa1wt` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Twenty-first entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject**: the calendar rule did not preempt — `main` was green
+(typecheck 0, 1268 passed | 1 skipped, build clean) and no pull request was
+open. Wednesday's brief is the failure paths and "hunt the places where a
+`catch` returns green"; this is the largest one left at the console's front
+door, and it is priority (2) as well: a real, reproducible bug, on the two
+routes that face the network and the four where an operator changes settings.
+
+**What was actually wrong**, measured through the real handler and then over
+real sockets against the running service under
+`node --experimental-strip-types`:
+
+| Request | before | after |
+|---|---|---|
+| `PUT /api/ingestion/policy`, body truncated mid-transfer | **200 + the settled policy** | `400`, "not valid JSON" |
+| `PUT /api/settings` / `/api/credentials` / `/api/workflows/variables`, same | **200 + the settled value** | `400`, same sentence |
+| `POST /api/ingest/generic` form-encoded by mistake, valid secret | ran the pipeline on an EMPTY alert, then a verdict naming `alert_id` | `400`, before the engine |
+| `POST /api/auth/login`, body truncated | **`401` "Wrong password." AND one of the eight attempts spent** | `400`, no attempt spent |
+| `POST /api/mcp`, body truncated | `-32600` "Not a JSON-RPC 2.0 request" | `-32700` parse error, in a JSON-RPC envelope |
+| `POST /api/diagnostics` / `/api/simulate`, body `null` | **`500 {"error":"Cannot read properties of null"}`** | `400`, "must be a JSON object" |
+| no body at all (the control) | `200` | `200` |
+| a body over 256 kB (the neighbour) | `413` | `413` |
+
+**What I learned**:
+
+- **The rule was already written, in the other half of the product.**
+  `VulnPipe/src/orchestration/webhook.ts` has its own `readBody`, and it
+  refuses both states by name, under a comment saying that silently
+  substituting `{}` *"would be filling a gap with a default, which this product
+  refuses"*. The console's reader did exactly that. Fifth recurrence of *the
+  mirror of a rule is not the rule* — and the way to find these is to read the
+  same primitive in the other half BEFORE writing the fix, because it also
+  answers the design questions: VulnPipe refuses arrays, the console must not
+  (the MCP batch is a top-level array).
+- **A guard can be written for a state it can never see.** `mcp.ts` opens with
+  `if (body === null || typeof body !== 'object') rpcError(PARSE_ERROR, 'Body
+  is not JSON.')`, written for a truncated body and unreachable for one,
+  because `{}` is an object. It caught `null` and scalars only. Dead code that
+  looks load-bearing, on the protocol surface.
+- **A body that PARSES is not therefore readable.** `null`, a number, a string:
+  valid JSON naming no field. Two routes read a field off them and answered a
+  500 carrying V8's message. That half was not in the subject I set out with; it
+  fell out of writing the probe, which is the argument for probing every shape
+  rather than the one in the report.
+- **The login throttle was the surprising cost.** Eight truncated bodies from
+  one address used to be eight wrong guesses: the console then refuses the
+  right password for five minutes. A client with a broken serialiser locks its
+  operator out, and every sentence on the way says "Wrong password".
+- **One existing assertion had to change, and it is not a weakening.**
+  `body-limit.test.ts` pinned `readBodyOrNull(…'{oops')` → `{}`. That line
+  states the contract this PR corrects, so it now asserts the rejection
+  instead; the claim the file legitimately owns — `null` for a stream that
+  FAILED — is untouched and still passes. Spelled out in the PR.
+
+**Do not redo**:
+
+- **Do not put the check in the routes.** Twenty-one callers, and the two that
+  matter most (the ingestion endpoints) are the ones that would be forgotten —
+  that is the "guard that names the door instead of the work" row of 09-22.
+  One reader, three answers.
+- **Do not map both states to one sentence.** Mutation M7: telling a sender
+  that `null` "is not valid JSON" is a sentence reachable from a state it does
+  not describe. `reason` exists for that and nothing else.
+- **Do not let the MCP endpoint fall to the generic 400** (M8). A JSON-RPC
+  client is owed a JSON-RPC envelope, and the two codes differ: -32700 for
+  bytes that do not parse, -32600 for valid JSON that is not a request object.
+- **Do not refuse the empty body** (M4) **or a top-level array** (M5). Both are
+  the plausible over-fix, both are caught, and the array one would silently
+  break every MCP batch.
+
+**Found and NOT fixed** — verified tonight, left alone deliberately:
+
+- **`POST /api/settings/test/database` still answers about a port the console
+  would never dial.** Already `ROADMAP.md` § 7, still the best-documented open
+  item there; untouched because it is its own subject.
+- The two older leads stand: the login throttle collapsing to one bucket behind
+  the tunnel (an architecture decision for a human), and `attempts` in
+  `auth.ts` never being swept.
+
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 1286 passed | 1 skipped   — was 1268 | 1 (+18, nothing skipped or weakened)
+npm run build       # dist built, CSS 88.54 kB, JS 474.75 kB (unchanged)
+```
+Checked **RED** first: 12 of the 18 tests in `server/malformed-body.test.ts`
+fail before the change, and the 6 that pass are exactly the boundary controls
+(no body, a valid save, the 413, the MCP batch, `null` for a failed stream, an
+absent body as `{}`) — they pass before AND after on purpose. Then nine
+mutations, one at a time, restoring in between:
+
+| Mutation | Result |
+|---|---|
+| parse failure answers `{}` again (the original defect) | RED — 10 |
+| the non-object check removed | RED — 5 |
+| `readBodyOrNull` swallows it into `null` | RED — 5 |
+| an EMPTY body refused too (the over-fix) | RED — 2 |
+| a top-level ARRAY refused too (the over-fix) | RED — 2 |
+| answered as a 500 | RED — 5 |
+| one sentence for both states | RED — 1 |
+| MCP lets it fall to the generic net | RED — 2 |
+| MCP calls both states a parse error | RED — 1 |
+
+The changed modules were also loaded and driven under
+`node --experimental-strip-types` — the runtime the service uses, where `tsc`
+and vitest both lie — and the service was started and dialled over real
+sockets on 127.0.0.1 (truncated body, form-encoded body, `null` body, and the
+valid controls). No model key, no database and no network egress needed.
+`VulnPipe/` is untouched — it is where the correct version of this reader
+already lived — so its suite was not run. Probes were written to the session
+scratchpad, never the repository; `git status` shows no stray file.
+
 ## 2026-09-22 (second run) — Tuesday · Security
 
 **Subject**: **a cap on BYTES, in front of a limit that is about DEPTH** —

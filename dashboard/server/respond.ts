@@ -152,16 +152,50 @@ export class BodyTooLarge extends Error {
 }
 
 /**
+ * A body that arrived and is not something any route can read.
+ *
+ * The sibling of `BodyTooLarge`, and it exists for the same reason: mapped to
+ * the empty object, this refusal was answered by whatever a route does when it
+ * is sent nothing. Four configuration saves read that as *change nothing* and
+ * reported success; the ingestion endpoints told an appliance its alert was
+ * missing the fields nobody could read; the login route called it a wrong
+ * password and spent one of the eight attempts.
+ *
+ * `reason` is carried because the two states are not one: bytes that do not
+ * parse are not valid JSON, and `null` or a number is valid JSON that names no
+ * field. One sentence for both would be reachable from a state it does not
+ * describe.
+ *
+ * No parameter property: the service runs under
+ * `node --experimental-strip-types`, which refuses that syntax at startup.
+ */
+export class MalformedBody extends Error {
+  /** `not_json`: the bytes do not parse. `not_an_object`: they parse to a scalar or null. */
+  reason: 'not_json' | 'not_an_object';
+
+  constructor(reason: 'not_json' | 'not_an_object') {
+    super(reason === 'not_json' ? 'request body is not valid JSON' : 'request body is not a JSON object');
+    this.reason = reason;
+  }
+}
+
+/**
  * Reads a JSON request body.
  *
- * An unreadable body yields `{}` rather than throwing. That holds only because
- * EVERY route validates what it received — the rule routes shape the input
- * before reading it, the ingestion routes reject an alert whose identity
- * fields are missing, and both name what was wrong. A route that skipped that
- * validation would silently act on an empty object.
+ * Three answers, and they are three facts. NOTHING ARRIVED is `{}` — a dozen
+ * routes take no body, and that must stay true. Bytes that arrived and cannot
+ * be read are a refusal WE made, so they throw and the answer names what was
+ * wrong with them. A body over the cap throws first, because its refusal is
+ * about a size nobody read past.
  *
- * A body over the cap is the one thing that does throw: there is no validation
- * to fall back on, because nothing was read.
+ * It used to answer `{}` for the middle case too, under a header saying that
+ * held "because EVERY route validates what it received". Measured against the
+ * real handler, that was false in both directions: the routes that do not
+ * validate reported a save nobody made, and the routes that do described a
+ * body nobody could read. See `malformed-body.test.ts`.
+ *
+ * An ARRAY is returned as itself: `/api/mcp` takes a JSON-RPC batch, and that
+ * is the one top-level array this API accepts.
  */
 export async function readBody(req: any): Promise<any> {
   const chunks: Buffer[] = [];
@@ -177,11 +211,16 @@ export async function readBody(req: any): Promise<any> {
     chunks.push(chunk as Buffer);
   }
   if (!chunks.length) return {};
+  let parsed: unknown;
   try {
-    return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    parsed = JSON.parse(Buffer.concat(chunks).toString('utf8'));
   } catch {
-    return {};
+    // V8's own message names a position in a buffer the sender cannot see, so
+    // it is not forwarded: the class carries the fact, the route the sentence.
+    throw new MalformedBody('not_json');
   }
+  if (parsed === null || typeof parsed !== 'object') throw new MalformedBody('not_an_object');
+  return parsed;
 }
 
 /**
@@ -194,12 +233,16 @@ export async function readBody(req: any): Promise<any> {
  * the sender was then told its alert was missing fields that were present and
  * merely unread. Only the unreadable body is `null`; a refusal we made travels
  * on to the one place that can word it.
+ *
+ * `null` therefore means ONE thing: the stream itself failed — a socket that
+ * died mid-transfer, which tells a route nothing it can pass on. Both of our
+ * own refusals, the size and the shape, travel.
  */
 export async function readBodyOrNull(req: any): Promise<any | null> {
   try {
     return await readBody(req);
   } catch (err) {
-    if (err instanceof BodyTooLarge) throw err;
+    if (err instanceof BodyTooLarge || err instanceof MalformedBody) throw err;
     return null;
   }
 }
