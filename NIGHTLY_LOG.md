@@ -11,7 +11,7 @@ they were — they are memory about live code, and rewriting them would lose it.
 this was safe "because EVERY route validates what it received". Nobody had
 measured the claim; it is false in both directions.
 
-**Result**: PR #PENDING (branch `claude/great-pascal-wwa1wt`).
+**Result**: PR #36 (branch `claude/great-pascal-wwa1wt`).
 
 **Note on the branch name.** `NIGHTLY.md` § 5 asks for
 `claude/nightly-YYYY-MM-DD-subject`; this session was handed
