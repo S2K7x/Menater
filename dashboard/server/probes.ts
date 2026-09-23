@@ -10,7 +10,18 @@ import { createConnection } from 'node:net';
 
 import { fetchWithDeadline } from './http.ts';
 
-/** TCP reachability test. With no Postgres driver, this is what can be proven. */
+/**
+ * TCP reachability test. With no Postgres driver, this is what can be proven.
+ *
+ * `port` MUST already be a whole number in [1, 65535]: `createConnection`
+ * throws `ERR_SOCKET_BAD_PORT` SYNCHRONOUSLY, from inside the executor below,
+ * for anything else. That check belongs to the CALLER and not here, because
+ * the two questions have different answers: "is something listening" is a
+ * verdict about the network and leaves as a 200, "that is not a port" is a
+ * verdict about the request and leaves as a 400. Guarding it here would have
+ * to return `ok: false`, which is the first answer given to the second
+ * question — the confident wrong diagnosis this function was fixed for.
+ */
 export function tcpProbe(host: string, port: number, timeoutMs = 5000): Promise<{ ok: boolean; detail: string; ms: number }> {
   return new Promise((resolve) => {
     const started = Date.now();
