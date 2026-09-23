@@ -4,6 +4,134 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-23 (second run) — Wednesday · Tests and QA
+
+**Subject**: **a diagnostic that answered about a port it had not dialled.**
+`POST /api/settings/test/database` handed `Number(body.port ?? d.port)` straight
+to `tcpProbe`. `ROADMAP.md` § 7 had it written down and the previous run of this
+same day called it *"the best-documented open item there"* and left it alone as
+its own subject. It is that subject.
+
+**Result**: PR #37 (branch `claude/great-pascal-xs1db4`).
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-xs1db4` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Twenty-second entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject**: the calendar rule did not preempt — `main` was green at
+`dfce51f` (typecheck 0, 1286 passed | 1 skipped, build clean) and no pull
+request was open. Wednesday's brief is the failure paths and *"a failure must
+never look like a success"*; this route had one of each, on the button an
+operator presses precisely when they are trying to find out whether the database
+is the problem. Priority (2) as well: a real, reproducible bug.
+
+**What was actually wrong**, measured through the real handler, then over real
+sockets against the service under `node --experimental-strip-types`:
+
+| Request | before | after |
+|---|---|---|
+| `port: 0` (what the cleared `type="number"` field sends) | **200** *« Connection refused: nothing is listening on this port »* | `400`, names the value and the rule |
+| `port: 70000` | **500** `{"error":"Port should be >= 0 and < 65536. Received type number (70000)."}` + a stack under `[menater] uncaught error` | `400`, same sentence |
+| `port: -1`, `5432.5`, `"abc"` | **500**, same shape | `400`, same sentence |
+| `port: 4477` with a listener on it (the control) | `200 ok:true` + caveat | unchanged |
+| `port: 5432` with nothing on it (the control) | `200 ok:false` | unchanged |
+| no `port` at all (the control) | falls back to the configured one | unchanged |
+
+**What I learned**:
+
+- **The clamp existed and was on the wrong screen.** `saveConfig` clamps the
+  same field into `[1, 65535]`, so SAVE was safe and only the DIAGNOSTIC was
+  not — the screen you reach for when something is already wrong. Worth
+  generalising: when a rule exists once, ask which of the two callers is the one
+  under stress, because that is the one that will be missing it.
+- **Node does not name a port it never dialled.** Probed: `connect(0)` fails
+  `ECONNREFUSED` with the message `connect ECONNREFUSED 127.0.0.1` — **no
+  `:0`** — while `connect(5432)` gives `connect ECONNREFUSED 127.0.0.1:5432`.
+  The absent port is the proof that the sentence *« nothing is listening on this
+  port »* described a state that had not happened. A detail you only get by
+  running it.
+- **`createConnection` throws synchronously, from inside the promise
+  executor.** That is why nothing caught it: `tcpProbe` looks like a function
+  that resolves with a verdict, and for four input shapes it rejects with a
+  `RangeError` instead. `ERR_SOCKET_BAD_PORT` fires for `> 65535`, `< 0`, a
+  fraction AND `NaN` — probed, one list, one sentence.
+- **The guard does not belong inside `tcpProbe`,** and that was the real design
+  question. It could only answer `ok: false` there, which is the network
+  sentence again — the confident wrong diagnosis, rebuilt inside its own fix.
+  "Is something listening" is a verdict about the network and keeps its 200;
+  "that is not a port" is a verdict about the request and leaves as a 400. The
+  function's header now names the precondition instead, because its own opening
+  comment promises *"a sentence rather than a stack trace"* and that was false.
+
+**Do not redo**:
+
+- **Do not clamp** (mutation M2). It is the plausible fix, it is four characters
+  shorter, and it makes the console probe 65535 for somebody who typed 70000 —
+  then report the result as a diagnosis. Refuse, and say what was received.
+- **Do not answer at 200 with `ok: false`** (M7). It keeps the shape the client
+  already handles and it files a sender fault as a network verdict, which is the
+  whole defect.
+- **Do not coerce every shape** (M5). `Number(true)` is 1 and `Number('')` is 0:
+  both legal ports nobody named. The route accepts a number or a string and
+  refuses the rest.
+- **Do not assert that some fixed port is closed.** The tests start their own
+  listener on a port the OS hands out, and the "closed port" case binds one and
+  releases it. Asserting `5432` is free is a claim about the machine running the
+  suite — the 09-21 `persistent-cache.test.ts` lesson.
+
+**Found and NOT fixed** — verified tonight, left alone deliberately:
+
+- **`String(given)` is echoed back unclipped**, matching `variables.notANumber`
+  one route over. Bounded by the 256 kB body cap, behind the console lock, and
+  echoed only to the caller who sent it. Inventing a second bound here is two
+  spellings of one number, which is how the two start disagreeing.
+- **The port input has no `min`/`max`.** Deliberate: a `type="number"` field
+  accepts out-of-range typing anyway, so the attribute would hide nothing and
+  the contract belongs on the route.
+- The three older leads stand: `sweepExpiredWaits()` / `engine.resume()` have no
+  scheduler (§ 7, and the biggest open item left there — the approval TIMEOUT
+  never fires), the login throttle collapsing to one bucket behind the tunnel,
+  and `attempts` in `auth.ts` never being swept.
+
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 1295 passed | 1 skipped   — was 1286 | 1 (+9, nothing skipped or weakened)
+npm run build       # dist built, CSS 88.54 kB, JS 474.75 kB (unchanged)
+```
+Checked **RED** first: 4 of the 8 tests in `server/database-probe.test.ts` fail
+before the change — on the status (`expected 200 to be 400`, then the three
+500s) and not on a missing catalogue key — and the 4 that pass are exactly the
+boundary controls (an open port, a closed port, the configured fallback, the
+host check), which pass before AND after on purpose. The new test in
+`api-named-failures.test.ts` fails with *"promise resolved instead of
+rejecting"*. Then nine mutations, one at a time, restoring in between:
+
+| Mutation | Result |
+|---|---|
+| no guard at all (the original defect) | RED — 4 |
+| clamp instead of refuse | RED — 4 |
+| zero allowed (`port < 0`) | RED — 2 |
+| fractional allowed (no `isInteger`) | RED — 1 |
+| any shape coerced (`Number(given)`) | RED — 1 |
+| answered as a 500 | RED — 4 |
+| answered at 200, like a network verdict | RED — 3 |
+| a valid port refused too (the over-fix) | RED — 3 |
+| the sentence talks about the network again | RED — 2 |
+
+Then driven under `node --experimental-strip-types` — the runtime the service
+uses, where `tsc` and vitest both lie — and over real sockets against
+`npm run serve` on 127.0.0.1:4477, with a listener of the test's own on the port
+that must answer `ok: true`. Zero occurrences of `uncaught error` in the server
+log across the whole pass. No model key, no database and no network egress
+needed. `VulnPipe/` is untouched, so its suite was not run. Probes were written
+to the session scratchpad, never the repository; `git status` shows no stray
+file.
+
 ## 2026-09-23 — Wednesday · Tests and QA
 
 **Subject**: **a `catch` that turned an unreadable body into an empty one.**

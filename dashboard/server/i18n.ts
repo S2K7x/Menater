@@ -159,6 +159,12 @@ export interface ServerMessages {
     /** Says WHAT is wrong with the inventory, never just "invalid". */
     inventoryRefused: (problems: string[]) => string;
     hostMissing: string;
+    /**
+     * Refuses the REQUEST, and says nothing about the network: the value named
+     * no port, so nothing was dialled and there is nothing to report about a
+     * machine.
+     */
+    portInvalid: (value: string) => string;
     portCaveat: string;
     caseNotFound: (id: string) => string;
     ruleNotFound: (id: string) => string;
@@ -389,6 +395,11 @@ const EN: ServerMessages = {
     // round trip per line is how somebody gives up on the screen.
     inventoryRefused: (problems) => `Service inventory not saved. ${problems.join(' ')}`,
     hostMissing: 'Host missing.',
+    // "nothing was dialled" is the half this sentence exists for: the old
+    // answer was "nothing is listening on this port", which sent somebody to
+    // look at a database the console had never contacted.
+    portInvalid: (value) =>
+      `"${value}" is not a port number: nothing was dialled. Give a whole number between 1 and 65535.`,
     portCaveat:
       'The port answers. That verifies neither the credentials nor that the tables exist \u2014 run the connectivity test on the Health tab for that.',
     caseNotFound: (id) => `Case ${id} not found.`,

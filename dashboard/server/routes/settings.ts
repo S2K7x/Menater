@@ -105,8 +105,35 @@ export async function settingsRoutes(c: Ctx): Promise<boolean> {
       const body = await readBody(req);
       const d = getConfig().database;
       const host = String(body.host ?? d.host).trim();
-      const port = Number(body.port ?? d.port);
+      const given = body.port ?? d.port;
+      /**
+       * THE PORT IS CHECKED BEFORE ANYTHING IS DIALLED, and refused rather
+       * than clamped.
+       *
+       * `saveConfig` clamps the same value into [1, 65535], so the rule
+       * existed — on the screen an operator uses when things already work. The
+       * diagnostic, pressed when they do not, had none, and answered two
+       * different wrong things. `0` — what `Number('')` gives when this
+       * `type="number"` field is cleared — reached `connect()`, came back
+       * `ECONNREFUSED` and was worded "nothing is listening on this port": a
+       * verdict about a machine, for a value that named no port. `70000`,
+       * `-1` and `5432.5` made `createConnection` throw
+       * `ERR_SOCKET_BAD_PORT` synchronously inside `tcpProbe`'s promise
+       * executor, which nothing catches, so the route fell to the last net in
+       * `app.ts` — a 500 carrying Node's own sentence, for a sender fault.
+       *
+       * Clamping here would be the plausible wrong fix: probing 65535 because
+       * somebody typed 70000 answers a question nobody asked, and the answer
+       * would look like a diagnosis.
+       *
+       * A shape the interface cannot send is not coerced either: `Number(true)`
+       * is 1 and `Number('')` is 0, both legal ports nobody named.
+       */
+      const port = typeof given === 'number' || typeof given === 'string' ? Number(given) : NaN;
       if (!host) return json(res, 400, { ok: false, detail: am.hostMissing });
+      if (!Number.isInteger(port) || port < 1 || port > 65535) {
+        return json(res, 400, { ok: false, detail: am.portInvalid(String(given)) });
+      }
       const probe = await tcpProbe(host, port);
       return json(res, 200, {
         ok: probe.ok,
