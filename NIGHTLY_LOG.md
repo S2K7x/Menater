@@ -12,7 +12,7 @@ to `tcpProbe`. `ROADMAP.md` § 7 had it written down and the previous run of thi
 same day called it *"the best-documented open item there"* and left it alone as
 its own subject. It is that subject.
 
-**Result**: PR #TBD (branch `claude/great-pascal-xs1db4`).
+**Result**: PR #37 (branch `claude/great-pascal-xs1db4`).
 
 **Note on the branch name.** `NIGHTLY.md` § 5 asks for
 `claude/nightly-YYYY-MM-DD-subject`; this session was handed
