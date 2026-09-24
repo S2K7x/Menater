@@ -315,17 +315,12 @@ export class PgRunStore implements RunStore {
   }
 
   async openWaitOfRun(runId: string): Promise<WaitRecord | null> {
-    // `soc_run_wait_run_idx` has existed since the schema was written: this
-    // lookup was planned for, and had simply never been written.
-    //
-    // `resumed_at IS NULL` is part of the ANSWER, not an optimisation: a
-    // settled wait must come back `null`, so that the route's 404 « that
-    // approval is not open any more » is true on the occasion it is shown.
+    // `soc_run_wait_run_idx` covers the lookup. `resumed_at IS NULL` is the
+    // whole contract: a settled wait is not an open question, and answering it
+    // twice would be the one thing `resolveWait` exists to make impossible.
     const rows = await this.q(
-      `SELECT * FROM soc_run_wait
-       WHERE run_id = $1 AND resumed_at IS NULL
-       ORDER BY deadline
-       LIMIT 1`,
+      `SELECT * FROM soc_run_wait WHERE run_id = $1 AND resumed_at IS NULL
+         ORDER BY created_at LIMIT 1`,
       [runId],
     );
     return rows[0] ? toWait(rows[0]) : null;

@@ -6,146 +6,818 @@ they were — they are memory about live code, and rewriting them would lose it.
 
 ## 2026-09-24 — Thursday · Bugs and technical debt
 
-**Subject**: **the console could not answer an approval at all** — `ROADMAP.md`
-§ 7, the row the 09-21 night opened and called "the obvious next night". Both
-approval buttons were disabled on every real case, and the identifier the card
-does hold answered 404 with a sentence that was false in every clause.
+**Subject**: **the approval timeout never fired.** `ROADMAP.md` § 7 carried it
+as *« Nothing calls `sweepExpiredWaits()` or `engine.resume()` outside the
+tests »*, and the previous two runs both named it the biggest open item left
+there without taking it. It is that item, and only its first half.
 
-**Result**: PR #39 (branch `claude/great-pascal-ikuc7f`).
+**Result**: PR #38 (branch `claude/great-pascal-z2l69m`).
 
 **Note on the branch name.** `NIGHTLY.md` § 5 asks for
 `claude/nightly-YYYY-MM-DD-subject`; this session was handed
-`claude/great-pascal-ikuc7f` with an instruction not to push anywhere else, as
+`claude/great-pascal-z2l69m` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Twenty-third entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject**: the calendar rule did not preempt — `main` was green at
+`ca6d123` (typecheck 0, 1295 passed | 1 skipped, build clean) and no pull
+request was open. Thursday's reservoir is § 7, and this was priority (3), an
+explicit limitation from the roadmap, with (2) inside it: a reproducible bug
+found while wiring it.
+
+**What was actually wrong.** Everything around the timeout was built and
+correct, and none of it had ever run:
+
+| Piece | State before |
+|---|---|
+| `Engine.sweepExpiredWaits()` | correct, tested, **callers: `engine.test.ts` and `integration.test.ts`, nothing else** |
+| the `timeout` port → `escalate-timeout` in `04-Action-Routing` | wired, and asserted by `routing.test.ts` |
+| `cases.ts` reading the `timeout` node → `outcome: 'timeout_escalated'` | written, and unreachable |
+| `soc_run_wait_pending_idx ON soc_run_wait (deadline) WHERE resumed_at IS NULL` | **a partial index built for a periodic sweep that was never scheduled** |
+| a scheduler in the process | did not exist. `setInterval` appeared in `ingest/poller.ts` and `auth.ts`, nowhere else |
+
+So the approval request posted to a human promised *« no answer within 30
+minutes and the alert is escalated »*, silence did nothing, and the run stayed
+`waiting` for ever. Because `awaiting` short-circuits the verdict ladder in
+`cases.ts`, the chain never became `stalled` either: an alert nobody answered
+was invisible on the one tab built to show what the queue hides.
+
+**What I learned**:
+
+- **The tell is infrastructure built for a caller nobody wrote.** The partial
+  index is the loudest one here, and it is in `sql/`, not in the code anybody
+  was reading. Worth looking for elsewhere: a schema, a port, a branch or a
+  reader that exists for a trigger that does not.
+- **A test that calls the thing cannot tell you whether anything else does.**
+  Every test of that sweep invoked it by hand and passed for its whole life. The
+  guard that closes it reads `server/api.ts` as text — the module cannot be
+  imported, importing it opens a port, which is why `app.ts` exists — **with
+  comments stripped**, or the paragraph above the call vouches for a call
+  somebody removed.
+- **Wiring a guard makes its own defects live.** The sweep loop had no fault
+  isolation. Measured on `MemoryRunStore`, driving the real `resumeWait` inside
+  the pass: a human answering one approval in the instant between
+  `expiredWaits` listing it and `resolveWait` settling it threw *« that wait
+  was already settled »* out of the WHOLE sweep — `run-2` stayed `waiting`,
+  zero escalations, and the rejection reached the caller, which from a timer
+  terminates a Node 22 process.
+- **The `settledByUs` flag is the non-obvious half of that fix**, and the test
+  found it, not the reading. `resolveWait` runs before `endStep`, so re-reading
+  the wait after a LATER failure finds a `resumedAt` this pass wrote and files
+  a real failure as a normal race. The first version did exactly that and went
+  green on the isolation test while failing the reporting one.
+- **`PgRunStore.q()` already describes every query failure**, at one choke
+  point, so the `pg`-empty-message trap does not reach the sweep. Booting the
+  console with no database printed *« approval sweep failed — Database
+  (SELECT): connect ECONNREFUSED 127.0.0.1:5432 »*. The first fix ran that
+  through `describePgError` a second time, which prints one cause under two
+  prefixes. **The mirror of a rule is sometimes the rule already applied.**
+
+**Do not redo**:
+
+- **Do not wire `engine.resume()` the same way.** It is the other half of the
+  § 7 row and I left it open on purpose: `claimRun` is
+  `WHERE id = $1 AND (owner IS NULL OR owner = $2)`, `drive()` releases the
+  claim on every terminal path, and nothing releases it for a process that
+  DIED — so `soc_run.owner` stays `console-<dead pid>` for ever and a restarted
+  console's claim is refused. The run is skipped, silently, which is exactly
+  the recovery it would be wired to do. `engine.test.ts` already asserts that
+  refusal (*« ne reprend pas une exécution déjà prise par un autre
+  processus »*), and its recovery tests only pass because
+  `MemoryRunStore.simulateCrash()` clears the locks — which Postgres cannot do
+  by itself. The missing piece is not a `setInterval`, it is an answer to *when
+  is a claim stale*, and a wrong answer replays a `write` step.
+- **Do not describe the sweep's errors again** (mutation, then measured on the
+  real boot). See above.
+- **Do not make the interval a setting.** It bounds how LATE an escalation can
+  be, not how long the wait is; the wait is `approval.timeoutMinutes`, already
+  editable. A second number would be two spellings of one policy.
+- **Do not drop the `inFlight` guard.** Two sweeps over one run replay its
+  steps. The mutation hangs the test on a 5 s timeout rather than failing an
+  assertion — a real, if ugly, red.
+
+**Found and NOT fixed** — verified tonight, left alone deliberately:
+
+- A backlog of expired waits is swept **serially and unbounded** in one tick.
+  It makes progress and cannot pile up (one sweep at a time), so a long outage
+  costs a long first tick rather than a lost escalation. Bounding it is a
+  policy decision about how fast a console may post to Slack, and nobody has
+  asked the question.
+- `announceError` dedups against the LAST message only, so two failing runs
+  with different causes are both reported every tick. That is arguably right —
+  different causes deserve saying — and it is bounded by the number of expired
+  waits.
+- The three older leads stand: the login throttle collapsing to one bucket
+  behind the tunnel, `attempts` in `auth.ts` never being swept, and the ~90
+  French strings inside `server/engine/`.
+
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 1309 passed | 1 skipped  — was 1295 | 1 (+14, nothing skipped or weakened)
+npm run build       # dist built, CSS 88.54 kB, JS 474.75 kB (unchanged)
+```
+Plus the real process, under `node --experimental-strip-types` — the runtime
+that breaks this repository at startup only, where no test can see it:
+```
+[menater] approval deadlines swept every 60s
+[menater] approval sweep failed — Database (SELECT): connect ECONNREFUSED 127.0.0.1:5432
+```
+140 seconds, i.e. **two** sweep periods, with no database behind it: the
+failure is announced ONCE. Ten mutations, one at a time, restoring in between:
+
+| Mutation | Result |
+|---|---|
+| the boot line removed (the original defect) | RED — 1 |
+| `stopWaitScheduler()` removed from the shutdown path | RED — 1 |
+| the sweep loop as it was, no fault isolation | RED — 2 |
+| `settledByUs` dropped | RED — 1 |
+| `tick()` lets the rejection escape | RED — 2 |
+| no `inFlight` guard | RED — 1 (by timeout) |
+| `unref` dropped | RED — 1 |
+| engine resolved once at construction instead of per tick | RED — 1 |
+| failure reported every tick (the permanent alarm) | RED — 1 |
+| `start()` not idempotent | RED — 1 |
+
+## 2026-09-23 (second run) — Wednesday · Tests and QA
+
+**Subject**: **a diagnostic that answered about a port it had not dialled.**
+`POST /api/settings/test/database` handed `Number(body.port ?? d.port)` straight
+to `tcpProbe`. `ROADMAP.md` § 7 had it written down and the previous run of this
+same day called it *"the best-documented open item there"* and left it alone as
+its own subject. It is that subject.
+
+**Result**: PR #37 (branch `claude/great-pascal-xs1db4`).
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-xs1db4` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Twenty-second entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject**: the calendar rule did not preempt — `main` was green at
+`dfce51f` (typecheck 0, 1286 passed | 1 skipped, build clean) and no pull
+request was open. Wednesday's brief is the failure paths and *"a failure must
+never look like a success"*; this route had one of each, on the button an
+operator presses precisely when they are trying to find out whether the database
+is the problem. Priority (2) as well: a real, reproducible bug.
+
+**What was actually wrong**, measured through the real handler, then over real
+sockets against the service under `node --experimental-strip-types`:
+
+| Request | before | after |
+|---|---|---|
+| `port: 0` (what the cleared `type="number"` field sends) | **200** *« Connection refused: nothing is listening on this port »* | `400`, names the value and the rule |
+| `port: 70000` | **500** `{"error":"Port should be >= 0 and < 65536. Received type number (70000)."}` + a stack under `[menater] uncaught error` | `400`, same sentence |
+| `port: -1`, `5432.5`, `"abc"` | **500**, same shape | `400`, same sentence |
+| `port: 4477` with a listener on it (the control) | `200 ok:true` + caveat | unchanged |
+| `port: 5432` with nothing on it (the control) | `200 ok:false` | unchanged |
+| no `port` at all (the control) | falls back to the configured one | unchanged |
+
+**What I learned**:
+
+- **The clamp existed and was on the wrong screen.** `saveConfig` clamps the
+  same field into `[1, 65535]`, so SAVE was safe and only the DIAGNOSTIC was
+  not — the screen you reach for when something is already wrong. Worth
+  generalising: when a rule exists once, ask which of the two callers is the one
+  under stress, because that is the one that will be missing it.
+- **Node does not name a port it never dialled.** Probed: `connect(0)` fails
+  `ECONNREFUSED` with the message `connect ECONNREFUSED 127.0.0.1` — **no
+  `:0`** — while `connect(5432)` gives `connect ECONNREFUSED 127.0.0.1:5432`.
+  The absent port is the proof that the sentence *« nothing is listening on this
+  port »* described a state that had not happened. A detail you only get by
+  running it.
+- **`createConnection` throws synchronously, from inside the promise
+  executor.** That is why nothing caught it: `tcpProbe` looks like a function
+  that resolves with a verdict, and for four input shapes it rejects with a
+  `RangeError` instead. `ERR_SOCKET_BAD_PORT` fires for `> 65535`, `< 0`, a
+  fraction AND `NaN` — probed, one list, one sentence.
+- **The guard does not belong inside `tcpProbe`,** and that was the real design
+  question. It could only answer `ok: false` there, which is the network
+  sentence again — the confident wrong diagnosis, rebuilt inside its own fix.
+  "Is something listening" is a verdict about the network and keeps its 200;
+  "that is not a port" is a verdict about the request and leaves as a 400. The
+  function's header now names the precondition instead, because its own opening
+  comment promises *"a sentence rather than a stack trace"* and that was false.
+
+**Do not redo**:
+
+- **Do not clamp** (mutation M2). It is the plausible fix, it is four characters
+  shorter, and it makes the console probe 65535 for somebody who typed 70000 —
+  then report the result as a diagnosis. Refuse, and say what was received.
+- **Do not answer at 200 with `ok: false`** (M7). It keeps the shape the client
+  already handles and it files a sender fault as a network verdict, which is the
+  whole defect.
+- **Do not coerce every shape** (M5). `Number(true)` is 1 and `Number('')` is 0:
+  both legal ports nobody named. The route accepts a number or a string and
+  refuses the rest.
+- **Do not assert that some fixed port is closed.** The tests start their own
+  listener on a port the OS hands out, and the "closed port" case binds one and
+  releases it. Asserting `5432` is free is a claim about the machine running the
+  suite — the 09-21 `persistent-cache.test.ts` lesson.
+
+**Found and NOT fixed** — verified tonight, left alone deliberately:
+
+- **`String(given)` is echoed back unclipped**, matching `variables.notANumber`
+  one route over. Bounded by the 256 kB body cap, behind the console lock, and
+  echoed only to the caller who sent it. Inventing a second bound here is two
+  spellings of one number, which is how the two start disagreeing.
+- **The port input has no `min`/`max`.** Deliberate: a `type="number"` field
+  accepts out-of-range typing anyway, so the attribute would hide nothing and
+  the contract belongs on the route.
+- The three older leads stand: `sweepExpiredWaits()` / `engine.resume()` have no
+  scheduler (§ 7, and the biggest open item left there — the approval TIMEOUT
+  never fires), the login throttle collapsing to one bucket behind the tunnel,
+  and `attempts` in `auth.ts` never being swept.
+
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 1295 passed | 1 skipped   — was 1286 | 1 (+9, nothing skipped or weakened)
+npm run build       # dist built, CSS 88.54 kB, JS 474.75 kB (unchanged)
+```
+Checked **RED** first: 4 of the 8 tests in `server/database-probe.test.ts` fail
+before the change — on the status (`expected 200 to be 400`, then the three
+500s) and not on a missing catalogue key — and the 4 that pass are exactly the
+boundary controls (an open port, a closed port, the configured fallback, the
+host check), which pass before AND after on purpose. The new test in
+`api-named-failures.test.ts` fails with *"promise resolved instead of
+rejecting"*. Then nine mutations, one at a time, restoring in between:
+
+| Mutation | Result |
+|---|---|
+| no guard at all (the original defect) | RED — 4 |
+| clamp instead of refuse | RED — 4 |
+| zero allowed (`port < 0`) | RED — 2 |
+| fractional allowed (no `isInteger`) | RED — 1 |
+| any shape coerced (`Number(given)`) | RED — 1 |
+| answered as a 500 | RED — 4 |
+| answered at 200, like a network verdict | RED — 3 |
+| a valid port refused too (the over-fix) | RED — 3 |
+| the sentence talks about the network again | RED — 2 |
+
+Then driven under `node --experimental-strip-types` — the runtime the service
+uses, where `tsc` and vitest both lie — and over real sockets against
+`npm run serve` on 127.0.0.1:4477, with a listener of the test's own on the port
+that must answer `ok: true`. Zero occurrences of `uncaught error` in the server
+log across the whole pass. No model key, no database and no network egress
+needed. `VulnPipe/` is untouched, so its suite was not run. Probes were written
+to the session scratchpad, never the repository; `git status` shows no stray
+file.
+
+## 2026-09-23 — Wednesday · Tests and QA
+
+**Subject**: **a `catch` that turned an unreadable body into an empty one.**
+`readBody` mapped a `JSON.parse` failure to `{}` under a header vouching that
+this was safe "because EVERY route validates what it received". Nobody had
+measured the claim; it is false in both directions.
+
+**Result**: PR #36 (branch `claude/great-pascal-wwa1wt`).
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-wwa1wt` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Twenty-first entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject**: the calendar rule did not preempt — `main` was green
+(typecheck 0, 1268 passed | 1 skipped, build clean) and no pull request was
+open. Wednesday's brief is the failure paths and "hunt the places where a
+`catch` returns green"; this is the largest one left at the console's front
+door, and it is priority (2) as well: a real, reproducible bug, on the two
+routes that face the network and the four where an operator changes settings.
+
+**What was actually wrong**, measured through the real handler and then over
+real sockets against the running service under
+`node --experimental-strip-types`:
+
+| Request | before | after |
+|---|---|---|
+| `PUT /api/ingestion/policy`, body truncated mid-transfer | **200 + the settled policy** | `400`, "not valid JSON" |
+| `PUT /api/settings` / `/api/credentials` / `/api/workflows/variables`, same | **200 + the settled value** | `400`, same sentence |
+| `POST /api/ingest/generic` form-encoded by mistake, valid secret | ran the pipeline on an EMPTY alert, then a verdict naming `alert_id` | `400`, before the engine |
+| `POST /api/auth/login`, body truncated | **`401` "Wrong password." AND one of the eight attempts spent** | `400`, no attempt spent |
+| `POST /api/mcp`, body truncated | `-32600` "Not a JSON-RPC 2.0 request" | `-32700` parse error, in a JSON-RPC envelope |
+| `POST /api/diagnostics` / `/api/simulate`, body `null` | **`500 {"error":"Cannot read properties of null"}`** | `400`, "must be a JSON object" |
+| no body at all (the control) | `200` | `200` |
+| a body over 256 kB (the neighbour) | `413` | `413` |
+
+**What I learned**:
+
+- **The rule was already written, in the other half of the product.**
+  `VulnPipe/src/orchestration/webhook.ts` has its own `readBody`, and it
+  refuses both states by name, under a comment saying that silently
+  substituting `{}` *"would be filling a gap with a default, which this product
+  refuses"*. The console's reader did exactly that. Fifth recurrence of *the
+  mirror of a rule is not the rule* — and the way to find these is to read the
+  same primitive in the other half BEFORE writing the fix, because it also
+  answers the design questions: VulnPipe refuses arrays, the console must not
+  (the MCP batch is a top-level array).
+- **A guard can be written for a state it can never see.** `mcp.ts` opens with
+  `if (body === null || typeof body !== 'object') rpcError(PARSE_ERROR, 'Body
+  is not JSON.')`, written for a truncated body and unreachable for one,
+  because `{}` is an object. It caught `null` and scalars only. Dead code that
+  looks load-bearing, on the protocol surface.
+- **A body that PARSES is not therefore readable.** `null`, a number, a string:
+  valid JSON naming no field. Two routes read a field off them and answered a
+  500 carrying V8's message. That half was not in the subject I set out with; it
+  fell out of writing the probe, which is the argument for probing every shape
+  rather than the one in the report.
+- **The login throttle was the surprising cost.** Eight truncated bodies from
+  one address used to be eight wrong guesses: the console then refuses the
+  right password for five minutes. A client with a broken serialiser locks its
+  operator out, and every sentence on the way says "Wrong password".
+- **One existing assertion had to change, and it is not a weakening.**
+  `body-limit.test.ts` pinned `readBodyOrNull(…'{oops')` → `{}`. That line
+  states the contract this PR corrects, so it now asserts the rejection
+  instead; the claim the file legitimately owns — `null` for a stream that
+  FAILED — is untouched and still passes. Spelled out in the PR.
+
+**Do not redo**:
+
+- **Do not put the check in the routes.** Twenty-one callers, and the two that
+  matter most (the ingestion endpoints) are the ones that would be forgotten —
+  that is the "guard that names the door instead of the work" row of 09-22.
+  One reader, three answers.
+- **Do not map both states to one sentence.** Mutation M7: telling a sender
+  that `null` "is not valid JSON" is a sentence reachable from a state it does
+  not describe. `reason` exists for that and nothing else.
+- **Do not let the MCP endpoint fall to the generic 400** (M8). A JSON-RPC
+  client is owed a JSON-RPC envelope, and the two codes differ: -32700 for
+  bytes that do not parse, -32600 for valid JSON that is not a request object.
+- **Do not refuse the empty body** (M4) **or a top-level array** (M5). Both are
+  the plausible over-fix, both are caught, and the array one would silently
+  break every MCP batch.
+
+**Found and NOT fixed** — verified tonight, left alone deliberately:
+
+- **`POST /api/settings/test/database` still answers about a port the console
+  would never dial.** Already `ROADMAP.md` § 7, still the best-documented open
+  item there; untouched because it is its own subject.
+- The two older leads stand: the login throttle collapsing to one bucket behind
+  the tunnel (an architecture decision for a human), and `attempts` in
+  `auth.ts` never being swept.
+
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 1286 passed | 1 skipped   — was 1268 | 1 (+18, nothing skipped or weakened)
+npm run build       # dist built, CSS 88.54 kB, JS 474.75 kB (unchanged)
+```
+Checked **RED** first: 12 of the 18 tests in `server/malformed-body.test.ts`
+fail before the change, and the 6 that pass are exactly the boundary controls
+(no body, a valid save, the 413, the MCP batch, `null` for a failed stream, an
+absent body as `{}`) — they pass before AND after on purpose. Then nine
+mutations, one at a time, restoring in between:
+
+| Mutation | Result |
+|---|---|
+| parse failure answers `{}` again (the original defect) | RED — 10 |
+| the non-object check removed | RED — 5 |
+| `readBodyOrNull` swallows it into `null` | RED — 5 |
+| an EMPTY body refused too (the over-fix) | RED — 2 |
+| a top-level ARRAY refused too (the over-fix) | RED — 2 |
+| answered as a 500 | RED — 5 |
+| one sentence for both states | RED — 1 |
+| MCP lets it fall to the generic net | RED — 2 |
+| MCP calls both states a parse error | RED — 1 |
+
+The changed modules were also loaded and driven under
+`node --experimental-strip-types` — the runtime the service uses, where `tsc`
+and vitest both lie — and the service was started and dialled over real
+sockets on 127.0.0.1 (truncated body, form-encoded body, `null` body, and the
+valid controls). No model key, no database and no network egress needed.
+`VulnPipe/` is untouched — it is where the correct version of this reader
+already lived — so its suite was not run. Probes were written to the session
+scratchpad, never the repository; `git status` shows no stray file.
+
+## 2026-09-22 (second run) — Tuesday · Security
+
+**Subject**: **a cap on BYTES, in front of a limit that is about DEPTH** —
+`ROADMAP.md` § 7, the row the previous run of this same day wrote and named
+*"the best next subject"*. An unauthenticated caller could make the ingestion
+endpoint answer `500` carrying V8's own message; a polled source could kill the
+process.
+
+**Result**: PR #35 (branch `claude/great-pascal-2q0cmw`).
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-2q0cmw` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Twentieth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject**: the calendar rule did not preempt — `main` was green
+(typecheck 0, 1255 passed | 1 skipped, build clean) and no pull request was
+open. It is priority (2) *and* (3): a real, reproducible bug AND an explicit
+roadmap limitation, handed over by the previous run with the reproduction
+already written down. Tuesday's listed areas name *denial of service (body
+sizes, concurrency, quotas)* first among the ones it touches.
+
+**What was actually wrong**, measured on Node 22.22.2 over real sockets under
+`node --experimental-strip-types`:
+
+| | before | after |
+|---|---|---|
+| `POST /api/ingest/generic`, 117 kB body, 60 000 deep, **no `x-soc-token`** | **`500 {"error":"Maximum call stack size exceeded"}`** | `400 payload_too_deep`, naming the cap |
+| the same on `/api/webhook/soc/alert` | **500**, same message | `400`, same sentence |
+| the same nesting under an UNMAPPED key (rides in `extensions`) | **500** | `400` |
+| `pollSource()` on a source answering one such item | **throws out of the function** | resolves, `unusable: 1`, `accepted: 0` |
+| the same, with two good items beside it in the batch | **all three lost** | `G1` and `G2` delivered, `accepted: 2` |
+| a shallow alert with no token (the control) | `401` | `401` |
+
+**What I learned**:
+
+- **The asymmetry is the whole bug, and it is a V8 fact worth keeping.**
+  `JSON.parse` is iterative and `JSON.stringify` is recursive, so the parser
+  hands the rest of the process structures the serialiser cannot survive.
+  Measured: parse is fine at **200 000** levels, stringify gives up at
+  **4 165**. A cap on BYTES says nothing about the shape inside them.
+- **That 4 165 is not a constant, and a fix that treats it as one moves with
+  the machine.** The same probe under `--stack-size=2000` answers **8 500** —
+  it is whatever stack is left at the moment of the call. So the cap has to be
+  a policy number chosen against real data, not a measured maximum: the nine
+  injection scenarios are **2** levels deep, a Wazuh alert with MITRE arrays
+  and agent metadata is **5**, the deepest JSON in the repository is **5**.
+  64 is an order of magnitude above the first and two below the second.
+- **The second door was the expensive one.** The § 7 row described the push
+  route. `pollSource()` is the other caller of `normalize`, and there the
+  `RangeError` escaped the function — so `fail()`, which records the error,
+  backs the source off and shows it on the Ingestion tab, never ran. It escaped
+  `tick()` too, which the timer calls as `void this.tick()`, and I measured
+  what Node 22 does with that rather than assuming: **the process terminates.**
+  One over-deep item from a polled source crash-loops the console.
+- **A mutation caught my test claiming something that is not true.** I wrote
+  *"the guard does not recurse, because a recursive depth check overflows on
+  its own input"* and built a test for it. Mutated to a recursive check, the
+  test went **GREEN** — a recursive check that compares depth BEFORE descending
+  is bounded at `limit` frames and is perfectly safe. The real hazard is
+  measure-then-compare (walk the whole structure, then compare the maximum),
+  which is the obvious way to write it and overflows; that mutation is red, in
+  both a recursive and an iterative form. The comment and the test now say the
+  true thing. **A plausible-sounding rule is not a tested rule.**
+- **Widening a counter obliges you to re-read its sentence.** `unusable` on a
+  poll outcome had one cause when it was worded — *"carried no alert id and
+  could not be read"* — and a refused payload often has an alert id. Left
+  alone, the Ingestion tab would have printed a diagnosis nobody made, which is
+  the exact shape `readBodyOrNull` exists to remove at the other door.
+
+**Do not redo**:
+
+- **Do not put the floor on the mapped fields.** Tried as mutation M6 and red:
+  `extensions` keeps every unmapped vendor key whole, so a field-level guard
+  refuses `raw_log` and waves the same nesting through as `vendor_blob` — and
+  `pg-store`, `decision.ts`'s prompt builder and `sanitize.ts`'s fence all
+  serialise what arrives. One door, checked once, before anything is copied.
+- **Do not put the check in `readBody` instead.** It looks more general and it
+  is less: the poller's items come from `JSON.parse(readCapped(res, …))` and
+  never touch `readBody`, so the crash-loop door would have stayed open. I
+  checked the other direction too — of the routes that read a body, `/api/rules`
+  coerces through `String()` (`text()` in `tuning.ts`), `/api/findings/promote`
+  and `/api/simulate` never serialise the body, so `normalize` is the only
+  place the depth reaches a recursive serialiser.
+- **Do not fail the whole poll on one bad item.** It replaces the batch's good
+  alerts with nothing, which is the harsher half of the same mistake. Counted
+  `unusable`, which is the channel that already exists for *"read, could not be
+  turned into an alert, counted and shown"*.
+- **Do not refuse the deep body AFTER the shared secret** to avoid telling an
+  unauthenticated caller anything. This route already decides two other
+  refusals about the request itself before `handleAlert` sees a token — an
+  unknown source is a `404` and an over-large body a `413` — so moving this one
+  would make it the odd case, and the "oracle" it closes is that the endpoint
+  exists, which the 404 and the 413 announce anyway.
+
+**Found and NOT fixed**:
+
+- **`unusable` still does not say WHY.** Two causes now share one counter and
+  one sentence, so the tab names both possibilities rather than the one that
+  happened. Splitting it into two counters is right and it is a wider change —
+  `PollOutcome`, `lib/ingestion.ts`, the catalogue and the panel — than this
+  subject needed. Named in the PR.
+- The two leads the previous run left are untouched and still stand: the login
+  throttle collapsing to one bucket behind the tunnel (an architecture decision
+  for a human), and `attempts` in `auth.ts` never being swept.
+
+**Verified**:
+```
+cd dashboard
+npm ci              # the container starts with no node_modules
+npm run typecheck   # 0 errors
+npm test            # 1268 passed | 1 skipped   — was 1255 | 1 (+13, nothing skipped or weakened)
+npm run build       # dist built, CSS 88.54 kB, JS 474.75 kB
+```
+Checked **RED** first: 8 of the 11 tests then in `server/payload-depth.test.ts`
+fail before the change. Then by mutation, one at a time, restoring in between:
+
+| Mutation | Result |
+|---|---|
+| the guard removed (the original defect) | RED — 9 of 12 |
+| `depth >= limit` instead of `>` (off by one) | RED — 2, the two boundary tests |
+| the cap lowered to 3 (the plausible over-fix) | RED — the Wazuh control |
+| a recursive check that compares before descending | **GREEN — the test was wrong**; see above |
+| measure-then-compare, recursive | RED — 4, with `RangeError` in the log |
+| measure-then-compare, iterative (no early exit) | RED — 9 |
+| the route guarded, the POLLER left alone | RED — 2 |
+| the floor on the mapped fields only | RED — 2 |
+
+Both changed server modules were also loaded and driven under
+`node --experimental-strip-types` — the runtime the service uses, where `tsc`
+and vitest both lie — over live sockets on 127.0.0.1. No model key, no database
+and no network egress needed. `VulnPipe/` is untouched, so its suite was not
+run. Probes were written to the session scratchpad, never the repository;
+`git status` shows no stray file.
+
+## 2026-09-22 — Tuesday · Security
+
+**Subject**: **two guards that named a door instead of the work behind it** —
+the console did its most expensive read for callers it had just refused at the
+ingestion endpoint, and the MCP cap counted one of the two paths to the same
+fourteen getters.
+
+**Result**: PR #34 (branch `claude/great-pascal-9u9p8e`).
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-9u9p8e` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Nineteenth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject**: the calendar rule did not preempt — `main` was green
+(typecheck 0, 1238 passed | 1 skipped, build clean) and no pull request was
+open. Tuesday's listed areas include *authz and public routes
+(`PUBLIC_ROUTES`, `/api/ingest/*`)* and *denial of service (body sizes,
+concurrency, quotas)*, and both defects are priority (2): real, reproducible,
+tracked nowhere.
+
+**What was actually wrong**, measured over real sockets against the real
+service under `node --experimental-strip-types`:
+
+| | before | after |
+|---|---|---|
+| 30 unauthenticated `POST /api/ingest/generic`, answered `401` | **30 / 30 snapshot rebuilds** | 0 / 30 |
+| 400 `tools/call` on `/api/mcp` | 120 served, 280 refused | unchanged |
+| 400 `resources/read`, the same `runTool` | **400 served, 0 refused** | 120 served, 280 refused |
+| one 179 kB JSON-RPC batch of 2,000 `resources/read` | **2,000 served, 123 ms of blocked event loop** | 120 served, 17 ms, 2 ms stall |
+
+**What I learned**:
+
+- **Two accurate comments can describe one uncounted path.** `rateLimited`
+  says it exists because *"an agent in a loop is exactly the client that will
+  call them a thousand times without noticing"*; `readResource` says *"every
+  branch goes through `runTool`, NOT around it"*. Both true, and together they
+  say the cap misses `resources/read` — which nobody read as a sentence,
+  because the two lines are four hundred apart in the same file. The way to
+  find a second door is to grep for the other CALLERS of the thing the guard
+  protects, not to re-read the guard.
+- **A status code cannot answer "did anything change", in either direction.**
+  The obvious fix for the ingestion half is `if (result.status === 202)
+  invalidate()`. It is wrong twice: three of the four door refusals are `503`
+  and the PIPELINE answers a 503 of its own when deduplication is unavailable,
+  and a `400` for a missing field is an alert that DID run and shows in the
+  Tracking tab. `WebhookResult.ran` is set where the engine is actually
+  started. Fishing the reason back out of `body.run_id` would have been *"a
+  node's output under a field name you remembered"*.
+- **Asserting the CALL would have let a wrong fix pass.**
+  `refused-ingest.test.ts` does not spy on `invalidate()`; it takes two
+  snapshots around the refused request and compares them by IDENTITY, because
+  a live cache hands back the same object. A fix that merely moved the call
+  elsewhere still fails it.
+- **A cap test that sends one batch cannot see a per-batch reset.** My first
+  batch test asserted "some of this batch was refused" and "the next call is
+  refused" — and the mutation `resetMcpRateLimit()` at the top of the batch
+  branch passed all of it, because 400 calls still overflow a freshly reset
+  budget. The window is a MINUTE, not a request, so the assertion has to be a
+  SECOND batch being refused outright. Five of six mutations were caught on the
+  first pass; this was the sixth, and it is the one worth remembering.
+- **An invalidated hypothesis, recorded so nobody re-runs it.** I expected a
+  TOCTOU on the login throttle: `throttle(ip)` is checked, then `await
+  readBody(req)` yields, then `recordFailure(ip)` lands — so concurrent
+  requests should all pass the check. Measured with 200 requests on 200
+  separate sockets: **exactly 8 guesses get through**, the designed cap.
+  `verifyPassword` is `scryptSync`, which blocks the event loop for **35 ms**,
+  so the handlers are serialised by the very thing that makes them expensive.
+  The rate limiter is safe by an accident of the hash being synchronous.
+- **The "secrets never come back out" guarantee holds, measured not read.** I
+  planted a distinct sentinel in all 17 secrets the console holds (the auth
+  hash, the database password, the ingestion secret, the tunnel and MCP
+  tokens, all 12 managed credentials), then swept 44 answers — every GET route,
+  the diagnostics and simulate POSTs, all 9 MCP resources, `initialize`,
+  `tools/list`, `prompts/list` and all 14 tools driven directly. **0 leaks.**
+
+**Found and NOT fixed** — each verified by me tonight, not taken on trust:
+
+- **`normalize()` breaks its own "never throws" contract, unauthenticated, and
+  answers a 500 carrying V8's message.** `routes/ingest.ts` calls
+  `normalize(mapping, await readBodyOrNull(req))` **before** `handleAlert` looks
+  at the shared secret, and `normalize` does `JSON.stringify(v)` with no depth
+  floor. Reproduced over a real socket, console lock ON, **no `x-soc-token` at
+  all**: a 117 kB body of `{"raw_log":[[[…60 000 deep…]]]}` — inside the 256 kB
+  cap, because the cap is on BYTES — gives `RangeError: Maximum call stack size
+  exceeded`, logged as an uncaught error and answered
+  `500 {"error":"Maximum call stack size exceeded"}`. A server-fault code for a
+  sender fault plus an internal message to an unauthenticated caller. **It is
+  now `ROADMAP.md` § 7 and it is the best next subject** — the fix is a depth
+  floor plus a named 400, in the shape `BodyTooLarge` already has.
+- **The login throttle collapses to ONE bucket behind the tunnel.** `app.ts:100`
+  is `req.socket.remoteAddress` and nothing in the tree reads
+  `X-Forwarded-For` (grepped). Under the documented `cloudflared` deployment
+  every external request shares one address, so 8 wrong passwords lock **every**
+  operator out for five minutes, repeatable. **I deliberately did not fix it**:
+  the remedy is to trust a forwarded header, and trusting one without a
+  trusted-proxy list is a worse hole than the one it closes (anyone spoofs the
+  header and evades the throttle entirely). That is an architecture decision for
+  a human, not a night's edit.
+- **`attempts` in `auth.ts` is never swept.** `throttle()` deletes only when
+  `rec.until` is truthy, and a record with 1–7 failures has `until === 0`, so it
+  is permanent; `sweep()` iterates `sessions`, not this map. One failed login
+  per source address is one permanent entry, and it accrues even on an install
+  with no password set. Small, unbounded, unauthenticated — worth a line, not a
+  night.
+- **`tokenMatches` in `mcp.ts` returns early on a length mismatch** while
+  `secretMatches` in `webhook.ts` deliberately does a dummy `timingSafeEqual`
+  first *"so the length itself does not leak either"*. The mirror of a rule is
+  not the rule — but the token is server-generated at a fixed length and the
+  difference is sub-microsecond, so I could not demonstrate wrong behaviour and
+  did not touch it.
+
+**Do not redo**:
+
+- **Do not key `invalidate()` on the status code.** See above: `503` means two
+  opposite things and `400` means a run exists. Mutation M2 (`ran: true` on the
+  401) and M3 (`ran: false` everywhere) are both caught, the second by the
+  mirror assertion, which is there precisely so a "fix" that deletes the call
+  cannot pass.
+- **Do not copy `readResource`'s URI vocabulary up into `dispatch`** to let an
+  unknown URI dodge the cap. The cap is charged before the URI is resolved, on
+  purpose: a second list of resource names is a second thing to keep in step,
+  and the whole cost of the asymmetry is that a client's typo spends one unit
+  of a hundred and twenty a minute.
+- **Do not meter `completion/complete`.** One call per KEYSTROKE, and an alert
+  id is eighteen characters; metering it makes the console's own suggestions
+  the thing that exhausts the budget. A test claims that side and passes before
+  AND after, as does one for the catalogue listings.
+- **Do not chase the login-throttle TOCTOU.** Measured, it does not exist; see
+  above.
+- **Ruled out for tonight: the VulnPipe egress findings.** A sweep reported that
+  `VULNPIPE_LLM_BASE_URL` is settable over HTTP and becomes the destination for
+  a call carrying `authorization: Bearer` and the analysed source code, and that
+  VulnPipe's three LLM `fetch` calls never got the console's `redirect: 'manual'`
+  primitive. **I did not verify either claim**, so they are written here as
+  leads and NOT in `ROADMAP.md`. They are also the other half of the product and
+  a whole subject; the first one turns on whether that service is reachable at
+  all in the shipped compose file, which is the thing to check first.
+
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 1255 passed | 1 skipped   — was 1238 | 1 (+17, nothing skipped or weakened)
+npm run build       # dist built, CSS 88.54 kB, JS 474.68 kB (unchanged)
+```
+Checked **RED** first: 6 of the 8 tests in `server/refused-ingest.test.ts` fail
+before the change, and 4 of the 6 new ones in `server/assistant/mcp.test.ts`.
+Then by mutation, one at a time, restoring in between:
+
+| Mutation | Result |
+|---|---|
+| `invalidate()` unconditional again (the original defect) | RED — 6 of 8 |
+| the 401 branch reports `ran: true` | RED — 4 |
+| nothing ever ran (`ran: false` everywhere — the plausible over-fix) | RED — 3, incl. the mirror |
+| the cap dropped from `resources/read` (the original defect) | RED — 4 |
+| `completion/complete` metered too (the plausible over-fix) | RED — the boundary control |
+| the budget reset per batch | **GREEN at first — the test was too weak**; red once it asserts a second batch |
+
+Both changed server modules were loaded and driven under
+`node --experimental-strip-types` — the runtime the service uses, where `tsc`
+and vitest both lie — over live sockets on 127.0.0.1. No model key, no database
+and no network egress needed. `VulnPipe/` is untouched, so its suite was not
+run. Probes were written to the session scratchpad, never the repository;
+`git status` shows no stray file.
+
+## 2026-09-21 (second run) — Monday · Feature
+
+**Subject**: **the approve and reject buttons were disabled on every real
+case** — `ROADMAP.md` § 7, opened by the previous run of this same day and
+named there as the obvious next night. With the approval payload fixed, the
+console still could not answer an approval at all.
+
+**Result**: PR #33 (branch `claude/great-pascal-wvxr07`).
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-wvxr07` with an instruction not to push anywhere else, as
 every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
 mandatory — holds either way. **Eighteenth entry saying so**; it is a line in
 the routine's configuration, not a thing a night can fix.
 
 **Why this subject**: the calendar rule did not preempt — `main` was green
 (typecheck 0, 1228 passed | 1 skipped, build clean) and no pull request was
-open. Thursday's reservoir is § 7 plus anything this journal left unfixed, and
-this row was both. Two other § 7 rows were weighed and rejected: the missing
-scheduler for `sweepExpiredWaits`/`resume` is explicitly *a decision* about
-where a scheduler lives (one per process, and the console can run more than
-one), and the database test button's port validation is real but strictly
-smaller. This one carries the product's central guarantee — *no irreversible
-action without explicit human approval* — and the guarantee was unreachable.
+open. Inside Monday's theme NIGHTLY.md ranks *a real, reproducible bug* above
+*an explicit limitation*, and this one is both: it is the § 7 row the previous
+run wrote, measured rather than read, on the only path where a human authorises
+an irreversible action.
 
-**What was actually wrong**, measured by driving the real route over the real
-pipeline, before any change:
+**What was actually wrong**, measured through the real pipeline and the real
+route:
 
 | | before | after |
 |---|---|---|
-| `case.approval.execution_id` | `undefined` | the `04-Action-Routing` run id |
-| `CaseView` `canSubmit`, name typed | `false` | `true` |
-| `POST /api/approvals/<run id>/resume` | **404** | 200, action executed |
-| that 404's sentence | *"not open any more — already answered, or timed out"* over a wide-open wait | shown only once the wait really is closed |
-| second press on the same run | (unreachable) | 404, first answer stands |
-| `store-contract.test.ts` on Postgres | never run | 44 tests, green |
+| `approval.execution_id` on a live wait | `undefined` | the `04-action-routing` run id |
+| `canSubmit` with a name typed | `false` — both buttons disabled | `true` |
+| identifier the route reads | wait token (`crypto.randomUUID()`) | run id |
+| second of two simultaneous presses | **200, "Decision relayed"** | 404, *"the first answer stands"* |
+| tests of `approval-route.test.ts` red on `main` | 10 of 13 | 0 |
 
 **What I learned**:
 
-- **The premise that blocked this for three nights had stopped being true.**
-  The 09-21 entry filed the fix as undecidable partly because the Postgres half
-  "cannot be verified without a database and this environment has none". It
-  does: Postgres 16.13 is installed in the nightly container. `initdb` refuses
-  to run as root, so the cluster is created under the `postgres` user and
-  **inside `/var/lib/postgresql`, not the scratchpad** — `initdb` could not
-  traverse the scratchpad path as that user. `sql/*.sql` apply cleanly except
-  `01-role-and-dedup.sql`, whose `:'app_password'` is a psql variable
-  `docker/init-db.sh` supplies; the tables every test needs are created anyway.
-  **Check an inherited premise before inheriting the conclusion.**
-- **Running the skipped half immediately paid for itself.** `store-contract.test.ts`
-  runs the SAME suite against both stores and is skipped without
-  `MENATER_TEST_PG`. Its first real run was **red**: `MemoryRunStore` threw
-  `jeton d'attente inconnu` where `PgRunStore` throws `unknown wait token`.
-  That sentence reaches an operator — `routes/approvals.ts` puts `err.message`
-  straight into `approvalFailed` — so the console answered in a different
-  language depending on which store was mounted, and the file written to catch
-  exactly that drift could not see it. **A test nobody can run protects
-  nothing, and the thing it was not protecting had already broken.**
-- **The decision the roadmap row posed was not the decision it looked like.**
-  It reads as *token or run id* — which spelling wins. It is really *what is
-  already published*, and that is measurable rather than arguable: `resumeUrl`
-  builds `/?run=<run id>`, the snapshot carries run ids on every stage of every
-  case, and **nothing writes a token outside the database**. So the token is
-  not a capability anybody was ever given, and the run already is the product's
-  public handle for an approval. Accepting the run grants a signed-in tab
-  nothing new; shipping the token into the snapshot would have MINTED a
-  capability that does not exist today. That settles it the way the 09-21 entry
-  guessed, for a reason it had not stated.
-- **The 404 was the worse half.** The missing field disabled a button, which is
-  at least visible. Posting the run id — what the card holds, what Slack
-  publishes — answered *"That approval is not open any more — it was already
-  answered, or it timed out. The first answer stands; nothing was lost."* over
-  a wait that was wide open and a run sitting in `waiting`. Every clause false,
-  and reassuring. Same family as `llm` reporting *"the model answered with no
-  content"* about a model it never asked: **a sentence must not be reachable
-  from a state it does not describe** — here aimed at the operator. Which is
-  why `openWaitOfRun` returns only an OPEN wait: that is what makes the same
-  404 true when it is finally shown, on a second press.
+- **The plausible fix was the dangerous one.** The client has always named the
+  parameter `executionId` and passed a run id; the route read a wait token. The
+  obvious repair is to put the token on the case — and a wait token resolves an
+  approval **once and irreversibly**, so it is a verb, not a name. The case is
+  answered by `get_alert` (`sections: ['approval']`) to a model whose context
+  also holds attacker-composed log text, and by `POST /api/mcp` to any holder
+  of a read-only bearer token. The catalogue is closed and verbless on purpose;
+  that fix would have posted one through the fence. Run ids already travel
+  there on every stage line, so naming the run costs nothing new.
+- **`pg-store.ts` was NOT the blocker the previous run feared.**
+  `store-contract.test.ts` is written once and run against both
+  implementations, Postgres only when `MENATER_TEST_PG` names a database. The
+  four new contract tests therefore verify the memory half here and the SQL
+  half on any machine with a database, which is this repository's own answer to
+  "cannot be verified without Postgres". The SQL itself
+  (`WHERE run_id = $1 AND resumed_at IS NULL ORDER BY created_at LIMIT 1`) is
+  covered by the existing `soc_run_wait_run_idx`, and `created_at` already
+  exists on the table — it was in the schema and in neither implementation's
+  reach until now.
+- **A control can be disabled for two reasons at once, and say neither.** The
+  other term of `canSubmit` is the operator's own name, so the greyed-out
+  button read as *you have not typed your identifier yet*. I deliberately did
+  NOT add a sentence explaining the third state: after the fix
+  `execution_id` is always written for a case the pipeline produced, so a note
+  about its absence would be error handling for a state that no longer occurs
+  — which `NIGHTLY.md` § 3 forbids and which would age into a lie.
+- **A test that names the identifier itself cannot see this defect.** The route
+  test now reads it off `buildCases`, the way the browser does. That single
+  change is what turns 10 of its 13 tests red on `main`: a card that carries no
+  identifier is a route nobody can call, and asserting on a hand-written run id
+  would have hidden exactly that.
 
-**Found and NOT fixed** — reproduced on unmodified `main`, so neither new nor
-mine, and now a § 7 row:
+**Found and NOT fixed**:
 
-- **An executed action is sealed into the audit chain as `action_taken: "none"`.**
-  Driving an approval to *approve* on the real database: the containment really
-  runs (`https://edr.test/isolate` dialled, `executed: true`) while the audit
-  record composed by 04 reads `action_taken: "none"`, `routing_outcome: "unknown"`,
-  and the card's `action_taken` is `null`. The append-only row that is this
-  product's only tamper-evidence does not name the action it is evidence of.
-  The immediate cause on the card side is that `cases.ts` reads `action` /
-  `executed_action` off the `execute` step, which is an `http` node whose
-  output is `{ ok, status, body }` and carries neither; the audit side is its
-  own question, since `buildAuditRecord` is what writes those two words.
-  **Why the existing test is green over it**: it asserts `routing_outcome` is
-  NOT `rejected` and NOT `timeout_escalated`, and `"unknown"` satisfies both.
-  Deliberately left: it changes what is sealed into an immutable chain, which
-  is a subject of its own. **This is the obvious next night.**
+- **Nothing calls `sweepExpiredWaits()` or `engine.resume()` outside the
+  tests** — still true, still the next § 7 row, and now the sharper one: with
+  the buttons live, the console can answer an approval, but an approval nobody
+  answers still waits for ever rather than escalating at its deadline. Slack's
+  own message promises the opposite. Where the scheduler lives is a decision
+  (one per process, and the console can run more than one), which is why it is
+  not a line to slip into this PR.
+- The database test button's unclamped port (§ 7) is untouched.
 
 **Do not redo**:
 
-- **Do not ship the wait token into the snapshot.** It is the plausible other
-  half of the decision and it is the wrong one: it creates a capability in
-  every open tab that does not exist today, for no reach the run id does not
-  already give.
-- **Do not make `openWaitOfRun` return "the latest wait".** Tried and rejected
-  as mutation 3: a settled wait coming back makes a second press find the
-  question still open, and rebuilds the false 404 inside its own fix. Caught by
-  both the contract test and the route test.
-- **Do not resolve with the route's argument.** `resumeWait` must call
-  `resolveWait(wait.token, …)`, never `resolveWait(token, …)` — the argument
-  may be a run id. Mutation 4; caught.
-- **Do not "fix" the language divergence by changing the test to accept both.**
-  That is the weakened assertion NIGHTLY.md forbids, and the file's whole
-  purpose is that the two stores answer identically. The memory store moved to
-  English, which is also the direction § 7 wants.
-- **A `CaseView` test cannot be red for this defect** — the bug is in
-  `cases.ts`, not the component. The two added there claim both sides of
-  `canSubmit`'s `&&` and pass before and after, on purpose; the red-before
-  evidence is in `approval-route.test.ts`.
+- **Do not put the wait token on the case**, under any name. See above: it is a
+  verb on a surface that is read by a model. `case-view.test.tsx` and
+  `approval-route.test.ts` both carry a standing assertion against it, and both
+  pass before AND after on purpose.
+- **Do not make the route accept either a token or a run id.** One identifier.
+  An endpoint that guesses which of two things it was handed is the ambiguity
+  this project refuses everywhere else, and `waitByToken` stays engine API with
+  exactly one production caller: `Engine.resumeRun`.
+- **Do not read the run's wait without the `resumed_at IS NULL` filter.** It
+  looks like a harmless widening and it re-opens a settled approval to a second
+  answer; the store then throws, so the operator gets a 500 about a decision
+  that was recorded correctly. Mutation 3 catches it.
+- **Do not add an explanatory note under the disabled buttons** (see above).
 
-**Verified** (commands run, output read):
-
-- `npm run typecheck` — 0 errors.
-- `npm test` — **1238 passed | 1 skipped** (was 1228 | 1). The skip is the
-  Postgres contract half, which needs `MENATER_TEST_PG`.
-- `MENATER_TEST_PG=… npm test` — **1260 passed, 0 skipped**, against a real
-  Postgres 16.13 cluster. That half had never been run before tonight.
-- `npm run build` — clean.
-- **Red before the fix**: 6 contract tests (both stores) and 3 route tests.
-  The 2 route controls and the 2 `CaseView` tests were green before and after,
-  which is what separates the fix from a constant.
-- **Four mutations, each caught**: cases.ts not writing `execution_id` (1 red);
-  engine dropping the run-id fallback (2 red); `openWaitOfRun` returning
-  settled waits, both stores (2 contract + 1 route red); `resolveWait(token)`
-  instead of `resolveWait(wait.token)` (2 red).
-- **End to end on Postgres**, through the real pipeline and the real store:
-  wait opened with a real token, answered by RUN id, run `done`, isolation
-  endpoint dialled, wait closed, case `approved` by `alice`, second press
-  refused. Probe deleted.
-- VulnPipe untouched, so its suite was not run.
-
----
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 1238 passed | 1 skipped   — was 1228 | 1 (+10, all new)
+npm run build       # dist built, CSS 88.54 kB, JS 474.68 kB (unchanged)
+node --experimental-strip-types -e "import(...)"   # the five changed server
+                    # modules load: the service runs under strip-types, which
+                    # refuses syntax tsc and vitest both accept
+```
+Checked **RED** first: the four `store-contract` tests fail with
+`store.openWaitOfRun is not a function`, and **10 of the 13** tests in
+`server/approval-route.test.ts` fail once the identifier is read off the case
+the console renders. Five mutations against the finished change, all five
+caught by the assertion that should catch it: `execution_id` dropped from the
+case (10 red), the route reverted to `resumeWait` on the path segment (9 red),
+`openWaitOfRun` ignoring `resumedAt` (2 red — the contract test and the
+two-operator race), `openWaitOfRun` ignoring `runId` (1 red), and the panel
+posting an identifier of its own instead of the card's (1 red). No model key
+and no database needed; no probe script was left behind and `git status` shows
+no stray file.
 
 ## 2026-09-21 — Monday · Feature
 

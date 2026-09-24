@@ -21,7 +21,7 @@
  * ============================================================================
  */
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 
@@ -264,19 +264,21 @@ describe('an answered approval says what the human actually answered', () => {
 });
 
 /* ==========================================================================
- * THE BUTTONS THEMSELVES, WHICH WERE DISABLED ON EVERY REAL CASE
+ * THE TWO BUTTONS, AND WHETHER ANYBODY CAN PRESS THEM
  *
- * `canSubmit = approver.trim().length > 0 && Boolean(execId) && !busy`, with
- * `execId = approval.execution_id` — a field `cases.ts` never wrote. So on a
- * real install both controls rendered `disabled` however carefully the
- * operator filled the form, and NOTHING said why: the other term of that
- * `&&` is their own name, so a greyed-out button reads as "you have not
- * finished typing". Only `demo.ts` set the field, which is why the screen
- * looked right in demonstration mode and only there.
+ * `ApprovalPanel` computes `canSubmit = approver.trim() && Boolean(execId)
+ * && !busy`, with `execId = approval.execution_id`. `cases.ts` did not write
+ * that field, so both controls rendered disabled on every case the pipeline
+ * produced — and nothing said why, because the other term of the same `&&` is
+ * the operator's own name: a greyed-out button is indistinguishable from "you
+ * have not typed your identifier yet". Only `demo.ts` set it, which is why the
+ * screen looked right in demonstration mode.
  *
- * These two tests claim opposite sides of the same `&&`, on purpose: the fix
- * is a field that must be PRESENT, so a test that only checks the enabled
- * case would pass just as well against a component that ignores it.
+ * The server half — that `buildCases` writes the field, and that the route
+ * accepts what it writes — is driven through the real pipeline in
+ * `server/approval-route.test.ts`. What only a mount can show is the link
+ * between them: that this panel posts the identifier the card carries, to the
+ * address the route answers on.
  * ========================================================================== */
 
 const PENDING: Approval = {
@@ -284,34 +286,68 @@ const PENDING: Approval = {
   outcome: 'pending',
   approver: null,
   human_reasoning: null,
-  execution_id: '244e34dc-a79a-4cd8-85be-49d16785e124',
+  // A run id, as `cases.ts` writes it. NEVER a wait token: that one resolves
+  // the approval once and irreversibly, and this object is answered to the
+  // assistant and to every MCP client.
+  execution_id: 'run-04-7f3c',
 };
 
-describe('an approval waiting on a human can actually be answered', () => {
-  it('enables both controls once the operator has named themselves', async () => {
+describe('an approval still waiting for an answer', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('posts the identifier the card carries, to the run it belongs to', async () => {
+    /*
+     * Both tests here pass before the fix as well as after, and deliberately:
+     * this panel was never the wrong half. What they pin is the LINK — that
+     * the address is built out of `approval.execution_id` and nothing else —
+     * so the server-side fix cannot be undone by a panel that starts sending
+     * something of its own. The red half of the change is in
+     * `server/approval-route.test.ts`, where the field did not exist.
+     */
+    const seen: string[] = [];
+    vi.stubGlobal('fetch', async (url: unknown) => {
+      seen.push(String(url));
+      return new Response(JSON.stringify({ ok: true, detail: 'Decision relayed to the pipeline.' }), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      });
+    });
+
     const user = userEvent.setup();
     render(<CaseView alertCase={kase({ approval: PENDING })} onRefresh={() => {}} />);
 
     const accept = screen.getByRole('button', { name: /Accept/ });
-    const refuse = screen.getByRole('button', { name: /Decline/ });
-    // Before a name: correctly refused, and that half always worked.
-    expect((accept as HTMLButtonElement).disabled).toBe(true);
+    // The defect, from the operator's side: before their name is typed the
+    // button is legitimately disabled — and it stayed disabled afterwards.
+    expect(accept.hasAttribute('disabled')).toBe(true);
 
     await user.type(screen.getByPlaceholderText('@first.last'), 'alice');
+    expect(accept.hasAttribute('disabled')).toBe(false);
 
-    expect((accept as HTMLButtonElement).disabled).toBe(false);
-    expect((refuse as HTMLButtonElement).disabled).toBe(false);
+    await user.click(accept);
+    expect(seen).toEqual(['/api/approvals/run-04-7f3c/resume']);
   });
 
-  it('is still refused when the case carries no execution to answer', async () => {
-    // The control, and the state every real case was in. Written out because
-    // the two reasons a button is disabled are indistinguishable on screen.
+  it('refuses to answer an approval it has no identifier for', async () => {
+    /*
+     * The control, and it claims the other side on purpose: it passes before
+     * the fix as well as after. A panel that submitted anyway would post
+     * `/api/approvals/undefined/resume` — a request about nothing, answered
+     * 404, reported to the operator as a decision that did not land. Refusing
+     * is right; what was wrong is that the field was never filled.
+     */
+    const seen: string[] = [];
+    vi.stubGlobal('fetch', async (url: unknown) => {
+      seen.push(String(url));
+      return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+
     const user = userEvent.setup();
-    const orphaned: Approval = { ...PENDING, execution_id: null };
-    render(<CaseView alertCase={kase({ approval: orphaned })} onRefresh={() => {}} />);
+    const orphan: Approval = { ...PENDING, execution_id: null };
+    render(<CaseView alertCase={kase({ approval: orphan })} onRefresh={() => {}} />);
 
     await user.type(screen.getByPlaceholderText('@first.last'), 'alice');
-
-    expect((screen.getByRole('button', { name: /Accept/ }) as HTMLButtonElement).disabled).toBe(true);
+    const accept = screen.getByRole('button', { name: /Accept/ });
+    expect(accept.hasAttribute('disabled')).toBe(true);
+    expect(seen).toEqual([]);
   });
 });

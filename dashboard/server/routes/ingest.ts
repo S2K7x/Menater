@@ -9,7 +9,8 @@ import { json, readBodyOrNull } from '../respond.ts';
 import { invalidate } from '../snapshot.ts';
 import { getEngine } from '../runtime.ts';
 import { handleAlert } from '../webhook.ts';
-import { MAPPINGS, mappingFor, normalize } from '../engine/transforms/normalize.ts';
+import {
+  MAPPINGS, mappingFor, normalize, PayloadTooDeep } from '../engine/transforms/normalize.ts';
 import {
   getConfig, saveConfig } from '../config.ts';
 import { laneFor, normalizePolicyInput, onExpectedTransport } from '../ingest/policy.ts';
@@ -104,7 +105,35 @@ export async function ingestRoutes(c: Ctx): Promise<boolean> {
             + `${MAPPINGS.map((m) => m.source).join(', ')}.` });
       }
       const conf = getConfig();
-      const normalized = normalize(mapping, await readBodyOrNull(req));
+      /**
+       * A BODY THIS CONSOLE CANNOT SERIALISE IS THE SENDER'S TO FIX.
+       *
+       * `JSON.parse` accepts nesting `JSON.stringify` cannot survive, so a
+       * body well inside the 256 kB cap — that cap is on BYTES — used to reach
+       * `normalize`, throw a `RangeError` and fall to the last net in
+       * `app.ts`: **500 `{"error":"Maximum call stack size exceeded"}`**, a
+       * server-fault code for a sender fault with V8's own message attached,
+       * answered to a caller holding no credential at all.
+       *
+       * Refused HERE rather than after the shared secret, like this route's
+       * two other refusals about the request itself: an unknown source is a
+       * 404 and an over-large body a 413, both decided before `handleAlert`
+       * looks at a token. Nothing is started, so nothing is invalidated.
+       */
+      let normalized: Record<string, unknown>;
+      try {
+        normalized = normalize(mapping, await readBodyOrNull(req));
+      } catch (err) {
+        if (!(err instanceof PayloadTooDeep)) throw err;
+        return json(res, 400, {
+          status: 'error',
+          reason: 'payload_too_deep',
+          detail: `This alert is nested more than ${err.limit} levels deep, which is past `
+            + 'what the pipeline can read. Nothing was triaged. An alert carries a log '
+            + 'line and a few observables; a structure this deep is a mistake in whatever '
+            + 'composed it.',
+        });
+      }
       const result = await handleAlert(
         {
           mode: conf.webhook.mode,
@@ -117,8 +146,20 @@ export async function ingestRoutes(c: Ctx): Promise<boolean> {
         normalized,
         sourceName,
       );
-      // An alert received changes what the console must show.
-      invalidate();
+      /**
+       * An alert received changes what the console must show. ONE REFUSED AT
+       * THE DOOR DOES NOT — and it used to throw the cache away all the same.
+       *
+       * `invalidate()` drops `cache` AND `inFlight`, so the next reader waits
+       * on a full walk of the run journal and concurrent readers stop sharing
+       * one. These two paths sit outside the console's lock by design, which
+       * means an unauthenticated caller — answered 401, holding no credential
+       * at all — could spend the most expensive thing this console does, once
+       * per request and with no rate limit, on the single thread that also
+       * serves the alerts. The attacker sees a 401; the operator sees a
+       * console that got slow.
+       */
+      if (result.ran) invalidate();
 
       // N5 — WHICH LANE THIS ALERT SHOULD HAVE TAKEN, said in the reply.
       //

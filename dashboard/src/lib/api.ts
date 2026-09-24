@@ -79,7 +79,7 @@ function saying(value: unknown): string | null {
  *
  * - `problems`, one `{ field, detail }` per thing wrong with a tuning rule,
  *   from `POST /api/rules` and `PUT /api/rules/:id`;
- * - `detail`, from `POST /api/approvals/:token/resume` and the database probe —
+ * - `detail`, from `POST /api/approvals/:runId/resume` and the database probe —
  *   the approval one naming the cause AND that the alert will be escalated.
  *
  * `error` wins when both are present: the settings route composes a sentence

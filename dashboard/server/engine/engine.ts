@@ -78,6 +78,31 @@ export interface NodeResult {
 
 export type NodeHandler = (ctx: NodeContext) => Promise<NodeResult>;
 
+/**
+ * What one pass of `sweepExpiredWaits` did.
+ *
+ * Two lists rather than one, because the scheduler that calls it has two
+ * different things to say: an escalation that HAPPENED is an event worth a
+ * line, and an expiry that could not be settled is a failure worth naming —
+ * per run, since one bad run says nothing about the others.
+ */
+export interface SweepResult {
+  /** Runs whose wait expired and that were driven on down the `timeout` port. */
+  resumed: string[];
+  /**
+   * Expiries that failed, and why. They are retried at the next sweep.
+   *
+   * A MESSAGE, and it is safe to flatten one here — which is not obvious,
+   * because `pg` rejects an `ECONNREFUSED` with an EMPTY `.message` and the
+   * code one level down. `PgRunStore.q()` is a single choke point that every
+   * query of that store passes through, and it re-throws each one already
+   * described. Measured by booting the console with no database behind it:
+   * « Database (SELECT): connect ECONNREFUSED 127.0.0.1:5432 ». Describing it
+   * a second time here would print one cause under two prefixes.
+   */
+  failed: { runId: string; error: string }[];
+}
+
 export class IndeterminateError extends Error {
   // Champ déclaré puis affecté, PAS une propriété de paramètre : le serveur
   // tourne sous `--experimental-strip-types` / `erasableSyntaxOnly`, qui
@@ -92,6 +117,20 @@ export class IndeterminateError extends Error {
     );
     this.nodeId = nodeId;
   }
+}
+
+/**
+ * A sentence for an error, never an empty one.
+ *
+ * `PgRunStore.q()` already describes every query failure it re-throws, so in
+ * this process the message is there. A `RunStore` is an interface, though, and
+ * an error that reaches a log with nothing in it is a failure with no cause —
+ * the state this console refuses everywhere. One expression, so it cannot be
+ * the thing that disagrees.
+ */
+export function errorText(err: unknown): string {
+  const message = (err as Error)?.message?.trim();
+  return message ? message : String(err);
 }
 
 const PORT_MAIN = 'main';
@@ -207,40 +246,31 @@ export class Engine {
   }
 
   /**
-   * Resumes a suspended run, on presentation of its wait token — OR of the
-   * identifier of the run itself.
+   * Answers the approval a run is holding open, named by the RUN.
    *
-   * ==========================================================================
-   * WHY BOTH, AND WHY THAT IS NOT A WIDENING
+   * The console has the run id — it is on the incident card, and on every
+   * stage line — and it never has the token, which resolves a wait once and
+   * irreversibly. Resolving the one into the other is this side's job; see
+   * `RunStore.openWaitOfRun`.
    *
-   * THE TOKEN IS PUBLISHED NOWHERE. `resumeUrl` builds `/?run=<run id>`, the
-   * snapshot carries those same ids on every stage of every case, and nothing
-   * ever writes a token outside the database. Its only holder is therefore the
-   * store — so the console could not answer at all, and the Approve button was
-   * disabled on every real case.
-   *
-   * The run is the identifier this product ALREADY publishes to designate an
-   * approval: in the Slack request, and in the snapshot every signed-in tab
-   * reads. Accepting it grants reach to nothing new — it makes the handle that
-   * was intended usable. Carrying the token into the snapshot instead would
-   * have MINTED a capability that does not exist today.
-   *
-   * The token stays accepted: it is the engine's contract, and it is what a
-   * link carries. The order matters — the token first, which is a primary key,
-   * then the run — and both are UUIDs, so there is no ambiguity to settle.
-   * ==========================================================================
+   * `null` means there is no open question under that name: an unknown run, a
+   * run that never waited on anybody, or a wait somebody else has already
+   * answered. All three are the same thing to answer — the first answer
+   * stands — and none of them is an error to shout about.
    */
+  async resumeRun(runId: string, payload: unknown): Promise<RunRecord | null> {
+    const wait = await this.store.openWaitOfRun(runId);
+    if (!wait) return null;
+    return this.resumeWait(wait.token, payload);
+  }
+
+  /** Reprend une exécution suspendue, sur présentation de son jeton. */
   async resumeWait(token: string, payload: unknown): Promise<RunRecord | null> {
-    const wait = (await this.store.waitByToken(token))
-      ?? (await this.store.openWaitOfRun(token));
+    const wait = await this.store.waitByToken(token);
     if (!wait) return null;
     if (wait.resumedAt) return this.store.getRun(wait.runId);
 
-    // `wait.token` AND NOT `token`: the argument may be a run id, and it is
-    // the wait that was FOUND which has to be settled. The uniqueness that
-    // stops a double click acting twice is carried by `soc_run_wait`'s primary
-    // key, which is the token.
-    await this.store.resolveWait(wait.token, payload);
+    await this.store.resolveWait(token, payload);
     const run = await this.store.getRun(wait.runId);
     if (!run) return null;
     const workflow = this.workflows.get(run.workflowId);
@@ -265,27 +295,60 @@ export class Engine {
    * escalade, jamais vers l'exécution de l'action. Un moteur qui laisserait
    * l'attente retomber sur `main` transformerait le silence en approbation.
    */
-  async sweepExpiredWaits(): Promise<string[]> {
+  async sweepExpiredWaits(): Promise<SweepResult> {
     const expired = await this.store.expiredWaits(this.now().toISOString());
-    const touched: string[] = [];
-    for (const wait of expired) {
-      const run = await this.store.getRun(wait.runId);
-      if (!run || run.status !== 'waiting') continue;
-      const workflow = this.workflows.get(run.workflowId);
-      if (!workflow) continue;
+    const resumed: string[] = [];
+    const failed: SweepResult['failed'] = [];
 
-      await this.store.resolveWait(wait.token, null);
-      await this.store.endStep(run.id, wait.nodeId, 1, {
-        status: 'ok',
-        output: { timed_out: true },
-        port: 'timeout',
-      });
-      await this.store.setRunStatus(run.id, 'running');
-      await this.store.claimRun(run.id, this.owner);
-      await this.drive({ ...run, status: 'running' }, workflow);
-      touched.push(run.id);
+    for (const wait of expired) {
+      // Whether the settling is OURS. Without it the catch below cannot tell
+      // « somebody answered first » from « we settled it and the next write
+      // failed »: `resolveWait` runs before `endStep`, so re-reading the wait
+      // after a later failure finds a `resumedAt` THIS pass wrote, and the
+      // failure would be filed as a normal race and never reported. Caught by
+      // the test, not by reading the code.
+      let settledByUs = false;
+      try {
+        const run = await this.store.getRun(wait.runId);
+        if (!run || run.status !== 'waiting') continue;
+        const workflow = this.workflows.get(run.workflowId);
+        if (!workflow) continue;
+
+        await this.store.resolveWait(wait.token, null);
+        settledByUs = true;
+        await this.store.endStep(run.id, wait.nodeId, 1, {
+          status: 'ok',
+          output: { timed_out: true },
+          port: 'timeout',
+        });
+        await this.store.setRunStatus(run.id, 'running');
+        await this.store.claimRun(run.id, this.owner);
+        await this.drive({ ...run, status: 'running' }, workflow);
+        resumed.push(run.id);
+      } catch (err) {
+        // ONE EXPIRY MUST NEVER ABANDON THE OTHERS.
+        //
+        // Each wait is a separate decision about a separate alert, and the
+        // loop used to let the first failure escape: measured on the
+        // in-memory store, a human answering one approval in the instant
+        // between `expiredWaits` listing it and `resolveWait` settling it
+        // threw « that wait was already settled » out of the whole sweep —
+        // and every OTHER expired approval behind it was left waiting, with
+        // no escalation and nothing said. Until this method was scheduled
+        // that could not happen, because nothing called it.
+        //
+        // The classification is READ FROM THE STORE, never matched on the
+        // error text: the wait having gained a `resumedAt` is what tells
+        // « somebody answered first » — normal, and the first answer stands —
+        // from a failure that has to be reported.
+        if (!settledByUs) {
+          const settled = await this.store.waitByToken(wait.token).catch(() => null);
+          if (settled?.resumedAt) continue;
+        }
+        failed.push({ runId: wait.runId, error: errorText(err) });
+      }
     }
-    return touched;
+    return { resumed, failed };
   }
 
   // --- Boucle d'exécution ----------------------------------------------------

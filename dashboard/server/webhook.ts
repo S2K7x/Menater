@@ -57,6 +57,24 @@ export interface WebhookDeps {
 export interface WebhookResult {
   status: number;
   body: Record<string, unknown>;
+  /**
+   * Whether this alert reached the ENGINE — that is, whether a run now exists.
+   *
+   * ==========================================================================
+   * IT IS NOT A STATUS CODE, AND THAT IS THE WHOLE POINT
+   *
+   * The caller's real question is "did anything change that the console must
+   * show", and the status alone cannot answer it: this function answers 503
+   * for a door that is shut (`webhook_disabled`, `webhook_secret_missing`,
+   * `engine_unavailable`) and the PIPELINE answers 503 of its own when
+   * deduplication is unavailable — same code, opposite meaning. A `400` is the
+   * sharpest case: the alert was refused for a missing field, and a run exists
+   * anyway, visible in the Tracking tab. Reading the reason back out of `body`
+   * would be this project's "a node's output under a field name you
+   * remembered"; it is said here, once, where the engine is actually started.
+   * ==========================================================================
+   */
+  ran: boolean;
 }
 
 function secretMatches(expected: string, received: string): boolean {
@@ -81,6 +99,7 @@ export async function handleAlert(
   if (deps.mode === 'off') {
     return {
       status: 503,
+      ran: false,
       body: {
         status: 'error',
         reason: 'webhook_disabled',
@@ -95,6 +114,7 @@ export async function handleAlert(
   if (deps.secret === '') {
     return {
       status: 503,
+      ran: false,
       body: {
         status: 'error',
         reason: 'webhook_secret_missing',
@@ -111,12 +131,13 @@ export async function handleAlert(
   if (typeof token !== 'string' || !secretMatches(deps.secret, token)) {
     // No detail: saying "invalid secret" rather than "missing secret" tells an
     // attacker something about how this installation is configured.
-    return { status: 401, body: { status: 'error', reason: 'unauthorized' } };
+    return { status: 401, ran: false, body: { status: 'error', reason: 'unauthorized' } };
   }
 
   if (!deps.engine) {
     return {
       status: 503,
+      ran: false,
       body: {
         status: 'error',
         reason: 'engine_unavailable',
@@ -140,6 +161,7 @@ export async function handleAlert(
     if (decided) {
       return {
         status: decided.status,
+        ran: true,
         body: {
           // The body the pipeline wrote, when it wrote one.
           ...(decided.body && typeof decided.body === 'object'
@@ -160,11 +182,16 @@ export async function handleAlert(
     // inventing a status the pipeline never chose.
     return {
       status: 202,
+      ran: true,
       body: { status: 'accepted', alert_id: alertId, run_id: run.id, pipeline: 'console', source },
     };
   } catch (err) {
     return {
+      // `start` threw, which it can do after writing the run header — and this
+      // line is only reachable past the secret anyway. Counted as having run:
+      // an extra rebuild costs time, a missed one shows a stale queue.
       status: 500,
+      ran: true,
       body: { status: 'error', reason: 'engine_failed', detail: (err as Error).message },
     };
   }

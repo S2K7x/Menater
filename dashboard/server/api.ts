@@ -24,6 +24,8 @@ import { applyCredentialStore } from './credentials.ts';
 import { hasBuiltUi } from './static.ts';
 import { getPoller, stopPoller, syncPoller } from './ingest/runtime.ts';
 import { flushCursors } from './ingest/cursors.ts';
+import { SWEEP_INTERVAL_MS, getWaitScheduler, stopWaitScheduler } from './engine/scheduler.ts';
+import { getEngine } from './runtime.ts';
 
 const server = createServer(handleRequest);
 
@@ -69,6 +71,7 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
     if (stopping) return;
     stopping = true;
     stopPoller();
+    stopWaitScheduler();
     void flushCursors().finally(() => process.exit(0));
   });
 }
@@ -102,6 +105,17 @@ server.listen(PORT, () => {
   // idempotent and does nothing when polling is off or has no enabled source,
   // so a push-only install pays one function call for it.
   syncPoller();
+
+  // The clock behind « no answer within 30 minutes and the alert is
+  // escalated ». Started whether or not a database is configured: the tick
+  // asks for the engine, so configuring one in Settings starts the sweeps
+  // with no restart — and the timer is `unref`ed, so it costs a stopped
+  // console nothing.
+  getWaitScheduler(getEngine).start();
+  console.log(
+    `[menater] approval deadlines swept every ${SWEEP_INTERVAL_MS / 1000}s`,
+  );
+
   const ing = c.ingestion;
   console.log(
     `[menater] ingestion: ${ing.delivery}`

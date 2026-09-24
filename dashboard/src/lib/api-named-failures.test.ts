@@ -51,7 +51,7 @@
  *   POST /api/settings/test/database
  *                          400 {"ok":false,"detail":"Host missing."}
  *                                                              → the same
- *   POST /api/approvals/:token/resume
+ *   POST /api/approvals/:runId/resume
  *                          500 {"ok":false,"detail":"The decision could not be
  *                              recorded: … Without it the run will time out and
  *                              the alert will be escalated."}
@@ -310,6 +310,15 @@ describe('a refusal the server explained under a key that was not `error`', () =
 
   it('names what the database probe is missing instead of the status code', async () => {
     await expect(api.testDatabase({ host: '' })).rejects.toThrow(am.hostMissing);
+  });
+
+  it('tells the operator the port field is the problem, not their database', async () => {
+    // The same route, the second thing it can refuse. Clearing the port field
+    // sends `Number('') === 0`, and the answer has to reach the banner as the
+    // sentence about the FIELD: a generic "the console answered 400" would
+    // leave somebody looking for a database that was never dialled.
+    await expect(api.testDatabase({ host: '127.0.0.1', port: 0 })).rejects.toThrow(am.portInvalid('0'));
+    await expect(api.testDatabase({ host: '127.0.0.1', port: 70000 })).rejects.toThrow(/65535/);
   });
 });
 

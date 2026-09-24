@@ -85,19 +85,24 @@ export interface RunStore {
 
   createWait(wait: WaitRecord): Promise<void>;
   waitByToken(token: string): Promise<WaitRecord | null>;
+
   /**
-   * The OPEN wait of a run, if it has one.
+   * The wait a run is still holding open — the question a human can answer.
    *
-   * THE TOKEN IS PUBLISHED NOWHERE. `resumeUrl` builds `/?run=<run id>`, the
-   * snapshot carries those same ids on every stage of every case, and nothing
-   * ever writes a token outside the database — so the store is its only
-   * holder, and nobody was ever given one. The run is therefore how the
-   * console answers a question the pipeline stopped to ask; see
-   * `Engine.resumeWait`.
+   * ==========================================================================
+   * THE TOKEN IS A VERB, AND IT MUST NOT LEAVE THIS PROCESS
    *
-   * OPEN, not "the latest": a wait already settled must answer `null`, or a
-   * second press would find the question still open and the route's « that
-   * approval is not open any more » would describe a state nobody is in.
+   * The console answers an approval by naming the RUN, never the token:
+   * `waitByToken` resolves a capability, and resolving one is irreversible.
+   * The incident card that would have had to carry a token is read by the
+   * assistant's `get_alert` and by every MCP client — a catalogue that is
+   * closed and read-only precisely so that an injected instruction arrives at
+   * a model holding no verb. Run ids already travel there.
+   *
+   * So the lookup lives here, on the far side of the boundary, and it answers
+   * `null` for a wait already settled: the first answer stands, and there is
+   * no second question to resolve.
+   * ==========================================================================
    */
   openWaitOfRun(runId: string): Promise<WaitRecord | null>;
   resolveWait(token: string, payload: unknown): Promise<void>;
@@ -237,22 +242,25 @@ export class MemoryRunStore implements RunStore {
   }
 
   async openWaitOfRun(runId: string): Promise<WaitRecord | null> {
-    // The one closest to expiring, as on the Postgres side: a workflow that
-    // stopped twice must get the same answer from both implementations.
-    const open = [...this.waits.values()]
-      .filter((w) => w.runId === runId && !w.resumedAt)
-      .sort((a, b) => a.deadline.localeCompare(b.deadline));
-    return open[0] ? MemoryRunStore.copy(open[0]) : null;
+    // Insertion order, which is creation order — the same order the SQL side
+    // gets from `ORDER BY created_at`. A run holds one open wait in this
+    // pipeline; taking the oldest keeps the two implementations identical if
+    // one ever holds two.
+    for (const wait of this.waits.values()) {
+      if (wait.runId === runId && !wait.resumedAt) return MemoryRunStore.copy(wait);
+    }
+    return null;
   }
 
   async resolveWait(token: string, payload: unknown): Promise<void> {
     const wait = this.waits.get(token);
-    // ENGLISH, AS ON THE POSTGRES SIDE. This sentence reaches an operator:
-    // `routes/approvals.ts` puts it straight into `approvalFailed`. The two
-    // stores were saying it in two different languages, and
-    // `store-contract.test.ts` — the file that exists to stop exactly this
-    // drift — could not see it, its Postgres half running only when
-    // `MENATER_TEST_PG` is set.
+    // ENGLISH, AND THE SAME SENTENCE `PgRunStore` THROWS. It reaches an
+    // operator — `routes/approvals.ts` puts `err.message` straight into
+    // `approvalFailed` — so the two stores saying it differently means the
+    // console answers in a different language depending on which one is
+    // mounted. `store-contract.test.ts` exists to stop exactly this drift and
+    // could not see it: its Postgres half runs only when `MENATER_TEST_PG` is
+    // set, and it never had been.
     if (!wait) throw new Error('unknown wait token');
     if (wait.resumedAt) throw new Error('that wait was already settled');
     wait.resumedAt = new Date().toISOString();

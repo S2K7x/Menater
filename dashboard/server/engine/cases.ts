@@ -559,21 +559,14 @@ export function buildCases(
           human_reasoning: null,
           timeout_minutes: typeof ap.timeout_minutes === 'number' ? ap.timeout_minutes : 30,
           requested_at: str(ap.requested_at) || run.startedAt,
-          // WHAT THE CARD ANSWERS WITH, and nothing wrote it.
-          //
-          // `CaseView` computes `canSubmit = approver && Boolean(execId)`, so
-          // an absent `execution_id` rendered BOTH buttons disabled on every
-          // real case — and said nothing, since the other term of that `&&` is
-          // the operator's own name: a greyed-out button reads as "you have
-          // not typed it yet". Only `demo.ts` set the field, which is why the
-          // screen looked right in demonstration mode.
-          //
-          // It is THIS run — the `04-Action-Routing` execution that stopped to
-          // ask — which is the same identifier `resumeUrl` already publishes
-          // to the approval channel, and which every stage of this case
-          // already carries in the same snapshot. So the card gains no
-          // information it did not hold; it gains the one place that looks
-          // for it. `Engine.resumeWait` resolves it to the open wait.
+          // WHAT THE TWO BUTTONS POST. `CaseView` reads this field and refuses
+          // to submit without it, and nothing wrote it — so both controls
+          // rendered disabled on every case the pipeline produced, and only
+          // there, since `demo.ts` sets it. It is the RUN holding the wait,
+          // never the wait's token: the token resolves the approval once and
+          // irreversibly, and this object is answered by `get_alert` to a model
+          // reading attacker-composed logs. `POST /api/approvals/:runId/resume`
+          // does the resolving on the server, where the token stays.
           execution_id: run.id,
         };
       }

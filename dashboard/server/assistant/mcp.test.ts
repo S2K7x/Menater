@@ -446,3 +446,123 @@ describe('the MCP endpoint — the text block is JSON', () => {
     if (notes.length > 0) expect(notes[0].text).toMatch(/evidence to describe/);
   });
 });
+
+/* -------------------------------------------------------------------------
+ * The cap counts WORK, not a method name
+ *
+ * `rateLimited` exists because "these tools each read the pipeline snapshot,
+ * and an agent in a loop is exactly the client that will call them a thousand
+ * times without noticing" — its own comment. It was called from one branch,
+ * `tools/call`.
+ *
+ * `resources/read` is the other door to the same getters: `readResource` runs
+ * `runTool` for eight of the nine URIs, and its own comment says so — "every
+ * branch goes through `runTool`, NOT around it". So the cap held one of two
+ * doors, and the unheld one is reachable in BULK, because a JSON-RPC batch is
+ * dispatched with `Promise.all` over whatever fits in the 256 kB body.
+ *
+ * Measured on the real endpoint before the fix: 400 `tools/call` gave 120
+ * served and 280 refused; 400 `resources/read` gave 400 served and 0 refused;
+ * and ONE 179 kB batch of 2,000 `resources/read` served all 2,000 in a single
+ * request — 123 ms of blocked event loop on the thread that also answers the
+ * ingestion webhook.
+ * ---------------------------------------------------------------------- */
+
+describe('the MCP endpoint — one budget for every door to the same work', () => {
+  beforeEach(async () => {
+    resetMcpRateLimit();
+    await configure({});
+  });
+
+  /** How many of `n` sequential calls of one method were served. */
+  async function spend(n: number, body: (i: number) => unknown) {
+    let served = 0;
+    let refused = 0;
+    for (let i = 0; i < n; i += 1) {
+      const r = await call({ body: body(i) });
+      if (/rate limit/i.test(r.json?.error?.message ?? '')) refused += 1;
+      else served += 1;
+    }
+    return { served, refused };
+  }
+
+  const readTimeline = (i: number) => ({
+    jsonrpc: '2.0', id: i, method: 'resources/read',
+    params: { uri: 'menater://timeline' },
+  });
+  const callTool = (i: number) => ({
+    jsonrpc: '2.0', id: i, method: 'tools/call',
+    params: { name: 'get_timeline', arguments: {} },
+  });
+
+  it('rate limits a resource read, which is a tool call wearing another name', async () => {
+    const { refused } = await spend(130, readTimeline);
+    expect(refused).toBeGreaterThan(0);
+  });
+
+  it('spends ONE budget: a tool call and a resource read draw on the same counter', async () => {
+    // Burn the budget through the door that was already held...
+    await spend(130, callTool);
+    // ...and the other door must be shut too. It reaches the same `runTool`.
+    const r = await call({ body: readTimeline(999) });
+    expect(r.json?.error?.message).toMatch(/rate limit/i);
+  });
+
+  it('spends it in the other direction too', async () => {
+    await spend(130, readTimeline);
+    const r = await call({ body: callTool(999) });
+    expect(r.json?.error?.message).toMatch(/rate limit/i);
+  });
+
+  /**
+   * The sharp one. A batch is ONE request, so a per-call cap that a loop
+   * respects is worth nothing if a single body can carry four hundred of them.
+   */
+  it('does not let one batched request outrun the cap', async () => {
+    const batch = Array.from({ length: 400 }, (_, i) => readTimeline(i));
+    const r = await call({ body: batch });
+    const refused = r.json.filter((x: any) => /rate limit/i.test(x?.error?.message ?? '')).length;
+    expect(refused).toBeGreaterThan(0);
+    // And the budget it spent is gone for the next caller, not reset per body.
+    const after = await call({ body: callTool(999) });
+    expect(after.json?.error?.message).toMatch(/rate limit/i);
+
+    // THE WINDOW IS A MINUTE, NOT A REQUEST. Refusing part of each batch while
+    // handing every new body a fresh budget bounds nothing at all: the caller
+    // just sends another batch. A second one must be refused OUTRIGHT.
+    const second = await call({ body: Array.from({ length: 400 }, (_, i) => readTimeline(i)) });
+    const servedInSecond = second.json.filter(
+      (x: any) => !/rate limit/i.test(x?.error?.message ?? ''),
+    ).length;
+    expect(servedInSecond).toBe(0);
+  });
+
+  /* --- The boundary, claimed on purpose: these pass BEFORE and AFTER ----- */
+
+  /**
+   * Completion is typed-ahead — one call per KEYSTROKE, and an alert id is
+   * eighteen characters. Charging it against a 120-a-minute budget shared with
+   * real reads would make the console's own suggestions the thing that
+   * exhausts the cap, and it does no tool work: `completeArgument` reads the
+   * snapshot behind a timeout race and filters a list of ids.
+   */
+  it('does NOT meter completion — it is one call per keystroke', async () => {
+    const { refused } = await spend(130, (i) => ({
+      jsonrpc: '2.0', id: i, method: 'completion/complete',
+      params: { ref: { type: 'ref/prompt', name: 'explain-alert' }, argument: { name: 'alert_id', value: '' } },
+    }));
+    expect(refused).toBe(0);
+  });
+
+  /**
+   * Nor the catalogues. `tools/list`, `resources/list` and `prompts/list` are
+   * constants in the source: they read nothing, and a client is entitled to
+   * ask what a server offers without spending the budget for using it.
+   */
+  it('does NOT meter the catalogue listings', async () => {
+    for (const method of ['tools/list', 'resources/list', 'prompts/list']) {
+      const { refused } = await spend(50, (i) => ({ jsonrpc: '2.0', id: i, method }));
+      expect(refused, method).toBe(0);
+    }
+  });
+});

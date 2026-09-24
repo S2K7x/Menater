@@ -49,7 +49,7 @@ import { describeFetchError, fetchWithDeadline } from '../http.ts';
 import { mapLimit } from '../limit.ts';
 import { humanBytes } from '../respond.ts';
 import { isManagedCredential } from '../credentials.ts';
-import { mappingFor, normalize } from '../engine/transforms/normalize.ts';
+import { mappingFor, normalize, PayloadTooDeep } from '../engine/transforms/normalize.ts';
 import { readPath } from '../engine/values.ts';
 import { readCursor, recordPoll } from './cursors.ts';
 import type { IngestionPolicy, PullSource } from './policy.ts';
@@ -391,7 +391,29 @@ export async function pollSource(
   const normalized: Record<string, unknown>[] = [];
   let unusable = 0;
   for (const item of batch) {
-    const alert = normalize(mapping, item) as Record<string, unknown>;
+    let alert: Record<string, unknown>;
+    try {
+      alert = normalize(mapping, item) as Record<string, unknown>;
+    } catch (err) {
+      if (!(err instanceof PayloadTooDeep)) throw err;
+      /**
+       * ONE POISONED ITEM MUST NOT COST THE NINETY-NINE GOOD ONES.
+       *
+       * `normalize` refuses a payload nested past what `JSON.stringify` can
+       * survive, and before that floor existed the `RangeError` escaped this
+       * function entirely — so `fail()` never ran, the source was never backed
+       * off and nothing appeared on the Ingestion tab. It escaped `tick()` too,
+       * which the timer calls as `void this.tick()`: an unhandled rejection
+       * from a timer TERMINATES a Node 22 process, on every interval.
+       *
+       * Counted as unusable, like any other item the mapping could not turn
+       * into an alert. Failing the whole poll instead would replace the
+       * batch's good alerts with nothing, which is the harsher half of the
+       * same mistake.
+       */
+      unusable += 1;
+      continue;
+    }
     // No identity, no cursor contribution and no delivery. It is COUNTED and
     // shown: silently skipping items is how a source that changed its shape
     // looks like a source that went quiet.
