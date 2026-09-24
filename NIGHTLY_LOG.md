@@ -4,6 +4,117 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-24 (second run) — Thursday · Bugs and technical debt
+
+**Subject**: started on **the approve and reject buttons disabled on every real
+case** and **that subject was already merged before this session began**. What
+shipped instead is what verifying it turned up: `store-contract.test.ts`'s
+Postgres half had never been run, and it was red on `main`.
+
+**Result**: PR #39 (branch `claude/great-pascal-ikuc7f`), reduced to the
+16 lines that are not a duplicate.
+
+**Read this first — the process failure, which is the most useful thing here.**
+This session's clone was **17 commits behind `origin/main`**: six merged PRs
+(#33–#38) it never saw, including #35, which fixed tonight's subject with the
+same design, and #38, the run four hours earlier. `NIGHTLY.md` Step 0.5 asks
+for `git log --oneline -30` and the open-PR list; **both were run and both said
+go ahead**, because the log reads the stale clone and the PR list was empty
+precisely because everything had been *merged*. Neither instrument can see this.
+The one command that would have — `git fetch origin main` — is in Step 5 for
+pushing and nowhere in Step 0. Cost: a full night's work, written, tested and
+pushed, on a problem already solved. **Step 0 needs a fetch before its git log,
+and a future night should not trust `git log` on a container clone.**
+
+**What the duplicate cost, and what it did not.** The design this night reached
+independently was the same as #35's — `openWaitOfRun` on both stores,
+`execution_id: run.id`, the run id resolved server-side — which is at least
+evidence the answer was forced. #35's reasoning is better and is now the one in
+the tree: the wait token must not reach the browser **because the incident card
+is answered by `get_alert` to a model reading attacker-composed logs, and to
+every MCP client** — a concrete exposure path this session did not find, having
+argued only that the token is published nowhere. Everything duplicated was
+resolved in favour of `origin/main`, including the tests: #35's
+*« carries no wait token to the browser »* is a better assertion than anything
+written here.
+
+**What actually shipped**, and it came from the verification rather than the
+subject:
+
+- `MemoryRunStore.resolveWait` threw `jeton d'attente inconnu`; `PgRunStore`
+  throws `unknown wait token`. The memory store says the English one now, and
+  the contract asserts it.
+- Measured on **unmodified `origin/main` at 85a77b6**, Postgres half enabled:
+  **1 failed, 45 passed**. The file exists to stop the two stores diverging and
+  **had never once compared them**, because `MENATER_TEST_PG` had never been
+  set. The sentence is not internal: `routes/approvals.ts` puts `err.message`
+  into `approvalFailed`, so the console answered an operator in French or
+  English depending on which store was mounted.
+
+**What I learned**:
+
+- **There IS a database in this environment.** Three nights deferred `pg-store`
+  work on an inherited *"cannot be verified without a database and this
+  environment has none"*. Postgres 16.13 is installed. `initdb` refuses to run
+  as root, so the cluster goes under the `postgres` user **and inside
+  `/var/lib/postgresql`** — that user cannot traverse the scratchpad path, which
+  is the one non-obvious step. `sql/*.sql` apply cleanly except
+  `01-role-and-dedup.sql`, whose `:'app_password'` is a psql variable
+  `docker/init-db.sh` supplies; every table the tests need is created anyway.
+  Recipe, in full, so no night re-derives it:
+
+      PGD=/var/lib/postgresql/nightly
+      mkdir -p $PGD && chown postgres:postgres $PGD && chmod 700 $PGD
+      su postgres -s /bin/sh -c "initdb -D $PGD -U menater --auth=trust"
+      su postgres -s /bin/sh -c "pg_ctl -D $PGD -o '-p 5455 -k /tmp' -l $PGD/log.txt start"
+      psql -h /tmp -p 5455 -U menater -d postgres -c 'CREATE DATABASE menater_test'
+      # then: MENATER_TEST_PG=postgres://menater@127.0.0.1:5455/menater_test npm test
+
+- **A skipped test also hides the PRs that leaned on it.** #35's four
+  `openWaitOfRun` contract tests were merged with their SQL never executed.
+  They pass — verified tonight — but nobody knew that, and *not knowing* is the
+  defect, not the outcome. With the Postgres half enabled the whole suite is
+  **1332 passed, 0 skipped**, against 1309 | 1 without it.
+- **A negative assertion cannot notice a non-answer.** See the finding below.
+
+**Found and NOT fixed** — reproduced on unmodified `main` at 85a77b6, so neither
+new nor mine, and now a § 7 row:
+
+- **An executed action is sealed into the audit chain as `action_taken: "none"`.**
+  Answering *approve*: the containment really runs (`https://edr.test/isolate`
+  dialled, `executed: true`) while the audit record reads `action_taken: "none"`,
+  `routing_outcome: "unknown"`, and the card's `action_taken` is `null`. The
+  append-only row that is this product's only tamper-evidence does not name the
+  action it is evidence of. On the card side, `cases.ts` reads `action` /
+  `executed_action` off the `execute` step — an `http` node whose output is
+  `{ ok, status, body }` and carries neither; the audit side is its own
+  question, `buildAuditRecord` being what writes those two words. **Why the
+  existing test is green over it**: it asserts `routing_outcome` is NOT
+  `rejected` and NOT `timeout_escalated`, and `"unknown"` satisfies both.
+  Left alone because it changes what is sealed into an immutable chain.
+
+**Do not redo**:
+
+- **Do not re-fix the approval buttons.** Done in #35, better. This branch's
+  version is in the merge's second parent if anyone wants to compare.
+- **Do not "fix" the language divergence by widening the assertion to accept
+  both spellings.** That is the weakened test `NIGHTLY.md` forbids, and the
+  file's whole purpose is that the two stores answer identically.
+- **Do not conclude from `git log` alone that a nightly clone is current.**
+
+**Verified** (commands run, output read):
+
+- `npm run typecheck` — 0 errors.
+- `npm test` — **1309 passed | 1 skipped**, which is what CI sees.
+- `MENATER_TEST_PG=… npm test` — **1332 passed, 0 skipped**.
+- `npm run build` — clean.
+- **Red before the change**, on a clean worktree of unmodified `origin/main`
+  with Postgres: `store-contract.test.ts` **1 failed | 45 passed (46)**.
+- The audit finding reproduced on that same unmodified worktree.
+- VulnPipe untouched, so its suite was not run.
+
+---
+
 ## 2026-09-24 — Thursday · Bugs and technical debt
 
 **Subject**: **the approval timeout never fired.** `ROADMAP.md` § 7 carried it

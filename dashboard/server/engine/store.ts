@@ -254,7 +254,14 @@ export class MemoryRunStore implements RunStore {
 
   async resolveWait(token: string, payload: unknown): Promise<void> {
     const wait = this.waits.get(token);
-    if (!wait) throw new Error(`jeton d'attente inconnu`);
+    // ENGLISH, AND THE SAME SENTENCE `PgRunStore` THROWS. It reaches an
+    // operator — `routes/approvals.ts` puts `err.message` straight into
+    // `approvalFailed` — so the two stores saying it differently means the
+    // console answers in a different language depending on which one is
+    // mounted. `store-contract.test.ts` exists to stop exactly this drift and
+    // could not see it: its Postgres half runs only when `MENATER_TEST_PG` is
+    // set, and it never had been.
+    if (!wait) throw new Error('unknown wait token');
     if (wait.resumedAt) throw new Error('that wait was already settled');
     wait.resumedAt = new Date().toISOString();
     wait.payload = MemoryRunStore.copy(payload);

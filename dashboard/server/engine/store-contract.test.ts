@@ -215,7 +215,14 @@ function contract(name: string, make: () => Promise<RunStore>) {
     });
 
     it('refuse un jeton inconnu', async () => {
-      await expect(store.resolveWait('jamais-emis', {})).rejects.toThrow(/inconnu/);
+      // THE MESSAGE IS PART OF THE CONTRACT, and this assertion is what proved
+      // the two implementations had drifted. It read `/inconnu/`, which only
+      // the memory store answered: `PgRunStore` has thrown `unknown wait token`
+      // for as long as it has been English. Nothing noticed, because this half
+      // of the file runs only with `MENATER_TEST_PG` set — and it never had
+      // been, so the file written to stop the two stores diverging had never
+      // once compared them.
+      await expect(store.resolveWait('jamais-emis', {})).rejects.toThrow(/unknown wait token/);
     });
 
     it('ne rend échues que les attentes ouvertes et dépassées', async () => {
