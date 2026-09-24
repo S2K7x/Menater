@@ -11,7 +11,7 @@ they were — they are memory about live code, and rewriting them would lose it.
 approval buttons were disabled on every real case, and the identifier the card
 does hold answered 404 with a sentence that was false in every clause.
 
-**Result**: PR (branch `claude/great-pascal-ikuc7f`).
+**Result**: PR #39 (branch `claude/great-pascal-ikuc7f`).
 
 **Note on the branch name.** `NIGHTLY.md` § 5 asks for
 `claude/nightly-YYYY-MM-DD-subject`; this session was handed
