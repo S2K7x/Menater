@@ -11,7 +11,7 @@ as *« Nothing calls `sweepExpiredWaits()` or `engine.resume()` outside the
 tests »*, and the previous two runs both named it the biggest open item left
 there without taking it. It is that item, and only its first half.
 
-**Result**: PR #TBD (branch `claude/great-pascal-z2l69m`).
+**Result**: PR #38 (branch `claude/great-pascal-z2l69m`).
 
 **Note on the branch name.** `NIGHTLY.md` § 5 asks for
 `claude/nightly-YYYY-MM-DD-subject`; this session was handed
