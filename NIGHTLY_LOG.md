@@ -4,6 +4,149 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-24 — Thursday · Bugs and technical debt
+
+**Subject**: **the console could not answer an approval at all** — `ROADMAP.md`
+§ 7, the row the 09-21 night opened and called "the obvious next night". Both
+approval buttons were disabled on every real case, and the identifier the card
+does hold answered 404 with a sentence that was false in every clause.
+
+**Result**: PR (branch `claude/great-pascal-ikuc7f`).
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-ikuc7f` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Eighteenth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject**: the calendar rule did not preempt — `main` was green
+(typecheck 0, 1228 passed | 1 skipped, build clean) and no pull request was
+open. Thursday's reservoir is § 7 plus anything this journal left unfixed, and
+this row was both. Two other § 7 rows were weighed and rejected: the missing
+scheduler for `sweepExpiredWaits`/`resume` is explicitly *a decision* about
+where a scheduler lives (one per process, and the console can run more than
+one), and the database test button's port validation is real but strictly
+smaller. This one carries the product's central guarantee — *no irreversible
+action without explicit human approval* — and the guarantee was unreachable.
+
+**What was actually wrong**, measured by driving the real route over the real
+pipeline, before any change:
+
+| | before | after |
+|---|---|---|
+| `case.approval.execution_id` | `undefined` | the `04-Action-Routing` run id |
+| `CaseView` `canSubmit`, name typed | `false` | `true` |
+| `POST /api/approvals/<run id>/resume` | **404** | 200, action executed |
+| that 404's sentence | *"not open any more — already answered, or timed out"* over a wide-open wait | shown only once the wait really is closed |
+| second press on the same run | (unreachable) | 404, first answer stands |
+| `store-contract.test.ts` on Postgres | never run | 44 tests, green |
+
+**What I learned**:
+
+- **The premise that blocked this for three nights had stopped being true.**
+  The 09-21 entry filed the fix as undecidable partly because the Postgres half
+  "cannot be verified without a database and this environment has none". It
+  does: Postgres 16.13 is installed in the nightly container. `initdb` refuses
+  to run as root, so the cluster is created under the `postgres` user and
+  **inside `/var/lib/postgresql`, not the scratchpad** — `initdb` could not
+  traverse the scratchpad path as that user. `sql/*.sql` apply cleanly except
+  `01-role-and-dedup.sql`, whose `:'app_password'` is a psql variable
+  `docker/init-db.sh` supplies; the tables every test needs are created anyway.
+  **Check an inherited premise before inheriting the conclusion.**
+- **Running the skipped half immediately paid for itself.** `store-contract.test.ts`
+  runs the SAME suite against both stores and is skipped without
+  `MENATER_TEST_PG`. Its first real run was **red**: `MemoryRunStore` threw
+  `jeton d'attente inconnu` where `PgRunStore` throws `unknown wait token`.
+  That sentence reaches an operator — `routes/approvals.ts` puts `err.message`
+  straight into `approvalFailed` — so the console answered in a different
+  language depending on which store was mounted, and the file written to catch
+  exactly that drift could not see it. **A test nobody can run protects
+  nothing, and the thing it was not protecting had already broken.**
+- **The decision the roadmap row posed was not the decision it looked like.**
+  It reads as *token or run id* — which spelling wins. It is really *what is
+  already published*, and that is measurable rather than arguable: `resumeUrl`
+  builds `/?run=<run id>`, the snapshot carries run ids on every stage of every
+  case, and **nothing writes a token outside the database**. So the token is
+  not a capability anybody was ever given, and the run already is the product's
+  public handle for an approval. Accepting the run grants a signed-in tab
+  nothing new; shipping the token into the snapshot would have MINTED a
+  capability that does not exist today. That settles it the way the 09-21 entry
+  guessed, for a reason it had not stated.
+- **The 404 was the worse half.** The missing field disabled a button, which is
+  at least visible. Posting the run id — what the card holds, what Slack
+  publishes — answered *"That approval is not open any more — it was already
+  answered, or it timed out. The first answer stands; nothing was lost."* over
+  a wait that was wide open and a run sitting in `waiting`. Every clause false,
+  and reassuring. Same family as `llm` reporting *"the model answered with no
+  content"* about a model it never asked: **a sentence must not be reachable
+  from a state it does not describe** — here aimed at the operator. Which is
+  why `openWaitOfRun` returns only an OPEN wait: that is what makes the same
+  404 true when it is finally shown, on a second press.
+
+**Found and NOT fixed** — reproduced on unmodified `main`, so neither new nor
+mine, and now a § 7 row:
+
+- **An executed action is sealed into the audit chain as `action_taken: "none"`.**
+  Driving an approval to *approve* on the real database: the containment really
+  runs (`https://edr.test/isolate` dialled, `executed: true`) while the audit
+  record composed by 04 reads `action_taken: "none"`, `routing_outcome: "unknown"`,
+  and the card's `action_taken` is `null`. The append-only row that is this
+  product's only tamper-evidence does not name the action it is evidence of.
+  The immediate cause on the card side is that `cases.ts` reads `action` /
+  `executed_action` off the `execute` step, which is an `http` node whose
+  output is `{ ok, status, body }` and carries neither; the audit side is its
+  own question, since `buildAuditRecord` is what writes those two words.
+  **Why the existing test is green over it**: it asserts `routing_outcome` is
+  NOT `rejected` and NOT `timeout_escalated`, and `"unknown"` satisfies both.
+  Deliberately left: it changes what is sealed into an immutable chain, which
+  is a subject of its own. **This is the obvious next night.**
+
+**Do not redo**:
+
+- **Do not ship the wait token into the snapshot.** It is the plausible other
+  half of the decision and it is the wrong one: it creates a capability in
+  every open tab that does not exist today, for no reach the run id does not
+  already give.
+- **Do not make `openWaitOfRun` return "the latest wait".** Tried and rejected
+  as mutation 3: a settled wait coming back makes a second press find the
+  question still open, and rebuilds the false 404 inside its own fix. Caught by
+  both the contract test and the route test.
+- **Do not resolve with the route's argument.** `resumeWait` must call
+  `resolveWait(wait.token, …)`, never `resolveWait(token, …)` — the argument
+  may be a run id. Mutation 4; caught.
+- **Do not "fix" the language divergence by changing the test to accept both.**
+  That is the weakened assertion NIGHTLY.md forbids, and the file's whole
+  purpose is that the two stores answer identically. The memory store moved to
+  English, which is also the direction § 7 wants.
+- **A `CaseView` test cannot be red for this defect** — the bug is in
+  `cases.ts`, not the component. The two added there claim both sides of
+  `canSubmit`'s `&&` and pass before and after, on purpose; the red-before
+  evidence is in `approval-route.test.ts`.
+
+**Verified** (commands run, output read):
+
+- `npm run typecheck` — 0 errors.
+- `npm test` — **1238 passed | 1 skipped** (was 1228 | 1). The skip is the
+  Postgres contract half, which needs `MENATER_TEST_PG`.
+- `MENATER_TEST_PG=… npm test` — **1260 passed, 0 skipped**, against a real
+  Postgres 16.13 cluster. That half had never been run before tonight.
+- `npm run build` — clean.
+- **Red before the fix**: 6 contract tests (both stores) and 3 route tests.
+  The 2 route controls and the 2 `CaseView` tests were green before and after,
+  which is what separates the fix from a constant.
+- **Four mutations, each caught**: cases.ts not writing `execution_id` (1 red);
+  engine dropping the run-id fallback (2 red); `openWaitOfRun` returning
+  settled waits, both stores (2 contract + 1 route red); `resolveWait(token)`
+  instead of `resolveWait(wait.token)` (2 red).
+- **End to end on Postgres**, through the real pipeline and the real store:
+  wait opened with a real token, answered by RUN id, run `done`, isolation
+  endpoint dialled, wait closed, case `approved` by `alice`, second press
+  refused. Probe deleted.
+- VulnPipe untouched, so its suite was not run.
+
+---
+
 ## 2026-09-21 — Monday · Feature
 
 **Subject**: **an approval answered in the console was interpreted as SILENCE**

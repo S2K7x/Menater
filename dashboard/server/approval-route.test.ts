@@ -377,3 +377,109 @@ describe('an approval answered in the console', () => {
     expect(r.approval.approver?.signature_verified).toBe(false);
   });
 });
+
+/* ==========================================================================
+ * THE OTHER HALF OF THE SAME PATH: THE CONSOLE COULD NOT ANSWER AT ALL
+ *
+ * Everything above answers with the wait TOKEN, which is engine API — and the
+ * browser has never held one. `resumeUrl` publishes a RUN id
+ * (`/?run=<run id>`), the snapshot carries run ids on every stage, and the
+ * token is published nowhere at all: the only holder of a token is the
+ * database. So the identifier the whole product already uses for an approval
+ * is the run, and the route accepted the one thing nobody was ever given.
+ *
+ * Measured before the fix, driving this route over this pipeline:
+ *
+ *   - `case.approval.execution_id` is `undefined` — `cases.ts` never wrote it
+ *     — so `CaseView`'s `canSubmit` is false and BOTH buttons render disabled,
+ *     with nothing on screen saying why (the other term of the same `&&` is
+ *     the operator's own name, so it reads as "you have not typed it yet");
+ *   - posting the run id the card DOES hold answers **404 « That approval is
+ *     not open any more — it was already answered, or it timed out. The first
+ *     answer stands; nothing was lost. »** over a wait that is wide open and
+ *     a run sitting in `waiting`. A confident sentence about a state nobody is
+ *     in, on the one control that carries this product's central guarantee.
+ * ========================================================================== */
+
+describe('answering from the console, with the identifier the console holds', () => {
+  /** The 04 run — what `resumeUrl` publishes and what the card shows. */
+  async function routingRunId() {
+    const runs = await live.store.recentRuns({ limit: 200 });
+    return runs.find((r) => r.workflowId === '04-action-routing')!.id;
+  }
+
+  it('carries the run id onto the card, so the buttons are reachable', async () => {
+    // `CaseView` reads `approval.execution_id` and disables both buttons
+    // without it. Read off the case the console would actually render, built
+    // by the real reader from the real journal.
+    await alertAwaitingApproval();
+    const { cases } = await collect();
+    const ap = cases[0].approval!;
+
+    expect(cases[0].state).toBe('awaiting_approval');
+    expect(ap.execution_id).toBe(await routingRunId());
+    // The exact expression the component computes. Written out because the
+    // defect was not that the field was wrong — it was that it was absent,
+    // and absent reads as "the operator has not finished typing".
+    expect('alice'.trim().length > 0 && Boolean(ap.execution_id)).toBe(true);
+  });
+
+  it('resolves that run to its open wait and relays the decision', async () => {
+    await alertAwaitingApproval();
+    const runId = await routingRunId();
+
+    const r = await call('POST', `/api/approvals/${runId}/resume`, {
+      decision: 'approve', approver: 'alice', reason: 'Owner confirmed the maintenance window.',
+    });
+    expect(r.status).toBe(200);
+
+    // Asserted on what the ENGINE concluded, never on the sentence the route
+    // printed: a route can answer 200 about a pipeline that did nothing.
+    expect((await interpreted())!.outcome).toBe('approved');
+    expect(live.calls).toContain(ISOLATE);
+  });
+
+  it('still answers a raw token, because that is the engine contract', async () => {
+    // The control. The run id is ADDED, not substituted: `resumeWait` is
+    // engine API and a token is what a link carries.
+    await alertAwaitingApproval();
+    const r = await answer('approve');
+    expect(r.status).toBe(200);
+    expect((await interpreted())!.outcome).toBe('approved');
+  });
+
+  it('says « not open any more » only when that is true', async () => {
+    /*
+     * THE SENTENCE HAS TO EARN ITSELF. It was being printed over an open wait,
+     * which is this product's defining defect pointed at its own operator: a
+     * confident diagnosis of a state nobody is in. Once the run resolves, the
+     * same 404 becomes the honest answer to a SECOND press — the first answer
+     * stands and the question really is closed.
+     */
+    await alertAwaitingApproval();
+    const runId = await routingRunId();
+
+    const first = await call('POST', `/api/approvals/${runId}/resume`, {
+      decision: 'approve', approver: 'alice', reason: 'first',
+    });
+    expect(first.status).toBe(200);
+
+    const second = await call('POST', `/api/approvals/${runId}/resume`, {
+      decision: 'reject', approver: 'bob', reason: 'second',
+    });
+    expect(second.status).toBe(404);
+    // And the second press changed nothing: the action executed is the one the
+    // first answer chose.
+    expect((await interpreted())!.outcome).toBe('approved');
+  });
+
+  it('answers 404 for an identifier that is neither', async () => {
+    await alertAwaitingApproval();
+    const r = await call('POST', '/api/approvals/not-a-run-or-a-token/resume', {
+      decision: 'approve', approver: 'alice', reason: 'x',
+    });
+    expect(r.status).toBe(404);
+    // The real question is still open: nothing was spent.
+    expect(await interpreted()).toBeUndefined();
+  });
+});

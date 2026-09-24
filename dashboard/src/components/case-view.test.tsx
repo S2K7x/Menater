@@ -23,6 +23,7 @@
 
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, screen } from '@testing-library/react';
+import { userEvent } from '@testing-library/user-event';
 
 import { render } from '../vulnpipe/test-utils.tsx';
 import { CaseView } from './CaseView.tsx';
@@ -259,5 +260,58 @@ describe('an answered approval says what the human actually answered', () => {
 
     expect(screen.getByText('Declined by alice')).toBeTruthy();
     expect(screen.queryByText('Accepted by alice')).toBeNull();
+  });
+});
+
+/* ==========================================================================
+ * THE BUTTONS THEMSELVES, WHICH WERE DISABLED ON EVERY REAL CASE
+ *
+ * `canSubmit = approver.trim().length > 0 && Boolean(execId) && !busy`, with
+ * `execId = approval.execution_id` — a field `cases.ts` never wrote. So on a
+ * real install both controls rendered `disabled` however carefully the
+ * operator filled the form, and NOTHING said why: the other term of that
+ * `&&` is their own name, so a greyed-out button reads as "you have not
+ * finished typing". Only `demo.ts` set the field, which is why the screen
+ * looked right in demonstration mode and only there.
+ *
+ * These two tests claim opposite sides of the same `&&`, on purpose: the fix
+ * is a field that must be PRESENT, so a test that only checks the enabled
+ * case would pass just as well against a component that ignores it.
+ * ========================================================================== */
+
+const PENDING: Approval = {
+  ...APPROVED,
+  outcome: 'pending',
+  approver: null,
+  human_reasoning: null,
+  execution_id: '244e34dc-a79a-4cd8-85be-49d16785e124',
+};
+
+describe('an approval waiting on a human can actually be answered', () => {
+  it('enables both controls once the operator has named themselves', async () => {
+    const user = userEvent.setup();
+    render(<CaseView alertCase={kase({ approval: PENDING })} onRefresh={() => {}} />);
+
+    const accept = screen.getByRole('button', { name: /Accept/ });
+    const refuse = screen.getByRole('button', { name: /Decline/ });
+    // Before a name: correctly refused, and that half always worked.
+    expect((accept as HTMLButtonElement).disabled).toBe(true);
+
+    await user.type(screen.getByPlaceholderText('@first.last'), 'alice');
+
+    expect((accept as HTMLButtonElement).disabled).toBe(false);
+    expect((refuse as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('is still refused when the case carries no execution to answer', async () => {
+    // The control, and the state every real case was in. Written out because
+    // the two reasons a button is disabled are indistinguishable on screen.
+    const user = userEvent.setup();
+    const orphaned: Approval = { ...PENDING, execution_id: null };
+    render(<CaseView alertCase={kase({ approval: orphaned })} onRefresh={() => {}} />);
+
+    await user.type(screen.getByPlaceholderText('@first.last'), 'alice');
+
+    expect((screen.getByRole('button', { name: /Accept/ }) as HTMLButtonElement).disabled).toBe(true);
   });
 });

@@ -85,6 +85,21 @@ export interface RunStore {
 
   createWait(wait: WaitRecord): Promise<void>;
   waitByToken(token: string): Promise<WaitRecord | null>;
+  /**
+   * The OPEN wait of a run, if it has one.
+   *
+   * THE TOKEN IS PUBLISHED NOWHERE. `resumeUrl` builds `/?run=<run id>`, the
+   * snapshot carries those same ids on every stage of every case, and nothing
+   * ever writes a token outside the database — so the store is its only
+   * holder, and nobody was ever given one. The run is therefore how the
+   * console answers a question the pipeline stopped to ask; see
+   * `Engine.resumeWait`.
+   *
+   * OPEN, not "the latest": a wait already settled must answer `null`, or a
+   * second press would find the question still open and the route's « that
+   * approval is not open any more » would describe a state nobody is in.
+   */
+  openWaitOfRun(runId: string): Promise<WaitRecord | null>;
   resolveWait(token: string, payload: unknown): Promise<void>;
   /** Attentes dont l'échéance est dépassée et que personne n'a tranchées. */
   expiredWaits(now: string): Promise<WaitRecord[]>;
@@ -221,9 +236,24 @@ export class MemoryRunStore implements RunStore {
     return wait ? MemoryRunStore.copy(wait) : null;
   }
 
+  async openWaitOfRun(runId: string): Promise<WaitRecord | null> {
+    // The one closest to expiring, as on the Postgres side: a workflow that
+    // stopped twice must get the same answer from both implementations.
+    const open = [...this.waits.values()]
+      .filter((w) => w.runId === runId && !w.resumedAt)
+      .sort((a, b) => a.deadline.localeCompare(b.deadline));
+    return open[0] ? MemoryRunStore.copy(open[0]) : null;
+  }
+
   async resolveWait(token: string, payload: unknown): Promise<void> {
     const wait = this.waits.get(token);
-    if (!wait) throw new Error(`jeton d'attente inconnu`);
+    // ENGLISH, AS ON THE POSTGRES SIDE. This sentence reaches an operator:
+    // `routes/approvals.ts` puts it straight into `approvalFailed`. The two
+    // stores were saying it in two different languages, and
+    // `store-contract.test.ts` — the file that exists to stop exactly this
+    // drift — could not see it, its Postgres half running only when
+    // `MENATER_TEST_PG` is set.
+    if (!wait) throw new Error('unknown wait token');
     if (wait.resumedAt) throw new Error('that wait was already settled');
     wait.resumedAt = new Date().toISOString();
     wait.payload = MemoryRunStore.copy(payload);

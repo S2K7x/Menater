@@ -206,13 +206,41 @@ export class Engine {
     return resumed;
   }
 
-  /** Reprend une exécution suspendue, sur présentation de son jeton. */
+  /**
+   * Resumes a suspended run, on presentation of its wait token — OR of the
+   * identifier of the run itself.
+   *
+   * ==========================================================================
+   * WHY BOTH, AND WHY THAT IS NOT A WIDENING
+   *
+   * THE TOKEN IS PUBLISHED NOWHERE. `resumeUrl` builds `/?run=<run id>`, the
+   * snapshot carries those same ids on every stage of every case, and nothing
+   * ever writes a token outside the database. Its only holder is therefore the
+   * store — so the console could not answer at all, and the Approve button was
+   * disabled on every real case.
+   *
+   * The run is the identifier this product ALREADY publishes to designate an
+   * approval: in the Slack request, and in the snapshot every signed-in tab
+   * reads. Accepting it grants reach to nothing new — it makes the handle that
+   * was intended usable. Carrying the token into the snapshot instead would
+   * have MINTED a capability that does not exist today.
+   *
+   * The token stays accepted: it is the engine's contract, and it is what a
+   * link carries. The order matters — the token first, which is a primary key,
+   * then the run — and both are UUIDs, so there is no ambiguity to settle.
+   * ==========================================================================
+   */
   async resumeWait(token: string, payload: unknown): Promise<RunRecord | null> {
-    const wait = await this.store.waitByToken(token);
+    const wait = (await this.store.waitByToken(token))
+      ?? (await this.store.openWaitOfRun(token));
     if (!wait) return null;
     if (wait.resumedAt) return this.store.getRun(wait.runId);
 
-    await this.store.resolveWait(token, payload);
+    // `wait.token` AND NOT `token`: the argument may be a run id, and it is
+    // the wait that was FOUND which has to be settled. The uniqueness that
+    // stops a double click acting twice is carried by `soc_run_wait`'s primary
+    // key, which is the token.
+    await this.store.resolveWait(wait.token, payload);
     const run = await this.store.getRun(wait.runId);
     if (!run) return null;
     const workflow = this.workflows.get(run.workflowId);

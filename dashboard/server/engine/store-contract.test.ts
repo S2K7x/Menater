@@ -215,7 +215,60 @@ function contract(name: string, make: () => Promise<RunStore>) {
     });
 
     it('refuse un jeton inconnu', async () => {
-      await expect(store.resolveWait('jamais-emis', {})).rejects.toThrow(/inconnu/);
+      // THE MESSAGE IS PART OF THE CONTRACT, and it is what made this
+      // assertion the one that proved the two stores had drifted: it read
+      // `/inconnu/`, which only the memory store answered. The Postgres half
+      // has said `unknown wait token` for as long as it has been English, and
+      // nothing noticed because this half only runs with `MENATER_TEST_PG`
+      // set. The sentence reaches an operator — `routes/approvals.ts` puts it
+      // straight into `approvalFailed(err.message)` — so the two stores
+      // disagreeing means the console answers in a different language
+      // depending on which one is mounted.
+      await expect(store.resolveWait('jamais-emis', {})).rejects.toThrow(/unknown wait token/);
+    });
+
+    /* --------------------------------------------------------------------
+     * THE OPEN WAIT OF A RUN — how an approval is answered from the console
+     *
+     * The token is published NOWHERE: `resumeUrl` carries a RUN id, and the
+     * snapshot carries run ids on every stage. So the run is the identifier
+     * everything already holds, and the token is the one nobody was ever
+     * given. This lookup is what lets the console answer a question the
+     * pipeline stopped to ask; see `Engine.resumeWait`.
+     * ------------------------------------------------------------------ */
+
+    it('answers with the OPEN wait of a run', async () => {
+      const r = run();
+      await store.createRun(r);
+      await store.createWait({
+        runId: r.id, nodeId: 'attente', token: 'jeton-run',
+        deadline: new Date('2026-08-24T10:30:00Z').toISOString(),
+        resumedAt: null, payload: null,
+      });
+      expect(await store.openWaitOfRun(r.id)).toMatchObject({ token: 'jeton-run', resumedAt: null });
+    });
+
+    it('answers NOTHING for a wait that is already settled', async () => {
+      // AND THIS IS THE HALF THAT KEEPS THE 404 HONEST. A second press must
+      // not find the question still open: the route's « that approval is not
+      // open any more » is then TRUE, where handing back a settled wait would
+      // make it a sentence about a state nobody is in.
+      const r = run();
+      await store.createRun(r);
+      await store.createWait({
+        runId: r.id, nodeId: 'attente', token: 'jeton-clos',
+        deadline: new Date('2026-08-24T10:30:00Z').toISOString(),
+        resumedAt: null, payload: null,
+      });
+      await store.resolveWait('jeton-clos', { decision: 'approve' });
+      expect(await store.openWaitOfRun(r.id)).toBeNull();
+    });
+
+    it('answers nothing for a run that is waiting on nobody', async () => {
+      const r = run();
+      await store.createRun(r);
+      expect(await store.openWaitOfRun(r.id)).toBeNull();
+      expect(await store.openWaitOfRun('jamais-creee')).toBeNull();
     });
 
     it('ne rend échues que les attentes ouvertes et dépassées', async () => {
