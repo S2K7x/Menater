@@ -4,6 +4,143 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-24 — Thursday · Bugs and technical debt
+
+**Subject**: **the approval timeout never fired.** `ROADMAP.md` § 7 carried it
+as *« Nothing calls `sweepExpiredWaits()` or `engine.resume()` outside the
+tests »*, and the previous two runs both named it the biggest open item left
+there without taking it. It is that item, and only its first half.
+
+**Result**: PR #38 (branch `claude/great-pascal-z2l69m`).
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-z2l69m` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Twenty-third entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject**: the calendar rule did not preempt — `main` was green at
+`ca6d123` (typecheck 0, 1295 passed | 1 skipped, build clean) and no pull
+request was open. Thursday's reservoir is § 7, and this was priority (3), an
+explicit limitation from the roadmap, with (2) inside it: a reproducible bug
+found while wiring it.
+
+**What was actually wrong.** Everything around the timeout was built and
+correct, and none of it had ever run:
+
+| Piece | State before |
+|---|---|
+| `Engine.sweepExpiredWaits()` | correct, tested, **callers: `engine.test.ts` and `integration.test.ts`, nothing else** |
+| the `timeout` port → `escalate-timeout` in `04-Action-Routing` | wired, and asserted by `routing.test.ts` |
+| `cases.ts` reading the `timeout` node → `outcome: 'timeout_escalated'` | written, and unreachable |
+| `soc_run_wait_pending_idx ON soc_run_wait (deadline) WHERE resumed_at IS NULL` | **a partial index built for a periodic sweep that was never scheduled** |
+| a scheduler in the process | did not exist. `setInterval` appeared in `ingest/poller.ts` and `auth.ts`, nowhere else |
+
+So the approval request posted to a human promised *« no answer within 30
+minutes and the alert is escalated »*, silence did nothing, and the run stayed
+`waiting` for ever. Because `awaiting` short-circuits the verdict ladder in
+`cases.ts`, the chain never became `stalled` either: an alert nobody answered
+was invisible on the one tab built to show what the queue hides.
+
+**What I learned**:
+
+- **The tell is infrastructure built for a caller nobody wrote.** The partial
+  index is the loudest one here, and it is in `sql/`, not in the code anybody
+  was reading. Worth looking for elsewhere: a schema, a port, a branch or a
+  reader that exists for a trigger that does not.
+- **A test that calls the thing cannot tell you whether anything else does.**
+  Every test of that sweep invoked it by hand and passed for its whole life. The
+  guard that closes it reads `server/api.ts` as text — the module cannot be
+  imported, importing it opens a port, which is why `app.ts` exists — **with
+  comments stripped**, or the paragraph above the call vouches for a call
+  somebody removed.
+- **Wiring a guard makes its own defects live.** The sweep loop had no fault
+  isolation. Measured on `MemoryRunStore`, driving the real `resumeWait` inside
+  the pass: a human answering one approval in the instant between
+  `expiredWaits` listing it and `resolveWait` settling it threw *« that wait
+  was already settled »* out of the WHOLE sweep — `run-2` stayed `waiting`,
+  zero escalations, and the rejection reached the caller, which from a timer
+  terminates a Node 22 process.
+- **The `settledByUs` flag is the non-obvious half of that fix**, and the test
+  found it, not the reading. `resolveWait` runs before `endStep`, so re-reading
+  the wait after a LATER failure finds a `resumedAt` this pass wrote and files
+  a real failure as a normal race. The first version did exactly that and went
+  green on the isolation test while failing the reporting one.
+- **`PgRunStore.q()` already describes every query failure**, at one choke
+  point, so the `pg`-empty-message trap does not reach the sweep. Booting the
+  console with no database printed *« approval sweep failed — Database
+  (SELECT): connect ECONNREFUSED 127.0.0.1:5432 »*. The first fix ran that
+  through `describePgError` a second time, which prints one cause under two
+  prefixes. **The mirror of a rule is sometimes the rule already applied.**
+
+**Do not redo**:
+
+- **Do not wire `engine.resume()` the same way.** It is the other half of the
+  § 7 row and I left it open on purpose: `claimRun` is
+  `WHERE id = $1 AND (owner IS NULL OR owner = $2)`, `drive()` releases the
+  claim on every terminal path, and nothing releases it for a process that
+  DIED — so `soc_run.owner` stays `console-<dead pid>` for ever and a restarted
+  console's claim is refused. The run is skipped, silently, which is exactly
+  the recovery it would be wired to do. `engine.test.ts` already asserts that
+  refusal (*« ne reprend pas une exécution déjà prise par un autre
+  processus »*), and its recovery tests only pass because
+  `MemoryRunStore.simulateCrash()` clears the locks — which Postgres cannot do
+  by itself. The missing piece is not a `setInterval`, it is an answer to *when
+  is a claim stale*, and a wrong answer replays a `write` step.
+- **Do not describe the sweep's errors again** (mutation, then measured on the
+  real boot). See above.
+- **Do not make the interval a setting.** It bounds how LATE an escalation can
+  be, not how long the wait is; the wait is `approval.timeoutMinutes`, already
+  editable. A second number would be two spellings of one policy.
+- **Do not drop the `inFlight` guard.** Two sweeps over one run replay its
+  steps. The mutation hangs the test on a 5 s timeout rather than failing an
+  assertion — a real, if ugly, red.
+
+**Found and NOT fixed** — verified tonight, left alone deliberately:
+
+- A backlog of expired waits is swept **serially and unbounded** in one tick.
+  It makes progress and cannot pile up (one sweep at a time), so a long outage
+  costs a long first tick rather than a lost escalation. Bounding it is a
+  policy decision about how fast a console may post to Slack, and nobody has
+  asked the question.
+- `announceError` dedups against the LAST message only, so two failing runs
+  with different causes are both reported every tick. That is arguably right —
+  different causes deserve saying — and it is bounded by the number of expired
+  waits.
+- The three older leads stand: the login throttle collapsing to one bucket
+  behind the tunnel, `attempts` in `auth.ts` never being swept, and the ~90
+  French strings inside `server/engine/`.
+
+**Verified**:
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 1309 passed | 1 skipped  — was 1295 | 1 (+14, nothing skipped or weakened)
+npm run build       # dist built, CSS 88.54 kB, JS 474.75 kB (unchanged)
+```
+Plus the real process, under `node --experimental-strip-types` — the runtime
+that breaks this repository at startup only, where no test can see it:
+```
+[menater] approval deadlines swept every 60s
+[menater] approval sweep failed — Database (SELECT): connect ECONNREFUSED 127.0.0.1:5432
+```
+140 seconds, i.e. **two** sweep periods, with no database behind it: the
+failure is announced ONCE. Ten mutations, one at a time, restoring in between:
+
+| Mutation | Result |
+|---|---|
+| the boot line removed (the original defect) | RED — 1 |
+| `stopWaitScheduler()` removed from the shutdown path | RED — 1 |
+| the sweep loop as it was, no fault isolation | RED — 2 |
+| `settledByUs` dropped | RED — 1 |
+| `tick()` lets the rejection escape | RED — 2 |
+| no `inFlight` guard | RED — 1 (by timeout) |
+| `unref` dropped | RED — 1 |
+| engine resolved once at construction instead of per tick | RED — 1 |
+| failure reported every tick (the permanent alarm) | RED — 1 |
+| `start()` not idempotent | RED — 1 |
+
 ## 2026-09-23 (second run) — Wednesday · Tests and QA
 
 **Subject**: **a diagnostic that answered about a port it had not dialled.**

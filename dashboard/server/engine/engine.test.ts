@@ -418,6 +418,104 @@ describe('attente d’une approbation humaine', () => {
     // d'effet.
     expect(applied).toHaveBeenCalledTimes(1);
   });
+
+  /*
+   * ONE EXPIRY MUST NEVER ABANDON THE OTHERS.
+   *
+   * These two could not cost anything while `sweepExpiredWaits` had no caller
+   * outside this file. Scheduled, they decide whether one alert's bad luck
+   * silences the escalation of every other alert in the same pass.
+   */
+  it('a wait answered mid-sweep does not abandon the ones behind it', async () => {
+    let tokens = 0;
+    const escalated = vi.fn(async () => ({ output: {} }));
+    const store = new MemoryRunStore();
+    let clock = new Date('2026-09-24T10:00:00Z');
+    let runs = 0;
+    const engine = new Engine({
+      store,
+      handlers: {
+        'trigger.webhook': pass,
+        wait: async () => ({
+          output: null,
+          suspend: { token: `jeton-${++tokens}`, deadlineMs: 30 * 60_000 },
+        }),
+        http: pass,
+        notify: escalated,
+      },
+      now: () => clock,
+      newId: () => `run-${++runs}`,
+    });
+    engine.register(approvalFlow());
+
+    await engine.start('wf', {});
+    await engine.start('wf', {});
+    clock = new Date('2026-09-24T10:31:00Z');
+
+    // A human answers the first approval in the instant between the sweep
+    // listing it and settling it. Real path: `resumeWait` -> `resolveWait`,
+    // whose conditional UPDATE is what makes the second settle throw.
+    let raced = false;
+    const readRun = store.getRun.bind(store);
+    store.getRun = async (runId: string) => {
+      const run = await readRun(runId);
+      if (!raced && runId === 'run-1') {
+        raced = true;
+        await engine.resumeWait('jeton-1', { decision: 'approve' });
+      }
+      return run;
+    };
+
+    const swept = await engine.sweepExpiredWaits();
+
+    // The answered one is not a failure — the first answer stands — and the
+    // one BEHIND it is escalated rather than left waiting in silence.
+    expect(swept.failed).toEqual([]);
+    expect(swept.resumed).toEqual(['run-2']);
+    expect((await store.getRun('run-2'))?.status).toBe('done');
+    expect(escalated).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports the expiry it could not settle, per run, and sweeps the rest', async () => {
+    let tokens = 0;
+    const escalated = vi.fn(async () => ({ output: {} }));
+    const store = new MemoryRunStore();
+    let clock = new Date('2026-09-24T10:00:00Z');
+    let runs = 0;
+    const engine = new Engine({
+      store,
+      handlers: {
+        'trigger.webhook': pass,
+        wait: async () => ({
+          output: null,
+          suspend: { token: `jeton-${++tokens}`, deadlineMs: 30 * 60_000 },
+        }),
+        http: pass,
+        notify: escalated,
+      },
+      now: () => clock,
+      newId: () => `run-${++runs}`,
+    });
+    engine.register(approvalFlow());
+
+    await engine.start('wf', {});
+    await engine.start('wf', {});
+    clock = new Date('2026-09-24T10:31:00Z');
+
+    // The database refuses this one row and answers for the other: a failure
+    // that is NOT « somebody answered first » must be named, never swallowed.
+    const write = store.endStep.bind(store);
+    store.endStep = async (runId, nodeId, attempt, patch) => {
+      if (runId === 'run-1') throw new Error('deadlock detected');
+      return write(runId, nodeId, attempt, patch);
+    };
+
+    const swept = await engine.sweepExpiredWaits();
+
+    expect(swept.resumed).toEqual(['run-2']);
+    expect(swept.failed).toEqual([{ runId: 'run-1', error: 'deadlock detected' }]);
+    expect(escalated).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('le nom d’un nœud n’est pas son contrat', () => {
