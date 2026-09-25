@@ -4,6 +4,100 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-25 — Friday · Performance and cost
+
+**Subject**: the console compresses every JSON answer over 4 kB and served its
+own 474 kB JavaScript bundle in the clear.
+
+**Result**: PR #PENDING (branch `claude/great-pascal-ahuvlz`).
+
+**What it is.** `respond.ts` gzips any JSON body past `GZIP_MIN_BYTES`, under a
+comment explaining that the snapshot "runs to several hundred kB" and
+"compresses about tenfold". `static.ts` — same process, same socket, same
+deployment, ten lines away — sent the interface uncompressed. Measured on a
+real socket against this repository's build, counting bytes as they travelled
+(`node:http` does not decompress, unlike `fetch`): a cold load moved
+**629,637 bytes**; it moves **175,581** now, **−72.1 %**. In the normal
+deployment there is nothing in front of this process to compress instead —
+*one application, one origin, one lock* is exactly why there is no nginx.
+
+**What I measured before choosing**, and the numbers decided the design:
+
+- `gzipSync` on the bundle: 12.4 ms of CPU and **15.3 ms of blocked event
+  loop**. `createGzip()` on a stream: 22.1 ms wall, **2.1 ms** of peak
+  event-loop lag, because zlib streams run on libuv's threadpool. This is the
+  thread that also answers the ingestion webhook, so the streamed form wins on
+  *where* the CPU lands, not on how much of it there is.
+- Compression levels on the same bundle: level 1 → 161,078 B in 5.3 ms,
+  level 6 (the default) → 139,433 B in 11.8 ms, level 9 → 139,009 B in 15.0 ms.
+  Level 9 buys 0.3 % for 27 % more CPU; the default is the right floor and
+  nothing was tuned.
+
+**What I ruled out, with numbers, before landing on this** — so a future night
+does not re-measure them:
+
+- **`buildCases` on a full window is not a problem.** Driving 100 alerts through
+  the real pipeline gives 500 runs / 4,100 steps, and `buildCases` takes
+  **6.37 ms per call** (mean of 20). It runs at most once per 15 s snapshot
+  rebuild, so it is ~0.04 % of one core. The `outputOf(steps, id)` linear scans
+  that look quadratic are not worth touching: 8.2 steps per run.
+- **An ETag / 304 on `/api/snapshot` would rarely fire.** `checked_at`,
+  `trace.generated_at` and every chain's `idle_ms` are recomputed on each
+  rebuild, so the bytes differ even when nothing happened. Excluding volatile
+  fields from the hash would be a fragile hand-maintained list. Not done.
+- **`getConfig()` and the request path do no synchronous I/O.** `getConfig` is
+  memoised; the sync `readFileSync` calls left in `server/` are in
+  `credentials.ts` (`describeCredentials`, settings routes only), `config.ts`
+  (save) and `ingest/cursors.ts` (load). None is on a hot path.
+
+**What I learned**:
+
+- **A response double cannot vouch for a body.** `static.test.ts`'s fake `res`
+  is enough to read a header back, and `pipe()` into an object that is not a
+  real `Writable` moves nothing — a compression test driven through it would
+  pass against an implementation that compresses and one that does not. The new
+  block starts a real `http.Server`. Same lesson `fetchWithDeadline`'s redirect
+  tests paid for with `redirect: 'manual'`.
+- **`fetch` decompresses transparently and `node:http` does not.** The first
+  probe used `fetch` and reported the *decoded* length, which is the same number
+  before and after the change — i.e. an instrument that could not see the thing
+  being measured. Every byte figure above comes from `node:http`.
+- **`pipe()` forwards no error.** A read that fails after the head is written
+  emits an unhandled `error` and ends the process. Latent before; adding a
+  second stream to the chain is what made it this change's to state, so both
+  branches go through `pipeline`.
+
+**Do not redo**:
+
+- **Do not add a memo to `static.ts`.** `respond.ts` has one because a single
+  snapshot object is answered many times a second. Every asset here carries a
+  Vite fingerprint and a year of `immutable`, so a browser fetches it once per
+  deployment: a cache would save nothing and add an invalidation to get wrong.
+- **Do not compress `.woff2`, `.png` or `.webp`.** They are compressed
+  containers; gzipping them spends CPU per request for a handful of bytes. The
+  list says what to COMPRESS, and a test claims that boundary.
+- **Do not special-case `index.html` under the 4 kB floor.** It is 2,945 bytes
+  and its round trip is latency, not transfer. Sharing one constant with the
+  JSON routes is worth more than 1.5 kB per navigation.
+
+**Verified** (commands run, output read):
+
+- `npm run typecheck` — 0 errors.
+- `npm test` — **1314 passed | 1 skipped** (1309 before; the skip is
+  `store-contract.test.ts`'s Postgres half, gated on `MENATER_TEST_PG`, and
+  pre-existing — see last night's entry for the recipe to enable it).
+- `npm run build` — clean.
+- **Red before the change**: 2 of the 5 new tests (`sends the bundle
+  compressed`, `says the answer depends on the request header`). The other
+  three claim boundaries and pass before AND after, on purpose.
+- **Five mutations, each red**: no `Vary`; compress every type; no size floor;
+  ignore `Accept-Encoding`; announce gzip and send raw bytes.
+- Before/after on a real socket, bytes as they travelled: 629,637 → 175,581 for
+  a cold load; an `identity` client still receives the four files untouched.
+- VulnPipe untouched, so its suite was not run.
+
+---
+
 ## 2026-09-24 (second run) — Thursday · Bugs and technical debt
 
 **Subject**: started on **the approve and reject buttons disabled on every real
