@@ -9,7 +9,7 @@ they were — they are memory about live code, and rewriting them would lose it.
 **Subject**: the console compresses every JSON answer over 4 kB and served its
 own 474 kB JavaScript bundle in the clear.
 
-**Result**: PR #PENDING (branch `claude/great-pascal-ahuvlz`).
+**Result**: PR #40 (branch `claude/great-pascal-ahuvlz`).
 
 **What it is.** `respond.ts` gzips any JSON body past `GZIP_MIN_BYTES`, under a
 comment explaining that the snapshot "runs to several hundred kB" and
