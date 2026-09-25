@@ -35,11 +35,22 @@ import {
 export const SERVER_NAME = 'vulnpipe-indexer';
 export const SERVER_VERSION = '0.2.0';
 
-/** Réponse d'erreur applicative, avec le résumé humain exigé par CLAUDE.md §4. */
+/**
+ * The text block is COMPACT, and here nobody reads it at all.
+ *
+ * It exists for conformance: the protocol asks a tool returning structured
+ * content to also return the serialised form in a text block. This server's
+ * only client is `nodes/shared/mcp-client.ts`, which reads `structuredContent`
+ * and nothing else — so the indentation was serialised, pushed over stdio and
+ * thrown away. Measured on the fixture repository: 10,684 bytes against 7,940,
+ * **−25.7%**, and −29.6% on one context bundle at the 24 kB budget. Same rule
+ * as the console half of the product, which already held it in
+ * `assistant/chat.ts` and did not in `assistant/mcp.ts`.
+ */
 function errorResult(message: string, plainLanguageSummary: string) {
   const payload = { error: message, plain_language_summary: plainLanguageSummary };
   return {
-    content: [{ type: 'text' as const, text: JSON.stringify(payload, null, 2) }],
+    content: [{ type: 'text' as const, text: JSON.stringify(payload) }],
     structuredContent: payload,
     isError: true,
   };
@@ -47,7 +58,7 @@ function errorResult(message: string, plainLanguageSummary: string) {
 
 function okResult(payload: unknown) {
   return {
-    content: [{ type: 'text' as const, text: JSON.stringify(payload, null, 2) }],
+    content: [{ type: 'text' as const, text: JSON.stringify(payload) }],
     structuredContent: payload as Record<string, unknown>,
   };
 }

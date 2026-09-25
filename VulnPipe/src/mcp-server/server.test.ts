@@ -429,3 +429,55 @@ describe('index repo', () => {
     expect(createServer(index)).toBeDefined();
   });
 });
+
+/* ---------------------------------------------------------------------------
+ * The serialised block, and who reads it
+ *
+ * The protocol asks a tool returning structured content to also return the
+ * serialised form in a text block, so it stays. But this server's only client
+ * is `nodes/shared/mcp-client.ts`, which reads `structuredContent` and nothing
+ * else — so two-space indentation here is serialised, pushed over stdio and
+ * thrown away. Measured on this fixture: 10,684 bytes against 7,940, −25.7%,
+ * and −29.6% on one context bundle at the 24 kB budget.
+ *
+ * The assertion is EQUALITY with the compact serialisation of
+ * `structuredContent`, not "no double space": it pins the content as well as
+ * the spacing, so compacting by dropping a field fails it.
+ * ------------------------------------------------------------------------ */
+describe('the serialised text block', () => {
+  it('carries the same bundle as structuredContent, compact', async () => {
+    const { client, server } = await connectClient(FIXTURE_REPO);
+    try {
+      const res = await client.callTool({
+        name: 'get_context',
+        arguments: { route: '/orders/:id', http_method: 'GET' },
+      });
+      const text = (res.content as Array<{ text: string }>)[0].text;
+      expect(text).toBe(JSON.stringify(res.structuredContent));
+      expect(text).not.toContain('\n');
+      expect(JSON.parse(text)).toEqual(res.structuredContent);
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it('serialises a refusal the same way', async () => {
+    const { client, server } = await connectClient(FIXTURE_REPO);
+    try {
+      const res = await client.callTool({
+        name: 'get_context',
+        arguments: { route: '/does/not/exist', http_method: 'GET' },
+      });
+      expect(res.isError).toBe(true);
+      const text = (res.content as Array<{ text: string }>)[0].text;
+      expect(text).toBe(JSON.stringify(res.structuredContent));
+      expect(text).not.toContain('\n');
+      // The human summary CLAUDE.md § 4 requires is still in there.
+      expect(JSON.parse(text).plain_language_summary).toBeTruthy();
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+});

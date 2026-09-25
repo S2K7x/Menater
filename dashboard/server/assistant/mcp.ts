@@ -580,7 +580,7 @@ async function dispatch(msg: RpcRequest, locale: any): Promise<unknown | null> {
       const fence = newFence();
       const result = await runTool(name, args, { locale, fence });
       const failed = Boolean(result && typeof result === 'object' && 'error' in (result as object));
-      const body = JSON.stringify(result, null, 2);
+      const body = JSON.stringify(result);
 
       /**
        * TWO TEXT BLOCKS, and the order is a conformance decision.
@@ -591,6 +591,18 @@ async function dispatch(msg: RpcRequest, locale: any): Promise<unknown | null> {
        * entitled to get JSON. Prefixing the fence note onto it, which is what
        * this did first, produced a block that no longer parsed: found by
        * calling the endpoint, not by reading the code.
+       *
+       * AND COMPACT, because this block is what the OTHER SIDE'S MODEL READS.
+       * `structuredContent` beside it is for the client's code; the text is
+       * what lands in a context window, and two-space indentation is a line
+       * break and an indent run per key that says nothing the JSON does not.
+       * Measured over the fourteen tools on this installation's sample window:
+       * 24,219 B pretty against 19,473 B compact, **−19.6%**, and −18.9% over
+       * the nine resources. The panel half of this same catalogue has always
+       * serialised compactly (`chat.ts` caps a tool result on `JSON.stringify`
+       * with no spacing, `providers.ts` sends it the same way) — the mirror of
+       * a rule is not the rule, which this repository has now paid for six
+       * times.
        *
        * The second names the nonce. A consumer outside the console has no other
        * way to know which marker to distrust, and a fence nobody was told about
@@ -660,8 +672,11 @@ async function dispatch(msg: RpcRequest, locale: any): Promise<unknown | null> {
       }
       const read = await readResource(uri, locale);
       if (read === null) return rpcError(id, INVALID_PARAMS, `Unknown resource: ${uri}`);
+      // Compact for the same reason as `tools/call` above: a resource is
+      // ATTACHED to a conversation, so its whole text goes into the context
+      // window and nothing else ever reads it.
       return rpcResult(id, {
-        contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(read, null, 2) }],
+        contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(read) }],
       });
     }
 

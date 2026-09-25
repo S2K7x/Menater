@@ -4,6 +4,145 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-25 (second run) — Friday · Performance and cost
+
+**Subject**: both MCP servers in this product pretty-printed every answer they
+serialised, and the panel half of the same catalogue never has. The block they
+inflated is the one the other side's MODEL reads.
+
+**Result**: PR #41 (branch `claude/great-pascal-j5yj4k`).
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-j5yj4k` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. This is also the SECOND run carrying 2026-09-25;
+the entry below is the first, and nothing was redone: its subject was
+`static.ts`, and its own "do not redo" list is where I started.
+
+**Why this subject**: the suite was green on the default branch first (1314
+passed, 1 skipped, typecheck clean, build clean), so the calendar rule did not
+preempt, and no pull request was open. It is the top item on the token-cost
+list that the 2026-09-11 and 2026-09-18 Friday entries both carried forward
+"for a future Friday", and both said *re-measure it first*. Re-measuring is
+what produced the most useful thing here.
+
+**What it is.** `assistant/mcp.ts` wrote `JSON.stringify(result, null, 2)` into
+`content[0].text` on every `tools/call`, and the same into every
+`resources/read`. `VulnPipe/src/mcp-server/server.ts` did it in `okResult` and
+`errorResult`. The panel — the SAME fourteen getters, one file over — has
+always serialised compactly: `chat.ts`'s `capResult` measures and cuts on
+`JSON.stringify(result)` with no spacing, and `providers.ts` sends it that way
+to all four providers. Seventh recurrence of *the mirror of a rule is not the
+rule*, and a bill rather than a failure, so it shows up only if somebody looks.
+
+**Measured**, by driving the REAL endpoint (the `mcp.test.ts` harness: real
+`mcpRoutes`, real `runTool`, sample window because this environment has no
+database) and the REAL VulnPipe server over an in-memory MCP transport:
+
+| surface | before | after | saved |
+|---|---|---|---|
+| the fourteen tools' text blocks | 24,219 B | 19,473 B | **−19.6 %** |
+| the nine resources | 26,120 B | 21,177 B | −18.9 % |
+| one whole `get_alert` JSON-RPC answer | 12,132 B | 11,033 B | −9.1 % |
+| VulnPipe, fixture repo, 4 calls | 10,684 B | 7,940 B | **−25.7 %** |
+| VulnPipe, one context bundle at the 24 kB budget | 5,319 B | 3,742 B | −29.6 % |
+
+Per call it is stable at 17–25 % on the console (`get_trace` 5.9 % and
+`explain_term` 3.8 % are the floor — short results, little structure) and
+23–28 % on VulnPipe.
+
+**What I learned**:
+
+- **The headline number this was carried under was measuring something else**,
+  and that is the general lesson. Two entries recorded the survey figure
+  *« `mcp.ts:558` serialises every tool result twice … 11,191 B on the wire
+  where 5,123 B would do »* as the biggest single token saving on this surface.
+  Re-measured: 11,191 is the text block **plus** `structuredContent`, and 5,123
+  is `structuredContent` alone — so the number was pricing the DELETION of the
+  text block, which the spec asks for and which a client that parses
+  `content[0].text` is entitled to receive. The saving that actually exists is
+  the indentation, about a fifth of it. A survey nobody re-measures becomes a
+  number people plan around, and the one thing it cannot tell you is what it
+  measured.
+- **On VulnPipe those bytes reached nobody at all.** `nodes/shared/mcp-client.ts`
+  reads `result.structuredContent` on both calls and never touches `content` —
+  so the indentation was serialised, pushed over stdio and discarded. I checked
+  the client before changing the server; the text block still stays, because a
+  conforming server owes it whether or not its one client wants it.
+- **`JSON.stringify` escapes a newline inside a string**, so a compact body
+  cannot contain a literal one whatever an alert's raw log holds. That is what
+  makes `expect(text).not.toContain('\n')` a legitimate assertion here rather
+  than a guess about the data.
+- **The assertion that earns its place is equality with
+  `JSON.stringify(structuredContent)`**, not "no double space": it pins the
+  content as well as the spacing. A mutation that compacts and drops a key
+  passes the spacing check and fails this one — run, red.
+
+**Measured and RULED OUT — do not spend another night on these**:
+
+- **`decision.ts`'s alert block.** `buildAlertBlock` pretty-prints the alert,
+  the enrichment and the enrichment status into the triage prompt, and that is
+  one model call per alert on the product's main flow — much likelier to matter
+  than an off-by-default endpoint. Measured on a Wazuh-shaped alert with three
+  enrichment sources: **423 B saved, 23.6 % at a 200 B raw log, 16.3 % at 1 kB
+  and 5.6 % at the 6,000 B cap** `buildAlertBlock` applies. So the saving is
+  small in absolute terms and evaporates exactly when the prompt is big. And it
+  changes what a model is SHOWN, which cannot be A/B'd from an environment with
+  no key — `CLAUDE.md`'s own rule about comparing two model calls. Not done, on
+  purpose.
+- **The MCP catalogue listings are already compact.** `tools/list` is 6,548 B,
+  `prompts/list` 1,865, `resources/list` 1,564, `initialize` 1,917 — they go out
+  through `respond.ts`'s `json()`, which has never indented anything.
+- **There is no cacheable prefix to fix in `03-AI-Decision`.** I went looking
+  for the *"invariant half after the variable half"* trap: the first decision
+  call is a single user message whose only invariant text is one sentence, and
+  the correction prompt starts with different words entirely, so the two calls
+  share no prefix worth caching in either direction. Nothing to reorder.
+
+**Do not redo**:
+
+- **Do not drop the text block to reach the survey's 5,123 B.** The spec asks a
+  tool returning structured content to also return the serialised form, this
+  repository has already paid once for making `content[0].text` unparseable,
+  and `resources/read` has no `structuredContent` to fall back on at all.
+- **Do not pretty-print it again "so a human can read it".** `structuredContent`
+  is right there for a client that renders structure, and the console's own
+  panel has never indented a tool result.
+- **Do not remove VulnPipe's text block because its only client ignores it.**
+  Conformance is not a function of who happens to be connected today.
+- **Do not add a `null, 2` anywhere on a path that ends in a model.** The
+  remaining ones in this repository are all writes to disk (`config.ts`,
+  `credentials.ts`, `keystore.ts`, `cursors.ts`) or `<pre>` blocks on screen,
+  where indentation is the point.
+
+**Verified** (commands run, output read):
+
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 1317 passed | 1 skipped  (1314 before; +3 new, nothing skipped or weakened)
+npm run build       # dist built, 474.75 kB / 140.60 kB gzip (server-side change)
+cd ../VulnPipe
+npm run typecheck   # 0 errors
+npm test            # 373 passed  (371 before; +2 new)
+```
+
+Checked **RED** first, on the two halves separately, by stashing only the two
+source files: 2 of the 3 new console tests failed (`sends the text block
+compact`, `sends a resource compact too`) and 2 of the 2 new VulnPipe tests
+failed. The third console test — the fence note beside a compact body — claims
+a boundary and passes before AND after, on purpose. **Five mutations, each
+red**: tools/call left pretty (1 fail), resources/read left pretty (1), the
+text block compacted but missing a key (1 — the spacing check passes, the
+equality check does not), the fence note never appended (1), VulnPipe's ok path
+compacted and its refusal left pretty (1). No model key and no database needed:
+the console falls back to its sample window and VulnPipe indexes its own
+fixture repository. The five measurement probes were written under
+`dashboard/scripts/` and `VulnPipe/scripts/`, run, and deleted.
+
+---
+
 ## 2026-09-25 — Friday · Performance and cost
 
 **Subject**: the console compresses every JSON answer over 4 kB and served its
