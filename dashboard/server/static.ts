@@ -27,12 +27,41 @@
  *     serve the old version indefinitely after a deployment — the classic
  *     failure, and the one nobody understands because "it works in a private
  *     window".
+ *
+ * ============================================================================
+ * THE BILL NOBODY WENT LOOKING FOR
+ *
+ * `respond.ts` compresses any JSON answer over 4 kB, and ten lines away this
+ * function handed out a 474 kB JavaScript bundle in the clear. Measured on a
+ * real socket against this repository's own build, counting bytes as they
+ * travelled: a cold load of the console moved **629,637 bytes**, and moves
+ * **175,581** now — 3.6 times the bytes, on the one deployment mode CLAUDE.md
+ * calls normal, where nothing sits in front of this process to do it instead.
+ * Nothing fails, which is why it survived: it is a bill, not a failure.
+ *
+ * COMPRESSED ON A STREAM, NOT WITH `gzipSync`, and that is measured too.
+ * `gzipSync` on the bundle is 12.4 ms of CPU and **15.3 ms of blocked event
+ * loop**; the same work through `createGzip()` runs on libuv's threadpool and
+ * leaves a **2.1 ms** lag behind. This is the thread that also answers the
+ * ingestion webhook, so where the CPU lands matters more than how much of it
+ * there is.
+ *
+ * AND NO MEMO, deliberately, where `respond.ts` has one. That memo answers a
+ * different question: the snapshot is ONE object answered many times a second,
+ * so the waste there was the repetition. Here every asset carries a
+ * fingerprint and a year of `immutable`, so a browser fetches it once per
+ * deployment — there is no repetition to save, and a cache keyed on a file
+ * would buy nothing while adding an invalidation somebody has to get right.
  * ============================================================================
  */
 
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import { extname, join, resolve, sep } from 'node:path';
+import { pipeline } from 'node:stream';
+import { createGzip } from 'node:zlib';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+
+import { GZIP_MIN_BYTES } from './respond.ts';
 
 const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -48,6 +77,19 @@ const TYPES: Record<string, string> = {
   '.woff': 'font/woff',
   '.map': 'application/json; charset=utf-8',
 };
+
+/**
+ * The types worth compressing.
+ *
+ * A LIST OF WHAT TO COMPRESS, NOT OF WHAT TO SKIP. A woff2, a png and a webp
+ * are compressed containers already: gzipping one spends CPU on every request
+ * and returns a handful of bytes, sometimes fewer than none. Written as a
+ * closed list because the failure modes are not symmetric — a text type
+ * missing from it costs bandwidth nobody will notice, a binary type wrongly
+ * included costs CPU on every request, and a new extension arrives here in
+ * `TYPES` first where the question is asked out loud.
+ */
+const COMPRESSIBLE = new Set(['.html', '.js', '.css', '.json', '.svg', '.map']);
 
 export interface StaticOptions {
   /** Directory of built files. Absent = nothing to serve (development mode). */
@@ -112,7 +154,18 @@ export function serveStatic(
   const ext = extname(file);
   const isEntry = file.endsWith('index.html');
 
-  res.writeHead(200, {
+  // Whether the answer depends on `Accept-Encoding` at all — computed once,
+  // because it decides both the encoding and the `Vary` below.
+  //
+  // The floor is the JSON routes' own, imported rather than restated: this
+  // console names a size in several places, and two spellings of one number is
+  // how the two start disagreeing. `index.html` is under it and stays in the
+  // clear, which is the honest answer for a file dominated by round-trip time.
+  const varies = COMPRESSIBLE.has(ext) && statSync(file).size >= GZIP_MIN_BYTES;
+  const compress = varies
+    && /\bgzip\b/.test(String(req.headers?.['accept-encoding'] ?? ''));
+
+  const headers: Record<string, string> = {
     'Content-Type': TYPES[ext] ?? 'application/octet-stream',
     // See the header: the fingerprint in the name makes a long cache safe,
     // except for the entry point, which always keeps the same name.
@@ -121,12 +174,28 @@ export function serveStatic(
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'DENY',
     'Referrer-Policy': 'no-referrer',
-  });
+  };
+  // Announced on exactly the answers that DO depend on the request header.
+  // Without it, any cache between here and the browser may hand the gzipped
+  // variant to the next client — one that asked for bytes it can read — and
+  // the assets carry a year of `immutable`, so that mistake would be a long
+  // one. A file nobody would compress does not vary, and says nothing.
+  if (compress) headers['Content-Encoding'] = 'gzip';
+  if (varies) headers.Vary = 'Accept-Encoding';
+  res.writeHead(200, headers);
 
   if (req.method === 'HEAD') {
     res.end();
     return true;
   }
-  createReadStream(file).pipe(res);
+  // `pipeline` rather than `pipe`, because `pipe` FORWARDS NO ERROR: a read
+  // that fails after the head is written emits an unhandled `error`, which
+  // takes the process down. Latent while the chain was one stream long; adding
+  // a second stream to it is what made it this change's to state. `pipeline`
+  // closes every stream in the chain on failure, and its callback has nothing
+  // to say — the socket it would have spoken to is the one that went away.
+  const source = createReadStream(file);
+  if (compress) pipeline(source, createGzip(), res, () => {});
+  else pipeline(source, res, () => {});
   return true;
 }

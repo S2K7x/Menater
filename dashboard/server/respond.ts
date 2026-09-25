@@ -12,8 +12,12 @@ import { gzipSync } from 'node:zlib';
 /**
  * Below this size, compressing costs more than it returns: the gain is
  * measured in microseconds, the cost in CPU cycles on every small response.
+ *
+ * Exported because `static.ts` compresses the interface's files against the
+ * same floor. Two spellings of one number is how the two start disagreeing —
+ * the reason `humanBytes` lives here and is imported in both directions.
  */
-const GZIP_MIN_BYTES = 4096;
+export const GZIP_MIN_BYTES = 4096;
 
 /**
  * Bytes already produced for a body object.

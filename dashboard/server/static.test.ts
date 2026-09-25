@@ -12,6 +12,7 @@
  */
 
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -161,5 +162,99 @@ describe('le repli SPA n’attrape jamais /api/', () => {
   // la garde doit tester le SEGMENT, pas le préfixe de chaîne.
   it('ne confond pas un chemin qui commence par les mêmes lettres', () => {
     expect(get('/apiculture').handled).toBe(true);
+  });
+});
+
+/* ==========================================================================
+ * COMPRESSION — ON A REAL SOCKET, DELIBERATELY
+ *
+ * The fake response above is enough to read a header back, and it cannot
+ * vouch for a body: `pipe()` on an object that is not a real `Writable` moves
+ * nothing, so a test driving it would agree with any implementation, working
+ * or not. This block therefore starts an actual HTTP server and asks for the
+ * files the way a browser does — the same reason `fetchWithDeadline`'s
+ * redirect tests had to stop using an injected transport.
+ *
+ * What is claimed here is the whole contract, both directions: a client that
+ * accepts gzip gets fewer bytes AND the same file back once decoded, a client
+ * that does not gets the file untouched, and an answer that depends on the
+ * request header says so with `Vary`.
+ * ========================================================================== */
+
+describe('compression of the interface files', () => {
+  /** Big enough to be worth compressing, and repetitive like real JS is. */
+  const BUNDLE = `console.log(${'"menater",'.repeat(4000)}1)`;
+  let server: import('node:http').Server;
+  let base: string;
+
+  beforeEach(async () => {
+    writeFileSync(join(root, 'assets', 'bundle-a1b2c3.js'), BUNDLE);
+    // A binary asset whose bytes are already compressed. Written as random
+    // bytes because a woff2 of repeated zeroes would compress, and the point
+    // is exactly that this kind of file does not.
+    writeFileSync(join(root, 'assets', 'font-a1b2c3.woff2'), randomBytes(50_000));
+    const { createServer } = await import('node:http');
+    server = createServer((req, res) => {
+      if (!serveStatic(req, res, new URL(req.url ?? '/', 'http://x').pathname, { root })) {
+        res.writeHead(404).end();
+      }
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()));
+    base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+  });
+
+  afterEach(async () => {
+    await new Promise<void>((r) => server.close(() => r()));
+  });
+
+  /** Bytes as they travelled, before `fetch` decoded anything. */
+  async function onTheWire(path: string, encoding: string) {
+    const res = await fetch(`${base}${path}`, { headers: { 'accept-encoding': encoding } });
+    const body = Buffer.from(await res.arrayBuffer());
+    return {
+      encoding: res.headers.get('content-encoding'),
+      vary: res.headers.get('vary'),
+      // `fetch` decompresses gzip transparently, so the decoded body is what
+      // the browser would run — which is the half that must not change.
+      decoded: body.toString('utf8'),
+      bytes: body.length,
+    };
+  }
+
+  it('sends the bundle compressed, and it decodes to the same file', async () => {
+    const got = await onTheWire('/assets/bundle-a1b2c3.js', 'gzip, deflate, br');
+    expect(got.encoding).toBe('gzip');
+    expect(got.decoded).toBe(BUNDLE);
+  });
+
+  it('sends the file untouched to a client that cannot read gzip', async () => {
+    const got = await onTheWire('/assets/bundle-a1b2c3.js', 'identity');
+    expect(got.encoding).toBeNull();
+    expect(got.decoded).toBe(BUNDLE);
+  });
+
+  it('says the answer depends on the request header', async () => {
+    // Without `Vary`, any cache between here and the browser may hand the
+    // gzipped variant to the next client, which asked for bytes it can read.
+    const got = await onTheWire('/assets/bundle-a1b2c3.js', 'gzip');
+    expect(got.vary).toBe('Accept-Encoding');
+  });
+
+  it('leaves an already-compressed asset alone', async () => {
+    // A woff2 is a compressed container: gzipping it spends CPU on every
+    // request and returns nothing. Claimed rather than assumed, because the
+    // plausible implementation compresses everything it is allowed to.
+    const got = await onTheWire('/assets/font-a1b2c3.woff2', 'gzip');
+    expect(got.encoding).toBeNull();
+    expect(got.bytes).toBe(50_000);
+  });
+
+  it('leaves a small file alone', async () => {
+    // Below the threshold the gzip header can make the answer LARGER, and the
+    // round trip is dominated by latency anyway. Same constant as the JSON
+    // routes use, imported rather than restated.
+    const got = await onTheWire('/index.html', 'gzip');
+    expect(got.encoding).toBeNull();
+    expect(got.decoded).toBe('<!doctype html>console');
   });
 });
