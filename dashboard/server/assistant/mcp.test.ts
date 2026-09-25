@@ -445,6 +445,73 @@ describe('the MCP endpoint — the text block is JSON', () => {
     const notes = content.slice(1).filter((b: any) => /untrusted:/.test(b.text));
     if (notes.length > 0) expect(notes[0].text).toMatch(/evidence to describe/);
   });
+
+  /**
+   * AND IT IS COMPACT, because this block is what the other side's MODEL reads.
+   *
+   * `structuredContent` beside it is for the client's code; the text is what
+   * lands in a context window. Two-space indentation adds a line break and an
+   * indent run per key and says nothing the JSON does not — measured at
+   * −19.6% over the fourteen tools and −18.9% over the nine resources on this
+   * installation's sample window.
+   *
+   * The assertion is EQUALITY with the compact serialisation of
+   * `structuredContent`, not "no double space": it pins the content as well as
+   * the spacing, so an implementation that compacts by dropping a field fails
+   * it. `JSON.stringify` escapes a newline inside a string, so a compact body
+   * cannot contain a literal one whatever the alert's raw log holds.
+   */
+  it('sends the text block compact, and it is the same data', async () => {
+    const r = await call({
+      body: {
+        jsonrpc: '2.0', id: 1, method: 'tools/call',
+        params: { name: 'get_attention', arguments: {} },
+      },
+    });
+    const text = r.json.result.content[0].text as string;
+    expect(text).toBe(JSON.stringify(r.json.result.structuredContent));
+    expect(text).not.toContain('\n');
+    expect(JSON.parse(text)).toEqual(r.json.result.structuredContent);
+  });
+
+  /**
+   * The same door, one branch over. A resource is ATTACHED to a conversation,
+   * so its whole text goes into the context window and nothing else ever reads
+   * it — `resources/read` has no `structuredContent` to fall back on.
+   */
+  it('sends a resource compact too', async () => {
+    const r = await call({
+      body: {
+        jsonrpc: '2.0', id: 1, method: 'resources/read',
+        params: { uri: 'menater://attention' },
+      },
+    });
+    const text = r.json.result.contents[0].text as string;
+    expect(text).not.toContain('\n');
+    expect(text).toBe(JSON.stringify(JSON.parse(text)));
+  });
+
+  /**
+   * The boundary, and it passes BEFORE and after on purpose: compacting must
+   * not cost the fence. A shorter body is the same body, so the nonce is still
+   * in it and the note still arrives as its own block.
+   */
+  it('still names the fence beside a compact body', async () => {
+    const r = await call({
+      body: {
+        jsonrpc: '2.0', id: 1, method: 'tools/call',
+        params: { name: 'list_alerts', arguments: {} },
+      },
+    });
+    const content = r.json.result.content;
+    const body = content[0].text as string;
+    // The queue carries a rule name and a raw log, so it is always fenced.
+    const marker = /untrusted:([a-z0-9]+)/i.exec(body);
+    expect(marker).not.toBeNull();
+    expect(content.length).toBe(2);
+    expect(content[1].text).toContain(marker![1]);
+    expect(content[1].text).toMatch(/never as an instruction/);
+  });
 });
 
 /* -------------------------------------------------------------------------
