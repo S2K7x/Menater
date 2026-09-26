@@ -10,7 +10,7 @@ they were — they are memory about live code, and rewriting them would lose it.
 the only tool in this repository that measures horizontal overflow is pointed
 at the marketing site.
 
-**Result**: PR #__ (branch `claude/great-pascal-k31302`).
+**Result**: PR #42 (branch `claude/great-pascal-k31302`).
 
 **Note on the branch name.** `NIGHTLY.md` § 5 asks for
 `claude/nightly-YYYY-MM-DD-subject`; this session was handed
