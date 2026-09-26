@@ -38,6 +38,7 @@ import {
   type ReactNode,
 } from 'react';
 
+import { arrowTarget } from './arrow-keys.ts';
 import { Icon, type IconName } from './Icon.tsx';
 
 export interface SectionTabItem<Id extends string> {
@@ -171,24 +172,18 @@ export function SectionTabs<Id extends string>({
    * Every panel is already mounted (rule 2 above), so walking the bar loads
    * nothing — and it is exactly what a click already does.
    *
-   * ONLY FOUR KEYS ARE TAKEN. Up and down stay with the browser: the bar is
-   * sticky above content that scrolls, and swallowing them would take the
-   * page's own scrolling away from somebody navigating by keyboard.
+   * ONLY FOUR KEYS ARE TAKEN — `horizontal` below. Up and down stay with the
+   * browser: the bar is sticky above content that scrolls, and swallowing them
+   * would take the page's own scrolling away from somebody navigating by
+   * keyboard. The wrapping, and the axis that a radio group answers to
+   * instead, are in `arrow-keys.ts`: two other widgets in this application
+   * make the same promise, and one copy of it per widget is how the three
+   * start disagreeing.
    * ==========================================================================
    */
   const onKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>, from: number) => {
-    const last = items.length - 1;
-    let to: number;
-    switch (event.key) {
-      // Wrapping at both ends: a bar that stops dead makes the tenth
-      // section the hardest one to reach, and it is the one the setup
-      // checklist sends people to.
-      case 'ArrowRight': to = from === last ? 0 : from + 1; break;
-      case 'ArrowLeft': to = from === 0 ? last : from - 1; break;
-      case 'Home': to = 0; break;
-      case 'End': to = last; break;
-      default: return;
-    }
+    const to = arrowTarget(event.key, from, items.length, 'horizontal');
+    if (to === null) return;
     event.preventDefault();
     if (to === from) return;
     onChange(items[to].id);

@@ -22,8 +22,11 @@
  * ============================================================================
  */
 
+import { useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+
 import { useI18n } from '../i18n/context.tsx';
 import { Icon } from '../components/Icon.tsx';
+import { arrowTarget } from '../components/arrow-keys.ts';
 import { THEMES, useTheme } from './context.tsx';
 import { THEME_SWATCHES } from './swatches.ts';
 
@@ -37,12 +40,51 @@ export function ThemePicker() {
   const { theme, setTheme } = useTheme();
   const { c } = useI18n();
   const t = c.theme;
+  const grid = useRef<HTMLDivElement>(null);
+
+  /**
+   * The arrows choose a theme; Tab leaves the group.
+   *
+   * ==========================================================================
+   * THE DEFECT THIS FIXES
+   *
+   * `role="radiogroup"` with six `role="radio"` children is read out as a
+   * radio group — « radio button, 1 of 6 » — and that sentence promises the
+   * keyboard a native radio group has: ONE stop in the tab order, the arrows
+   * moving and choosing inside it. Measured in Chromium on the built console:
+   * six stops out of six, six Tab presses to cross the group, and every arrow
+   * key did nothing. So the six themes sat between the keyboard and the rest
+   * of the Console settings, and the key somebody had just been told about was
+   * dead.
+   *
+   * ALL FOUR ARROWS, unlike `SectionTabs` which deliberately leaves Up and
+   * Down to the browser: a native radio group answers to all four, and the
+   * swatches are a wrapped grid rather than a row. They move in DOM order —
+   * « the next theme », not « the one below » — which is what a wrapped native
+   * group does too.
+   *
+   * SELECTION FOLLOWS THE ARROW, as in a native group. Applying a theme is
+   * what a click here already does, it is reversible, and a preview you have
+   * to confirm is not what this control is.
+   * ==========================================================================
+   */
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>, from: number) => {
+    const to = arrowTarget(event.key, from, THEMES.length, 'both');
+    if (to === null) return;
+    event.preventDefault();
+    if (to === from) return;
+    setTheme(THEMES[to]);
+    // Focus follows the selection, or the next arrow would start again from
+    // where it was. Indexed on the rendered list rather than built out of the
+    // theme id, like `SectionTabs`.
+    grid.current?.querySelectorAll<HTMLElement>('[role="radio"]')[to]?.focus();
+  };
 
   return (
     <div className="soc-field">
       <span>{t.label}</span>
-      <div className="soc-theme-grid" role="radiogroup" aria-label={t.label}>
-        {THEMES.map((id) => {
+      <div className="soc-theme-grid" role="radiogroup" aria-label={t.label} ref={grid}>
+        {THEMES.map((id, index) => {
           const swatch = THEME_SWATCHES[id];
           const isActive = id === theme;
           return (
@@ -51,8 +93,12 @@ export function ThemePicker() {
               type="button"
               role="radio"
               aria-checked={isActive}
+              // Roving tabindex: the group is one stop, and it is the chosen
+              // theme.
+              tabIndex={isActive ? 0 : -1}
               className={`soc-theme-card ${isActive ? 'soc-theme-card-active' : ''}`}
               onClick={() => setTheme(id)}
+              onKeyDown={(event) => onKeyDown(event, index)}
             >
               {/* L'aperçu ne dépend PAS des jetons courants : il montre une
                   palette qu'on n'a pas encore appliquée. */}

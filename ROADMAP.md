@@ -691,6 +691,52 @@ stayed exactly where it was.*
 **What R does not do.** It adds no per-user layout preference; that is C1.5. It
 leaves the eight facts of a triage row intact: the table got shorter, not poorer.
 
+### C0.32 ✅ — Two widgets that promised a keyboard and had none
+
+*C0.30 made `SectionTabs` keep the contract `role="tab"` announces, and it
+looked nowhere else. There are two other composite widgets in this
+application, one per half — the theme grid (`role="radiogroup"`, six
+`role="radio"`) and the scan launcher's target bar (`role="tablist"`, three
+`role="tab"`) — and both declared the role while implementing none of its
+keyboard.*
+
+| # | Feature | What it changes |
+|---|---|---|
+| ~~R47~~ ✅ | **Roving tabindex and arrow keys on the last two composite widgets** — the group becomes ONE stop in the tab order, carried by the chosen member; the arrows move the selection and take the focus with it; Home and End reach both ends and the ends wrap. `components/arrow-keys.ts` holds the index arithmetic once for the three call sites, `SectionTabs` included, because one copy per widget is how three copies start disagreeing | Measured in Chromium on the built console: the theme grid goes from **6 tab stops (6 Tab presses to cross) to 1**, the target bar from **3 to 1**, and every arrow key goes from doing nothing to choosing |
+
+**Why it is not cosmetic.** A composite role is not a description, it is a
+promise read out loud before anybody has pressed anything: a screen reader says
+« radio button, 1 of 6 » and « tab, 1 of 3 », and the arrow key it has just
+announced did nothing on either widget. A key you have been told works, that
+does not work, does not read as a missing feature — it reads as a broken page.
+The cost was also paid by anybody navigating with Tab: six stops across the
+theme grid before the rest of the Console settings, three across the target bar
+before the field you came to the Code tab to fill.
+
+**The axis is the one real design difference, and it is an argument rather than
+a default.** A horizontal tab bar takes Left and Right and leaves Up, Down and
+the page keys to the browser — `SectionTabs` documents why, and the launcher's
+bar sits above a form that scrolls. A radio group takes all four, because a
+native `<input type="radio">` group does: ignoring Up and Down under
+`role="radio"` would be a second, quieter lie. Both directions are asserted.
+
+**The boundary is half the fix.** Six segmented pickers in this product wear
+`role="group"` with `aria-pressed` buttons. `group` promises nothing beyond
+grouping, so every button there is legitimately its own tab stop and no arrow
+key is owed; a test claims that side and passes before and after, so the next
+pass cannot "finish the job" by making six honest pickers swallow keys they
+never promised.
+
+**What this does NOT do.** The launcher's bar still controls no `tabpanel` —
+it carries no `aria-controls`, which ARIA permits, and what it really switches
+is the question, help and example of the ONE field below it. Wrapping that
+field set in a panel is a structural change to a form for a relationship the
+role only recommends, and inventing a panel to satisfy a pattern is the mistake
+C0.30 refused when it gave the Workflow tabs one shared region. Whether those
+three buttons should be a tab bar at all — the product spells the same widget
+as `role="group"` plus `aria-pressed` six times over — is a vocabulary decision
+for a human, not a night's call.
+
 ### C0.31 ✅ — Two buttons whose whole content is a drawing
 
 *`Icon` states its own contract in its header: a captionless glyph is

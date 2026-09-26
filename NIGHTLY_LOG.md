@@ -4,6 +4,190 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-26 (second run) — Saturday · Interface, clarity, accessibility
+
+**Subject**: two composite widgets — one per half of the product — declared
+`role="radiogroup"` and `role="tablist"` and implemented none of the keyboard
+those roles announce.
+
+**Result**: PR #43 (branch `claude/great-pascal-z54s6s`).
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-z54s6s` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Sixteenth entry saying so**; it is a line in the
+routine's configuration, not a thing a night can fix.
+
+**Why this subject**: the suite was green on the default branch first (1324
+passed, 1 skipped, typecheck clean, build clean), so the calendar rule did not
+preempt, and no pull request was open. This is the SECOND run carrying
+2026-09-26; the entry below is the first (PR #42, horizontal overflow at
+320 px), and nothing was redone — I started from its *Found and NOT fixed* list
+and took **none** of its three items (see **Do not redo**). Saturday's
+reservoir is interface and accessibility, and this is priority (2) — a real
+defect with a measurement, not (6) a clarity pass.
+
+**What it is NOT, said plainly.** This is not a clean single WCAG failure and I
+am not claiming one. 2.1.1 (Keyboard) was satisfied before the change: Tab
+reached every member and Enter chose it. What was broken is the contract the
+ROLE announces — the WAI-ARIA pattern, which evaluators file under 4.1.2 —
+plus the tab-order cost that comes with it. The sentence that matters is the
+product's own: a screen reader said « radio button, 1 of 6 » and « tab, 1 of
+3 », and the arrow key it had just announced did nothing.
+
+**How it was found.** Not by reading components: by taking an inventory of the
+roles the product writes.
+
+```
+grep -rno 'role="[a-z]*"' --include=*.tsx . | grep -v '\.test\.'
+```
+
+Thirteen roles, and exactly three composite ones: `SectionTabs` — which C0.30
+fixed — plus `ThemePicker` (`radiogroup`, Settings → Console) and
+`ScanLauncher` (`tablist`, the Code tab). Then a throwaway vitest probe measured
+both, and real Chromium confirmed it on the built bundle served by the console's
+own API.
+
+**Measured**, in Chromium 1194 on the built console (`npm run serve`, sample
+window, no database):
+
+| | before | after |
+|---|---|---|
+| theme grid, members | 6 radios | 6 radios |
+| theme grid, tab stops | **6 of 6** | 1 of 6 (the chosen theme) |
+| theme grid, Tab presses to cross | **6** | 1 |
+| theme grid, ArrowRight | `data-theme` grayed → **grayed** | grayed → **punk**, focus follows |
+| target bar, tab stops | **3 of 3** | 1 of 3 (the selected form) |
+| target bar, Tab presses to cross | **3** | 1 |
+| target bar, ArrowRight | question unchanged | « Which folder » → « Which file » |
+
+**What I learned**:
+
+- **The grep that finds the siblings of a component fix is not « who calls
+  it ».** C0.30 was written as a fix to `SectionTabs`, so the natural follow-up
+  question was which callers render a panel — and it could never have named
+  these two, which call nothing. The question that names them is *what else
+  wears a composite role*, and it is one line of grep over the product. Tenth
+  recurrence of *the mirror of a rule is not the rule*, and the first one where
+  the miss is explained by the SHAPE of the earlier fix rather than by nobody
+  having looked.
+- **Chromium's AX tree says `focusable=true` on a `tabIndex="-1"` member.** It
+  is true — the element is programmatically focusable — and it is not the
+  question a keyboard user is asking. Reading that property would have reported
+  the fix as a no-op. What a keyboard user pays is TAB STOPS, so the
+  measurement is « how many Tab presses until focus leaves the group », driven
+  through the real browser. Same family as sampling a colour during the theme
+  cross-fade: a measurement is code and can be wrong in both directions.
+- **`page.accessibility.snapshot()` no longer exists.** The 09-19 entry used it
+  for the icon-name numbers; in current `playwright-core` (1.63.0) `page.accessibility`
+  is `undefined` and the probe dies with *« Cannot read properties of undefined
+  (reading 'snapshot') »*. The replacement is CDP:
+  `context.newCDPSession(page)` → `Accessibility.enable`, `DOM.getDocument`,
+  `DOM.querySelector`, `Accessibility.getPartialAXTree` with
+  `fetchRelatives: true`, which returns role, name and the `focusable` /
+  `checked` / `selected` properties. Recorded here because a future night will
+  otherwise pay the same fifteen minutes.
+- **Both values a roving tabindex depends on are validated, so it cannot land
+  on nothing.** Checked rather than assumed: `isThemeId` in `theme/context.tsx`
+  refuses a stored theme outside `THEMES`, and `sanitizePreferences` in
+  `vulnpipe/lib/preferences.ts` refuses a `defaultKind` outside the three. If
+  either could pass an unknown value through, no member would carry `tabIndex=0`
+  and the group would have **zero** stops — unreachable by keyboard, which is
+  worse than the defect being fixed. No guard was added, because there is no
+  reachable state to guard.
+- **`git checkout <file>` to undo a mutation throws away an uncommitted fix
+  with it.** Two of my six mutation runs silently measured an UNFIXED component
+  — the revert had taken the fix, the sed then matched nothing, and the run
+  looked like a mutation that was caught. I noticed because the count was 4 and
+  not 1, rebuilt both components from the session's own edits, committed, and
+  re-ran every mutation against the commit. The rule for a future night:
+  **commit the fix before mutating it**, and treat a mutation whose failure
+  count is bigger than the test written for it as a suspect measurement.
+
+**Do not redo**:
+
+- **Do not wrap the launcher's fields in a `role="tabpanel"`** to give its tabs
+  an `aria-controls`. ARIA only recommends that property, the bar really does
+  switch the question, help and example of the ONE field below it, and wrapping
+  a form's fields in a panel is a structural change with a layout risk — the
+  gaps in `.vp-launcher` are the container's. C0.30's own rule applies:
+  inventing content to satisfy a pattern is the same mistake as filling a gap
+  with a default.
+- **Do not give the six `role="group"` pickers a roving tabindex or arrow
+  keys.** `group` promises nothing beyond grouping, so every button there is
+  legitimately its own stop. One test claims that side and passes before AND
+  after, on purpose.
+- **Do not make the launcher's bar answer Up and Down.** Mutation-tested: one
+  test, and only that test, goes red on it. The bar sits above a form that
+  scrolls.
+- **Do not make the theme grid horizontal-only.** The mirror mutation, also
+  caught by exactly one test: a native radio group answers to all four arrows.
+- **Do not use `page.accessibility.snapshot()`** — see above.
+- **Do not take PR #42's three open items as already done.** The four console
+  tables with no accessible name, the two `H4`-after-`H2` heading jumps
+  (« Log sources », Settings → Engines « Analysis speed ») and the missing
+  console `check.cjs` are all untouched tonight.
+
+**Found and NOT fixed**:
+
+- **The 21 live regions in `src/vulnpipe/` are all created together with their
+  first message.** I sampled four and every one is inside the conditional that
+  renders the sentence: `PromoteFinding.tsx:111`, `EstimatePanel.tsx:156`,
+  `ProviderSwitcher.tsx:135`, `FindingStatus.tsx:142`. That is the exact trap
+  `Announce` exists to remove in the console half — *« a region created in the
+  same breath as its first message is announced by some screen readers and
+  missed by others, and « sometimes » is not a guarantee »* — and the half that
+  taught the console the rule does not follow it. Worse, two of the four are
+  STANDING conditions carrying `role="alert"`, i.e. assertive: « this provider
+  cannot be used » and « the code changed since this finding was marked fixed »
+  are states, not answers to a press. **This is a well-shaped Saturday
+  subject** (the 09-19 entry had already listed the audit as not done): 21
+  regions, one primitive that already exists and is already imported by this
+  half, and a boundary rule the console half has written as tests.
+- **The launcher's bar controls no `tabpanel`**, as above — and whether those
+  three buttons should be a tab bar at all is a vocabulary question I did not
+  take: this product spells the same widget as `role="group"` plus
+  `aria-pressed` **six** times, as a `radiogroup` once, and as a `tablist`
+  once. Raised in the PR as a decision for a human.
+- **`SectionTabs` was not rewritten onto the shared helper's axis argument
+  beyond the one line it needed.** Its key set is unchanged and its own tests
+  prove it.
+- The items carried from 09-19 are still open and untouched: the Ingestion
+  tab's « Poll now » announcement, the assistant's `aria-busy`, the big result
+  panels.
+
+**Verified** (commands run, output read):
+
+```
+cd dashboard
+npm ci              # lockfile unchanged
+npm run typecheck   # 0 errors
+npm test            # 1335 passed | 1 skipped  (1324 before; +11 new, nothing skipped or weakened)
+npm run build       # dist built, CSS 88.64 kB BYTE-IDENTICAL (same hash index-D18qEK1J),
+                    # JS 474.76 → 475.16 kB
+```
+
+The CSS hash being unchanged is the claim that nothing here is visible to
+somebody using a mouse. Checked **RED** by reverting the three source files and
+keeping the tests: **7 of 11 fail**. The four that pass do so by design — the
+two `arrowTarget` unit tests (it is new code, and they are what pin the axis),
+the launcher's up/down boundary, and the `role="group"` boundary. **Six
+mutations, each caught by the test written for it**: no roving tabindex on the
+theme grid (1 fail), selection that does not move the focus (3), the theme grid
+treated as horizontal (1), the launcher's bar answering up and down (1),
+wrapping replaced by clamping in `arrowTarget` (3), no roving tabindex on the
+launcher's bar (1). The one skipped test is the pre-existing
+`store-contract.test.ts > contrat — postgres`, which needs a database.
+`VulnPipe/` untouched — `dashboard/src/vulnpipe/` is the console's embedded
+section, not the service — so its suite was not run. No model key and no
+database needed: the console falls back to its sample window, which is what put
+the Code tab on screen. The Chromium probe and the vitest probe were written
+under the scratchpad and inside `src/` respectively; the second was deleted, and
+`git status` is clean apart from the diff.
+
+---
+
 ## 2026-09-26 — Saturday · Interface, clarity, accessibility
 
 **Subject**: the console scrolled sideways on a phone, at three places — and

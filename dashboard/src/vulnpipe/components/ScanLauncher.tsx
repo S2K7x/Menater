@@ -23,9 +23,10 @@
  * ============================================================================
  */
 
-import { useState } from 'react';
+import { useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 
 import { useI18n } from '../../i18n/context.tsx';
+import { arrowTarget } from '../../components/arrow-keys.ts';
 import { Icon, type IconName } from './Icon.tsx';
 
 export type TargetKind = 'directory' | 'file' | 'github';
@@ -66,8 +67,36 @@ export function ScanLauncher({
   const [mode, setMode] = useState<'full_scan' | 'incremental_scan'>(defaultMode);
   const [commitSha, setCommitSha] = useState('');
   const [touched, setTouched] = useState(false);
+  const bar = useRef<HTMLDivElement>(null);
 
   const invalid = touched && target.trim().length === 0;
+
+  /**
+   * The arrows choose a target form; Tab goes on to the field.
+   *
+   * ==========================================================================
+   * THE DEFECT THIS FIXES
+   *
+   * `role="tab"` announces a contract — one stop in the tab order, the arrows
+   * choosing inside it — and this bar declared it while implementing none of
+   * it: measured in Chromium, three stops out of three, and no arrow key did
+   * anything. So the three forms sat between the keyboard and the field they
+   * describe, and the key a screen reader had just promised was dead.
+   *
+   * The same four keys as the console's own tab bar, for the same reason: this
+   * one is horizontal, and Up, Down and the page keys belong to the form that
+   * scrolls under it. Automatic activation, because switching a tab here only
+   * rewrites the question and the example below — it is what a click does.
+   * ==========================================================================
+   */
+  const onTabKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>, from: number) => {
+    const to = arrowTarget(event.key, from, TARGET_KINDS.length, 'horizontal');
+    if (to === null) return;
+    event.preventDefault();
+    if (to === from) return;
+    setKind(TARGET_KINDS[to]);
+    bar.current?.querySelectorAll<HTMLElement>('[role="tab"]')[to]?.focus();
+  };
 
   return (
     <form
@@ -82,15 +111,18 @@ export function ScanLauncher({
       <span className="vp-kicker">{t.launcher.kicker}</span>
       <h2>{t.launcher.title}</h2>
 
-      <div className="vp-target-tabs" role="tablist" aria-label={t.launcher.title}>
-        {TARGET_KINDS.map((id) => (
+      <div className="vp-target-tabs" role="tablist" aria-label={t.launcher.title} ref={bar}>
+        {TARGET_KINDS.map((id, index) => (
           <button
             key={id}
             type="button"
             role="tab"
             aria-selected={kind === id}
+            // Roving tabindex: the bar is one stop, and it is the selected form.
+            tabIndex={kind === id ? 0 : -1}
             className={kind === id ? 'vp-target-tab vp-target-tab-active' : 'vp-target-tab'}
             onClick={() => setKind(id)}
+            onKeyDown={(event) => onTabKeyDown(event, index)}
             disabled={busy}
           >
             <Icon name={TARGET_ICONS[id]} size={16} />
