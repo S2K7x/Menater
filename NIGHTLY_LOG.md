@@ -10,7 +10,7 @@ they were — they are memory about live code, and rewriting them would lose it.
 `role="radiogroup"` and `role="tablist"` and implemented none of the keyboard
 those roles announce.
 
-**Result**: PR #TBD (branch `claude/great-pascal-z54s6s`).
+**Result**: PR #43 (branch `claude/great-pascal-z54s6s`).
 
 **Note on the branch name.** `NIGHTLY.md` § 5 asks for
 `claude/nightly-YYYY-MM-DD-subject`; this session was handed
