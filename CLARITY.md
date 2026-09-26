@@ -288,6 +288,7 @@ deletion.
 | A live region on a STANDING condition | The console re-renders on every poll: a broken chain, a warning about a setting's value or a guarantee printed above a field would be re-announced for as long as it lasts. A permanent alarm stops being read — the rule the Tracking tab already applies to the diagnostic probe. Regions are for what APPEARED BECAUSE SOMEBODY ACTED |
 | A control whose whole content is an `Icon` | `Icon` keeps a captionless glyph `aria-hidden` on purpose — that is what stops « New rule » being read as « check New rule ». So a button holding an icon and nothing else has **no accessible name at all**: it reaches assistive technology as « button ». Give it an `aria-label` from the catalogue, the way `Assistant.tsx` does; do **not** give the icon a `title`, which announces the drawing beside every word it decorates. And when the control repeats per row, the label names the ROW — twenty identical « Delete » buttons name nothing, and one of them is the one that deletes |
 | A long unbreakable value in a grid or flex item | A grid item has `min-width: auto`, so a 51-character connection string becomes the item's minimum and **floors the track**: the diagnostic card's single column measured 503.6 px inside a 325 px grid, and the page scrolled 529 px at 375. The one-column override written for it in the 760 px block cannot help — it chooses how many tracks there are, not how narrow one may become. Let the value break, and mind the spelling: `overflow-wrap: anywhere` and `word-break: break-all` change min-content, `break-word` does not and leaves the overflow exactly where it was. A no-wrap flex line is the same rule for a row of buttons: it is as wide as their sum |
+| A composite role with no keyboard behind it | `role="tablist"` and `role="radiogroup"` promise ONE stop in the tab order and arrows that choose inside it, and a screen reader says so — « tab, 1 of 3 » — before anybody presses anything. Measured in Chromium: the theme grid was 6 stops of 6, the launcher's target bar 3 of 3, and every arrow key on both did nothing. Roving tabindex on the chosen member, and `components/arrow-keys.ts` for the index arithmetic rather than a copy per widget. The axis is not a detail: a horizontal bar leaves Up, Down and the page keys to the browser, a radio group answers to all four because a native one does. And `role="group"` is the honest role when you owe no keyboard — six pickers here use it, and nothing is owed there |
 
 The full table, with the story behind each, is in **CLAUDE.md**.
 
@@ -317,9 +318,13 @@ The full table, with the story behind each, is in **CLAUDE.md**.
 11. Does every new control have an **accessible name** — including one whose
     whole content is an `Icon`, which carries none of its own? And if it
     repeats per row, does the name say **which row**?
-12. Is the rule you just applied **written as a test**?
-13. `npm run typecheck && npm run test && npm run build`.
-14. Did you record the decision in **ROADMAP.md**, and the trap in
+12. Does every **composite role** you wrote have the keyboard it announces —
+    one stop in the tab order, the arrows choosing inside it? Measure it by
+    counting Tab presses out of the group, and use `role="group"` when you owe
+    no keyboard.
+13. Is the rule you just applied **written as a test**?
+14. `npm run typecheck && npm run test && npm run build`.
+15. Did you record the decision in **ROADMAP.md**, and the trap in
     **CLAUDE.md**?
 
 ---
