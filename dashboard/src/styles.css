@@ -604,6 +604,24 @@ code, .soc-mono { font-family: var(--mono); }
 .soc-health-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
 .soc-health-item { background: var(--panel); border: 1px solid var(--line); padding: 16px; }
 .soc-health-item h3 { margin: 0 0 6px; }
+/* A GRID ITEM IS NEVER NARROWER THAN ITS LONGEST UNBREAKABLE WORD.
+   This card prints the engine's address — `postgresql://user:***@host:5432/db`,
+   one 51-character token with nowhere to break. A grid item has
+   `min-width: auto`, so that token becomes the item's automatic minimum size
+   and FLOORS the track: measured at 375 px, the single column came out
+   503.6 px wide and the whole document scrolled 529 px. The one-column
+   override in the 760 px block was written for exactly this and cannot work —
+   it chooses how many tracks there are, not how narrow one may become
+   (measured: 512 px of overflow left). Same for `minmax(min(260px, 100%), 1fr)`.
+   What fixes it is letting the value break, which is what `.soc-hash` and
+   `.soc-kv dd` already do for the other machine values in this console.
+   `anywhere` and not `break-word`: only `anywhere` and `word-break: break-all`
+   take part in min-content sizing, and `break-word` measured 529 px — the
+   page still scrolling under a rule that looks applied. Of the two that work,
+   `anywhere` is the one that breaks a word ONLY when it would overflow. It is
+   scoped to `code` on purpose: the sentence underneath names the failure
+   (« connect ECONNREFUSED 127.0.0.1:5432 ») and is read, not compared. */
+.soc-health-item code { overflow-wrap: anywhere; }
 
 .soc-wf-list { list-style: none; padding: 0; margin: 0; }
 .soc-wf-list span { color: var(--muted); }
@@ -684,7 +702,15 @@ code, .soc-mono { font-family: var(--mono); }
 }
 .soc-lang button:hover { color: var(--fg); }
 .soc-lang button[aria-pressed='true'] { background: var(--accent); color: var(--accent-fg); }
-.soc-lang-wide { margin-top: 6px; }
+/* The same control, widened, is the console's segmented picker — six call
+   sites: a rule's action and severity, the MCP client, the ingestion mode, the
+   setup wizard's source, the fast lane. A no-wrap flex line is as wide as the
+   sum of its buttons, so the longest labels take the page with them: measured
+   at 375 px, Settings → MCP's four clients made the group 521 px and the
+   document scrolled 546 px. Wrapping costs nothing while there is room and
+   fixes all six at once, where widening one label's screen fixes only the one
+   you remembered. */
+.soc-lang-wide { margin-top: 6px; flex-wrap: wrap; }
 .soc-lang-wide button { padding: 10px 16px; }
 
 /* Checkbox with an explanation: one pattern for all five settings. */
@@ -2034,6 +2060,15 @@ code, .soc-mono { font-family: var(--mono); }
   border-top: 1px solid var(--line); padding-top: 16px;
 }
 .soc-mcp-step:first-of-type { border-top: none; }
+
+/* The sentence under Claude Desktop's block names the file to paste into, on
+   both platforms: `%APPDATA%\Claude\claude_desktop_config.json` is a
+   forty-three-character word inside ordinary prose. It fits at 375 px and it
+   does not at the 320 px WCAG 1.4.10 asks for — measured, the paragraph's
+   min-content was 302 px in 270 px of room and the page scrolled. Same rule
+   as the diagnostic card's address: a path is a machine value and may break
+   where a sentence may not. */
+.soc-mcp-path { overflow-wrap: anywhere; }
 
 .soc-mcp-block {
   margin: 10px 0 4px; border: 1px solid var(--line); border-radius: var(--radius);

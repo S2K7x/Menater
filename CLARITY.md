@@ -236,6 +236,14 @@ It returns only *rendered* text. If a heading's `innerText` contains what you
 believed was hidden, assistive technology reads it too — a closed popover that
 is merely positioned off-flow is still in the accessible name.
 
+**The `offsetParent` filter below is the whole test, not tidiness.** On an
+element that is NOT rendered, `innerText` falls back to `textContent` — so a
+`<th>` inside the `thead` the responsive card layout hides at 375 px reports
+every word of the popover it contains, and a sweep that drops the filter
+reports a defect that has been fixed for months. A ruler that fires on hidden
+markup is the theme cross-fade again: wrong in the direction that wastes a
+night, and one edit away from being wrong in the direction that hides one.
+
 ```js
 [...document.querySelectorAll('h1,h2,h3,th')]
   .filter(e => e.offsetParent && (e.innerText || '').length > 70)
@@ -279,6 +287,7 @@ deletion.
 | A live region created together with its first message | Some screen readers announce it, others miss it, and « sometimes » is not a guarantee. `Announce` is a WRAPPER that is always in the DOM, so the region pre-exists the sentence |
 | A live region on a STANDING condition | The console re-renders on every poll: a broken chain, a warning about a setting's value or a guarantee printed above a field would be re-announced for as long as it lasts. A permanent alarm stops being read — the rule the Tracking tab already applies to the diagnostic probe. Regions are for what APPEARED BECAUSE SOMEBODY ACTED |
 | A control whose whole content is an `Icon` | `Icon` keeps a captionless glyph `aria-hidden` on purpose — that is what stops « New rule » being read as « check New rule ». So a button holding an icon and nothing else has **no accessible name at all**: it reaches assistive technology as « button ». Give it an `aria-label` from the catalogue, the way `Assistant.tsx` does; do **not** give the icon a `title`, which announces the drawing beside every word it decorates. And when the control repeats per row, the label names the ROW — twenty identical « Delete » buttons name nothing, and one of them is the one that deletes |
+| A long unbreakable value in a grid or flex item | A grid item has `min-width: auto`, so a 51-character connection string becomes the item's minimum and **floors the track**: the diagnostic card's single column measured 503.6 px inside a 325 px grid, and the page scrolled 529 px at 375. The one-column override written for it in the 760 px block cannot help — it chooses how many tracks there are, not how narrow one may become. Let the value break, and mind the spelling: `overflow-wrap: anywhere` and `word-break: break-all` change min-content, `break-word` does not and leaves the overflow exactly where it was. A no-wrap flex line is the same rule for a row of buttons: it is as wide as their sum |
 
 The full table, with the story behind each, is in **CLAUDE.md**.
 
@@ -295,8 +304,14 @@ The full table, with the story behind each, is in **CLAUDE.md**.
 6. Is the new class prefix **free**? `grep` before you write.
 7. Did you **measure** the screen before and after?
 8. Do headings and `<th>` still come back **empty** from the `innerText` sweep?
-9. Does it hold at **390 px** and in a **dark** theme, with no horizontal
-   overflow?
+9. Does it hold at **320 px** and in a **dark** theme, with no horizontal
+   overflow? 320 and not 390: that is the width WCAG 2.2 § 1.4.10 (Reflow)
+   names, and what a 375 px phone becomes at 125 % zoom. Measured, three
+   screens of this console passed at 390, two failed at 375 and three at
+   320 — **a width that passes is not a width that has margin**. The
+   marketing site has swept 320, 390, 768 and 1400 since it shipped
+   (`site/check.cjs`); the console has no equivalent yet, so this one is
+   still done by hand in a browser.
 10. Does every sentence a **button** produces land in an `Announce`, and does
     nothing standing land in one?
 11. Does every new control have an **accessible name** — including one whose

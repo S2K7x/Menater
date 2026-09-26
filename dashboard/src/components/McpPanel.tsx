@@ -311,7 +311,7 @@ export function McpPanel({
       {/* Le chemin du fichier ne vaut que pour Claude Desktop : affiche sous
           les trois autres, il envoyait editer un fichier qui n'existe pas. */}
       {client === 'desktop' ? (
-        <p className="soc-faint" style={{ textTransform: 'none', letterSpacing: 0 }}>
+        <p className="soc-faint soc-mcp-path" style={{ textTransform: 'none', letterSpacing: 0 }}>
           {t.claudeDesktopPath}
         </p>
       ) : null}
