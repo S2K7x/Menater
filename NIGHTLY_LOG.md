@@ -4,6 +4,156 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-26 — Saturday · Interface, clarity, accessibility
+
+**Subject**: the console scrolled sideways on a phone, at three places — and
+the only tool in this repository that measures horizontal overflow is pointed
+at the marketing site.
+
+**Result**: PR #__ (branch `claude/great-pascal-k31302`).
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-k31302` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Fifteenth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject**: the suite was green on the default branch first (1317
+passed, 1 skipped, typecheck clean, build clean), so the calendar rule did not
+preempt, and no pull request was open. Saturday's reservoir is interface and
+accessibility, and this is priority (2) — a real defect with a measurement, not
+(6) a clarity pass. WCAG 2.2 § 1.4.10 (Reflow), level AA.
+
+**How it was found.** `CLARITY.md` § 7's instruction, taken literally: the real
+application — `npm run serve` plus Vite, sample window, no database — driven in
+real Chromium, one pass per tab and per sub-tab, at 1280 and 375 px, reading
+`document.documentElement.scrollWidth`. Transitions killed first, per § 7. The
+sweep also covered `SettingsPage` and `MetricsPanel`, which the 09-19 entry
+listed as the two screens its jsdom probe never reached: both came back clean
+on unnamed controls, duplicate ids, dangling IDREFs and heading jumps, so that
+gap in the record is closed.
+
+**Measured**, on the built bundle served by the console's own API — the
+deployment path, not the dev server:
+
+| viewport | before | after |
+|---|---|---|
+| 320 px | Ingestion **330**, Health **529**, Settings → MCP **546** | every tab: 320 |
+| 375 px | Health **529**, Settings → MCP **546** | every tab: 375 |
+| 390 px | clean | clean |
+| 1280 px | clean | clean, and the whole sweep is byte-identical |
+
+**Three causes.**
+
+1. **A grid item is never narrower than its longest unbreakable word.** The
+   diagnostic card prints `postgresql://n8n_soc:********@localhost:5432/menater`
+   — 51 characters with nowhere to break — and a grid item has
+   `min-width: auto`, so that token became the item's automatic minimum and
+   floored the track at **503.6 px inside a 325 px grid**.
+2. **A no-wrap flex line is as wide as the sum of its buttons.**
+   `.soc-lang-wide` is the segmented picker shared by six screens; two of the
+   six had already failed (MCP's four clients at 375, the fast lane at 320).
+3. **The same thing again, in prose.** `%APPDATA%\Claude\claude_desktop_config.json`
+   is a 43-character word in the sentence under Claude Desktop's block: 302 px
+   of min-content in 270 px of room.
+
+**What I learned**:
+
+- **The rule was not merely written elsewhere — it was TOOLED elsewhere.**
+  `site/check.cjs` drives Chromium over the marketing site at 320, 390, 768 and
+  1400 px and reports overflow, under a header saying *« a page that scrolls
+  sideways on a phone hides its own right-hand edge »*. Two static brochure
+  pages swept on every build; the product swept by nobody. Ninth recurrence of
+  *the mirror of a rule is not the rule*, and the sharpest form of it yet.
+- **`styles.css` already carried a fix for cause 1, and it cannot work.**
+  `@media (max-width: 760px) { .soc-health-grid { grid-template-columns: 1fr } }`
+  chooses how many tracks there are, not how narrow one may become. Measured,
+  each remedy applied alone at 375 px: `min-width: 0` → **512 px**,
+  `minmax(min(260px, 100%), 1fr)` → **512 px**, letting the value break → 375.
+  Dead code that looks load-bearing, on a responsive override.
+- **The spelling of the break is not interchangeable, and the near-miss is the
+  plausible one.** Measured: `overflow-wrap: anywhere` → 375, `word-break:
+  break-all` → 375, **`overflow-wrap: break-word` → 529, unchanged**. Only the
+  first two take part in min-content sizing; `break-word` wraps the visible
+  line and leaves the item's minimum where it was. So the test asserts the
+  behaviour (either of the two that work) rather than the spelling, and refuses
+  the one that does not.
+- **A width that passes is not a width that has margin.** Cause 3 passed at
+  375 px and failed at 320. 320 is the width WCAG 1.4.10 names, and what a
+  375 px phone becomes at 125 % zoom — `CLARITY.md` § 9 asked for 390, and now
+  asks for 320 with that reason written in.
+- **`innerText` falls back to `textContent` on a NON-RENDERED element.** My
+  first sweep dropped `CLARITY.md`'s own `offsetParent` filter and duly
+  reported the closed-popover-in-a-`<th>` trap as back from the dead, on the
+  Ingestion lane table at 375 px — where `thead` is `display: none`, so nothing
+  is announced at all. A false positive of the ruler, same family as sampling a
+  colour during the theme cross-fade. The caveat is now in § 7 beside the
+  snippet.
+
+**Do not redo**:
+
+- **Do not "fix" the health grid with `min-width: 0` or
+  `minmax(min(260px, 100%), 1fr)`.** Both measured, both leave 512 px of
+  overflow: they fix the TRACK, and the string was still out.
+- **Do not write the break as `overflow-wrap: break-word`.** Measured at 529 px,
+  i.e. no change. Mutation-tested; one test is written for exactly that.
+- **Do not put the break on `.soc-health-item` itself.** It measures 375 too,
+  so it is a plausible fix — and it lets « ECONNREFUSED » and the diagnostic
+  prose be cut mid-word. A boundary test claims that side and passes before AND
+  after.
+- **Do not shorten the MCP client labels.** `CLAUDE.md` keeps all four forms
+  deliberately; the group wraps instead, which fixes the other five call sites
+  of the same picker at the same time.
+- **Do not chase the `<th>` popover trap on the Ingestion table.** It is closed
+  and it stays closed; see above.
+- **Do not re-sweep `SettingsPage` or `MetricsPanel` for unnamed controls,
+  duplicate ids, dangling IDREFs or heading jumps.** Done tonight, clean.
+
+**Found and NOT fixed**:
+
+- **The console has no `check.cjs`.** This is the real gap, and it is bigger
+  than a night: the suite cannot see layout (jsdom computes none, `scrollWidth`
+  is 0), so tonight's guard is three assertions over `styles.css` paired with
+  three over the rendered markup. A browser sweep of the console needs
+  Playwright in `dashboard/`, which is a dependency decision and a CI decision,
+  not a nightly one. Written into ROADMAP § 7 and raised in the PR.
+- **Four tables in the console half have no accessible name** (`soc-queue`
+  ×2, `soc-table-compact` ×2), while `vulnpipe/components/UsagePanel.tsx` uses
+  `<caption>` twice. Carried from the 09-19 entry, still true, still a scoped
+  Saturday subject; not a level-A failure, so it did not outrank this one.
+- **Two heading jumps**: `H4 after H2` under « Log sources » (Ingestion) and
+  under « Analysis speed » (Settings → Engines). Real, small, and a heading
+  level is an outline as well as a size — a separate subject.
+- **320 px is now clean, 280 px was not tested.** I stopped at the width the
+  criterion names.
+
+**Verified** (commands run, output read):
+
+```
+cd dashboard
+npm run typecheck   # 0 errors
+npm test            # 1324 passed | 1 skipped  (1317 before; +7 new, nothing skipped or weakened)
+npm run build       # dist built, CSS 88.54 → 88.64 kB (the comments), JS 474.75 → 474.76 kB
+```
+
+Checked **RED** by reverting `styles.css` and `McpPanel.tsx` and keeping the
+tests: **4 of 7 fail**. The three that pass do so by design — two coupling
+claims that were already true (the address is already in a `<code>`, the picker
+already holds its four buttons) and the boundary. **Four mutations, each caught
+by exactly the test written for it**: `break-word` instead of `anywhere` (1
+fail), the break moved onto the card instead of its `code` (2 — the behaviour
+check and the boundary), `flex-wrap` dropped (1), the address printed as plain
+text instead of `<code>` (1). The one skipped test is the pre-existing
+`store-contract.test.ts > contrat — postgres`, which needs a database.
+`VulnPipe/` untouched, its suite not run. No model key and no database needed:
+the console falls back to its sample window, which is what put real data on the
+Health tab. `npm ci` did not rewrite `package-lock.json`. The browser probes
+were written under the scratchpad, run, and are not in the diff; the one vitest
+probe written inside `src/` was deleted.
+
+---
+
 ## 2026-09-25 (second run) — Friday · Performance and cost
 
 **Subject**: both MCP servers in this product pretty-printed every answer they
