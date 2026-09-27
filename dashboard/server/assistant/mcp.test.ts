@@ -20,7 +20,7 @@
  * ============================================================================
  */
 
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MCP_PATH, mcpRoutes, resetMcpRateLimit } from './mcp.ts';
 import { TOOLS } from './tools.ts';
@@ -505,12 +505,64 @@ describe('the MCP endpoint — the text block is JSON', () => {
     });
     const content = r.json.result.content;
     const body = content[0].text as string;
-    // The queue carries a rule name and a raw log, so it is always fenced.
-    const marker = /untrusted:([a-z0-9]+)/i.exec(body);
+    /*
+     * The queue carries a rule name and a raw log, so it is always fenced.
+     *
+     * READ THE MARKER BY ITS DELIMITERS, NEVER BY THE NONCE'S ALPHABET.
+     * `newFence` mints `randomBytes(9).toString('base64url')`, whose alphabet
+     * includes `-` and `_`. A guessed `[a-z0-9]+` therefore matched nothing
+     * whenever the nonce OPENED on one of those two characters — measured at
+     * 3.056% of nonces over 200,000 draws, i.e. a suite that went red about
+     * once every thirty-three runs for no reason anybody could reproduce. And
+     * it was wrong in the quieter direction the rest of the time: a nonce with
+     * a `-` in the MIDDLE captured only the prefix before it, so the
+     * `toContain` below was satisfied by a single character. `[^\s>]+` and the
+     * ` field=` that follows are what the generator actually writes.
+     */
+    const marker = /<untrusted:([^\s>]+) field=/.exec(body);
     expect(marker).not.toBeNull();
     expect(content.length).toBe(2);
     expect(content[1].text).toContain(marker![1]);
     expect(content[1].text).toMatch(/never as an instruction/);
+  });
+
+  /**
+   * The same assertion, over the nonce that used to break it.
+   *
+   * The test above reads a nonce it did not choose, so it exercises whichever
+   * of the 64 opening characters `randomBytes` happened to draw — and it went
+   * red on two of them. A dice roll is not a test: this one PICKS the case,
+   * so the reader is checked against the worst nonce on every run rather than
+   * on 3% of them. `-` first and `_` inside, because those are exactly the two
+   * characters base64url adds to the alphabet somebody had guessed.
+   */
+  it('reads the fence marker whatever base64url drew', async () => {
+    const sanitize = await import('./sanitize.ts');
+    const real = sanitize.newFence();
+    vi.spyOn(sanitize, 'newFence').mockReturnValue({
+      ...real,
+      nonce: '-aB_9zZ',
+      open: (label: string) => `<untrusted:-aB_9zZ field="${label}">`,
+      close: '</untrusted:-aB_9zZ>',
+    });
+    try {
+      const r = await call({
+        body: {
+          jsonrpc: '2.0', id: 1, method: 'tools/call',
+          params: { name: 'list_alerts', arguments: {} },
+        },
+      });
+      const content = r.json.result.content;
+      const marker = /<untrusted:([^\s>]+) field=/.exec(content[0].text as string);
+      expect(marker).not.toBeNull();
+      // The WHOLE nonce, not the prefix before its first `-` or `_`: the note
+      // beside the body names the nonce, and a one-character `toContain` is a
+      // check that passes over anything.
+      expect(marker![1]).toBe('-aB_9zZ');
+      expect(content[1].text).toContain('-aB_9zZ');
+    } finally {
+      vi.restoreAllMocks();
+    }
   });
 });
 

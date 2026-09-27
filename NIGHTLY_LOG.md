@@ -4,6 +4,199 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-27 (second run) — Sunday · Maintenance and state of the project
+
+**Subject**: the console suite was **red on unmodified `main`**, and green on the
+next run. Two tests, two unrelated causes, both root-caused and measured: one
+guessed the alphabet of a value the code hands it, one read a property
+`findByText` never waited for.
+
+**Result**: PR #45 (branch `claude/great-pascal-gsb25a`).
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-gsb25a` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Eighteenth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject**: the calendar rule preempted. `npm test` on unmodified
+`main` at 9b498f1 gave **2 failed | 1338 passed | 1 skipped**, so NIGHTLY.md
+§ 1's overriding rule applied and Sunday's reservoir did not get a vote. The
+previous entry's recommendation — *take one page of `CLAUDE.md` and check every
+claim on it against the code* — is therefore **still open and still
+recommended**: it was not tried tonight and not ruled out.
+
+**The two failures, and they have nothing to do with each other.**
+
+1. `server/assistant/mcp.test.ts > still names the fence beside a compact body`
+   — `expected null not to be null`.
+2. `src/components/intel-panel.test.tsx > S'OUVRE quand aucune source ne repond`
+   — `expected false to be true`.
+
+Both passed **in isolation**, and the whole suite passed on the immediate
+re-run. The first diagnostic step was therefore the useful one: neither is a
+regression from #44, and "re-run it" would have closed the night with the defect
+intact.
+
+**Cause 1 — a test that guessed the alphabet of a value the code generates.**
+
+`newFence()` mints `randomBytes(9).toString('base64url')`. The assertion read
+the marker back out of the serialised body with `/untrusted:([a-z0-9]+)/i`.
+base64url adds exactly two characters to that set, so:
+
+| | measured |
+|---|---|
+| nonces where the regex matches NOTHING | **6,113 / 200,000 = 3.056%** |
+| first character `-` / `_` | 3,042 / 3,071 (2/64 = 3.125% expected) |
+| the quieter half | a `-` or `_` in the MIDDLE captured only the prefix before it, so `expect(content[1].text).toContain(marker[1])` was satisfied by **one character** |
+
+So the test went red about once every thirty-three runs, and the rest of the
+time it checked a prefix. Reproduced **deterministically** by forcing the first
+byte to `-` in `sanitize.ts`: the full suite was then red on that ONE test out
+of 1,341, which is the measurement that says the production side is sound —
+nothing in this product parses the nonce, `assistant.test.ts` compares against
+`fence.nonce` itself, and `prompt.ts` / `mcp.ts` interpolate it.
+
+**Cause 2 — a `findBy*` vouching for a property it never waited for.**
+
+`findByText` waits for ONE thing: the text. `Fold` cannot take `open` as a prop
+(React re-asserts `<details open>` on every change, `false` included — the
+half-controlled trap already in the table), so it writes the attribute from a
+`useEffect`, and passive effects flush on a macrotask AFTER the commit that put
+the hint on screen.
+
+| | measured |
+|---|---|
+| 600 mounts, `.open` read at the instant `findByText` resolved | **closed 12 times (2.0%)** |
+| of those 12, recovered by a bounded `waitFor` | **12 of 12** — the product opens the fold every time |
+| same 600 mounts with one empty `act` scope first | **0** |
+
+**And the same missing flush is a false GREEN in the other direction, four
+times more often than it is a false red.** The neighbouring test asserts the
+fold STAYS closed while at least one source answers; read early, that claim
+cannot tell *did not open* from *has not opened yet*. Mutating the coverage
+condition to `defaultOpen={providers !== null}` — a fold that opens whenever
+data arrives, the realistic version of this bug — the old assertion **passed
+over it on 2 of 10 fresh runs**, against 0 of 5 with the flush.
+
+**What I learned**:
+
+- **The rate depends on the run, which is why "it passes on my machine" is
+  worth nothing here.** The same race measured 2.0% inside a warm 600-iteration
+  loop and ~20% as a single mount in a cold process. A flake rate is not a
+  property of the test; it is a property of the test AND the machine.
+- **`act`, not `waitFor`, and the reason is the negative assertion.** Polling
+  makes a positive claim pass eventually and leaves the negative one vacuous:
+  `waitFor(() => expect(open).toBe(false))` is satisfied by its first read,
+  before anything has had a chance to open. One empty `act` scope drains
+  React's pending work once, so both directions are read at the same settled
+  moment. `settings-readability.test.tsx` had already reached for `waitFor` on
+  its one positive read — the local fix, at one call site, for the fifth time.
+- **A test can be red 3% of the time and wrong 100% of the time, and the 3% is
+  what gets noticed.** Both halves of the fence assertion were broken by the
+  same guess; only the noisy half made a suite go red.
+- **`main` has been tested as `main` exactly once**, and this is why a red
+  `main` was invisible. `ci.yml` declares `push: branches: [main]`, and the API
+  reports **1 push run on `main` in 45 total** — run 3, 2026-09-14, the HUMAN
+  merge of #19. Every merge since is `automerge.yml` acting with
+  `GITHUB_TOKEN`, and GitHub does not fire a workflow for an event created by
+  that token. The consequence is bounded rather than absent — automerge
+  re-tests the branch against the current `main` before merging, so each merge
+  IS preceded by a run over that content — but nothing ever runs the suite on
+  the merge commit, so a flake, a semantic merge conflict, or a `main` that
+  only breaks once assembled has no observer at all. **Not fixed**: the only
+  fixes are a PAT or an App token, i.e. a secret, and NIGHTLY.md forbids me
+  both the secret and the architecture decision. It is in the PR as a decision
+  for a human.
+- **The suite is 1.8 s of flake-free time by design, and these were the two
+  exceptions.** `vitest.config.ts` already blocks the developer's `config.json`,
+  credentials and cursors, and the VulnPipe side blocks its cache — every
+  previous flake on this project came from the ENVIRONMENT. These two came from
+  the tests' own reading, which is a class the existing locks cannot cover.
+
+**Do not redo**:
+
+- **Do not change `newFence()` to a narrower alphabet to satisfy the regex.**
+  9 bytes of base64url is 72 bits in 12 characters; hex would need 18 for the
+  same entropy, and the nonce is interpolated into a marker, never parsed. The
+  test was wrong, not the generator.
+- **Do not "fix" the flakes with `retry` in `vitest.config.ts`.** A retry turns
+  a red into a green and deletes the evidence — it is the failure that shows
+  green, bought at the cost of the only signal that found these.
+- **Do not replace the `act` flush with `waitFor` for symmetry.** Measured
+  above: it works for the positive claim and silently guts the negative one.
+- **Do not hoist `settle()` into `src/vulnpipe/test-utils.tsx` yet.** One call
+  site pair uses it; NIGHTLY.md § 3 refuses an abstraction for a single use.
+  The rule lives in `CLAUDE.md`'s table, which is where the next reader looks.
+- **Do not chase the other `.open` assertions.** Swept: three folds in the
+  product can self-open from ASYNC data (`IntelPanel`'s coverage,
+  `SettingsPage`'s tunnel token, VulnPipe `SettingsPage`'s engine health) and
+  `CaseView`'s two open at mount inside `render`'s own `act`. No test reads
+  `.open` on the other two after an async wait, and `intel-panel.test.tsx:317`
+  is an `Explain` bubble with no `defaultOpen` effect at all.
+
+**State of the week** (Sunday's other half, second run — the first run's
+account of the week stands; this adds only what tonight measured):
+
+- **Dependencies: clean, third Sunday running.** `npm ci` on both halves, then
+  `npm audit` with and without `--omit=dev`: **0 vulnerabilities**, four
+  answers out of four. Neither lockfile was rewritten (npm 10.9.7, Node
+  22.22.2). Nothing invented, no bump "to be current".
+- **The delivery path has a hole that is not the suite's.** See above: one
+  `push` run on `main` in the repository's life. That is now the strongest
+  remaining maintenance item, and unlike the last four it is **not** something
+  a night can close — it needs a credential decision.
+- **Recommendation for next week, unchanged and now with a second reason.**
+  Take one page of `CLAUDE.md` and check every claim against the code: it found
+  the last two Sunday subjects, it did not get a turn tonight, and tonight adds
+  the argument that the suite going green is not evidence a claim is true — two
+  assertions had been checking a one-character prefix and an unsettled DOM for
+  as long as they had existed, both green.
+- **Still open and still the strongest correctness item**: ROADMAP § 7's
+  *an executed action is sealed into the audit chain as `action_taken: "none"`*,
+  reproduced on unmodified `main`. Untouched tonight.
+
+**Verified** (commands run, output read):
+
+```
+cd dashboard
+npm ci              # lockfile unchanged, 0 vulnerabilities (prod and dev)
+npm run typecheck   # 0 errors
+npm test            # 1341 passed | 1 skipped  (baseline: 2 FAILED | 1338 | 1)
+                    # then 3 more consecutive full runs, all 1341 | 1 skipped
+npm run build       # dist built, ✓ in 1.00s
+cd ../VulnPipe
+npm ci              # lockfile unchanged, 0 vulnerabilities
+npm run typecheck   # 0 errors  — baseline only, VulnPipe untouched
+npm test            # 373 passed — baseline only, VulnPipe untouched
+```
+
+Plus **40 consecutive runs of the two affected files together** (46 tests):
+0 failures.
+
+Checked **RED** before the change, both halves, and neither by reading:
+
+- Cause 1: forcing `newFence`'s first byte to `-` gives
+  `1 failed | 1339 passed | 1 skipped` — that one test and nothing else in
+  1,341. With the delimiter regex in place, the same forced nonce is green. The
+  new pinned test (`reads the fence marker whatever base64url drew`, nonce
+  `-aB_9zZ` through a spy) is red under the old regex by construction:
+  `/untrusted:([a-z0-9]+)/i` on that marker is `NULL`, and on a mid-nonce
+  `aB_9zZ-q` it captures `"aB"`.
+- Cause 2: mutating `Fold`'s effect to never open (`if (false && …)`) fails the
+  fixed positive test; mutating it to always open fails the fixed negative one;
+  mutating `IntelPanel`'s coverage condition to `providers !== null` fails the
+  fixed negative test 5 times out of 5 and the OLD one only 8 times out of 10.
+  All mutated files were restored from copies and `git status` is clean.
+
+Two probes were written under `dashboard/scripts/` and one throwaway test file
+under `src/components/`; all three are deleted. No model key and no database
+were needed: both tests run on the demonstration snapshot, which is what a
+missing database already produces.
+
+---
+
 ## 2026-09-27 — Sunday · Maintenance and state of the project
 
 **Subject**: `NodeDef.retry` was a per-node retry policy declared on five nodes,

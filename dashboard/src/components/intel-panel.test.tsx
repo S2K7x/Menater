@@ -36,7 +36,7 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { render } from '../vulnpipe/test-utils.tsx';
@@ -47,6 +47,36 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
 });
+
+/**
+ * Let the effects scheduled by the render that just landed actually run.
+ *
+ * ============================================================================
+ * WHY A `findBy*` IS NOT ENOUGH HERE
+ *
+ * `findByText` waits for ONE thing: the text. Everything else about the
+ * element it hands back is a second question, with its own timing — and the
+ * fold's `open` is one of them. `Fold` cannot pass `open` as a prop (React
+ * re-asserts `<details open>` on every change, `false` included, so a prop
+ * would close under the fingers of somebody who had just opened it — see the
+ * traps table), so it writes the attribute from a `useEffect`. Passive effects
+ * are flushed on a macrotask AFTER the commit that put the text on screen, so
+ * there is a window in which the hint is visible and `open` is still false.
+ *
+ * MEASURED, because the window is narrow enough to be argued about: 600 mounts
+ * of this panel, reading `.open` at the instant `findByText` resolved — closed
+ * 12 times (2.0%), and a bounded `waitFor` recovered 12 of 12. The product is
+ * right; the test was reading one tick early, and a suite that goes red once
+ * every fifty runs is a suite people learn to re-run instead of believe.
+ *
+ * `act` and not `waitFor`: polling makes the POSITIVE claim pass eventually
+ * and leaves the NEGATIVE one vacuous — `waitFor(() => expect(open).toBe(false))`
+ * is satisfied by the first read, before anything has had a chance to open. An
+ * empty `act` scope drains React's pending work once, so both directions are
+ * read at the same, settled moment. Measured at 0 failures in 600 mounts.
+ * ============================================================================
+ */
+const settle = () => act(async () => {});
 
 const result = (over: Partial<IntelResult> = {}): IntelResult => ({
   observable: {
@@ -249,6 +279,11 @@ describe('le catalogue de sources se replie, et son pli rapporte', () => {
     stubProviders([provider({ id: 'internetdb', env: null }), provider({ id: 'vt' })]);
     render(<IntelPanel />);
     const summary = await screen.findByText('1 of 2 reachable');
+    // The same flush as below, and here it is what makes the claim mean
+    // anything: read before the effects run, "the fold did not open" is
+    // indistinguishable from "the fold has not opened YET", so the assertion
+    // would pass over a fold that opens one tick later.
+    await settle();
     expect(summary.closest('details')!.open).toBe(false);
   });
 
@@ -259,6 +294,7 @@ describe('le catalogue de sources se replie, et son pli rapporte', () => {
     stubProviders([provider({ id: 'vt' }), provider({ id: 'abuseipdb' })]);
     render(<IntelPanel />);
     const summary = await screen.findByText('0 of 2 reachable');
+    await settle();
     expect(summary.closest('details')!.open).toBe(true);
   });
 });
