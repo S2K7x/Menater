@@ -25,6 +25,10 @@ import { userEvent } from '@testing-library/user-event';
 import { render } from '../vulnpipe/test-utils.tsx';
 import { WorkflowPanel, type WorkflowsPayload } from './WorkflowPanel.tsx';
 import { api } from '../lib/api.ts';
+// Data modules: both are type-only imports away from being plain constants, so
+// reading them here pulls no server runtime into jsdom.
+import { PIPELINE_WORKFLOWS } from '../../server/engine/workflows/pipeline.ts';
+import { NODE_EFFECTS } from '../../server/engine/types.ts';
 
 afterEach(() => {
   cleanup();
@@ -46,7 +50,7 @@ const payload = (): WorkflowsPayload => ({
           id: 'dedup', type: 'postgres', label: 'Deduplication',
           note: 'CTE et INSERT dans la même transaction.',
           params: { sql: 'SELECT 1' }, position: { x: 200, y: 0 },
-          effect: 'write', retry: { attempts: 2, backoffMs: 400 },
+          effect: 'write',
         },
       ],
       edges: [{ from: 'webhook', fromPort: 'main', to: 'dedup' }],
@@ -131,10 +135,38 @@ describe('l’effet est montré avant tout le reste', () => {
     expect(await screen.findByText(/NEVER replayed/i)).toBeTruthy();
   });
 
-  it('montre la politique de réessai quand il y en a une', async () => {
-    await mount();
+  it('makes no claim about retrying, on the REAL definition', async () => {
+    /*
+     * This replaces a test asserting the card printed « Retries 2 times, 400 ms
+     * apart » for `dedup`. It was green, and it was asserting a lie: the string
+     * came from `NodeDef.retry`, which the engine never read, and it sat one
+     * line under `effectHelp`'s « NEVER replayed » about the same node.
+     *
+     * Driven from the SHIPPED workflow definition rather than the fixture
+     * above, for the reason `pipeline-to-case.test.ts` exists: a fixture is
+     * written in the reader's vocabulary, so a hand-written one cannot notice
+     * that the definitions carry a policy nobody applies. `01-ingestion` is
+     * where `dedup` declared the loudest of the five, `attempts: 2`.
+     */
+    const [ingestion] = PIPELINE_WORKFLOWS;
+    await mount({
+      workflows: [{
+        id: ingestion.id,
+        name: ingestion.name,
+        version: ingestion.version,
+        nodes: ingestion.nodes.map((n) => ({ ...n, effect: NODE_EFFECTS[n.type] })),
+        edges: ingestion.edges,
+      }],
+    });
     await openNode(/Deduplication/);
-    expect(await screen.findByText(/Retries 2 times, 400 ms apart/i)).toBeTruthy();
+
+    const card = document.querySelector('.soc-wf-inspector') as HTMLElement;
+    // The failure story is `effectHelp`, and it is the accurate one.
+    expect(within(card).getByText(/NEVER replayed/i)).toBeTruthy();
+    // `innerText` is not implemented under jsdom; `textContent` is what this
+    // suite reads elsewhere, and a folded-away sentence would still be in it —
+    // which is what we want here, since « one click away » is not « absent ».
+    expect(card.textContent).not.toMatch(/retr(y|ies|ying)/i);
   });
 
   it('affiche la note du nœud — ce qui remplace les pense-bêtes du canevas', async () => {

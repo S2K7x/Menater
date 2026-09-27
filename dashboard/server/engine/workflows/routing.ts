@@ -78,7 +78,6 @@ export const ROUTING: WorkflowDef = {
           'GROUP BY verdict, recommended_action, is_fallback',
         params: [],
       },
-      retry: { attempts: 2, backoffMs: 300 },
       position: { x: 740, y: -160 },
     },
     {
@@ -279,7 +278,6 @@ export const AUDIT: WorkflowDef = {
           fromNode('normalize', 'row.execution_id'), fromNode('normalize', 'row.payload'),
         ],
       },
-      retry: { attempts: 3, backoffMs: 500 },
       position: { x: 600, y: 0 },
     },
     {
@@ -291,7 +289,6 @@ export const AUDIT: WorkflowDef = {
       id: 'metrics', type: 'postgres', label: 'Metrics snapshot',
       note: 'BOTH rates, named separately. A failed query says "unavailable", never zero.',
       params: { sql: 'SELECT * FROM soc_metrics_7d()', params: [] },
-      retry: { attempts: 1, backoffMs: 200 },
       position: { x: 800, y: 0 },
     },
     {

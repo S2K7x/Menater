@@ -99,8 +99,13 @@ describe('les appels externes ont une branche d’erreur ou un motif', () => {
       if (NODE_EFFECTS[node.type] === 'pure') continue;
       if (node.type === 'subflow') continue;
       const hasError = wf.edges.some((e) => e.from === node.id && e.fromPort === 'error');
-      const hasRetry = node.retry !== undefined;
-      expect(hasError || hasRetry, `« ${node.id} » : ni branche d'erreur ni réessai`).toBe(true);
+      // STRENGTHENED, not weakened: this read `hasError || node.retry !== undefined`,
+      // and that second term could never do any work — no engine reads
+      // `NodeDef.retry`, so a node passing on it alone had no failure path at
+      // all. Measured before removing the disjunct: every non-`pure` node in
+      // the six graphs already has a wired `error` branch, so the assertion is
+      // the same set of nodes with one fewer way to pass.
+      expect(hasError, `« ${node.id} » : pas de branche d'erreur`).toBe(true);
     }
   });
 });

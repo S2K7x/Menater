@@ -104,7 +104,6 @@ export const INGESTION: WorkflowDef = {
           + 'SELECT NOT EXISTS (SELECT 1 FROM inserted) AS is_duplicate',
         params: [fromNode('validate', 'payload.alert_id')],
       },
-      retry: { attempts: 2, backoffMs: 400 },
       position: { x: 660, y: 0 },
     },
     {
@@ -145,7 +144,6 @@ export const INGESTION: WorkflowDef = {
           + 'ORDER BY priority ASC, id ASC',
         params: [],
       },
-      retry: { attempts: 2, backoffMs: 300 },
       position: { x: 1540, y: -220 },
     },
     {

@@ -488,7 +488,6 @@ export interface ConsoleDictionary {
     nodeId: string;
     params: string;
     noParams: string;
-    retry: (attempts: number, backoffMs: number) => string;
     effects: Record<'pure' | 'read' | 'write', string>;
     effectHelp: Record<'pure' | 'read' | 'write', string>;
     varsKicker: string;
@@ -1650,7 +1649,6 @@ const EN: ConsoleDictionary = {
     nodeId: 'Identifier, never shown anywhere else:',
     params: 'What the step actually reads',
     noParams: 'No parameters: this step only passes data through.',
-    retry: (attempts, backoffMs) => `Retries ${attempts} times, ${backoffMs} ms apart.`,
     effects: {
       pure: 'Computation',
       read: 'External read',
