@@ -11,7 +11,7 @@ printed on the Ingestion tab's step card, quoted by a comment in `nodes/io.ts`,
 asserted by four tests — and read by nothing. All five declarations sat on the
 one class of node the engine's own doctrine refuses to replay.
 
-**Result**: PR #PENDING (branch `claude/great-pascal-k8yjbq`).
+**Result**: PR #44 (branch `claude/great-pascal-k8yjbq`).
 
 **Note on the branch name.** `NIGHTLY.md` § 5 asks for
 `claude/nightly-YYYY-MM-DD-subject`; this session was handed
