@@ -17,12 +17,15 @@
  * not. That is a setting that looks applied and is not, printed on the screen
  * whose job is to say what the pipeline does.
  *
- * The two tests below are the two halves of the claim:
+ * Two halves of one claim, and the assertions divide that way:
  *
  *   1. no workflow declares a retry policy — because there is nobody to apply
- *      it. This one is RED before the removal: five nodes declared one.
+ *      it. RED before the removal: five nodes declared one. The two assertions
+ *      beside it exist so that this one cannot pass over an empty sweep — it
+ *      names the six workflows and counts the external calls, the same reason
+ *      the scan report names what it read before saying it found nothing.
  *   2. a failing node is called ONCE and takes its `error` port. This is the
- *      reason for (1) and it passes before and after, on purpose: it is what a
+ *      REASON for (1), and it passes before and after on purpose: it is what a
  *      future implementation of retry has to change deliberately, and the file
  *      it has to come back to.
  *
@@ -39,7 +42,7 @@ import { Engine } from './engine.ts';
 import { MemoryRunStore } from './store.ts';
 import { PIPELINE_WORKFLOWS } from './workflows/pipeline.ts';
 import { ROUTING_WORKFLOWS } from './workflows/routing.ts';
-import { NODE_EFFECTS, type NodeDef, type WorkflowDef } from './types.ts';
+import type { NodeDef, WorkflowDef } from './types.ts';
 
 const ALL = [...PIPELINE_WORKFLOWS, ...ROUTING_WORKFLOWS];
 
@@ -69,14 +72,27 @@ describe('the definitions declare no policy the executor ignores', () => {
     expect(declaring).toEqual([]);
   });
 
-  it('the outbound calls are there — they are what is not retried', () => {
+  it('counts the sixteen outbound calls — they are what is not retried', () => {
     // The count is what makes the test above mean something: if the external
     // calls ever left these graphs, "nobody declares a retry" would be true of
-    // a pipeline that dials nothing.
+    // a pipeline that dials nothing. `subflow` and `wait` are excluded: they
+    // are `write` in `NODE_EFFECTS` and they dial nobody.
     const external = ALL.flatMap((wf) => wf.nodes
-      .filter((n) => NODE_EFFECTS[n.type] !== 'pure')
+      .filter((n) => n.type === 'http' || n.type === 'postgres'
+        || n.type === 'notify' || n.type === 'llm')
       .map((n) => `${wf.id}/${n.id}`));
-    expect(external.length).toBeGreaterThanOrEqual(16);
+    expect(external.length).toBe(16);
+    // And every one of them has a wired failure path — the rule that replaced
+    // « every external-call node must have Retry On Fail enabled » in
+    // CLAUDE.md § Rules. The per-workflow tests assert it graph by graph;
+    // this asserts it across all six at once.
+    for (const wf of ALL) {
+      for (const n of wf.nodes) {
+        if (!external.includes(`${wf.id}/${n.id}`)) continue;
+        const wired = wf.edges.some((e) => e.from === n.id && e.fromPort === 'error');
+        expect(wired, `${wf.id}/${n.id} has no error branch`).toBe(true);
+      }
+    }
   });
 });
 
