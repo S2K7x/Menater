@@ -4,6 +4,206 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-27 — Sunday · Maintenance and state of the project
+
+**Subject**: `NodeDef.retry` was a per-node retry policy declared on five nodes,
+printed on the Ingestion tab's step card, quoted by a comment in `nodes/io.ts`,
+asserted by four tests — and read by nothing. All five declarations sat on the
+one class of node the engine's own doctrine refuses to replay.
+
+**Result**: PR #PENDING (branch `claude/great-pascal-k8yjbq`).
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-k8yjbq` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Seventeenth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject**: the calendar rule did not preempt — both suites were green
+on unmodified `main` (console 1335 passed | 1 skipped, VulnPipe 373 passed, both
+typechecks clean, build clean) and no pull request was open. Sunday's reservoir
+is *dependencies*, then *bring `CLAUDE.md` and `ROADMAP.md` back in line with
+what the code ACTUALLY does*. Dependencies were already clean (below), so the
+second line applied, and this is priority (2) — a real defect with an
+operator-visible consequence — not (3) or a documentation tidy.
+
+**How it was found.** Not by reading the engine: by checking CLAUDE.md's § Rules
+line by line against the code. The line was *« Every external-call node must
+have Retry On Fail enabled, and Continue On Fail for non-critical enrichment »*
+— **n8n's vocabulary**, for a product n8n left, which is what made it worth
+opening. A probe over the six workflow definitions answered 16 external-call
+nodes, 11 declaring nothing; then `grep -rn "\.retry\b" server/` returned
+**nothing at all**, which is the real finding.
+
+**Measured** (driving the real engine and the real transform, not reading them):
+
+| | before | after |
+|---|---|---|
+| handler calls for a node declaring `attempts: 3` | **1** | 1 |
+| journal `attempt` for it | **1** | 1 |
+| nodes declaring a retry policy | **5** (all `postgres`, i.e. `write`) | 0 |
+| external-call nodes with a wired `error` branch | 16 of 16 | 16 of 16 |
+| step card for `dedup` | « NEVER replayed » **and** « Retries 2 times, 400 ms apart » | « NEVER replayed » |
+| `AUDIT_WRITE_FAILED` sentence | « failed **after retries** » | « failed on its only attempt » |
+| tests asserting the mechanism | **4, all green** | 0 |
+
+**What I learned**:
+
+- **Four different things vouched for the field, and none of them was the
+  engine.** The type's own doc comment (*« Absente = pas de reprise »*, which
+  makes the present case sound like the opposite), a comment in `io.ts` saying
+  *« the engine's own retry does the waiting »* about a Discord 429, the step
+  card, and four tests. The tell for this class is not *who calls the engine* —
+  it is **a struct member with writers and no readers**, and the grep that finds
+  it is for the FIELD, not for the feature.
+- **The `|| hasRetry` disjunct was a hole, not dead code, and mutation is what
+  said so.** Two structural tests read `hasError || node.retry !== undefined`.
+  I expected the second term to be merely redundant. Measured instead: with the
+  old code and `link('dedup', 'respond-500', 'error')` deleted, *« every
+  external call has a failure path »* **passed** — a node could lose its only
+  failure branch and be waved through by a retry nobody applies. With the
+  disjunct gone the same assertion fails and names `dedup`. So removing a
+  disjunct from an assertion STRENGTHENED it, which looks like the opposite in a
+  diff and had to be measured to be claimed.
+- **The truthful sentence was twenty lines from the false one.** `auditWriteFailed`
+  said *« The audit write failed after retries »*; `actionExecutionFailed`, in
+  the same `reg(...)` block, says *« It is NOT retried automatically: its
+  outcome is unknown »*. Seventh recurrence of *the mirror of a rule is not the
+  rule*, and the nearest yet — same file, same function, same list.
+- **A test's NAME can be the lie.** `it('l'écriture d'audit réessaie avant
+  d'abandonner')` was green over an audit write that is attempted once, about
+  the product's only tamper-evidence. Nothing in it was wrong except the thing
+  it believed: `append.retry.attempts` really is 3, and nothing reads it. A test
+  asserting a CONFIGURATION cannot tell you the configuration is applied.
+- **Removing was the conservative answer, and that is not obvious.** The
+  tempting fix is to honour the field. It cannot be honoured as written: every
+  declaration was on a `write`, and `IndeterminateError` tells the operator in
+  as many words that *« the engine does not replay a write »*. Implementing it
+  there would contradict a stated architecture decision, which NIGHTLY.md
+  reserves for a human — so the field is gone and the decision is in ROADMAP
+  § 7, with the asymmetry that makes it interesting: the five nodes that
+  declared a retry may not have one, and the five that may (`http` ×3, `llm`
+  ×2 — all `read`) declared none.
+- **What the absence actually costs, so the ROADMAP row is not a hunch.**
+  `link('model', 'fallback-api', 'error')` is wired, and `makeLlm` throws on any
+  non-2xx — so **one transient 429 from OpenRouter costs that alert its verdict**
+  and it takes the fail-safe. `post-approval` → `notify-failed` on a Discord 429
+  escalates without asking anybody. Both fail SAFE; both are one wait away from
+  not happening.
+
+**Do not redo**:
+
+- **Do not implement retry by reviving `NodeDef.retry` as it stood.** A field a
+  definition can set is a field a `write` node can set, and that is the one
+  thing the engine must refuse. If it comes back, the gate belongs in `drive()`
+  on `NODE_EFFECTS[node.type] === 'read'`, not in the declaration.
+- **Do not "refresh" the five numbers instead.** `attempts: 2/2/2/3/1` were
+  chosen by someone and are the evidence of an intention; they are preserved in
+  ROADMAP § 7 and in the traps table, which is where this project keeps intent.
+  Putting them back in the graph puts the lie back on the card.
+- **Do not add the `|| hasRetry` disjunct back "for symmetry"** if a retry is
+  ever implemented. A retry is not a failure path: it decides how many times the
+  same failure happens, not what happens after it.
+- **Do not assume a removed disjunct weakens a test.** Mutate and count.
+
+**Found and NOT fixed**, deliberately:
+
+- **CLAUDE.md's Commands block carries hardcoded suite sizes** — `npm run test
+  # 1219 tests, 1 skipped`, `cd VulnPipe && npm test # 371 tests`, and `Unit |
+  889 tests` in the QA table. Real tonight: **1340 | 1 skipped** and **373**.
+  I did not refresh them, and I recommend against refreshing them: a count in
+  prose is stale the next night, and this project already reached the better
+  answer once — the assistant's operator-facing sentences describe REACH and a
+  test forbids the COUNT. Doing that to these three numbers is a five-line
+  change and a different subject; doing it inside this PR would invite an
+  argument about numbers instead of about the retry finding.
+- **`DocsPanel.tsx`'s header says « quinze sections ».** There are **17**
+  (measured: `consoleDictionary('en').docs.sections.length`), in 4 groups, 109
+  points. CLAUDE.md is right, the component's own comment is two behind. Same
+  family as the row above.
+- **The structural counts in CLAUDE.md that I DID check are all correct**, and
+  they are worth recording so a future night does not re-measure: 10 console
+  tabs, 14 assistant tools, 8 MCP prompts, 8 fixed resources + 1 template
+  (= the documented "9 resources"), 16 node types, 6 themes, 17 guide sections
+  in 4 groups, 9 Settings sub-tabs (10 when the code-analysis section is
+  supplied, which is why both numbers appear in CLAUDE.md and both are right).
+- **`cases.ts`'s `outputOf` takes the LAST journal entry per node.** I corrected
+  its comment (it said "a node retried"), not its logic: the engine does re-run
+  a `pure`/`read` step whose process died, so "last wins" has a real caller.
+  Whether a re-run step can collide with `soc_run_step`'s `(run, node, attempt)`
+  primary key — `beginStep` is called again with `attempt = 1` after the first
+  was marked `skipped` — I did **not** establish. It needs a database to answer
+  honestly and it is not tonight's subject. Worth a Wednesday.
+
+**State of the week** (Sunday's other half):
+
+- **Six nights, twelve PRs, all merged**: #32 → #43, two runs a night since
+  Monday, none open at the start of tonight — checked against the API, not
+  assumed. `automerge.yml` has now gone three weeks without needing a
+  recommendation.
+- **Dependencies are clean, second Sunday running.** `npm ci` on both halves
+  reports **0 vulnerabilities**, production and dev, and rewrote neither
+  lockfile (npm 10.9.7, Node 22.22.2). Nothing to do, and per NIGHTLY.md nothing
+  invented: no bump "to be current".
+- **The week's centre of gravity was the approval path, and it has moved.**
+  #32 fixed the payload vocabulary between three parties that had each got it
+  right on their own side, #33 un-disabled the two buttons that answer an
+  approval, #38 gave the approval deadline a clock that had never ticked, and
+  #39 ran `store-contract.test.ts` against a real Postgres for the first time.
+  Last Sunday's two recommendations are closed by that list. What is left open
+  on that path is in ROADMAP § 7 and is the strongest remaining item: **an
+  executed action is sealed into the audit chain as `action_taken: "none"`**,
+  reproduced on unmodified `main`. It is a correctness defect in an immutable
+  record, and it is Monday or Thursday work.
+- **Tonight's class of defect is the one this repository is worst at seeing, and
+  it has now appeared three times in one week**: `sweepExpiredWaits()` with no
+  caller (#38), `execution_id` never written onto the case so the two approval
+  buttons could not enable (#33), and `NodeDef.retry` with no reader. All three
+  were infrastructure built for a caller nobody wrote, all three were green in
+  the suite, and none of them is findable by reading the file that holds them. **The recommendation is a
+  method, not a guard**: next Sunday, take one page of `CLAUDE.md` and check
+  every claim on it against the code — that is exactly how tonight's was found,
+  and two of the three previous Sundays found their subject the same way.
+- **What CI still cannot see**, carried forward and unchanged: a UID-dependent
+  test (closed 09-20), a lockfile describing the wrong package (closed 09-20),
+  and now **a declaration nothing reads** — `tsc` cannot flag an optional field
+  with writers and no readers, and the suite asserted it. I do not recommend a
+  third speculative guard.
+
+**Verified** (commands run, output read):
+
+```
+cd dashboard
+npm ci              # lockfile unchanged, 0 vulnerabilities
+npm run typecheck   # 0 errors
+npm test            # 1340 passed | 1 skipped   (1335 | 1 before)
+npm run build       # dist built, CSS 88.64 kB BYTE-IDENTICAL (index-D18qEK1J),
+                    # JS 474.76 → 475.01 kB
+cd ../VulnPipe
+npm ci              # lockfile unchanged, 0 vulnerabilities
+npm run typecheck   # 0 errors   — baseline only, VulnPipe untouched
+npm test            # 373 passed — baseline only, VulnPipe untouched
+```
+
+Checked **RED** by restoring the eight source files from `origin/main` and
+keeping the tests: **3 failed | 99 passed** across the four affected files —
+`no node declares a retry policy` (`expected [ '01-ingestion/dedup', …(4) ] to
+deeply equal []`), `makes no claim about retrying, on the REAL definition` (the
+card's text matched `/retr/i`), and `an audit write that fails is a high
+incident, and does not claim it retried` (*« failed after retries »*). Two
+mutations: deleting `dedup`'s `error` link fails the strengthened assertion and
+names the node, and the same deletion under `main`'s disjunct **passes** — which
+is the measurement behind "strengthened, not weakened". The mutated files were
+restored from the commit and `git status` is clean. The one skipped test is the
+pre-existing `store-contract.test.ts > contrat — postgres`, which needs a
+database. No model key and no database were needed: the engine tests drive
+`MemoryRunStore`, and the panel test renders the shipped definition. Two probes
+were written under the scratchpad and one throwaway test file inside
+`server/engine/`, which was deleted before the commit.
+
+---
+
 ## 2026-09-26 (second run) — Saturday · Interface, clarity, accessibility
 
 **Subject**: two composite widgets — one per half of the product — declared
