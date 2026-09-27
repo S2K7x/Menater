@@ -123,11 +123,22 @@ export interface NodeDef {
   params: Record<string, unknown>;
   /** Position dans le graphe. Reprise des workflows n8n, jamais recalculée. */
   position: { x: number; y: number };
-  /**
-   * Politique de reprise sur échec.
-   * Absente = pas de reprise : un nœud qui échoue arrête sa branche.
+  /*
+   * NO PER-NODE RETRY POLICY, AND THE ABSENCE IS THE POINT.
+   *
+   * A `retry?: { attempts, backoffMs }` field lived here. It was declared on
+   * five nodes, quoted by a comment in `nodes/io.ts` as the thing that waits
+   * out a Discord 429, and PRINTED on the step card in the Ingestion tab — and
+   * it was read by nothing. Measured: a node declaring `attempts: 3` is called
+   * once, and the journal records `attempt: 1`.
+   *
+   * What the engine really does with a failure is `NODE_EFFECTS` above: the
+   * node takes its `error` port on the first attempt, and a write whose
+   * outcome is unknown is NEVER replayed. The field asked for the opposite of
+   * that rule — all five nodes carrying it were `postgres`, i.e. `write`, so
+   * the card said « NEVER replayed » and « Retries 2 times » one line apart.
+   * Whether the engine should gain a real retry is ROADMAP § 7.
    */
-  retry?: { attempts: number; backoffMs: number };
 }
 
 /**

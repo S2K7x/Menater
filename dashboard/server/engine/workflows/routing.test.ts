@@ -22,6 +22,7 @@ import { NODE_EFFECTS, type WorkflowDef } from '../types.ts';
 import { validateCondition, type Condition } from '../values.ts';
 import { AUDIT, ERRORS, ROUTING, ROUTING_WORKFLOWS } from './routing.ts';
 import { PIPELINE_WORKFLOWS } from './pipeline.ts';
+import { buildRegistry } from '../transforms/registry.ts';
 
 const ALL = [...PIPELINE_WORKFLOWS, ...ROUTING_WORKFLOWS];
 
@@ -81,7 +82,10 @@ describe.each(ROUTING_WORKFLOWS.map((wf) => [wf.id, wf] as const))(
       for (const node of wf.nodes) {
         if (NODE_EFFECTS[node.type] === 'pure' || node.type === 'subflow' || node.type === 'wait') continue;
         const hasError = wf.edges.some((e) => e.from === node.id && e.fromPort === 'error');
-        expect(hasError || node.retry !== undefined, `« ${node.id} »`).toBe(true);
+        // See the same assertion in `pipeline.test.ts`: the `|| node.retry`
+        // escape hatch is gone because nothing read that field, and every node
+        // reached here already has an `error` branch.
+        expect(hasError, `« ${node.id} »`).toBe(true);
       }
     });
   },
@@ -179,8 +183,34 @@ describe('05 — la preuve avant les mesures', () => {
     expect(ports.sort()).toEqual(['error', 'main']);
   });
 
-  it('l’écriture d’audit réessaie avant d’abandonner', () => {
-    expect(AUDIT.nodes.find((n) => n.id === 'append')?.retry?.attempts).toBeGreaterThanOrEqual(3);
+  it('an audit write that fails is a high incident, and does not claim it retried', () => {
+    /*
+     * This replaces `it('l’écriture d’audit réessaie avant d’abandonner')`,
+     * which asserted `append.retry.attempts >= 3` and was green over an engine
+     * that reads no retry policy at all. It tested the wrong thing: the number
+     * was real, the behaviour was not, and the test's own name promised the
+     * audit row was tried three times before being given up.
+     *
+     * What actually protects the row is this: the failure has a wired branch,
+     * and that branch raises a `high` incident rather than letting the write
+     * disappear. Plus the sentence it raises, which used to say « after
+     * retries ».
+     */
+    const branch = AUDIT.edges.find((e) => e.from === 'append' && e.fromPort === 'error');
+    expect(branch?.to).toBe('write-failed');
+
+    const fn = buildRegistry({
+      now: () => new Date('2026-09-27T00:00:00.000Z'),
+      resumeUrl: (runId: string) => `https://console.test/?run=${runId}`,
+    }).get('auditWriteFailed')!;
+    const failed = fn({ error: 'connect ECONNREFUSED' }, new Map(), { runId: 'run-1' }) as Record<string, unknown>;
+    expect(failed.severity).toBe('high');
+    // No retry vocabulary at all, in either direction. The sentence has to say
+    // what happened — one attempt — and « after retries » was not the only way
+    // to get that wrong: « is not retried » would pass a narrower assertion
+    // while still making the reader think about a mechanism there is none of.
+    expect(String(failed.error_message)).not.toMatch(/retr/i);
+    expect(String(failed.error_message)).toMatch(/only attempt/i);
   });
 
   it('une ligne sans alert_id n’est pas écrite en base', () => {

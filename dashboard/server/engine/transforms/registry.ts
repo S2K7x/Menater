@@ -447,7 +447,15 @@ export function buildRegistry(deps: RegistryDeps): TransformRegistry {
     severity: 'high',
     // Perdre la trace est un incident majeur : c'est la PREUVE de ce qui s'est
     // passé, et la seule chose qu'on ne peut pas reconstituer après coup.
-    error_message: 'The audit write failed after retries: the trace of this alert is lost.',
+    //
+    // It said « failed after retries » until 2026-09-27, and there were no
+    // retries: the engine reads no per-node retry policy, so this write was
+    // attempted exactly once. `actionExecutionFailed` above had it right —
+    // « It is NOT retried automatically » — which is the rule this project
+    // keeps paying for: the mirror of a rule is not the rule. Saying « after
+    // retries » sends somebody looking for a transient fault that survived
+    // three attempts, over a single failure that named its own cause.
+    error_message: 'The audit write failed on its only attempt: the trace of this alert is lost.',
     details: asRecord(input),
   }));
 

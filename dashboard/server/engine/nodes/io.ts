@@ -301,7 +301,12 @@ export function makeNotify(deps: IoDeps): NodeHandler {
         if (res.status === 429) {
           // Discord's `retry_after` is SECONDS as a float, in the JSON body as
           // well as the header. Naming the wait is what lets an operator tell a
-          // rate limit from an outage; the engine's own retry does the waiting.
+          // rate limit from an outage — and that is ALL it does: nothing waits
+          // it out. `notify` is a `write` node, the engine retries nothing, and
+          // this branch goes straight to `notify-failed`, which escalates
+          // without asking. An earlier version of this comment said the
+          // engine's own retry did the waiting; there is no such retry, and
+          // saying so here is how a reader came to believe there was.
           throw new Error(`Discord rate-limited the webhook (429): ${detail || 'retry later'}`);
         }
         throw new Error(`Discord refused: ${detail || `HTTP ${res.status}`}`);

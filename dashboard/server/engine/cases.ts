@@ -152,8 +152,9 @@ const rec = (v: unknown): Record<string, unknown> => (v ?? {}) as Record<string,
 
 /** The output of a node, or `null` if it never produced one. */
 function outputOf(steps: StepRecord[], nodeId: string): Record<string, unknown> | null {
-  // LAST attempt wins: a node retried after a transient failure is described by
-  // what it finally produced, not by its first stumble.
+  // LAST entry wins: a node the engine re-ran — a `pure` or `read` step whose
+  // process died mid-way and was replayed on resume — is described by what it
+  // finally produced, not by its first stumble. Not by a retry: there is none.
   const matching = steps.filter((s) => s.nodeId === nodeId && s.output !== null && s.output !== undefined);
   if (matching.length === 0) return null;
   const last = matching[matching.length - 1];

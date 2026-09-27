@@ -51,7 +51,6 @@ export interface WfNode {
   params: Record<string, unknown>;
   position: { x: number; y: number };
   effect: 'pure' | 'read' | 'write';
-  retry?: { attempts: number; backoffMs: number };
 }
 export interface WfEdge { from: string; fromPort: string; to: string }
 export interface Wf { id: string; name: string; version: number; nodes: WfNode[]; edges: WfEdge[] }
@@ -207,9 +206,11 @@ function NodeCard({ node }: { node: WfNode }) {
 
       {node.note ? <p className="soc-wf-note">{node.note}</p> : null}
 
-      {node.retry ? (
-        <p className="soc-faint">{t.retry(node.retry.attempts, node.retry.backoffMs)}</p>
-      ) : null}
+      {/* NOTHING HERE ABOUT RETRYING. `effectHelp` above already says what a
+          failure does — a `write` is « NEVER replayed » — and this card used to
+          print « Retries 2 times, 400 ms apart » one line under it, off a
+          `NodeDef.retry` the engine never read. Two sentences contradicting
+          each other on one card, and the false one was the reassuring one. */}
 
       <h4 className="soc-wf-subhead">{t.params}</h4>
       {Object.keys(node.params).length === 0 ? (
