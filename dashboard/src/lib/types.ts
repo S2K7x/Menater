@@ -205,6 +205,39 @@ export interface AlertCase {
    * card prints the first and must never print the second.
    */
   repository: CaseRepository | null;
+  /**
+   * J0.2 — this alert says the way in was the application's own code.
+   *
+   * `null` means no inferred technique says so, which is the ordinary case: a
+   * brute force, a beacon or a scheduled task is about a host, a credential or
+   * a tool, and the source of the service running there has nothing to do with
+   * it. It never means "the code is fine".
+   */
+  code_lead: CodeLead | null;
+}
+
+/**
+ * Why this alert is worth looking at the code for.
+ *
+ * ONE TECHNIQUE, NAMED. The card says which technique made us say so, for the
+ * same reason the repository line says what it matched on: "look at your code
+ * because of this alert" is only checkable next to the thing that said it —
+ * and the technique itself is INFERRED from the rule name, which the card
+ * already warns about one block below.
+ *
+ * The flaw CLASS is deliberately not in here. ATT&CK does not carry one:
+ * T1190 says an attacker used a weakness in an internet-facing application and
+ * says nothing about which weakness. Deriving one anyway would be a second
+ * inference nobody can check, on the screen that sends somebody to read code
+ * while an incident is open. What the offer says instead is what the analysis
+ * LOOKS FOR, which is a fact about this product and not a guess about the
+ * attack.
+ */
+export interface CodeLead {
+  /** e.g. `T1190`. */
+  technique_id: string;
+  /** e.g. `Exploit Public-Facing Application`. */
+  technique: string;
 }
 
 /**

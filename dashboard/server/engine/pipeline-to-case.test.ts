@@ -190,6 +190,9 @@ describe('a valid alert, end to end, as the console shows it', () => {
 
     // Inferred, and labelled as inferred on the card.
     expect(c.attack.map((a) => a.id)).toContain('T1110');
+    // J0.2 — a credential attack says nothing about the source of the service
+    // running there, so the card offers no reason to go and read it.
+    expect(c.code_lead).toBeNull();
 
     // Not one stage note falls back to "unknown": every one of them is a field
     // this file could have read under the wrong name.
@@ -197,6 +200,35 @@ describe('a valid alert, end to end, as the console shows it', () => {
       expect(s.note, `${s.workflow} has no readable note`).toBeTruthy();
       expect(s.note.toLowerCase(), `${s.workflow} fell back to "unknown"`).not.toBe('unknown');
     }
+  });
+
+  /*
+   * J0.2, through the real pipeline rather than through `tagAttack` alone.
+   * `cases.ts` computes the lead in its second pass, next to the state and the
+   * dwell time; the three field-name defects this file was written for all
+   * lived in exactly that kind of second read, so the assertion is made on a
+   * case the engine really produced.
+   */
+  it('offers the code on an alert that says the way in was the application', async () => {
+    const { engine, store } = assemble();
+    const web = {
+      ...ALERT,
+      alert_id: 'E2E-WEB',
+      rule_name: 'Web attack: SQL injection attempt on /api/orders',
+      raw_log: "GET /api/orders?id=1%20OR%201=1 HTTP/1.1\" 200",
+      source: 'generic',
+    };
+    await engine.start('01-ingestion', web, web.alert_id);
+    const { cases } = await collect(store);
+
+    const c = cases.find((k) => k.alert_id === 'E2E-WEB')!;
+    expect(c).toBeDefined();
+    expect(c.code_lead).toEqual({
+      technique_id: 'T1190', technique: 'Exploit Public-Facing Application',
+    });
+    // The technique the lead names is on the card too: the operator can check
+    // the reason for the offer against something already in front of them.
+    expect(c.attack.map((a) => a.id)).toContain(c.code_lead!.technique_id);
   });
 
   it('reports the chain as complete, with nothing needing attention', async () => {

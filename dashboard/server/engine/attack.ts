@@ -18,6 +18,32 @@
 import type { AttackTag } from '../../src/lib/types.ts';
 
 const ATTACK_RULES: { match: RegExp; tag: AttackTag }[] = [
+  /*
+   * FIRST BECAUSE IT IS THE ONE THAT CHANGES WHAT AN OPERATOR DOES NEXT, and
+   * because `tagAttack` keeps the first three matches: an alert about a web
+   * attack also says "script" and "scan" often enough that T1059 and T1046
+   * would have pushed it out.
+   *
+   * The nine rules below it are all about hosts, credentials and attacker
+   * tooling. None of them says "the way in was the application's own code",
+   * which is exactly the alert J0.2 exists for — so J0.2 could not have been
+   * built on the table as it stood.
+   *
+   * The vocabulary is EXPLOITATION, not flaw names. `IDOR` and `SSRF` are
+   * deliberately absent: a promoted scan finding is named `<flaw> in <METHOD>
+   * <route>` (`findingToAlert`), and tagging it "somebody exploited a
+   * public-facing application" would assert an attack nobody observed. The
+   * two names that are also flaw names — injection, traversal — earn their
+   * place because that is how a detection rule words the ATTEMPT.
+   *
+   * `LFI` and `RFI` were dropped for the same reason in miniature: three
+   * letters between word boundaries, matched against the RAW LOG as well as
+   * the rule name, is a token a URL path or an unrelated acronym can supply —
+   * and a false T1190 puts "go and read your code" on a card for nothing.
+   * `path traversal` is how a detection rule words that attack anyway.
+   */
+  { match: /sql ?injection|\bsqli\b|\bxss\b|cross.?site script|(path|directory) traversal|command injection|insecure deserializ|web ?shell|log4j|shellshock|exploit(ation)? attempt|public.facing|web attack/i,
+    tag: { id: 'T1190', technique: 'Exploit Public-Facing Application', tactic: 'Initial Access' } },
   { match: /brute.?force|failed (ssh|login|auth)|password spray/i,
     tag: { id: 'T1110', technique: 'Brute Force', tactic: 'Credential Access' } },
   { match: /ssh|remote (login|desktop)|rdp/i,

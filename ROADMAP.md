@@ -69,7 +69,7 @@ application. Until it is done, the merge is visual.
 | # | Item | What it changes |
 |---|---|---|
 | ~~**J0.1**~~ ✅ | ~~**A scan creates a case in the queue**~~ — `server/findings.ts` maps a finding to the alert contract, `POST /api/findings/promote` runs it through `01-Ingestion`, and the report carries a *Send to the triage queue* button per finding. A human presses it; nothing promotes itself | A flaw in the code stops being a report you close; it enters the circuit that gets it handled |
-| **J0.2** | **An alert triggers a scan** — an alert whose ATT&CK technique points at a class of flaw (injection, access control) offers to analyse the repository of the service concerned | Bring the incident next to the defect that made it possible, while you have it in front of you |
+| ~~**J0.2**~~ ✅ | ~~**An alert offers a scan**~~ — a case whose inferred technique says the way in was the application itself carries the reason on its card, beside the target J0.3 resolved and beside what the analysis can actually look for. `server/engine/code-lead.ts`; `attack.ts` gained T1190, which it did not have. It offers: no alert launches anything | Bring the incident next to the defect that made it possible, while you have it in front of you |
 | ~~**J0.3**~~ ✅ | ~~**Service ↔ repository inventory**~~ — `server/inventory.ts`, a Settings sub-tab, resolved onto every case in `snapshot.ts`. Exact matching only, ambiguity refused at the save, and the incident card names the code running on the machine it is about — with a jump that opens the Code tab on that target | Without it neither link means anything: nothing said which repository runs on `10.12.4.31` |
 | **J0.4** | **Unified "what threatens this system" view** — one screen stacking, for one asset, its alerts and its flaws | The question the user actually asks, which neither tab answers alone |
 
@@ -100,9 +100,10 @@ at the top of every incident.
 
 **What it does NOT do, and is honest to say so:**
 
-- **No alert starts a scan.** J0.2 is still open. J0.1 is delivered — see
-  below — and this was its prerequisite plus the smallest honest consumer, the
-  same move the Lookup tab made in the other direction.
+- **No alert starts a scan.** J0.2 is delivered and deliberately stops at the
+  OFFER — see below. J0.1 is delivered too, and this was the prerequisite of
+  both plus the smallest honest consumer, the same move the Lookup tab made in
+  the other direction.
 - **The assistant and the MCP catalogue do not read it.** The field is on
   `AlertCase`, so `get_alert` could expose it in a line; it was left out of
   this pass rather than widening a change that touches the fenced surface.
@@ -167,6 +168,56 @@ the payload, the way `/api/simulate` already sends it.
   lives in the browser and tracks fixed / accepted / false alarm; "sent to the
   queue" is a fourth thing, and wiring it in would have meant touching the
   status store in a pass that already spans server, report and contract.
+
+### J0.2 ✅ — an alert offers the code, and says what the offer can answer
+
+**What it is.** A case whose inferred ATT&CK technique says the way in was the
+application itself now carries, on the incident card, the reason to go and read
+the code — beside the target J0.3 resolved, and beside a sentence saying what
+the analysis actually looks for. `server/engine/code-lead.ts` decides it,
+`cases.ts` computes it in the same pass it computes the technique tags, and
+`CaseView` renders it. Nothing is estimated and nothing is scanned: the button
+below it is the J0.3 jump, which fills the Code tab's launcher in and stops.
+
+**The table could not answer the question.** `attack.ts` infers nine techniques
+and every one of them is about credentials (T1110), hosts (T1021, T1053),
+attacker tooling (T1059, T1204) or traffic (T1041, T1071). None of them says
+the way in was the application's own source, so this feature had no input until
+**T1190 — Exploit Public-Facing Application** was added, which is the commonest
+initial-access technique there is and was missing from a console whose other
+half reads code.
+
+**Four decisions, and three of them are refusals.**
+
+| Decision | Why the other answer was worse |
+|---|---|
+| **The offer names what the analysis LOOKS FOR** | `VulnPipe/src/nodes/` holds one detector. A scan proposed on an injection alert and coming back empty reads as *the code is fine*, about a class nobody looked for — the defect `clean` already refuses on the Lookup tab and the scan report already refuses on its own coverage, moved to the moment the scan is PROPOSED. `code-lead.test.ts` reads that directory and fails in both directions, because nothing here imports it and the two can otherwise drift in silence |
+| **No flaw class is derived from the technique** | ATT&CK does not carry one: T1190 says a weakness in an internet-facing application was used and says nothing about which. Inventing a class would be a second inference nobody can check, on the screen that sends somebody to read code while an incident is open. The offer names the ANALYSIS's scope, which is a fact about this product, rather than the ATTACK's class, which would be a guess |
+| **The lead is read off the TAGS, never off the rule name a second time** | The card already prints those tags under a note saying they are inferred, so the reason for the offer is checkable against something already on the operator's screen. A second matcher on the same rule name could reach a conclusion the visible tags do not support — two rulers disagreeing about one alert |
+| **Shown only where a repository is also named** | "The flaw may be in this code" with no code named is a line nobody can act on, which is exactly why J0.3 prints nothing at all on an install that has not filled the inventory in. The technique itself is on the card either way, three blocks lower |
+
+**What it does NOT do, and is honest to say so:**
+
+- **No alert launches a scan, and none is planned to.** A detection firing must
+  not spend a model call on a target read out of a settings file — § 8, and the
+  same refusal J0.3 and J0.1 both make.
+- **One technique in the set.** T1190 is the only one of the ten that means
+  "the code was the way in". Padding the set with techniques that merely
+  co-occur with a web attack would put the offer back on cards where it says
+  nothing, which is the defect this item removes.
+- **Nothing is offered when the inventory is empty.** An alert that says the
+  application was exploited, on a machine nobody has mapped, produces no line
+  at all rather than "no code declared for this machine". That is the
+  conservative reading of J0.3's rule and it is worth revisiting: the sentence
+  would be actionable (*fill the inventory in*) and would appear only on web
+  alerts, not on every card.
+- **The assistant and the MCP catalogue do not read it.** `alertDetail` in
+  `server/assistant/tools.ts` whitelists fields and `code_lead` is not among
+  them — the same line J0.3 drew, for the same reason: not widening a change
+  into the fenced surface.
+- **No filter on the technique table's reliability.** The tagging is pattern
+  matching on the rule name, the card says so, and this offer inherits that
+  reservation rather than adding a second one.
 
 ---
 

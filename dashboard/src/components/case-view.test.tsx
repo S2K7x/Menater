@@ -200,6 +200,78 @@ describe('the code that runs on the machine', () => {
       expect(asked).toEqual(['/srv/src/orders-api']);
     });
   });
+
+  /**
+   * J0.2 — WHY this alert is worth reading that code for.
+   *
+   * The offer was previously made on every case the inventory matched: the
+   * same button on a brute force against SSH as on an exploited endpoint. Two
+   * ways of getting it wrong, and again neither raises an error.
+   *
+   *   - offering the code with no reason, which is the state before this
+   *     change and reads as noise on every card;
+   *   - offering a scan without saying what it looks for, so a report finding
+   *     nothing is read as "the code is fine" about an injection nobody
+   *     looked for. Same rule as `clean` requiring a source that ANSWERED.
+   */
+  describe('why this alert is worth reading the code for', () => {
+    const LEAD = { technique_id: 'T1190', technique: 'Exploit Public-Facing Application' };
+
+    const exploited = () =>
+      kase({
+        code_lead: LEAD,
+        repository: {
+          service: 'orders-api',
+          repository: '/srv/src/orders-api',
+          matched_on: 'host',
+          matched_value: 'srv-bastion-01',
+        },
+      });
+
+    it('names the technique that made it say so', () => {
+      const { container } = render(<CaseView alertCase={exploited()} onRefresh={() => {}} />);
+      const lead = container.querySelector('.soc-inv-lead');
+      expect(lead).not.toBeNull();
+      // The claim is checkable: the technique it names is printed on the card
+      // as well, under the note saying the tagging is inferred.
+      expect(lead!.textContent).toContain('T1190');
+      expect(lead!.textContent).toContain('Exploit Public-Facing Application');
+    });
+
+    it('says what the analysis looks for before anyone pays for it', () => {
+      const { container } = render(<CaseView alertCase={exploited()} onRefresh={() => {}} />);
+      const lead = container.querySelector('.soc-inv-lead')!;
+      expect(lead.textContent!.toLowerCase()).toContain('access control');
+    });
+
+    it('offers no reason on an alert that carries none', () => {
+      const { container } = render(
+        <CaseView alertCase={kase({
+          code_lead: null,
+          repository: {
+            service: 'orders-api',
+            repository: '/srv/src/orders-api',
+            matched_on: 'host',
+            matched_value: 'srv-bastion-01',
+          },
+        })} onRefresh={() => {}} />,
+      );
+      // The plain jump stays — J0.3's line is "here is the code that runs on
+      // this machine", which is true whatever the alert is about.
+      expect(container.querySelector('.soc-inv-target')).not.toBeNull();
+      expect(container.querySelector('.soc-inv-lead')).toBeNull();
+    });
+
+    it('stays silent when there is no code to point at', () => {
+      // A sentence saying the flaw may be in the code, with no code named, is
+      // a line nobody can act on — the same reason J0.3 prints nothing at all
+      // on an install that has not filled the inventory in.
+      const { container } = render(
+        <CaseView alertCase={kase({ code_lead: LEAD, repository: null })} onRefresh={() => {}} />,
+      );
+      expect(container.querySelector('.soc-inv-lead')).toBeNull();
+    });
+  });
 });
 
 /* ==========================================================================

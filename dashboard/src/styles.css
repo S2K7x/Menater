@@ -457,6 +457,16 @@ code, .soc-mono { font-family: var(--mono); }
 }
 .soc-inv-jump:hover { color: var(--accent); border-color: var(--accent); }
 
+/* J0.2 — why this alert is worth reading that code for, and what the analysis
+   can answer. PROSE, so `--mono` is wrong here: the line above it is metadata
+   you compare character by character, this one is a sentence you read. And
+   `--muted`, not `--faint`: `--faint` is the token for what you may skip, and
+   the scope of an answer somebody is about to pay for is not skippable. */
+.soc-inv-lead {
+  margin: 8px 0 0; max-width: 68ch;
+  font-size: 0.82rem; line-height: 1.5; color: var(--muted);
+}
+
 .soc-block { margin-bottom: 24px; }
 .soc-block h3 { margin-bottom: 10px; }
 
