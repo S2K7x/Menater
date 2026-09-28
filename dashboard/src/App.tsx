@@ -35,6 +35,7 @@
 import { Fragment, Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 
 import { AlertQueue } from './components/AlertQueue.tsx';
+import { SystemPanel } from './components/SystemPanel.tsx';
 import { CaseView } from './components/CaseView.tsx';
 import { MetricsPanel, StatBar } from './components/MetricsPanel.tsx';
 import { HealthPanel } from './components/HealthPanel.tsx';
@@ -48,6 +49,7 @@ import { IntelPanel } from './components/IntelPanel.tsx';
 import { Assistant } from './components/Assistant.tsx';
 import { FirstRun, PageHead, SectionBoundary } from './components/Guidance.tsx';
 import { Icon, type IconName } from './components/Icon.tsx';
+import { SectionPanel, SectionTabs } from './components/SectionTabs.tsx';
 import { Mark } from './components/Mark.tsx';
 import { api, ApiError, AuthRequiredError } from './lib/api.ts';
 import { consoleDictionary } from './i18n/console.ts';
@@ -180,6 +182,15 @@ const DEFAULT_REFRESH_S = 20;
 export function App() {
   const { c, locale } = useI18n();
   const [tab, setTab] = useState<Tab>('queue');
+  /**
+   * Which view of the Alerts tab is showing (J0.4).
+   *
+   * HERE AND NOT INSIDE THE TAB, because opening a case replaces both views
+   * with the incident card: state held in the component that renders them
+   * would be reset by every round trip, and somebody working through one
+   * system's alerts would be sent back to the table after each one.
+   */
+  const [alertsView, setAlertsView] = useState<'queue' | 'systems'>('queue');
   // L'analyse de code n'est montée qu'à la première visite de son onglet. Une
   // fois montée, elle le reste : la démonter couperait un scan en cours.
   const [codeMounted, setCodeMounted] = useState(false);
@@ -581,7 +592,35 @@ export function App() {
                   />
                 </>
               ) : (
-                <AlertQueue cases={cases} selectedId={selected} onSelect={setSelected} />
+                <>
+                  {/*
+                    J0.4 — two views of the same window, and they answer
+                    different questions: the table says what to work on next,
+                    the system view says what one asset is carrying.
+
+                    NO COUNTER ON EITHER TAB, although `SectionTabs`'s first
+                    rule asks for one on anything hidden that needs action.
+                    What needs action here is "n waiting on you", and it is
+                    written in the page header thirty pixels above, visible
+                    whichever view is open — a second copy of it on the bar
+                    would be the same thing said twice on one screen.
+                  */}
+                  <SectionTabs
+                    items={[
+                      { id: 'queue', label: c.systems.viewQueue, icon: 'queue' },
+                      { id: 'systems', label: c.systems.viewSystems, icon: 'chip' },
+                    ]}
+                    active={alertsView}
+                    onChange={setAlertsView}
+                    label={c.systems.viewsLabel}
+                  />
+                  <SectionPanel id="queue" active={alertsView === 'queue'}>
+                    <AlertQueue cases={cases} selectedId={selected} onSelect={setSelected} />
+                  </SectionPanel>
+                  <SectionPanel id="systems" active={alertsView === 'systems'}>
+                    <SystemPanel cases={cases} onSelect={setSelected} onAnalyse={analyse} />
+                  </SectionPanel>
+                </>
               )}
             </>
           ) : null}

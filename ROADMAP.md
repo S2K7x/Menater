@@ -71,10 +71,52 @@ application. Until it is done, the merge is visual.
 | ~~**J0.1**~~ ✅ | ~~**A scan creates a case in the queue**~~ — `server/findings.ts` maps a finding to the alert contract, `POST /api/findings/promote` runs it through `01-Ingestion`, and the report carries a *Send to the triage queue* button per finding. A human presses it; nothing promotes itself | A flaw in the code stops being a report you close; it enters the circuit that gets it handled |
 | ~~**J0.2**~~ ✅ | ~~**An alert offers a scan**~~ — a case whose inferred technique says the way in was the application itself carries the reason on its card, beside the target J0.3 resolved and beside what the analysis can actually look for. `server/engine/code-lead.ts`; `attack.ts` gained T1190, which it did not have. It offers: no alert launches anything | Bring the incident next to the defect that made it possible, while you have it in front of you |
 | ~~**J0.3**~~ ✅ | ~~**Service ↔ repository inventory**~~ — `server/inventory.ts`, a Settings sub-tab, resolved onto every case in `snapshot.ts`. Exact matching only, ambiguity refused at the save, and the incident card names the code running on the machine it is about — with a jump that opens the Code tab on that target | Without it neither link means anything: nothing said which repository runs on `10.12.4.31` |
-| **J0.4** | **Unified "what threatens this system" view** — one screen stacking, for one asset, its alerts and its flaws | The question the user actually asks, which neither tab answers alone |
+| **J0.4** ◐ | **Unified "what threatens this system" view** — one screen stacking, for one asset, its alerts and its flaws. **First slice delivered**: the Alerts tab's second view groups the window by system — the alerts about a machine beside the flaws promoted out of the code the inventory says runs on it. What is NOT there is the rest of a scan report: this reads the queue, and says so | The question the user actually asks, which neither tab answers alone |
 
 > **Order:** J0.3 before J0.1 and J0.2. Guessing the repository from an IP
 > address would be exactly the kind of invented default that § 8 forbids.
+
+### J0.4 ◐ — one system, and everything that threatens it (first slice)
+
+**What it is.** A second view of the Alerts tab (`src/components/SystemPanel.tsx`,
+grouping in `src/lib/systems.ts`): the same window, re-cut by the system it is
+about. One block per system, the alerts on one side and, on the other, the
+flaws somebody promoted out of the code the service inventory says runs there.
+The sub-navigation is the console's own `SectionTabs`, so both views stay
+mounted and a round trip through an incident card loses neither.
+
+**Why this is the slice.** The join J0.4 needs is the one J0.3 built and J0.1
+and J0.2 already use: `case.repository`, answered by the inventory for an
+alert and by the scan for a promoted finding. Everything that join can reach
+today is in the queue, so this half needed no new data, no new route and no
+new payload — and it is the half that answers the question on an install that
+has run one scan and triaged one alert.
+
+**Four decisions, and three of them are refusals.**
+
+| Decision | Why the other answer was worse |
+|---|---|
+| **The grouping is a pure function in the browser** | Every case is already there: the snapshot carries the window. Computing this on the server would have sent the same alerts a second time, and the duplicate `trace.chains[].payload` measured 85,644 bytes away from its original — far outside DEFLATE's 32,768-byte window, so gzip cannot collapse one onto the other. A regrouping of data the client holds is a function, not a payload |
+| **A case it cannot attribute is COUNTED, never filed** | An alert naming no machine of ours and no code is not put under a likely system: the screen says how many there are and that they are in the queue. An overview that silently omits part of the queue is the failure that shows green, rebuilt in the screen whose job is the overview |
+| **The flaw half says what it read** | It reads the QUEUE, not scan reports, so an empty list means nobody promoted a finding. The sentence is on screen and not behind the disc — same rule as `clean` requiring a source that ANSWERED on the Lookup tab, and as the scan report's own coverage line. A machine the inventory maps to no code gets a DIFFERENT sentence, because "nobody promoted one" and "we could not have listed one" are two facts |
+| **A second view, not an eleventh tab** | Ten tabs in four groups is a decision this console already took, and this is the same data as the Alerts tab answering a second question. The page header and the stat bar — where "n waiting on you" is written — stay above both views, so nothing that needs a human is hidden by the switch |
+
+**What it does NOT do, and is honest to say so:**
+
+- **It does not read a scan report.** A system's flaws are the findings a human
+  promoted (J0.1). Listing a report's findings here would mean the console
+  holding scan results of its own, which is a store, a retention policy and a
+  fourth copy of code excerpts — a subject, not a slice.
+- **It never starts anything.** The one button is J0.3's jump: it fills the
+  Code tab's launcher in. Nothing is estimated and nothing is scanned.
+- **No CIDR, no suffix rule, still.** Machines are joined by the identifier an
+  operator typed, exactly, and the repository by the string somebody typed —
+  case-insensitively after trimming, which is the inventory's own comparison.
+- **No per-system history.** The window is the console's run window; a system
+  that was noisy last week and quiet today shows what the window holds. A
+  trend per asset is a different feature and would need a store.
+- **The assistant and the MCP catalogue do not read it.** Same line J0.2 and
+  J0.3 drew: not widening a change into the fenced surface.
 
 ### J0.3 ✅ — the table, and the first thing it makes possible
 

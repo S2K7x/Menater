@@ -4,6 +4,155 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-28 (second run) — Monday · Feature
+
+**Subject**: **J0.4, first slice** — the Alerts tab gained a second view that
+stacks, for one system, the alerts raised against its machines and the flaws
+somebody promoted out of the code the service inventory says runs there.
+
+**Result**: PR #47 (branch `claude/great-pascal-x0ouc4`).
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-x0ouc4` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Twentieth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: `npm test` on
+unmodified `main` at 934250f gave **1358 passed | 1 skipped**, typecheck 0,
+build clean. So Monday's reservoir applied, and `ROADMAP.md` § 2 says J0
+outranks everything else. J0.1, J0.2 and J0.3 are delivered; **J0.4 was the
+last open item in that section**, and the only one left anywhere with that
+priority.
+
+**What I found by reading, and could not have guessed.**
+
+1. **The whole flaw half already exists in the queue.** A promoted finding
+   (J0.1) is a case whose `repository.matched_on === 'scan_target'`, and an
+   ordinary alert on a mapped machine is a case whose `repository` came from
+   the inventory (J0.3). So "its alerts and its flaws" is a GROUPING of cases
+   the browser already holds, not a new data source — which is what made a
+   one-night slice possible at all.
+2. **It therefore belongs in the browser.** Shipping the grouping on the
+   snapshot would have sent every alert a second time; the 09-21 measurement
+   of the duplicated `trace.chains[].payload` says gzip cannot collapse copies
+   85,644 bytes apart. `src/lib/systems.ts` is a pure function over the cases
+   the client already has: no route, no payload, no cache to invalidate.
+3. **A promoted finding carries no host at all**, on purpose (J0.1 leaves it
+   absent so `isolationTarget()` refuses). So a grouping keyed on the machine
+   could never join the two halves — the key has to be the REPOSITORY when
+   there is one, and the machine only as the fallback for an install with no
+   inventory. That ordering is the feature; a mutation that reverses it fails
+   6 of 21 tests.
+4. **`normalizeInventory` refuses a duplicate identifier and NOT a duplicate
+   repository**, so two services legitimately share one repository string.
+   The view lists both names rather than picking one — the tie-break J0.3
+   exists in order not to have.
+
+**What shipped.** `src/lib/systems.ts` (the grouping), `SystemPanel.tsx` (the
+view), a `systems` section in the console catalogue, `.soc-sys-*` in
+`styles.css`, the sub-navigation in `App.tsx` via the existing `SectionTabs`,
+a Guide point under *The Alerts tab*, and 21 tests across two files.
+
+**Two defects my own first draft had, both found by MEASURING the built
+screen, neither visible in the code.**
+
+- **A heading uppercased by the stylesheet.** `h1, h2, h3` sets
+  `text-transform: uppercase`, and a system with no service name is titled by
+  its identity — a hostname, a path, a repository URL. So a case-sensitive
+  path was shouted back as `HTTPS://GITHUB.EXAMPLE.COM/…`, which is not the
+  string the launcher receives. Fixed with a modifier that NAMES the element.
+- **A 320 px overflow, hidden by my own instrument.** The same heading is one
+  unbreakable token in a flex item (`min-width: auto`): a 46-character
+  hostname took the document to **349 px inside 320**. My first CDP sweep ran
+  with `Emulation.setDeviceMetricsOverride({ mobile: true })`, which reported
+  `innerWidth: 349` for a requested 320 — it measured a viewport nobody asked
+  for and came back clean. **Check that `innerWidth` is the width you asked
+  for before believing a sweep.** Both are in the CLAUDE.md traps table.
+
+**Do not redo.**
+
+- **Do not put the grouping on the snapshot.** Measured reasoning above; and
+  the cases would then exist twice in one response, which is the trap this
+  repository already paid for once.
+- **Do not list a scan report's findings here.** It would mean the console
+  holding scan results of its own — a store, a retention policy and a fourth
+  copy of code excerpts outside the audit chain. The screen says what it read
+  instead, which is the honest version and cost three sentences.
+- **Do not give the two empty flaw states one sentence.** "None promoted from
+  this code" and "no code mapped to this machine" are different facts, and the
+  second is the state every install with an empty inventory is in. One
+  sentence for both is reachable from a state it does not describe.
+- **Do not add an eleventh tab.** Ten tabs in four groups is a decision
+  CLARITY § 10 states; this is the same data answering a second question, so
+  it is a sub-view. `SectionTabs` already owns the keyboard contract —
+  measured on the built app: **1 tab stop in the bar**, roving tabindex
+  honoured, and the queue panel `hidden` rather than unmounted.
+- **`mobile: true` in a CDP width sweep** — see above. It is not a detail of
+  this feature, it is the ruler.
+
+**Still open, from the previous entry and not touched tonight.**
+`findingAlertId` in `server/findings.ts` documents `NUL` as its separator and
+uses `.join(' ')`, a space — so two different findings can be made to collide
+into one `alert_id` and the second promotion is answered *duplicate, skipped*.
+Not reachable with today's VulnPipe output, and the fix changes every promoted
+alert id. Still a good bug night.
+
+**Verified** (Node 22.22.2, `dashboard/`):
+
+| Command | Result |
+|---|---|
+| `npm run typecheck` | 0 errors |
+| `npm test` | **1379 passed, 1 skipped**, 83 files (1358 before) |
+| `npm run build` | ✓ 463 ms |
+
+**Red before green** — every mutation below was applied to the production code
+and the suite re-run, not reasoned about:
+
+| Mutation | Effect |
+|---|---|
+| key on the machine only | **6 of 21 fail** — the join is the feature |
+| `—` read as a machine | 7 fail |
+| `source_ip` counted as one of our machines | 7 fail |
+| unattributed cases dropped silently | 4 fail |
+| no ordering at all | 2 fail |
+| "waiting on a human" loses its priority in the sort | 1 fail |
+| rollups computed over the alert half only | 3 fail |
+| one of two service names picked instead of both listed | 1 fail |
+| the lowercased comparison key displayed | 1 fail *(the first version of that test could NOT see it — the fixture repository was already lower case. Strengthened, then re-run)* |
+| scope sentence moved behind the disc | 1 fail |
+| green check over an empty flaw list | 1 fail |
+| a constant label on the repeated *Analyse* button | 1 fail |
+| the code line printed with no code to name | 1 fail |
+| one sentence for both empty flaw states | 1 fail |
+
+**Measured on the built screen**, headless Chromium 141 over CDP (no new
+dependency; Node 22 has a global `WebSocket`), on a throwaway preview page and
+then on the REAL console in demonstration mode with an inventory written into
+a temporary `MENATER_CONFIG`:
+
+| Width | document vs viewport | Overflowing | Long headings |
+|---|---|---|---|
+| 320 px (WCAG 2.2 § 1.4.10) | 320 / 320 | none | none |
+| 375 px | 375 / 375 | none | none |
+| 1280 px | 1280 / 1280 | none | none |
+
+Six palettes at 1280: no overflow on any, and every colour resolves through a
+token (`--muted`, `--faint`, `--fg`, `--line`, `--hero`, `--focus`). The panel
+is **742 px** tall at 1280 on a three-system fixture. The screen was reviewed
+with data of the right shape, never empty — `CLARITY.md` § 7.
+
+**What I learned that is written nowhere else.** The console can be driven
+end to end in this environment with no database and no model key: `npm run
+serve` with `MENATER_CONFIG` pointed at a temporary file falls straight into
+demonstration mode, and writing an `inventory.entries` block into that file is
+enough to make J0.3, J0.2 and now J0.4 render with real resolution. That is
+the cheapest way to review a screen that depends on configuration, and it cost
+nothing to set up. The previous nights' *"this environment has no database"*
+is true and has been used as a reason to skip screens it does not actually
+block.
+
 ## 2026-09-28 — Monday · Feature
 
 **Subject**: **J0.2** — an alert whose inferred technique says the way in was

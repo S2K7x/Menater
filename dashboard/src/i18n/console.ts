@@ -300,6 +300,65 @@ export interface ConsoleDictionary {
     back: string;
   };
 
+  /**
+   * J0.4 — the Alerts tab's second view: one system, everything that
+   * threatens it.
+   *
+   * Its own section rather than more keys under `queue`, because it answers a
+   * different question with the same data: the queue says what to work on
+   * next, this says what an asset is carrying.
+   */
+  systems: {
+    /** The sub-navigation of the Alerts tab. */
+    viewsLabel: string;
+    viewQueue: string;
+    viewSystems: string;
+    kicker: string;
+    title: string;
+    /** Behind the disc: how a system is identified, and what that never does. */
+    lede: string;
+    shown: (n: number) => string;
+    /** Labels above each half of a system's stack, count included. */
+    alertsLabel: (n: number) => string;
+    flawsLabel: (n: number) => string;
+    /** Said in place of an empty list, and grey: an absence is not good news. */
+    noAlerts: string;
+    noFlaws: string;
+    /**
+     * The flaw half of a machine nothing maps to any code.
+     *
+     * A different sentence from `noFlaws`, because it is a different fact: one
+     * says nobody promoted a finding, the other says we could not have listed
+     * one. A sentence must not be reachable from a state it does not
+     * describe — and this one names what to do about it.
+     */
+    noCodeMapped: string;
+    /**
+     * What the flaw half actually covers.
+     *
+     * This screen reads the QUEUE, not scan reports — so a system with no
+     * flaw listed means nobody promoted one, never that the code is clean.
+     * Same rule as `clean` requiring a source that ANSWERED on the Lookup
+     * tab, and it REPORTS, so it stays on screen.
+     */
+    scope: string;
+    machines: string;
+    code: string;
+    /** Names the system, because the button repeats once per system. */
+    analyseLabel: (system: string) => string;
+    awaiting: (n: number) => string;
+    failed: (n: number) => string;
+    /**
+     * Cases this screen could not attribute to any system.
+     *
+     * Counted and said out loud: an overview that silently omits part of the
+     * queue is the failure that shows green, in the screen built to give an
+     * overview.
+     */
+    unattributed: (n: number) => string;
+    empty: string;
+  };
+
   caseView: {
     id: string;
     source: string;
@@ -1453,6 +1512,38 @@ const EN: ConsoleDictionary = {
     back: 'Back to the list',
   },
 
+  systems: {
+    viewsLabel: 'Views of this tab',
+    viewQueue: 'Triage queue',
+    viewSystems: 'By system',
+    kicker: 'What threatens one system',
+    title: 'Systems',
+    lede:
+      'A system is a machine your alerts name, and — when the service inventory maps that '
+      + 'machine to a repository — the code running on it. Nothing here is guessed: the '
+      + 'matching is the inventory\u2019s own, exact and case-insensitive, and an alert naming '
+      + 'no machine of yours is counted apart rather than filed under a likely one.',
+    shown: (n) => (n === 1 ? '1 system in this window' : `${n} systems in this window`),
+    alertsLabel: (n) => `Alerts · ${n}`,
+    flawsLabel: (n) => `Flaws promoted from its code · ${n}`,
+    noAlerts: 'No alert in this window is attributed to this code.',
+    noFlaws: 'None promoted from this code.',
+    noCodeMapped: 'No code mapped to this machine.',
+    scope:
+      'The flaws listed here are the ones somebody sent to the triage queue from a scan '
+      + 'report. This screen does not read scan reports, so an empty list means none was '
+      + 'promoted — never that the code is clean.',
+    machines: 'Machines',
+    code: 'Code',
+    analyseLabel: (system) => `Analyse the code of ${system}`,
+    awaiting: (n) => (n === 1 ? '1 waiting on you' : `${n} waiting on you`),
+    failed: (n) => (n === 1 ? '1 failure' : `${n} failures`),
+    unattributed: (n) =>
+      `${n} ${n === 1 ? 'alert names' : 'alerts name'} neither one of your machines nor any `
+      + 'code. They are in the triage queue, and not on this screen.',
+    empty: 'No alert in this window names a machine or a piece of code.',
+  },
+
   caseView: {
     id: 'Id',
     source: 'Source',
@@ -2495,6 +2586,10 @@ const EN: ConsoleDictionary = {
           {
             term: 'The case sheet',
             text: 'One click opens the detail: what happened step by step, the intelligence gathered, the model’s decision and the facts it cites.',
+          },
+          {
+            term: 'By system',
+            text: 'The second view of this tab stacks, for one machine, the alerts raised against it and the flaws somebody promoted out of the code the service inventory says runs on it. It groups what is already in the queue and guesses nothing: an alert naming no machine of yours is counted apart rather than filed under a likely one, and an empty flaw list means none was promoted — never that the code is clean.',
           },
         ],
       },
