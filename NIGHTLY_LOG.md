@@ -10,7 +10,7 @@ they were — they are memory about live code, and rewriting them would lose it.
 stacks, for one system, the alerts raised against its machines and the flaws
 somebody promoted out of the code the service inventory says runs there.
 
-**Result**: PR #PENDING (branch `claude/great-pascal-x0ouc4`).
+**Result**: PR #47 (branch `claude/great-pascal-x0ouc4`).
 
 **Note on the branch name.** `NIGHTLY.md` § 5 asks for
 `claude/nightly-YYYY-MM-DD-subject`; this session was handed
