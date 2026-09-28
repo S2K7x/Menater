@@ -4,6 +4,137 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-28 — Monday · Feature
+
+**Subject**: **J0.2** — an alert whose inferred technique says the way in was
+the application itself now carries, on its incident card, the reason to go and
+read the code, and a sentence saying what the analysis can actually answer.
+
+**Result**: PR #46 (branch `claude/great-pascal-njl1hp`).
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-njl1hp` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Nineteenth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: `npm test` on
+unmodified `main` at 6a31257 gave **1341 passed | 1 skipped**, typecheck 0. So
+Monday's reservoir applied, and `ROADMAP.md` § 2 says J0 outranks everything
+else. J0.1 and J0.3 are delivered; **J0.2 was the last open item in that
+section** apart from J0.4.
+
+**What I found by reading, and could not have guessed.**
+
+1. **The offer already existed and was unconditional.** J0.3's *Analyse this
+   code* button renders on every case the service inventory matches — the same
+   button on a brute force against SSH as on an exploited endpoint. So J0.2 was
+   never about adding a jump; it is about qualifying one.
+2. **`attack.ts` had no technique for the application.** Its nine rules are
+   credentials (T1110), hosts (T1021, T1053), attacker tooling (T1059, T1204),
+   traffic (T1041, T1071). **T1190 — Exploit Public-Facing Application, the
+   commonest initial-access technique there is — was absent.** A lead built on
+   the existing tags would have been infrastructure with no caller, which is the
+   defect the 09-24 and 09-26 entries both paid for.
+3. **`tagAttack` had no test file at all**, and it cuts to three tags. A rule
+   appended below `/script/i`, `/scan/i` and `/upload/i` is a rule the alert
+   J0.2 is built for never reaches.
+4. **`VulnPipe/src/nodes/` holds exactly one detector** (`idor`, plus
+   `shared/`). So the analysis answers one question, broken access control, and
+   an offer that does not say so buys a report whose silence reads as *nothing
+   wrong* about an injection nobody looked for.
+
+**What shipped.** `server/engine/code-lead.ts` (a Set of one technique and a
+`find`), T1190 in `attack.ts` written FIRST, `code_lead` on `AlertCase` set in
+`cases.ts`'s second pass beside the tags, and two sentences on the card gated on
+`repository && code_lead`.
+
+**Do not redo.**
+
+- **Do not derive a flaw class from the technique.** ATT&CK does not carry one:
+  T1190 says a weakness in an internet-facing application was used and says
+  nothing about which. The roadmap's own wording — *"points at a class of flaw
+  (injection, access control)"* — cannot be honoured as written. What the offer
+  names instead is what the ANALYSIS looks for, which is a fact about this
+  product rather than a guess about the attack.
+- **Do not match the rule name a second time in `code-lead.ts`.** The lead is
+  read off the tags `cases.ts` has just computed, because the card prints those
+  tags: a second matcher could reach a conclusion the visible tags do not
+  support, and the operator would have no way to check the offer.
+- **Do not put flaw names in the T1190 regex.** `findingToAlert` names a
+  promoted finding `<flaw> in <METHOD> <route>`, so `IDOR` or `SSRF` there
+  would tag every promoted finding with an exploitation nobody observed. Tried
+  and rejected; `code-lead.test.ts` pins it.
+- **`\blfi\b` / `\brfi\b` were in the first draft and taken out.** Three
+  letters between word boundaries, matched against the RAW LOG as well as the
+  rule name, is a token a URL path can supply — and a false T1190 puts *go and
+  read your code* on a card for nothing. `path traversal` covers the same
+  attack as a detection rule words it.
+- **The lead is NOT shown without a repository.** A sentence about code with no
+  code named is the line nobody can act on that J0.3 refuses. Worth revisiting
+  — it would be actionable (*fill the inventory in*) and appears only on web
+  alerts — but it is a second decision and this night took the conservative
+  one.
+
+**Found and NOT fixed — for a bug night.** `findingAlertId` in
+`server/findings.ts` says in its own comment *"NUL as the separator: it cannot
+occur in any of the four parts, so no combination of them can be made to
+collide"* — and the code is `.join(' ')`, **a space**. Spaces occur freely in
+`vulnerability`, `route` and `file`, so two different findings can be made to
+produce one `alert_id`: `{vulnerability: 'IDOR X', http_method: 'GET'}` and
+`{vulnerability: 'IDOR', http_method: 'X GET'}` join identically. The second
+promotion would be answered `duplicate, skipped` — a finding silently never
+triaged, under a green check, which is this product's defining defect. Not
+reachable with today's VulnPipe output (one detector, `IDOR`, and space-free
+methods and routes), which is why it was logged rather than bundled into a
+feature night. **The fix changes every promoted alert id**, so it is not a
+one-character change to make without saying so.
+
+**Verified** (Node 22.22.2, `dashboard/`):
+
+| Command | Result |
+|---|---|
+| `npm run typecheck` | 0 errors |
+| `npm test` | **1358 passed, 1 skipped**, 81 files (1341 before) |
+| `npm run build` | ✓ 457 ms |
+
+**Red before, green after** — each checked by reverting the production change,
+not by reading:
+
+| Mutation | Effect |
+|---|---|
+| `attack.ts` back to `main` | **6 of 12** in `code-lead.test.ts` fail |
+| T1190 moved to the END of `ATTACK_RULES` | *survives an alert that matches four rules at once* fails — the ordering is load-bearing, not decoration |
+| `CaseView.tsx` back to `main` | 2 of the 4 new card tests fail |
+| `{c.repository && c.code_lead}` → `{c.code_lead}` | *stays silent when there is no code to point at* fails |
+| `leadScope` reworded to drop "access control" | the cross-half detector guard fails |
+
+**Measured on the built card**, in headless Chromium 141 driven over CDP with
+no new dependency (Node 22 has a global `WebSocket`), on a throwaway
+`preview-j02.html` deleted in the same session:
+
+| Width | `scrollWidth` vs viewport | Overflowing elements |
+|---|---|---|
+| 320 px (WCAG 2.2 § 1.4.10) | 305 / 305 | none |
+| 375 px | 360 / 360 | none |
+| 1280 px | 1280 / 1280 | none |
+
+Colour resolves to `--muted` on all six themes (`themes.test.ts` already pins
+that token at ≥ 4.5 on `--surface`; `--faint`, at ≥ 3, is the token for what you
+may skip and the scope of an answer somebody is about to pay for is not that).
+The block adds **87 px** to the case head at 1280 px, on cases carrying both a
+lead and a repository and on no others.
+
+**What I learned that is written nowhere else.** The repository has Chromium at
+`/opt/pw-browsers/chromium-1194/chrome-linux/chrome` and no `playwright`
+package, and installing one would touch `package-lock.json` — the trap this
+journal recorded on 09-25. CDP over the global `WebSocket` costs nothing and
+measures the real thing; the driver is ~40 lines. Two gotchas: Chromium must be
+launched as a BACKGROUND task (a foreground `&` in this harness returns 144 and
+the process never survives), and the CDP calls need `NO_PROXY='*'` or the agent
+proxy swallows the loopback request.
+
 ## 2026-09-27 (second run) — Sunday · Maintenance and state of the project
 
 **Subject**: the console suite was **red on unmodified `main`**, and green on the

@@ -23,13 +23,15 @@
 import type { AlertCase } from '../src/lib/types.ts';
 import { messages, type Locale } from './i18n.ts';
 import { tagAttack } from './engine/attack.ts';
+import { codeLead } from './engine/code-lead.ts';
 
 const now = Date.now();
 const at = (minutesAgo: number) => new Date(now - minutesAgo * 60_000).toISOString();
 
-function build(partial: Omit<AlertCase, 'attack' | 'dwell_ms' | 'extensions' | 'repository'>): AlertCase {
+function build(partial: Omit<AlertCase, 'attack' | 'code_lead' | 'dwell_ms' | 'extensions' | 'repository'>): AlertCase {
   const stages = partial.stages;
   const last = stages[stages.length - 1];
+  const attack = tagAttack(partial.rule_name, partial.raw_log);
   return {
     ...partial,
     // Left null here rather than filled in: the sample set must not claim a
@@ -41,7 +43,8 @@ function build(partial: Omit<AlertCase, 'attack' | 'dwell_ms' | 'extensions' | '
     // invented data on a screen whose whole job is to show what was really
     // observed.
     extensions: null,
-    attack: tagAttack(partial.rule_name, partial.raw_log),
+    attack,
+    code_lead: codeLead(attack),
     dwell_ms: last
       ? new Date(last.started_at).getTime() + (last.duration_ms ?? 0) - new Date(partial.received_at).getTime()
       : null,

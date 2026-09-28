@@ -340,6 +340,31 @@ export function CaseView({
                 ) : null}
               </p>
             ) : null}
+
+            {/*
+              J0.2 — why this alert in particular is worth reading that code
+              for, and what the analysis can answer.
+
+              GATED ON THE REPOSITORY, not only on the lead. A card that said
+              "the flaw may be in this code" with no code to name would be a
+              line nobody can act on, which is the reason J0.3 prints nothing
+              at all when the inventory has no entry. The technique it names is
+              listed either way, in the block directly below — so the reason
+              for the offer is checkable against something already on screen.
+
+              IT REPORTS, SO IT DOES NOT FOLD. The scope sentence is the
+              coverage of an answer somebody is about to pay for, and CLARITY
+              § 3 puts a coverage hole on the side that stays on screen. It is
+              quiet all the same — no accent, which rule 4 of `styles.css`
+              reserves for something waiting on a human — because the point is
+              to qualify the offer above, not to compete with it.
+            */}
+            {c.repository && c.code_lead ? (
+              <p className="soc-inv-lead">
+                {v.repository.lead(c.code_lead.technique_id, c.code_lead.technique)}{' '}
+                {v.repository.leadScope}
+              </p>
+            ) : null}
           </div>
 
           {c.attack.length > 0 ? (

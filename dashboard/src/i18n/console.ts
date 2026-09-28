@@ -323,6 +323,22 @@ export interface ConsoleDictionary {
       /** Says what the button does BEFORE it is pressed: it starts nothing. */
       analyse: string;
       analyseHint: string;
+      /**
+       * J0.2 — why this alert in particular is worth reading the code for.
+       * Takes the technique so the sentence names what made us say it.
+       */
+      lead: (techniqueId: string, technique: string) => string;
+      /**
+       * What the analysis LOOKS FOR, said before it is launched.
+       *
+       * A scan that comes back with nothing is read as "the code is fine", so
+       * an offer that does not name its scope buys a reassurance nobody
+       * measured — the rule the scan report and the Lookup tab already apply
+       * to their own verdicts, applied to the moment the scan is proposed.
+       * `code-lead.test.ts` fails if the analysis gains a second detector and
+       * this sentence does not move.
+       */
+      leadScope: string;
     };
     state: string;
     dwell: string;
@@ -1456,6 +1472,12 @@ const EN: ConsoleDictionary = {
       analyse: 'Analyse this code',
       analyseHint:
         'Opens the Code tab with this target already filled in. Nothing is scanned until you launch it.',
+      lead: (id, technique) =>
+        `This alert says the way in was the application itself (${id} — ${technique}), `
+        + 'so the flaw behind it may be in this code.',
+      leadScope:
+        'The analysis looks for broken access control. It will not tell you whether an '
+        + 'injection is possible, so nothing found here is not the same as nothing wrong.',
     },
     state: 'State',
     dwell: 'Time taken',

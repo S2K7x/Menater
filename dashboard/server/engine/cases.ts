@@ -47,6 +47,7 @@ import {
 } from '../../src/lib/types.ts';
 import { messages, type Locale } from '../i18n.ts';
 import { tagAttack } from './attack.ts';
+import { codeLead } from './code-lead.ts';
 import type { RunRecord, StepRecord } from './types.ts';
 
 /**
@@ -331,6 +332,7 @@ function blankCase(alertId: string, receivedAt: string): AlertCase {
     stages: [],
     errors: [],
     attack: [],
+    code_lead: null,
     dwell_ms: null,
     // Not the journal's business: the inventory is console configuration, and
     // it is attached where the snapshot is assembled. `cases.ts` reads runs.
@@ -703,6 +705,10 @@ export function buildCases(
     // card. A technique asserted without saying where it came from is the kind
     // of false rigour this product refuses everywhere else.
     c.attack = tagAttack(c.rule_name, c.raw_log);
+    // J0.2 — read off the tags just computed, never off the rule name a second
+    // time: the card prints those tags, so the reason for the offer is
+    // checkable against something already on the screen.
+    c.code_lead = codeLead(c.attack);
     const last = c.stages[c.stages.length - 1];
     c.dwell_ms = last
       ? Math.max(0, Date.parse(last.started_at) + (last.duration_ms ?? 0) - Date.parse(c.received_at))
