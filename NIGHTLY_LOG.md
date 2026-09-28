@@ -10,7 +10,7 @@ they were — they are memory about live code, and rewriting them would lose it.
 the application itself now carries, on its incident card, the reason to go and
 read the code, and a sentence saying what the analysis can actually answer.
 
-**Result**: PR (branch `claude/great-pascal-njl1hp`).
+**Result**: PR #46 (branch `claude/great-pascal-njl1hp`).
 
 **Note on the branch name.** `NIGHTLY.md` § 5 asks for
 `claude/nightly-YYYY-MM-DD-subject`; this session was handed
