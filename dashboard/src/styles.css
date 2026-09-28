@@ -298,6 +298,91 @@ code, .soc-mono { font-family: var(--mono); }
   color: var(--faint); margin-right: 4px;
 }
 
+/* --- J0.4 : one system, everything that threatens it ----------------------
+   The Alerts tab's second view, written next to its first and well before the
+   media blocks lower down: a rule appended at the END of this sheet would
+   silently outrank the mobile overrides it has to obey. */
+
+.soc-sys-scope {
+  margin: 0 0 4px; max-width: 68ch;
+  font-size: 0.82rem; line-height: 1.5; color: var(--muted);
+}
+.soc-sys-list { margin-top: 14px; }
+.soc-sys { padding: 16px 0; border-top: 1px solid var(--line); }
+.soc-sys-head {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px;
+  justify-content: space-between;
+}
+/* A system is a block inside a section: level 3, and the margin the shared
+   `.soc-block h3` rule would give it is wrong here — the metadata line sits
+   directly under the name.
+
+   `overflow-wrap: anywhere` IS NOT DECORATIVE, and measuring is what found it:
+   this heading is a hostname or a repository path, i.e. one long unbreakable
+   token, and a flex item has `min-width: auto`. At 320 px — the width WCAG 2.2
+   § 1.4.10 names — `workstation-finance-12.corp.internal.example.com` took the
+   document to 349 px and the whole page scrolled sideways. `break-word` would
+   have wrapped the visible line and left the minimum exactly where it was. */
+.soc-sys-head h3 { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+/* A heading that is a VALUE — a hostname, a path, a repository URL — keeps the
+   spelling it was given. `h1, h2, h3` uppercases, and a case-sensitive path
+   shouted back in display capitals is not the string the launcher receives.
+   The element is NAMED: `.soc-sys-head h3` is (0,1,1) and a bare modifier
+   class is (0,1,0), which has already lost three times in this stylesheet. */
+.soc-sys-head h3.soc-sys-name-literal {
+  font-family: var(--mono); text-transform: none; letter-spacing: 0;
+  font-weight: 500; font-size: 0.92rem;
+}
+.soc-sys-counts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.soc-sys-meta {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  margin: 8px 0 0; font-family: var(--mono); font-size: 0.78rem; color: var(--faint);
+}
+.soc-sys-meta b { color: var(--muted); font-weight: 400; }
+.soc-sys-machines { color: var(--fg); overflow-wrap: anywhere; }
+/* A repository path or URL is one long unbreakable token, and a flex or grid
+   item has `min-width: auto`: without a break it becomes the item's minimum
+   and takes the page sideways. `anywhere` and not `break-word` — only the
+   first changes min-content sizing. */
+.soc-sys-target {
+  font-family: var(--mono); color: var(--muted);
+  background: var(--hero); padding: 2px 6px; border-radius: var(--radius);
+  max-width: 100%; overflow-wrap: anywhere;
+}
+/* Two halves side by side on a wide screen, `minmax(0, …)` so a long rule name
+   cannot floor a track — the defect measured at 503.6 px inside a 325 px grid
+   on the diagnostic card. */
+.soc-sys-stacks {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px; margin-top: 12px;
+}
+.soc-sys-stack { min-width: 0; }
+/* `--muted` and not `--faint`: this label carries the COUNT of each half, and
+   `--faint` is the token for what you may skip. How many alerts a system is
+   carrying is the headline number of the block. */
+.soc-sys-stack-label {
+  margin: 0 0 6px; font-family: var(--mono); font-size: 0.66rem;
+  letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted);
+}
+.soc-sys-cases { list-style: none; margin: 0; padding: 0; }
+.soc-sys-row {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  width: 100%; text-align: left; padding: 8px 0;
+  background: transparent; border: none; border-bottom: 1px solid var(--line);
+  color: var(--fg); font-family: inherit; font-size: 0.84rem; cursor: pointer;
+}
+.soc-sys-row:hover .soc-sys-row-name { color: var(--accent); }
+/* `--focus` and not `--accent`: the accent is reserved for something waiting on
+   a human, and on two of the six themes it measures under the 3:1 a ring owes
+   (WCAG 1.4.11). */
+.soc-sys-row:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.soc-sys-row-name { flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; }
+.soc-sys-row-state,
+.soc-sys-row-when {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-family: var(--mono); font-size: 0.72rem; color: var(--faint); flex: none;
+}
+
 /* --- Pastilles ------------------------------------------------------------ */
 
 .soc-pill {
@@ -1080,6 +1165,11 @@ code, .soc-mono { font-family: var(--mono); }
      and a service name will not sit side by side at 375 px. */
   .soc-inv-match { flex-direction: column; align-items: flex-start; gap: 6px; }
   .soc-inv-jump { min-height: 44px; }
+  /* J0.4 — the two halves stack: 260 px of alert name and 260 px of flaw name
+     do not sit side by side on a phone. */
+  .soc-sys-stacks { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .soc-sys-meta { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .soc-sys-row { min-height: 44px; }
   .soc-sources { grid-template-columns: 1fr; }
   .soc-health-grid { grid-template-columns: 1fr; }
 
