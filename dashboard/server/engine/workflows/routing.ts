@@ -163,6 +163,12 @@ export const ROUTING: WorkflowDef = {
       position: { x: 1940, y: 0 },
     },
     {
+      id: 'executed', type: 'transform', label: 'Action executed',
+      note: 'An `http` receipt is not an outcome: the record of WHAT ran is composed here.',
+      params: { fn: 'actionExecuted', inputs: { routed: fromNode('catalog', ''), receipt: fromInput('') } },
+      position: { x: 2060, y: -80 },
+    },
+    {
       id: 'execute-failed', type: 'transform', label: 'Action failed',
       params: { fn: 'actionExecutionFailed' }, position: { x: 1940, y: 200 },
     },
@@ -172,8 +178,14 @@ export const ROUTING: WorkflowDef = {
       params: { fn: 'approvalRejected' }, position: { x: 1740, y: 200 },
     },
     {
+      id: 'escalated', type: 'transform', label: 'Escalation recorded',
+      note: 'Carries the timeout outcome past the notify node, and says whether it was posted.',
+      params: { fn: 'escalationRecorded', inputs: { outcome: fromNode('timeout', ''), delivery: fromInput('') } },
+      position: { x: 1740, y: 400 },
+    },
+    {
       id: 'audit-record', type: 'transform', label: 'Audit record',
-      note: 'Identical whichever branch was taken.',
+      note: 'Identical whichever branch was taken \u2014 so every branch owes it an OUTCOME, never an I/O receipt.',
       params: { fn: 'buildAuditRecord', inputs: { alert: fromNode('guard', 'alert'), outcome: fromInput('') } },
       position: { x: 2160, y: 0 },
     },
@@ -210,8 +222,9 @@ export const ROUTING: WorkflowDef = {
     link('attente', 'timeout', 'timeout'),
 
     link('timeout', 'escalate-timeout'),
-    link('escalate-timeout', 'audit-record'),
-    link('escalate-timeout', 'audit-record', 'error'),
+    link('escalate-timeout', 'escalated'),
+    link('escalate-timeout', 'escalated', 'error'),
+    link('escalated', 'audit-record'),
 
     link('interpret', 'approved'),
     link('approved', 'catalog', 'true'),
@@ -220,7 +233,8 @@ export const ROUTING: WorkflowDef = {
     link('catalog', 'execute'),
     link('execute', 'execute-failed', 'error'),
     link('execute-failed', 'audit-record'),
-    link('execute', 'audit-record'),
+    link('execute', 'executed'),
+    link('executed', 'audit-record'),
 
     link('audit-record', 'to-audit'),
   ],

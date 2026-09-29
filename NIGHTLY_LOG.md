@@ -4,6 +4,169 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-29 — Tuesday · Security
+
+**Subject**: **the append-only chain did not name the action it is evidence
+of** — `ROADMAP.md` § 7, and the sweep that wrote that row found one branch
+where there were two.
+
+**Result**: PR #48 (branch `claude/great-pascal-aqrowc`).
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-aqrowc` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Twenty-first entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: `main` at 62f27b0 gave
+typecheck 0, **1379 passed | 1 skipped**, build clean, and no pull request was
+open. Tuesday's listed areas end with *the integrity of the audit chain*, and
+this is priority (2) *and* (3) — a real, reproducible defect AND an explicit
+roadmap limitation, with the reproduction already written down by the night
+that found it.
+
+**What was actually wrong**, measured by driving the REAL workflows through the
+REAL engine to a live approval and reading the row back out of the run journal:
+
+| Branch of 04 | what reached `buildAuditRecord` | the row sealed |
+|---|---|---|
+| a human approved, containment dialled | `execute`, an `http` node: `{ status, ok, body }` | `executed: false`, `action_taken: "none"`, `routing_outcome: "unknown"`, `approval: null` |
+| nobody answered, escalation posted | `escalate-timeout`, a `notify` node: `{ ts, transport }` | `routing_outcome: "unknown"` |
+| the escalation itself failed to post | the same node's `error` port | `routing_outcome: "unknown"` |
+| the five other branches | a transform stating an outcome | correct, and always was |
+
+`normalizeAuditRow` reads `human_approver`, `human_approver_id`,
+`human_override` and `human_reasoning` out of that `approval` block **and out of
+nothing else**, so the append-only row recorded a containment nobody had
+authorised — in the one place this product cannot correct afterwards.
+
+**What I learned, and could not have guessed by reading one file.**
+
+1. **A junction is a contract, and this one stated none.** `audit-record` reads
+   `outcome: fromInput('')`, i.e. whatever node happens to sit above it, and
+   its note said the record is *« identical whichever branch was taken »* —
+   true of the NODE, false of its inputs, and read for a year as vouching for
+   both. The five branches that end on a transform were fine; the two that end
+   on an I/O node handed it a transport receipt. **A receipt is not an
+   outcome.**
+2. **The two broken branches are exactly the two where something HAPPENED.**
+   Not a coincidence: a branch that does nothing ends on the transform that
+   says so, and a branch that acts ends on the node that acted.
+3. **Four things vouched for the defect**, which is why it survived.
+   `approval-route.test.ts` asserts the row is NOT `rejected` and NOT
+   `timeout_escalated` — `"unknown"` satisfies both, so **a negative assertion
+   cannot notice a non-answer**. `routing.test.ts` calls `buildAuditRecord`
+   directly with `{ routing_outcome: 'approved', executed: true, action_taken:
+   'isolate_host_temporary' }`, a fixture in the READER's vocabulary that the
+   graph never delivers. `server/i18n.ts` carries a sentence for the outcome
+   `approved`, and **nothing in the engine produced that value** — a catalogue
+   entry with no producer. And the node's own note, above.
+4. **The timeout half was tracked nowhere and is the worse one.**
+   `approvalTimedOut` composes the entire outcome; the notify node sits BETWEEN
+   it and the record, so it was discarded one hop before arriving. On that
+   notify's `error` port — *nobody answered AND nobody was told* — the chain was
+   the only possible home for that fact, and it wrote `"unknown"`.
+5. **The defect is per-EDGE, and a run exercises one edge.** So the behavioural
+   tests cannot close the class: an eighth branch wired from an `http`,
+   `notify`, `postgres` or `llm` node rebuilds it wherever nobody is looking.
+   The structural assertion — every node feeding `audit-record` is a
+   `transform` — is what actually closes it, and it is red on unmodified `main`
+   naming all three offending edges.
+6. **My own first fixture was wrong, and the pipeline was right.** I asserted
+   `action_taken === 'isolate_host_temporary'`; this environment has no model
+   key, so 03 takes the fail-safe verdict and `fallbackDecision` proposes
+   `escalate`. Corrected to what the pipeline really produces, with the reason
+   written beside it.
+
+**Do not redo.**
+
+- **Do not fix only the `execute` branch.** § 7 described that one; wiring it
+  and stopping is *« a fix applied at the front door and not at the two buttons
+  behind it »*, and mutation M2 (the escalation wired straight back) is red on
+  four tests precisely so the next person cannot.
+- **Do not make `escalate-timeout` bypass the notify by wiring `timeout`
+  straight to `audit-record`.** Probed on the graph: the notify still needs an
+  `error` port wired (CLAUDE.md, asserted per workflow), and pointing it at
+  `audit-record` gives that node two live upstreams on one branch — the
+  junction rule this engine exists to respect. A transform after the notify is
+  the shape the graph already uses for `post-approval` → `notify-failed`.
+- **Do not change `buildAuditRecord`'s defaults instead of the graph.**
+  Mutation M9 — defaulting `routing_outcome` to `'approved'` rather than
+  `'unknown'` — is **GREEN** on the whole suite, and that is honest rather than
+  a hole: with the graph fixed those defaults are reachable from no branch at
+  all, so the mutation changes dead behaviour. It is also the wrong fix, since
+  it would invent an outcome for a branch that said nothing. Left alone on
+  purpose: the function's header promises it never throws, and whether
+  `action_taken` should default to `null` rather than the word `'none'` is a
+  decision about that column's vocabulary, not about this defect.
+- **Do not assert the audit row by calling `buildAuditRecord` directly.** That
+  is the fixture that was already green over this, and it is how the defect got
+  a second endorsement.
+
+**Found and NOT fixed** — the leads from previous security nights still stand,
+each re-checked as still true tonight but untouched:
+
+- `attempts` in `auth.ts` is never swept: a record with 1–7 failures has
+  `until === 0`, so `throttle()` never deletes it and `sweep()` iterates
+  `sessions` instead. Small, unbounded, unauthenticated.
+- The login throttle collapses to one bucket behind the `cloudflared` tunnel.
+  Deliberately not mine: the remedy is to trust a forwarded header, and doing
+  that without a trusted-proxy list is a worse hole than the one it closes.
+- VulnPipe's three LLM adapters (`openai-compatible.ts`, `gemini.ts`,
+  `ollama.ts`) call `fetch` with **no `redirect: 'manual'`**, which I confirmed
+  by reading them tonight — the console's `fetchWithDeadline` primitive was
+  never carried across. The request carries `authorization: Bearer <key>` and
+  the analysed source code, and the base URL is operator-configured, so this is
+  a configured endpoint choosing where the next request goes rather than an
+  attacker-controlled SSRF. It is a whole subject and the other half of the
+  product; it remains a lead, not a roadmap row, because I have not
+  demonstrated the abuse.
+- `findingAlertId` in `server/findings.ts` still documents `NUL` as its
+  separator and uses `.join(' ')` (carried over from the previous entry).
+
+**Verified** (Node 22.22.2, `dashboard/`):
+
+| Command | Result |
+|---|---|
+| `npm ci` | the container starts with no `node_modules` |
+| `npm run typecheck` | 0 errors |
+| `npm test` | **1386 passed, 1 skipped** (1379 \| 1 before: +7, nothing skipped or weakened) |
+| `npm run build` | ✓ 352 ms, bundle unchanged |
+
+Checked **RED first**: 5 of the 6 tests then in `server/engine/audit-record.test.ts`
+fail on unmodified production code; the sixth is the control (a human refusal
+still recorded as a refusal) and passes before AND after, on purpose. Then by
+mutation, one at a time, restoring in between:
+
+| Mutation | Result |
+|---|---|
+| `execute` wired straight to the audit record (the original defect) | RED — 5 |
+| `escalate-timeout` wired straight to the audit record (the second door) | RED — 4 |
+| `actionExecuted` reports `executed: false` | RED — 1 |
+| `actionExecuted` drops the `approval` block | RED — 1 |
+| `actionExecuted` names the action off the `http` receipt | RED — 2 |
+| `escalationRecorded` forwards the delivery receipt instead of the outcome | RED — 2 |
+| `escalationRecorded` always claims the escalation was posted | RED — 1 |
+| `cases.ts` reads `action_taken` off the `http` step again | RED — 1 |
+| `buildAuditRecord` defaults the outcome to `'approved'` | **GREEN — and why is written above** |
+
+Two existing assertions in `workflows/routing.test.ts` were updated and neither
+was weakened: *« TOUTES les branches convergent vers l'audit »* now claims
+REACHABILITY from each branch terminal rather than a direct edge (and the new
+file claims the complementary half — every node feeding the record is a
+transform — so the pair is stricter than the single direct-edge form was), and
+the node census went 79 → 81 with its per-workflow breakdown and its comment.
+
+The changed server modules were also loaded and driven under
+`node --experimental-strip-types`, the runtime the service actually uses and
+where `tsc` and vitest both lie: 04 has 25 nodes, all seven upstreams of
+`audit-record` are transforms, both new transforms are registered, and
+`executed` is in `NODE_CONTRACT`. No model key, no database, no network egress
+needed. `VulnPipe/` is untouched, so its suite was not run. Probes were written
+to the session scratchpad, never the repository; `git status` shows no stray
+file.
+
 ## 2026-09-28 (second run) — Monday · Feature
 
 **Subject**: **J0.4, first slice** — the Alerts tab gained a second view that

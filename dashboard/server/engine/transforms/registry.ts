@@ -422,6 +422,72 @@ export function buildRegistry(deps: RegistryDeps): TransformRegistry {
     };
   });
 
+  /**
+   * The approved action ran. Composes what the chain is evidence OF.
+   *
+   * This is the one branch of 04 that touches the world, and until now it
+   * handed the `http` node's receipt — `{ status, ok, body }` — straight to
+   * `buildAuditRecord`, which found none of the five fields a record is made
+   * of and fell back to its own defaults on every one. The append-only row
+   * then read `executed: false`, `action_taken: "none"`,
+   * `routing_outcome: "unknown"` and carried no approver at all, about a
+   * containment a human had just authorised and that had just been dialled.
+   *
+   * Arriving here IS the action having been accepted: `makeHttp` routes any
+   * non-2xx to its `error` port, which `actionExecutionFailed` answers. So
+   * `executed` is not read off the receipt, it is what this port MEANS.
+   */
+  reg('actionExecuted', (input) => {
+    const b = asRecord(input);
+    // `catalog`, i.e. `enforceCatalog`'s output: the action as it was after
+    // the defence-in-depth re-check, never the one 03 proposed.
+    const routed = asRecord(b.routed);
+    const receipt = asRecord(b.receipt);
+    return {
+      routing_outcome: 'approved',
+      executed: true,
+      action_taken: String(routed.proposed_action ?? 'none'),
+      action_details: {
+        endpoint_status: typeof receipt.status === 'number' ? receipt.status : null,
+        // Written only when the catalogue actually downgraded something: a
+        // `null` reason on every executed row would read as a redaction.
+        ...(routed.action_blocked === true ? { block_reason: routed.block_reason ?? null } : {}),
+      },
+      approval: routed.approval ?? null,
+    };
+  });
+
+  /**
+   * The deadline expired, the escalation was posted, and nothing ran.
+   *
+   * Same defect as `actionExecuted` above, one branch over and in the other
+   * direction: `approvalTimedOut` had already composed the whole outcome, and
+   * the `notify` node sat BETWEEN it and the audit record, so what reached the
+   * chain was `{ ts, transport }` — a transport receipt, not an outcome. The
+   * row read `"unknown"` about the one event the approval message promised
+   * would happen.
+   *
+   * Both ports of the escalation arrive here, and the difference between them
+   * is a fact the record should carry: « nobody answered, and nobody was told
+   * either » is not the same incident as « nobody answered, and the channel
+   * has it ». `transport` being a string is what tells a posted message from
+   * the engine's `{ error }`; it is checked, not assumed.
+   */
+  reg('escalationRecorded', (input) => {
+    const b = asRecord(input);
+    const outcome = asRecord(b.outcome);
+    const delivery = asRecord(b.delivery);
+    const posted = typeof delivery.transport === 'string';
+    return {
+      ...outcome,
+      action_details: {
+        ...asRecord(outcome.action_details),
+        escalation_posted: posted,
+        ...(posted ? {} : { escalation_error: delivery.error ?? null }),
+      },
+    };
+  });
+
   reg('approvalRejected', (input) => {
     const b = asRecord(input);
     return {

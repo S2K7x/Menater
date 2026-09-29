@@ -131,7 +131,7 @@ export const NODE_CONTRACT: Record<string, string[]> = {
   '03-ai-decision': ['finalize', 'to-routing'],
   '04-action-routing': [
     'shadow-count', 'request', 'notify?', 'below-threshold', 'interpret', 'timeout',
-    'rejected', 'execute', 'execute-failed', 'audit-record', 'to-audit',
+    'rejected', 'execute', 'executed', 'execute-failed', 'audit-record', 'to-audit',
   ],
   '05-audit-log': ['normalize', 'append', 'expose', 'unusable', 'write-failed'],
   '06-error-handler': ['normalize', 'assess', 'outcome'],
@@ -537,6 +537,7 @@ export function buildCases(
       const refused = outputOf(steps, 'rejected');
       const audit = outputOf(steps, 'audit-record');
       const executed = outputOf(steps, 'execute');
+      const executedRecord = outputOf(steps, 'executed');
       const shadow = outputOf(steps, 'shadow-count');
 
       if (request) {
@@ -613,7 +614,12 @@ export function buildCases(
 
       if (executed) {
         c.executed = true;
-        c.action_taken = str(rec(executed).action ?? rec(executed).executed_action) || null;
+        // `execute` is an `http` node: its output is `{ status, ok, body }`,
+        // so the two names read here were written by nothing and the card
+        // could never say WHICH action ran. `executed` is the transform one
+        // hop on that states the outcome — the same node the audit record is
+        // composed from, so the card and the append-only row cannot disagree.
+        c.action_taken = str(rec(executedRecord).action_taken) || null;
       }
       // `below-threshold` is read DIRECTLY, not only through the audit record it
       // feeds. The reason an alert was never notified is the one thing the card

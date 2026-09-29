@@ -152,9 +152,18 @@ describe('04 — LA garantie du produit', () => {
   it('TOUTES les branches convergent vers l’audit', () => {
     // Une branche qui n'écrirait pas d'audit ferait disparaître un cas de la
     // file de triage sans laisser de trace.
+    //
+    // REACHABILITY, not a direct edge, since 2026-09-29: the two branches that
+    // touch the world end on an I/O node — `execute` (http) and
+    // `escalate-timeout` (notify) — whose output is a transport receipt and
+    // not an outcome, so each now composes its record in a transform one hop
+    // further on. What must hold is that the branch ARRIVES, and that is what
+    // this asserts; `audit-record.test.ts` claims the complementary half, that
+    // every node feeding the record is a transform. Together they are stricter
+    // than the direct-edge form was on its own.
     const terminals = ['shadow-count', 'notify-failed', 'escalate-timeout', 'rejected', 'execute', 'execute-failed'];
     for (const id of terminals) {
-      const reaches = ROUTING.edges.some((e) => e.from === id && e.to === 'audit-record');
+      const reaches = reachableFrom(ROUTING, id).has('audit-record');
       expect(reaches, `« ${id} » n'atteint pas l'audit`).toBe(true);
     }
   });
@@ -295,17 +304,20 @@ describe('le pipeline complet', () => {
   });
 
   it('stays far lighter than the 113 nodes it was ported from', () => {
-    // 15 + 9 + 16 + 23 + 8 + 8. What went: 6 sticky notes, 3 no-ops, the
+    // 15 + 9 + 16 + 25 + 8 + 8. What went: 6 sticky notes, 3 no-ops, the
     // "Build Error Ctx" nodes and their calls, the copy-only `set` nodes, and
     // 06's second entry form.
     //
     // 01 went 11 → 15 with the tuning rules; 04 went 21 → 23 with the Slack
-    // notification threshold (`notify?` and `below-threshold`). The per-workflow
-    // breakdown is asserted, not just the total: a node added here and one lost
-    // there would cancel out in a sum.
+    // notification threshold (`notify?` and `below-threshold`), then 23 → 25
+    // with `executed` and `escalated`, which state the outcome of the two
+    // branches that end on an I/O node — a receipt is not an outcome, and
+    // `buildAuditRecord` was filling all five of its fields with defaults on
+    // both. The per-workflow breakdown is asserted, not just the total: a node
+    // added here and one lost there would cancel out in a sum.
     const total = ALL.reduce((n, wf) => n + wf.nodes.length, 0);
-    expect(total).toBe(79);
-    expect(ALL.map((wf) => wf.nodes.length)).toEqual([15, 9, 16, 23, 8, 8]);
+    expect(total).toBe(81);
+    expect(ALL.map((wf) => wf.nodes.length)).toEqual([15, 9, 16, 25, 8, 8]);
   });
 
   it('aucun identifiant de workflow en double', () => {
