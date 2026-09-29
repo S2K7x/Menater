@@ -137,6 +137,76 @@ export type LlmErrorKind =
   | 'bad_output' // réponse non conforme au schéma
   | 'unknown';
 
+/** Statuses whose whole meaning is "ask somewhere else". */
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+
+/**
+ * The destination by HOST alone — never its path and never its query.
+ *
+ * A configured base URL can carry a token in either half, and this sentence is
+ * printed in a scan report. `null` when the header is not a URL at all.
+ */
+function redirectHost(location: string, from: string): string | null {
+  try {
+    return new URL(location, from).host || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * `fetch`, and a reply is never allowed to choose where the next request goes.
+ *
+ * Every call this module makes is a POST carrying two things worth stealing:
+ * the api key, in a header, and the analysed SOURCE CODE, in the body. Node
+ * follows a redirect by default and the specification strips exactly one
+ * header across an origin — measured on 22.22.2, two servers, one hop:
+ * `authorization` ABSENT at the second host, `x-goog-api-key` DELIVERED, and
+ * on a 307 or 308 the whole body replayed there. So `Authorization` was safe
+ * by an accident of the specification and nothing else was.
+ *
+ * The rule is therefore the narrowest one that covers every caller here: a
+ * redirect is never followed on a WRITE, and every call in this directory is
+ * one. The console's `fetchWithDeadline` also allows a same-host hop, because
+ * it has GET callers and a trailing-slash 301 is the commonest redirect there
+ * is; this half has none, so that branch would be a guard written for a state
+ * it can never see.
+ *
+ * A 3xx carrying no `Location` redirected nothing, and is handed back as the
+ * answer it is rather than dressed up as a redirect that did not happen.
+ */
+export async function fetchNoRedirect(
+  provider: string,
+  url: string,
+  init: RequestInit
+): Promise<Response> {
+  // `manual` hands back the 3xx itself instead of undici deciding the next
+  // address for us.
+  const response = await fetch(url, { ...init, redirect: 'manual' });
+
+  if (!REDIRECT_STATUSES.has(response.status)) return response;
+  const location = response.headers.get('location');
+  if (!location) return response;
+
+  // Node keeps the socket checked out of the pool until the body is read or
+  // cancelled, and nobody is going to read this one.
+  await response.body?.cancel().catch(() => undefined);
+
+  const host = redirectHost(location, url);
+  throw new LlmError(
+    provider,
+    'unknown',
+    `${provider}: the address answered HTTP ${response.status} and redirected this call `
+      + `${host ? `to ${host}` : 'to an address that is not a valid URL'}. VulnPipe does not `
+      + 'follow that: this request carries the analysed source code and the api key, so the '
+      + 'destination would be chosen by whoever answered. Point the provider base URL at the '
+      + 'final address.',
+    // Asking the same endpoint again returns the same 3xx. A retry here spends
+    // a paid call to learn what is already known.
+    false
+  );
+}
+
 /**
  * Réessaie un appel sur erreur transitoire (quota, serveur indisponible).
  *
