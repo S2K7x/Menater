@@ -10,7 +10,7 @@ they were — they are memory about live code, and rewriting them would lose it.
 of** — `ROADMAP.md` § 7, and the sweep that wrote that row found one branch
 where there were two.
 
-**Result**: PR #PENDING (branch `claude/great-pascal-aqrowc`).
+**Result**: PR #48 (branch `claude/great-pascal-aqrowc`).
 
 **Note on the branch name.** `NIGHTLY.md` § 5 asks for
 `claude/nightly-YYYY-MM-DD-subject`; this session was handed
