@@ -4,6 +4,168 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-29 (second run) — Tuesday · Security
+
+**Subject**: **the redirect rule stopped at the console** — VulnPipe's four
+HTTP model adapters let the endpoint they were pointed at choose where the
+next request went, carrying the analysed source code and an api key with it.
+
+**Result**: PR #49 (branch `claude/great-pascal-xlhk0g`).
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-xlhk0g` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Twenty-second entry saying so**; it is a line
+in the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: `main` at 0c0cc6a gave
+dashboard typecheck 0, **1386 passed | 1 skipped**, build clean, VulnPipe **373
+passed**, and no pull request was open. This is the *second* Tuesday run of the
+same date, so the first run's subject was taken; its entry below lists four
+leads under **Found and NOT fixed**, and this is the third of them — recorded
+there as *« a whole subject and the other half of the product; it remains a
+lead, not a roadmap row, because I have not demonstrated the abuse »*.
+Demonstrating it was therefore the first thing this session did, and it is
+priority (2): a real, reproducible defect.
+
+**What was actually wrong**, measured on Node 22.22.2 with two real servers on
+two ports and one hop — a POST carrying an api-key header and a body of source
+code:
+
+| Status | reached 2nd host | method there | `authorization` | `x-goog-api-key` | body |
+|---|---|---|---|---|---|
+| 301 | yes | GET | ABSENT | **DELIVERED** | 0 B |
+| 302 | yes | GET | ABSENT | **DELIVERED** | 0 B |
+| 303 | yes | GET | ABSENT | **DELIVERED** | 0 B |
+| 307 | yes | POST | ABSENT | **DELIVERED** | **108 B** |
+| 308 | yes | POST | ABSENT | **DELIVERED** | **108 B** |
+
+`authorization` is stripped by the specification and by nothing this project
+wrote. Everything else is delivered, and on 307/308 the analysed source code is
+replayed in full at a host the caller never named. VulnPipe exists to read code
+somebody did not write, which is usually code they may not publish.
+
+**What I learned, and could not have guessed by reading one file.**
+
+1. **The base URL is operator-configured on every one of the four.**
+   `OLLAMA_HOST`, `VULNPIPE_LLM_BASE_URL` for `custom`, and — the one I would
+   have got wrong — **`ANTHROPIC_BASE_URL`, which the SDK reads by itself**
+   (`client.js:69`). I had written the Anthropic adapter off as hardcoded
+   because `factory.ts` passes no base URL. It does not have to.
+2. **The fourth adapter is the sharpest and a call-site sweep walks past it.**
+   `anthropic.ts` calls no `fetch` — the SDK owns the socket. Probed against a
+   real 307 **before** the fix: the SDK followed it, the decoy received
+   `x-api-key` (the credential the specification does *not* strip) and 82 bytes
+   of body, and the call **returned a verdict**. A scan reading an answer from
+   a host nobody named, reported as analysis. So the structural guard has to
+   NAME that file: a sweep over call sites vouches for a file it cannot see
+   into, which is this table's *« a sweep that checked one of the two
+   catalogues »*.
+3. **The SDK's `.cause` survives, and its message does not.** A throw from a
+   custom `fetch` is wrapped into `APIConnectionError` whose message is
+   `"Connection error."` — a sentence about a call that never got an answer,
+   printed over one that did. Probed: `e.cause` is the exact instance thrown,
+   so the reason is recovered rather than re-worded.
+4. **The SDK re-issues that throw.** Six Anthropic tests sat through the real
+   backoff: the file went to **8.3 s**. A test that sleeps is one people learn
+   to ignore — already in the traps table, twice paid for. The SDK's own
+   `maxRetries` is now exposed on exactly the terms the four `retry` options
+   already are (absent = the SDK's default, so production is unchanged), and
+   the file runs in **502 ms**.
+5. **The right rule here is NARROWER than the console's.** `fetchWithDeadline`
+   also allows a same-host hop and refuses a TLS downgrade, because it has GET
+   callers. Every call in this directory is a WRITE, so both branches would be
+   guards written for states they can never see — the dead code that looks
+   load-bearing this project refuses. The whole rule collapses to *a redirect
+   is never followed on a write*, which is one of the console's three.
+
+**Do not redo.**
+
+- **Do not port `fetchWithDeadline` across.** It is in the console package,
+  which VulnPipe does not depend on and must not; and two thirds of it would be
+  unreachable here (see 5 above). `fetchNoRedirect` in
+  `nodes/shared/llm/types.ts` is the same rule at the width this half needs.
+- **Do not test this with an injected transport.** A fake hands back whatever
+  Response it was told to and ignores `redirect: 'manual'` entirely — the
+  console's own redirect tests recorded eleven staying green over a reopened
+  hole. All 21 behavioural tests here drive real sockets on loopback, and cost
+  ~110 ms in total.
+- **Do not give `AnthropicClient` a `baseURL` option to make it testable.**
+  `ANTHROPIC_BASE_URL` already exists and is the knob an operator actually
+  turns; a test-only option would have tested a path nobody uses. The env var
+  is set and **restored** per test rather than deleted, because the suite must
+  leave the environment the way it found it.
+- **Do not extend this to `claude-subscription.ts`.** It speaks to
+  `@anthropic-ai/claude-agent-sdk`, an OPTIONAL dependency resolved at runtime
+  and **not installed in this repository**, over the person's own session: no
+  api key, no configurable endpoint, nothing to point elsewhere. Covering it
+  would be untestable here and would guard nothing.
+
+**Found and NOT fixed** — the other leads from the previous runs, re-checked as
+still true tonight and untouched:
+
+- `attempts` in `auth.ts` is never swept: a record with 1–7 failures has
+  `until === 0`, so `throttle()` never deletes it and `sweep()` iterates
+  `sessions` instead. Small, unbounded, unauthenticated. **This is the best
+  remaining security lead and it is genuinely small** — it is the one I would
+  pick next.
+- The login throttle collapses to one bucket behind the `cloudflared` tunnel.
+  Still deliberately not mine: the remedy is to trust a forwarded header, and
+  doing that without a trusted-proxy list is a worse hole than the one it closes.
+- `findingAlertId` in `server/findings.ts` still documents `NUL` as its
+  separator and uses `.join(' ')`.
+
+**Verified** (Node 22.22.2):
+
+| Command | Result |
+|---|---|
+| `dashboard`: `npm run typecheck` | 0 errors |
+| `dashboard`: `npm test` | **1386 passed, 1 skipped** — unchanged, nothing touched there |
+| `dashboard`: `npm run build` | ✓ 350 ms, bundle unchanged |
+| `VulnPipe`: `npx tsc --noEmit` | 0 errors |
+| `VulnPipe`: `npm test` | **407 passed** (373 before: +34, nothing skipped or weakened) |
+| `VulnPipe`: `npm run qa` | **36/36** |
+
+Checked **RED first**: the behavioural tests were written before the fix and 16
+of the first 18 failed on unmodified `main`, with the failure showing the client
+*believing a verdict returned by the decoy host*. The two that passed are the
+controls, and they pass before AND after on purpose. Then by mutation, one at a
+time, restoring in between:
+
+| Mutation | Result |
+|---|---|
+| the helper loses `redirect: 'manual'` | RED — 16 |
+| the helper returns the 3xx instead of refusing it | RED — 16 |
+| `openai-compatible` goes back to a bare `fetch()` | RED — 7 |
+| the `LlmError` pass-through guard is removed from a catch | RED — 1 |
+| the primitive's own `fetch` is hidden from the sweep | RED — 1 |
+| the helper refuses EVERY answer (an over-broad fix) | RED — 2 |
+| a 3xx with no `Location` is dressed up as a redirect | RED — 1 |
+| the SDK transport is removed from `anthropic.ts` | RED — 7 |
+| the `APIConnectionError` cause unwrap is removed | RED — 1 |
+
+Two of those mutations claim the OTHER side and are the reason the fix cannot
+be widened into noise: a fix that refused every answer, and one that called a
+`Location`-less 3xx a redirect, are both caught by controls that are green
+before and after.
+
+**One mutation I wrote was wrong, not the test.** My first « refuses every
+answer » mutation was `if (false) return response;`, which still falls through
+to the `if (!location) return response;` line — so it was green, and for a
+moment looked like a hole in the test. It is not: the corrected mutation (force
+a `Location` when the header is absent) is RED on both controls. Worth writing
+down because a green mutation is normally a finding, and this one was a bad
+ruler.
+
+The changed modules were also driven under `node --experimental-strip-types` —
+the runtime `src/orchestration/server.ts` and `src/mcp-server/server.ts`
+actually use, and where `tsc` and vitest both lie — against a real 307: all
+three direct adapters refuse, `retryable=false`, the sentence names the host,
+and the decoy is reached **0 times**. No model key, no database and no network
+egress are needed by any of it. Probes were written to the session scratchpad
+and deleted; `git status` shows no stray file, and no lockfile moved.
+
 ## 2026-09-29 — Tuesday · Security
 
 **Subject**: **the append-only chain did not name the action it is evidence

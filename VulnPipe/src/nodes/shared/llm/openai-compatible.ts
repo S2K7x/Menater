@@ -34,6 +34,7 @@
 
 import {
   CACHE_MIN_SYSTEM_CHARS,
+  fetchNoRedirect,
   LlmError,
   parseJsonOutput,
   withRetry,
@@ -146,7 +147,7 @@ export class OpenAiCompatibleClient implements LlmClient {
 
     let response: Response;
     try {
-      response = await fetch(`${this.baseUrl}/chat/completions`, {
+      response = await fetchNoRedirect(this.provider, `${this.baseUrl}/chat/completions`, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
@@ -169,6 +170,11 @@ export class OpenAiCompatibleClient implements LlmClient {
         signal: AbortSignal.timeout(this.timeoutMs),
       });
     } catch (error) {
+      // An error that already explains itself passes through untouched. This
+      // catch is for a call that could not be MADE; a refused redirect is an
+      // answer, and wording it "impossible" would be a sentence reachable from
+      // a state it does not describe — and would mark it retryable.
+      if (error instanceof LlmError) throw error;
       throw new LlmError(
         this.provider,
         'unavailable',

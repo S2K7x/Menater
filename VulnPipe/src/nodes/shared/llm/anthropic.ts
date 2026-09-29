@@ -27,6 +27,7 @@ import Anthropic from '@anthropic-ai/sdk';
 
 import {
   cacheableSystem,
+  fetchNoRedirect,
   LlmError,
   parseJsonOutput,
   withRetry,
@@ -54,6 +55,16 @@ export interface AnthropicOptions {
    * est le défaut de `withRetry` — il n'y a rien à régler pour l'utilisateur.
    */
   retry?: RetryOptions;
+  /**
+   * The SDK's OWN retry layer, which sits under `retry` above.
+   *
+   * Exposed for the same reason and on the same terms: the SDK re-issues
+   * anything its transport throws, so a test asserting that a refusal is
+   * reported would sit through the real backoff — 8.3 s for six of them here,
+   * and an intermittent test is one people learn to ignore. Absent leaves the
+   * SDK's own default untouched, so production behaviour is unchanged.
+   */
+  maxRetries?: number;
 }
 
 export class AnthropicClient implements LlmClient {
@@ -66,8 +77,22 @@ export class AnthropicClient implements LlmClient {
   private readonly retry?: RetryOptions;
 
   constructor(options: AnthropicOptions = {}) {
+    // A reply must not choose where the next request goes — see
+    // `fetchNoRedirect`. This adapter needs it as much as the other three: the
+    // SDK reads `ANTHROPIC_BASE_URL`, so the endpoint is operator-configured
+    // the same way, and it authenticates with `x-api-key`, which the
+    // specification does NOT strip across an origin. Measured on 22.22.2
+    // against a real 307: the key AND the analysed code arrived at the second
+    // host, and the SDK reported success.
+    const transport = {
+      fetch: (url: string | URL | Request, init?: RequestInit) =>
+        fetchNoRedirect('anthropic', String(url), init ?? {}),
+      ...(options.maxRetries === undefined ? {} : { maxRetries: options.maxRetries }),
+    };
     // Le SDK résout aussi ANTHROPIC_API_KEY / profil `ant auth login` seul.
-    this.client = options.apiKey ? new Anthropic({ apiKey: options.apiKey }) : new Anthropic();
+    this.client = options.apiKey
+      ? new Anthropic({ apiKey: options.apiKey, ...transport })
+      : new Anthropic(transport);
     this.model = options.model ?? DEFAULT_ANTHROPIC_MODEL;
     this.maxTokens = options.maxTokens ?? 8_000;
     this.effort = options.effort;
@@ -162,6 +187,14 @@ export class AnthropicClient implements LlmClient {
       }
       if (error instanceof Anthropic.RateLimitError) {
         throw new LlmError('anthropic', 'rate_limit', 'Quota Anthropic dépassé.', true);
+      }
+      // The SDK wraps whatever its transport throws into an
+      // `APIConnectionError` whose message is "Connection error." — a sentence
+      // about a call that never got an answer. A refused redirect DID get one,
+      // and it said "ask somewhere else". Measured: `.cause` is the exact
+      // instance thrown, so the reason is recovered rather than re-worded.
+      if (error instanceof Anthropic.APIConnectionError && error.cause instanceof LlmError) {
+        throw error.cause;
       }
       if (error instanceof Anthropic.APIConnectionError) {
         throw new LlmError('anthropic', 'unavailable', 'API Anthropic injoignable.', true);

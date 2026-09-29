@@ -29,6 +29,7 @@
  */
 
 import {
+  fetchNoRedirect,
   LlmError,
   parseJsonOutput,
   withRetry,
@@ -116,13 +117,20 @@ export class GeminiClient implements LlmClient {
   private async post(request: LlmRequest): Promise<{ response: Response; json: GeminiResponseBody }> {
     let response: Response;
     try {
-      response = await fetch(`${this.baseUrl}/models/${this.model}:generateContent`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-goog-api-key': this.apiKey },
-        body: JSON.stringify(this.buildBody(request)),
-        signal: AbortSignal.timeout(this.timeoutMs),
-      });
+      response = await fetchNoRedirect(
+        'gemini',
+        `${this.baseUrl}/models/${this.model}:generateContent`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-goog-api-key': this.apiKey },
+          body: JSON.stringify(this.buildBody(request)),
+          signal: AbortSignal.timeout(this.timeoutMs),
+        }
+      );
     } catch (error) {
+      // See the note in `openai-compatible.ts`: a refused redirect explains
+      // itself and must not be re-worded as a call that could not be made.
+      if (error instanceof LlmError) throw error;
       throw new LlmError(
         'gemini',
         'unavailable',

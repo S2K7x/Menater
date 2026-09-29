@@ -26,6 +26,7 @@
  */
 
 import {
+  fetchNoRedirect,
   LlmError,
   parseJsonOutput,
   withRetry,
@@ -89,7 +90,7 @@ export class OllamaClient implements LlmClient {
 
     let response: Response;
     try {
-      response = await fetch(`${this.baseUrl}/api/chat`, {
+      response = await fetchNoRedirect('ollama', `${this.baseUrl}/api/chat`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -107,6 +108,9 @@ export class OllamaClient implements LlmClient {
         signal: AbortSignal.timeout(this.timeoutMs),
       });
     } catch (error) {
+      // See the note in `openai-compatible.ts`: a refused redirect explains
+      // itself and must not be re-worded as a server that is not running.
+      if (error instanceof LlmError) throw error;
       // Serveur local arrêté ou tombé (fait n°3) — jamais un verdict.
       throw new LlmError(
         'ollama',
