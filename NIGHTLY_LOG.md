@@ -4,6 +4,183 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-09-30 — Wednesday · Tests and QA
+
+**Subject**: **the relay to the code-analysis service swallowed its own
+failure** — when that service died mid-answer the console replied 200, a
+truncated body, and no end, so the scan report spun for ever and the live
+timeline froze with no message. `server/vulnpipe.ts` had no test file at all.
+
+**Result**: PR #50, **merged automatically by `automerge.yml`** 2 min after it
+was opened, all four checks green (branch `claude/great-pascal-efkbgc`). This
+journal entry is a SECOND pull request, and the reason is the next paragraph.
+
+**READ THIS BEFORE FOLLOWING NIGHTLY.md § 5 — `automerge.yml` will beat you to
+it.** § 5 says open the PR and *then* add the journal entry at the top of this
+file, committing it in the same PR. That ordering cannot work on this repository
+any more: `automerge.yml` merges a nightly PR as soon as CI is green, and CI
+takes about **45 seconds**. Measured tonight — CI green at `01:02:33`, merge at
+`01:02:45`, and my journal commit created at `01:02:47`: **the journal lost the
+race by two seconds** and PR #50 merged without it. A merged PR cannot carry
+follow-up work, so the entry had to be rebased onto the new `main` and opened as
+its own PR. **Write the journal entry BEFORE opening the pull request**, with the
+PR number left out or filled in afterwards — one PR, and the memory actually
+lands. Two earlier nights got away with a separate *« Journal: record the PR
+number »* commit (see PRs #47 and #48) only because nothing merged in between.
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-efkbgc` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Twenty-third entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: `main` at ca7c2fe gave
+dashboard typecheck 0, **1386 passed | 1 skipped**, build clean, VulnPipe **407
+passed**, and no pull request was open. Wednesday's brief says to cover FAILURE
+paths and to *hunt the places where a `catch` returns green*. The sweep for
+`catch(() => literal)` turned up mostly rows this table has already closed; what
+it did turn up was a module with **no test file**, whose entire job is to sit
+between the browser and a separate process that can die — and whose own header
+comment asserts that *« un service absent n'est pas une panne de la console »*.
+That assertion is true of a service that never answered and false of one that
+stopped halfway. Priority (2): a real, reproducible defect.
+
+**What was actually wrong**, measured on Node 22.22.2 with real loopback sockets
+on both legs, one upstream failure shape per run:
+
+| The service… | Before | After |
+|---|---|---|
+| dies mid-report (`content-length` declared) | 200, 13 B, **never ends** | `TypeError: terminated` / *other side closed* |
+| dies mid-event-stream | 200, one event, **never ends** | same |
+| chunked, no terminating chunk | 200, **never ends** | same |
+| ends cleanly short of its declared length | 200, **never ends** | same |
+| never listening | 503 naming the service | unchanged |
+| dies before writing a head | 503 naming the cause | unchanged |
+
+**What I learned, and could not have guessed by reading the file.**
+
+1. **`pipe()` does not forward a failure of its SOURCE, and does not crash
+   either.** I expected an unhandled `'error'` to kill the process — the
+   `static.ts` row in the traps table had primed me for exactly that. Probed
+   with and without a listener on `upstreamRes`: the process survives, because
+   `Stream.prototype.pipe` prepends its own handler. It unpipes and returns, so
+   the destination is left OPEN. **Worse than crashing**: a crash is visible.
+2. **`IncomingMessage.complete` is a precise discriminator, and that was worth
+   probing rather than assuming.** `true` on a whole report, a 204, a 304, a
+   HEAD, an empty 200, a 320 kB body in forty chunks and a stream a finished
+   scan closed; `false` on all four unfinished shapes. A fix keyed on anything
+   looser would have cut good answers.
+3. **The fourth shape was hidden by a SECOND defect in the same function.**
+   Hop-by-hop headers were copied both ways, so the service saw the browser's
+   `connection: keep-alive` on every request — the `new Agent({ keepAlive:
+   false })` this file carries fifty lines of comment to justify governed one
+   side of the hop only. Under keep-alive Node drops an under-delivering socket
+   **1.5 s** late instead of at once, i.e. after the browser has given up.
+4. **Fixing the request side ALONE made it worse.** With the browser's header
+   gone the service answers `connection: close`, that travelled on to the
+   browser, the browser stopped reading chunked framing and took
+   end-of-connection as end-of-body — so a cut event stream arrived as a **200
+   with a body**. The two tests that had just gone green went red in a new way.
+   *A rule about one hop is not a rule until both hops have it.*
+5. **Three of nine mutations are green on purpose, and finding that out
+   corrected the fix twice.** See **Do not redo** — this is the most
+   transferable thing in the night.
+
+**Do not redo.**
+
+- **Do not guard the cut on `res.destroyed`.** My first version did, and I had
+  *measured* it as a real trap: for the short-clean shape the response object is
+  already `destroyed` while the socket to the browser is still open and waiting,
+  so reading that flag as « somebody has already answered » put the hang back
+  for one shape in four. **Then the header fix made that state stop occurring.**
+  The guard and its paragraph of justification had become a comment describing
+  nothing — a measurement that expired. Removed.
+- **Do not add a second guard on `res.writableEnded`.** It sat beside
+  `complete`, either one sufficient, so no single mutation could fail on
+  removing either. **Two guards where one suffices is a line no test can fail
+  on.** Removed; `complete` is kept because it is the handler's *predicate*
+  (`close` fires on both outcomes), not a defence.
+- **Do not try to write a test that claims the `complete` test.** I spent real
+  time on this and it cannot be done from here. Destroying a response `pipe()`
+  has already ended is a no-op on this Node: `res.writableLength` is **0** by
+  then, because backpressure means the relay cannot finish reading the service
+  until the browser has absorbed everything. Probed with a deliberately slow
+  reader (16 kB every 20 ms) at 2 MB and 8 MB: at 2 MB the queue is 0 at
+  completion; at 8 MB the upstream close does not fire within 3 s at all. The
+  connection survives too, so even a keep-alive reuse assertion stays green. The
+  PR says this out loud rather than implying coverage.
+- **Do not use a response double.** A fake cannot vouch for framing, for a
+  socket that dies, or for whether a connection survives — the lesson
+  `fetchWithDeadline`'s redirect tests and `static.ts`'s compression tests
+  already paid for. All 17 tests drive real sockets and cost ~0.5 s in total.
+- **Do not assert that the service sees no `connection` header.** It sees
+  `connection: close`, written by the agent — that IS the fix. And Node puts its
+  own `Keep-Alive: timeout=5` on the console's answer, so asserting that header
+  is absent fails over correct behaviour. Both were my tests being wrong about
+  the mechanism, not the code.
+- **Do not `res.end()` instead of cutting.** On a chunked answer that writes the
+  terminating chunk, so a truncated body arrives as a well-formed HTTP message
+  and the client blames the REPORT for being unreadable when the SERVICE died.
+  A mutation carries it.
+- **Do not open the PR before writing the journal entry.** See **Result** above:
+  `automerge.yml` merged PR #50 two seconds before the journal commit existed, so
+  the night's memory needed a second PR. The ordering in NIGHTLY.md § 5 predates
+  auto-merge.
+- **`pkill -f <script>.ts` kills the shell that runs it**, because `-f` matches
+  the bash command line containing the name. It ate a heredoc mid-write and cost
+  two confusing minutes.
+
+**Found and NOT fixed.**
+
+- **The relay's two operator-facing sentences are in French** — *« Le service
+  d'analyse de code ne repond pas sur … Le demarrer : `npm run serve` … »* and
+  the injoignable variant, on the 503 path. They render only when the analysis
+  service is down, which is why the English-only sweep never reached them; same
+  family as the scan-report strings in C0.24. Deliberately not fixed: they are
+  route answers, so `server/i18n.ts` should own them, but the field they travel
+  in (`error` / `plain_language_summary`) is read by the VulnPipe client, which
+  has a catalogue of its own. **That is a decision, not a translation** — it is
+  the PR's « Decision for a human » and now sits in ROADMAP § 7 beside the
+  engine's French strings.
+- **No general English-only sweep exists.** `n8n-removed.test.ts` walks the
+  catalogues for a stale NAME; nothing hunts French prose, and a grep for
+  accented characters over `server/` and `src/` hits test files full of
+  legitimate French comments. Writing one is its own pass.
+- **A stalled upstream is still unhandled.** This closes answers that *stop*; a
+  service that goes quiet and holds the connection needs an idle timeout, and
+  that threshold is a policy number — an SSE stream is legitimately idle for
+  minutes. Not demonstrated against the real service, so deliberately not a
+  roadmap row either.
+- The three leads carried by the previous nights, re-checked as still true and
+  untouched: `attempts` in `auth.ts` is never swept (still the best small
+  security lead); the login throttle collapses to one bucket behind the tunnel
+  (still deliberately not mine); `findingAlertId` still documents `NUL` as its
+  separator and uses `.join(' ')`.
+
+**Verified** (Node 22.22.2):
+
+| Command | Result |
+|---|---|
+| `dashboard`: `npm run typecheck` | 0 errors |
+| `dashboard`: `npm test` | **1403 passed, 1 skipped** (1386 \| 1 before: +17) |
+| `dashboard`: `npm run build` | ✓ 307 ms, bundle byte-identical |
+| `VulnPipe`: `npx tsc --noEmit` | 0 errors |
+| `VulnPipe`: `npm test` | **407 passed** — untouched |
+
+Checked **RED first**: the four shapes were written before the fix and all four
+failed on unmodified `main`, the file taking **16.1 s** because each one sat
+until its own abort; it runs in **0.5 s** now. One early version of the second
+test block passed before the fix for the wrong reason — a request that hangs
+until it is aborted has no body either, so *« no half-answer is handed over »*
+was vacuous on its own. Folded into one test per shape so it cannot pass
+vacuously. Then by mutation, one at a time, restoring in between: 6 of 9 red,
+the 3 green ones documented above and in the PR. The changed module was also
+driven under `node --experimental-strip-types` — the runtime the service uses,
+where `tsc` and vitest both lie — against all six shapes: each settles within
+~30 ms of the failure. No model key, no database and no network egress were
+needed by any of it. Ten probes were written to `dashboard/scripts/` and
+deleted; `git status` shows only the four intended files, and no lockfile moved.
+
 ## 2026-09-29 (second run) — Tuesday · Security
 
 **Subject**: **the redirect rule stopped at the console** — VulnPipe's four

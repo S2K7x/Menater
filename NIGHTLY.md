@@ -187,6 +187,14 @@ Branch: `claude/nightly-YYYY-MM-DD-short-subject`. The `claude/` prefix is
 mandatory — it is the only one the platform accepts. Never commit directly to
 the default branch, never `--force`, never rewrite history, never `--no-verify`.
 
+**Write your `NIGHTLY_LOG.md` entry BEFORE you open the pull request**, and
+commit it with the code. `automerge.yml` merges a nightly PR as soon as CI is
+green, which takes about 45 seconds — so an entry added *after* the PR exists
+loses a race it cannot win, and a merged PR cannot carry it. Measured on
+2026-09-30: CI green at `01:02:33`, merged at `01:02:45`, journal commit at
+`01:02:47` — two seconds late, and the night's memory needed a second PR.
+Leave the PR number out, or fill it in afterwards only if nothing has merged.
+
 Open the PR with `gh pr create`. Body, in this order:
 
 ```markdown
@@ -222,7 +230,8 @@ without success, an invalidated hypothesis.
 ```
 
 That file is your memory between nights: be as precise about dead ends as about
-successes. Commit it in the same PR.
+successes. Commit it in the same PR — which means writing it before you open
+that PR, for the reason given above.
 
 ## Step 6 — The Discord message
 
