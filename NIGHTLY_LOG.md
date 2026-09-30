@@ -157,6 +157,14 @@ on both legs, one upstream failure shape per run:
   (still deliberately not mine); `findingAlertId` still documents `NUL` as its
   separator and uses `.join(' ')`.
 
+**Follow-up, third PR**: the gate item *« `CLAUDE.md` is up to date »* was missed
+on one number. Its Commands block documented `1386 tests`, which THIS night's
++17 invalidated — a future night running the suite and reading 1403 against a
+documented 1386 would stop to work out what broke. Corrected to 1403, and
+`VulnPipe` from `371` to `407` while measured (that one had drifted by 36 on its
+own). The `889 tests` in the QA-pass section is deliberately LEFT: it records
+what that pass measured at the time, and a historical figure is not a stale one.
+
 **Verified** (Node 22.22.2):
 
 | Command | Result |

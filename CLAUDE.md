@@ -904,11 +904,11 @@ npm run serve:vulnpipe # code analysis engine alone
 npm run tunnel         # Cloudflare tunnel to the alert entry point
                        # (refuses to start without a shared secret)
 npm run typecheck
-npm run test           # 1386 tests, 1 skipped (the one needing a database)
+npm run test           # 1403 tests, 1 skipped (the one needing a database)
 npm run build
 
 # VulnPipe has its own suite
-cd VulnPipe && npm test   # 371 tests
+cd VulnPipe && npm test   # 407 tests
 cd VulnPipe && npm run qa # QA + stress pass: 36 checks over 10 areas
 ```
 
