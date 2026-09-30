@@ -65,6 +65,22 @@ export function isVulnPipePath(path: string): boolean {
   return path === VULNPIPE_PREFIX || path.startsWith(`${VULNPIPE_PREFIX}/`);
 }
 
+/**
+ * The headers that describe ONE HOP rather than the message (RFC 9110 § 7.6.1).
+ *
+ * They speak about the connection they arrived on. Copying them to the other hop
+ * lets one end decide something that is not its business, and the two directions
+ * cost differently — see the comment at each call site.
+ */
+const HOP_BY_HOP = [
+  'connection', 'keep-alive', 'te', 'trailer', 'transfer-encoding', 'upgrade',
+  'proxy-authenticate', 'proxy-authorization',
+] as const;
+
+function stripHopByHop(headers: Record<string, unknown>): void {
+  for (const name of HOP_BY_HOP) delete headers[name];
+}
+
 export function proxyToVulnPipe(req: IncomingMessage, res: ServerResponse, url: URL): void {
   const upstream = target();
   // Le prefixe est un artefact de la console : VulnPipe expose `/estimate`,
@@ -79,6 +95,34 @@ export function proxyToVulnPipe(req: IncomingMessage, res: ServerResponse, url: 
   // On ne relaie pas de reponse compressee : rien ici ne la decompresserait.
   delete headers['accept-encoding'];
 
+  // THE HEADERS THAT DESCRIBE ONE HOP MUST NOT TRAVEL TO THE NEXT.
+  //
+  // `Connection` and the fields it governs (RFC 9110 § 7.6.1) describe the
+  // connection they arrived on, not the request. Copying them forwarded the
+  // BROWSER's choice to a socket the browser knows nothing about — and the
+  // browser's choice is always `keep-alive`, which is the exact opposite of
+  // what the agent above was built to say. Measured: the upstream saw
+  // `connection: keep-alive` on every relayed request, so `keepAlive: false`
+  // governed only this side of the hop; VulnPipe held each socket open waiting
+  // for a second request the agent will never send on it.
+  //
+  // It is also what HID the fourth way an answer can stop early. A service that
+  // ends short of the `content-length` it announced has its socket dropped by
+  // Node at once under `Connection: close` — and 1.5 s later under keep-alive,
+  // i.e. only once the browser gave up, which is after the operator has.
+  //
+  // `transfer-encoding` goes too: the framing of the body we are about to write
+  // is ours to declare, and `httpRequest` picks it from what we send.
+  //
+  // THE SAME RULE APPLIES TO THE ANSWER, and applying it to the request alone
+  // is what made this worse rather than better. With the browser's
+  // `keep-alive` gone, the upstream answers `connection: close` — which was
+  // copied straight on to the browser, so the browser stopped reading the
+  // chunked framing and took end-of-connection as end-of-body. A cut event
+  // stream then arrived as a 200 with a body: the very confusion the cut below
+  // exists to remove, rebuilt by the header that describes the OTHER hop.
+  stripHopByHop(headers);
+
   const forwarded = httpRequest(
     {
       protocol: upstream.protocol,
@@ -90,11 +134,51 @@ export function proxyToVulnPipe(req: IncomingMessage, res: ServerResponse, url: 
       agent,
     },
     (upstreamRes) => {
+      const answer = { ...upstreamRes.headers };
+      stripHopByHop(answer);
       res.writeHead(upstreamRes.statusCode ?? 502, {
-        ...upstreamRes.headers,
+        ...answer,
         // Un scan n'est jamais un contenu a mettre en cache.
         'Cache-Control': 'no-store',
       });
+
+      // AN ANSWER THAT STOPPED HALFWAY MUST NOT LOOK LIKE ONE STILL ARRIVING.
+      //
+      // `pipe()` does not forward a failure of its SOURCE: it unpipes and
+      // returns. So when the analysis service died mid-answer — out of memory
+      // on a large repository, a container restart, a ctrl-C — the three
+      // events that said so (`aborted`, then `error` with `ECONNRESET`, then
+      // `close`) were all swallowed, and THIS response was left open: HTTP
+      // 200, a truncated body, and no end. The report spun for ever and the
+      // live timeline froze with no message.
+      //
+      // `close` fires on BOTH outcomes, so `complete` is not a guard bolted on
+      // to this handler — it IS the handler's predicate. Measured on Node
+      // 22.22.2 it is `true` on every whole answer (a report, a 204, a 304, a
+      // HEAD, a 160 kB body arriving in twenty chunks, a stream closed normally
+      // by a finished scan) and `false` on all four ways an answer can stop
+      // early.
+      //
+      // Worth knowing before anybody "simplifies" it: removing the test is
+      // green against every assertion in `vulnpipe.test.ts`, and that is not a
+      // hole in them. Destroying a response `pipe()` has already ended is a
+      // no-op on this Node — measured: `res.writableLength` is 0 by then,
+      // because backpressure means the relay cannot finish reading the service
+      // until the browser has absorbed everything, and the connection survives
+      // for the next request either way. So the line buys nothing TODAY and is
+      // kept because it states the condition truthfully rather than relying on
+      // a graceful-destroy nicety nothing in the HTTP module promises.
+      //
+      // The head is already gone, so the status code can no longer say
+      // anything; what is left is to fail the transfer the way the upstream
+      // failed it, which is also what the browser would have seen with no relay
+      // in between. Ending instead would write a terminating chunk and hand a
+      // truncated body over as a whole one.
+      upstreamRes.on('close', () => {
+        if (upstreamRes.complete) return;
+        res.destroy();
+      });
+
       upstreamRes.pipe(res);
     },
   );
