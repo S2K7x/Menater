@@ -164,15 +164,32 @@ leads rather than conclusions:
   step.* What is stale is its own comment — *« à la publication du workflow »*,
   *« quand quelqu'un les écrit dans le formulaire »* — which describes the n8n
   editor. A documentation row, not a bug.
-- The three leads carried by previous nights, untouched again: `attempts` in
+- **WITHDRAWN, and this is the most useful thing in tonight's entry.** The lead
+  recorded on 2026-09-28 and repeated on 09-29 and 09-30 — *« `findingAlertId`
+  says `NUL` as the separator and the code is `.join(' ')`, a space »* — **is
+  false, and there is no defect.** `server/findings.ts` really does join on a
+  literal **NUL byte**, and the comment above it is correct. Verified three
+  ways tonight rather than read a fourth time: `cat -A` renders the argument as
+  `'^@'`, `file` calls the whole module `data` rather than text, and
+  `open(...,'rb')` gives `b"].join('\x00'))"` with exactly one `0x00` in the
+  file. **A byte you cannot see is not a byte that is absent.** `cat`, every
+  file-reading tool in this harness and most editors render a NUL as nothing or
+  as whitespace, so a separator that was right looked like a space to three
+  successive nights, and the first of them filed it as a bug with a worked
+  collision — against code that cannot collide. Two lessons. One: a defect about
+  a DELIMITER, an encoding or a control character has to be read at byte level
+  before it is filed, and the tell was there all along — `grep` reports
+  `server/findings.ts` and `server/intel/lookup.ts` as **binary** and needs
+  `-a`, which is only true of a file holding a NUL. Two: a lead carried forward
+  in this journal is still a claim, and re-copying it is not re-checking it. The
+  real question a future night may want to answer is a different and much
+  smaller one: whether a lone NUL byte in a TypeScript source file is worth
+  keeping, given that it makes two modules invisible to a plain `grep` sweep —
+  `'\u0000'` is the same byte and greps normally. That is a readability call,
+  not a bug.
+- The two other leads carried by previous nights, untouched again: `attempts` in
   `auth.ts` is never swept (entries with `until === 0` live for the process's
-  life); the login throttle collapses to one bucket behind the tunnel; and
-  `findingAlertId` in `server/findings.ts` still documents `NUL` as its
-  separator and uses `.join(' ')`. I opened that last one tonight and left it:
-  the collision needs an interior space landing exactly on a delimiter, which
-  today's VulnPipe output cannot produce (`str()` trims, so no field can carry a
-  leading or trailing one), and the fix changes **every** promoted alert id.
-  Still worth a night for the false comment alone.
+  life), and the login throttle collapses to one bucket behind the tunnel.
 
 **Verified** (Node 22.22.2, `dashboard/`):
 
