@@ -284,3 +284,46 @@ describe('a source held back by the backoff says so', () => {
     expect(banner.textContent).toMatch(/Poll now/);
   });
 });
+
+describe('a poll whose window was clipped does not print a green check', () => {
+  /** A source that answered, delivered nothing, and left a gap behind it. */
+  const clipped = (unaskedSince: string | null) => ({
+    ...WITH_SOURCE,
+    state: {
+      running: true,
+      cursors: {
+        generic: {
+          since: null, lastPollAt: new Date().toISOString(), lastError: null,
+          received: 0, failures: 0, nextAttemptAt: null,
+        },
+      },
+      last: [{
+        source: 'generic', accepted: 0, unusable: 0, error: null,
+        since: null, nextAttemptAt: null, unaskedSince,
+      }],
+    },
+  });
+
+  it('says what was never requested, and warns rather than reassures', async () => {
+    // Three days unreachable, then an answer. The poll SUCCEEDED — no error,
+    // no backoff — and the window it used reached back one day, so two days of
+    // this source's history were requested by nobody and never will be.
+    mount(clipped(new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString()));
+    const banner = await screen.findByText(/never requested/);
+    expect(banner.textContent).toMatch(/had not answered for about 3 d/);
+    // GREEN IS EARNED. A clipped poll under the same check as a complete one is
+    // this product's own defining defect, on the tab that says how alerts
+    // arrive — so the row carries the warning tone, not the quiet one.
+    expect(banner.closest('.soc-banner-warn')).not.toBeNull();
+    expect(banner.closest('.soc-quiet-ok')).toBeNull();
+  });
+
+  it('leaves a poll that covered its gap alone', async () => {
+    // The boundary, claimed on purpose: the common case must keep its quiet
+    // green line, or the warning becomes the permanent alarm nobody reads.
+    mount(clipped(null));
+    const banner = await screen.findByText(/alerts collected/);
+    expect(banner.textContent).not.toMatch(/never requested/);
+    expect(banner.closest('.soc-quiet-ok')).not.toBeNull();
+  });
+});

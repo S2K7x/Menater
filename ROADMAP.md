@@ -468,6 +468,31 @@ body cap, and the timer's cadence.
 
 Still open in N6/N8: severity thresholds as variables, fingerprint dedup.
 
+### ~~N5.3 — the hole N5.1 closed, re-opened by the backoff N5.1 added~~ ✅
+
+One defect, and the two halves of it shipped in the same pass. N5.1 set the
+cursor-less lookback to `interval + overlap`, on the stated grounds that it is
+longer than the time since the previous poll; N5.1 also added the failure
+backoff, which SKIPS a source for up to thirty minutes. From that night on, a
+source that had never delivered — the only population the lookback exists for,
+since the cursor moves only onto data we delivered — lost every alert raised
+inside a skipped stretch: measured at **18 min 30 s unasked** after a single
+twenty-minute backoff, silently, under a green check.
+
+The window is now anchored on `lastPollAt`, the instant this source last
+answered, minus the overlap; the old lookback is kept as a floor so the change
+can only ever widen a window; and it is capped at **24 h**, because anchoring on
+an outage makes the window as wide as the outage and a week in one request is
+how a response is refused for its size — which backs the source off and widens
+it again. What the cap leaves out is reported on `PollOutcome.unaskedSince` and
+the source's row takes the warning tone, because a clipped poll under the same
+green check as a complete one is this product's defining defect on the tab that
+says how alerts get in.
+
+Found in the leads of the previous night's journal; reproduced before it was
+fixed, by driving the real `pollSource` on one fake clock and reading the fetch
+stub's request log. See the traps table in `CLAUDE.md` for the general rule.
+
 ### Two pre-existing gaps found while doing this
 
 Neither was introduced by N, and neither is fixed by it. Both concern 02:

@@ -127,6 +127,7 @@ export interface ConsoleDictionary {
       lastError: (message: string) => string;
       backingOff: (delay: string) => string;
       unusable: (count: number) => string;
+      unasked: (age: string) => string;
     };
   };
 
@@ -1284,6 +1285,17 @@ const EN: ConsoleDictionary = {
         `${count} item${count === 1 ? '' : 's'} could not be turned into an alert: `
         + 'no alert id, or nesting past what the pipeline can read. '
         + `${count === 1 ? 'It was' : 'They were'} counted, not silently skipped.`,
+      // A CLIP IS A LOSS, AND IT IS SAID. The window is anchored on the last
+      // answer this source gave, so an outage widens it — and past a point it
+      // is capped, because asking a busy source for a week in one request is
+      // how a response is refused for its size and the source backed off for
+      // ever. What the cap leaves out is gone from this console, so the row
+      // names it rather than printing the same green check as a poll that
+      // covered everything.
+      unasked: (age) =>
+        `This source had not answered for about ${age} \u2014 longer than one poll re-reads. `
+        + 'Anything it raised before that window was never requested, and will not be: '
+        + 'it is still at the source, it was simply not collected here.',
     },
   },
 

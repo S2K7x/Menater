@@ -52,6 +52,12 @@ export interface PollOutcome {
   error: string | null;
   since: string | null;
   nextAttemptAt: string | null;
+  /**
+   * The start of a stretch of history the poll did not request, because the
+   * gap since this source last answered is wider than one poll may re-read.
+   * `null` when nothing was left out, and when no poll ran.
+   */
+  unaskedSince: string | null;
 }
 
 export interface IngestionPayload {
