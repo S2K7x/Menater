@@ -47,7 +47,9 @@ const NOW = new Date('2026-09-04T10:00:00.000Z');
  * transform, every guardrail and every wire is the real one, which is the only
  * way a field-name mismatch can surface.
  */
-function assemble(opts: { rules?: unknown[]; dedup?: boolean; live?: boolean } = {}) {
+function assemble(
+  opts: { rules?: unknown[]; dedup?: boolean; live?: boolean; chatRefuses?: boolean } = {},
+) {
   const store = new MemoryRunStore();
   /** Every address the pipeline dialled, so a live run can be checked. */
   const calls: string[] = [];
@@ -89,6 +91,15 @@ function assemble(opts: { rules?: unknown[]; dedup?: boolean; live?: boolean } =
     newToken: () => 'approval-token',
     fetch: (async (url: string) => {
       calls.push(String(url));
+      if (opts.chatRefuses === true && String(url).includes('slack.com')) {
+        // THE SHAPE A SLACK REFUSAL ACTUALLY TAKES: HTTP 200 with
+        // `ok: false`. The status code says nothing — that is the trap
+        // CLAUDE.md records about this transport — so the node reads the
+        // envelope, throws, and `post-approval` leaves by its `error` port.
+        return new Response('{"ok":false,"error":"channel_not_found"}', {
+          status: 200, headers: { 'content-type': 'application/json' },
+        });
+      }
       return new Response('{"ok":true,"ts":"1"}', {
         status: 200, headers: { 'content-type': 'application/json' },
       });
@@ -474,5 +485,107 @@ describe('an alert put to a human, end to end', () => {
 
     const { cases } = await collect(store);
     expect(computeMetrics(cases).human_disagreement_rate_pct).toBe(0);
+  });
+});
+
+/* ===========================================================================
+ * A QUESTION THAT WAS NEVER PUT, AND A CARD OFFERING TO ANSWER IT
+ *
+ * `04-Action-Routing` has two branches that reach the audit record WITHOUT
+ * opening a wait, and the graph's own comment says they are the same shape:
+ * "BELOW THE THRESHOLD: no question, therefore no waiting. It joins the audit
+ * record directly, exactly like a request Slack refused."
+ *
+ *   notify? --false--> below-threshold    --> audit-record
+ *   post-approval --error--> notify-failed --> audit-record
+ *
+ * Both transforms say so in the engine's own vocabulary: `approvalBelowThreshold`
+ * and `approvalRequestFailed` each return `approval: null`. `cases.ts` honoured
+ * that for ONE of them — `if (ran(steps, 'below-threshold')) c.approval = null`
+ * — and the other kept the `pending` approval built from the `request` node, on
+ * a case the pipeline had already escalated, closed and audited.
+ *
+ * What that costs, and it is not only the card:
+ *
+ *   - `CaseView` renders `ApprovalPanel` on any non-null approval and its live
+ *     Approve / Reject form on `outcome === 'pending'`. Those buttons post to
+ *     `/api/approvals/:runId/resume`, which resolves through
+ *     `RunStore.openWaitOfRun` — and no wait was ever created, so the answer is
+ *     the catalogue's "that approval is not open any more; the first answer
+ *     stands". There was no first answer. A sentence must not be reachable from
+ *     a state it does not describe.
+ *   - `assistant/tools.ts` reads `c.approval?.outcome === 'pending'` in three
+ *     places: `alertRow`'s `awaiting_approval` field, `search_alerts`'
+ *     `awaiting_human` filter, and `get_attention`, which is what the
+ *     `shift-handover` and `why-waiting` prompts are built on. So the next
+ *     shift was told an alert was waiting on them, for a question nobody ever
+ *     asked, that nothing can ever answer.
+ *   - `alertRow` then carried `state: 'closed'` and `awaiting_approval: true`
+ *     in the same row, to a model.
+ *
+ * THE FIX IS NOT A SECOND NODE NAME. The fact wanted is "no wait was ever
+ * opened", and the node that opens one is `attente` — `beginStep` runs before
+ * a handler, so a suspended wait HAS a step row and a genuinely pending
+ * approval is unaffected. Keyed that way the console offers the form exactly
+ * when `openWaitOfRun` would find something, and a third bypass branch wired
+ * tomorrow is covered on the day it is wired rather than on the day somebody
+ * remembers to add it to a list.
+ * ========================================================================= */
+
+describe('an approval request the chat transport refused', () => {
+  it('leaves no approval to answer on a case nobody was asked about', async () => {
+    const { engine, store, calls } = assemble({ live: true, chatRefuses: true });
+    await engine.start('01-ingestion', { ...ALERT, source: 'generic' }, ALERT.alert_id);
+
+    // The branch under test was really taken: the post was attempted and the
+    // graph left `post-approval` by its error port.
+    const runs = await store.recentRuns({ limit: 200 });
+    const routing = runs.find((r) => r.workflowId === '04-action-routing')!;
+    const steps = await store.stepsOf(routing.id);
+    expect(calls).toContain('https://slack.com/api/chat.postMessage');
+    expect(steps.map((s) => s.nodeId)).toContain('notify-failed');
+    expect(steps.map((s) => s.nodeId)).not.toContain('attente');
+
+    const { cases } = await collect(store);
+    expect(cases).toHaveLength(1);
+    const c = cases[0];
+
+    // NOBODY WAS ASKED, SO THERE IS NOTHING TO ANSWER. This is the assertion
+    // that was false: the card showed a live Approve / Reject form.
+    expect(c.approval).toBeNull();
+
+    // The reason is still said — and it is the reason, not the other branch's.
+    // "we could not ask" and "we chose not to ask" call for different fixes.
+    expect(c.routing_outcome).toBe('approval_request_failed');
+    expect(c.state).toBe('closed');
+    expect(c.executed).toBe(false);
+    expect(calls).not.toContain('https://edr.test/isolate');
+  });
+
+  it('does not report the alert to the next shift as waiting on them', async () => {
+    // The predicate `assistant/tools.ts` reads three times, including in
+    // `get_attention` — what the `shift-handover` prompt is built on.
+    const { engine, store } = assemble({ live: true, chatRefuses: true });
+    await engine.start('01-ingestion', { ...ALERT, source: 'generic' }, ALERT.alert_id);
+
+    const { cases } = await collect(store);
+    expect(cases.filter((c) => c.approval?.outcome === 'pending')).toHaveLength(0);
+    // And the two numbers the console derives about one fact agree:
+    // `computeMetrics` counts the STATE, `get_attention` counts the approval.
+    expect(computeMetrics(cases).awaiting_approval).toBe(0);
+  });
+
+  it('still offers the form when a wait really is open', async () => {
+    // THE CONTROL, and the reason the fix cannot be "always null". Same live
+    // run, chat answering normally: the question was put, the run is suspended
+    // on `attente`, and the operator is the only thing that can move it.
+    const { engine, store } = assemble({ live: true });
+    await engine.start('01-ingestion', { ...ALERT, source: 'generic' }, ALERT.alert_id);
+
+    const { cases } = await collect(store);
+    expect(cases[0].approval).not.toBeNull();
+    expect(cases[0].approval!.outcome).toBe('pending');
+    expect(cases[0].state).toBe('awaiting_approval');
+    expect(computeMetrics(cases).awaiting_approval).toBe(1);
   });
 });

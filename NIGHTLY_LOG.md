@@ -4,6 +4,204 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-10-01 — Thursday · Bugs and technical debt
+
+**Subject**: `cases.ts` nulled a never-asked approval for **one** of the two
+routing branches that open no wait, and named that branch — so a request the
+chat transport **refused** kept a `pending` approval on a case the pipeline had
+already escalated, closed and audited. The incident card offered a live
+Approve / Reject form over a question nobody had put, and `get_attention` — the
+roll-up the `shift-handover` prompt is built on — handed the alert to the next
+shift as theirs to answer.
+
+**Result**: PR opened on `claude/great-pascal-jjnn19`. Four files: one
+production line in `dashboard/server/engine/cases.ts` (plus its comment and one
+entry in `NODE_CONTRACT`), three tests, and the two documentation rows.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-jjnn19` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Twenty-fourth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: `main` at c0e8cee gave
+dashboard typecheck 0, **1403 passed | 1 skipped**, build clean, and
+`gh pr list --state open` (via the GitHub API) was empty. Thursday's brief is
+ROADMAP § 7 plus the leads this journal left unfixed. The two § 7 rows still
+bolded are both explicitly *decisions for a human* — `engine.resume()` needs an
+answer to *when is a claim stale*, and the retry asymmetry is an architecture
+call — so neither is a night's work. What I took instead is priority (2), a
+real reproducible defect, found by reading the `04-Action-Routing` graph next to
+the reader of it.
+
+**What was actually wrong.** `04-Action-Routing` reaches `audit-record` by two
+paths that never open a wait, and the graph's own comment says they are the same
+shape:
+
+```
+notify? --false--> below-threshold  --> audit-record
+post-approval --error--> notify-failed --> audit-record
+```
+
+> *"BELOW THE THRESHOLD: no question, therefore no waiting. It joins the audit
+> record directly, exactly like a request Slack refused."*
+
+Both transforms say the same thing in the engine's own vocabulary —
+`approvalBelowThreshold` and `approvalRequestFailed` each return
+`approval: null` — and the reader believed one of them:
+`if (ran(steps, 'below-threshold')) c.approval = null`.
+
+Measured by driving the real workflows through the real engine with the chat
+transport answering the shape a Slack failure actually takes, **HTTP 200 with
+`ok: false`** (the trap this project already records for that transport):
+
+| | before | after |
+|---|---|---|
+| `approval` | `{ outcome: 'pending', … }` | `null` |
+| `routing_outcome` | `approval_request_failed` | unchanged |
+| `state` | `closed` | unchanged |
+| `executed` / isolate dialled | `false` / no | unchanged |
+
+**The cost is not only the card, and that is the half a screenshot cannot
+show.** `CaseView` renders `ApprovalPanel` on any non-null approval and its live
+form on `outcome === 'pending'`; those buttons post to
+`/api/approvals/:runId/resume`, which resolves through
+`RunStore.openWaitOfRun` — and no wait was ever created, so the answer is the
+catalogue's *« that approval is not open any more; the first answer stands »*,
+about a first answer that never existed. Then `assistant/tools.ts` tests
+`approval?.outcome === 'pending'` in **three** places — `alertRow`'s own
+`awaiting_approval` field, `search_alerts`' `awaiting_human` filter, and
+`get_attention` — so `alertRow` went out carrying `state: 'closed'` and
+`awaiting_approval: true` **in the same row**, to a model, and the shift
+handover named an alert that nothing can ever resolve.
+
+**What I learned that is written nowhere else.**
+
+1. **`beginStep` runs BEFORE the node handler**, so a *suspended* wait already
+   has its step row — `status: 'running'`, `output: null`. That is the fact the
+   fix stands on, and I checked it in `engine.ts` rather than assuming it: it is
+   what makes `ran(steps, 'attente')` true for a genuinely pending approval and
+   lets the predicate be the FACT (*was a wait ever opened*) instead of a list
+   of branch names. Keyed that way the card offers the form exactly when
+   `openWaitOfRun` would find something, so the screen and the route cannot
+   disagree, and a third bypass branch wired tomorrow is covered on the day it
+   is wired.
+2. **The two numbers the console derives about one fact disagreed, and nothing
+   said so.** `computeMetrics.awaiting_approval` counts `c.state` (0 here, and
+   right, because `deriveState` reads the stage status); `get_attention` counts
+   the approval (1). A defect that moves one and not the other is invisible from
+   either side — the same lesson as the approval route, where both endpoints
+   were correct and only their meeting was wrong.
+3. **Why `pipeline-to-case.test.ts` was green**, and it is the same reason as
+   the approval-reader defect it was extended for in September: the whole
+   `request` → `attente` → `interpret` branch exists only on an install that has
+   gone LIVE, and every live test in that file had the chat transport answering
+   `200 {"ok":true}`. **The failure shape of the one transport whose success is
+   read from the BODY was the one nobody drove** — so the file written to end
+   this class of defect had a hole of exactly its own shape.
+
+**Do not redo.**
+
+- **Do not key the guard on `outputOf(steps, 'attente')`.** It is the obvious
+  reading and it is the plausible wrong fix: a *suspended* wait has produced no
+  output, so it nulls every real pending approval and takes the console's only
+  way to answer one with it. Mutation M3 carries it — it fails the control test
+  and the "quotes the deadline an approver actually has" test, which is the pair
+  that should catch it.
+- **Do not add `notify-failed` to the condition as a second name.** That is the
+  change I started to write. It fixes the branch in front of me and leaves the
+  next one open, which is the *« a fix applied at the front door and not at the
+  two buttons behind it »* row of the traps table, committed on purpose.
+- **Do not also give `notify-failed` a direct `routing_outcome` read.**
+  `below-threshold` and `shadow-count` have one, under a comment about not
+  losing the reason if the audit write fails. I checked what that covers: the
+  outcome comes from `audit-record`, a pure transform in the SAME run, so the
+  only state the direct read saves is a 04 run interrupted between the two
+  nodes — which the Tracking tab already surfaces as a broken or stalled chain,
+  and which is symmetric across all six branches. Adding one read for one
+  branch would be error handling for a case the tab already covers.
+- **`sed -i` on a line containing `!` inside a shell double-quoted string** is
+  fine, but the mutation loop must `cp` the pristine file back **inside** the
+  function, not after the loop: one early version left M2 applied while M3 ran
+  and reported six failures that were two mutations stacked.
+
+**Found and NOT fixed** — all six verified by my own grep tonight
+(`grep -arn '\bNAME\b' dashboard/server dashboard/src --include=*.ts
+--include=*.tsx | grep -v '\.test\.'`), none root-caused, and offered as
+leads rather than conclusions:
+
+- **`readVariables` / `writeVariables` (`server/engine/pg-store.ts:383,399`)
+  have no mention anywhere in the repository outside their own declarations** —
+  no caller, no test, not one line of documentation. This is the best lead I
+  leave: `sql/10-engine.sql` creates `soc_variable` and
+  `soc_variable_history` and GRANTs on both (lines 152, 159, 190, 192), and
+  `writeVariables` archives the previous value in the same transaction under a
+  comment saying *« qui a changé ce seuil, et quand » est une question qu'on se
+  pose toujours APRÈS l'incident*. Pipeline variables are saved to
+  `config.json` instead (`api.saveVariables`). **Two tables and a
+  change-history feature built for a caller nobody wrote** — the same shape as
+  the partial index that waited for a sweep nobody scheduled, one level up.
+- **`Settings.meta.from_env` (`src/lib/types.ts`) is written and never read.**
+  `server/config.ts` sets `{ db_host, db_password }` under a comment saying *a
+  field that is already filled must say where it came from, or someone rewrites
+  it without understanding why it keeps coming back* — and `SettingsPage` reads
+  only `meta.config_path`. `applyEnvOverrides` does re-apply the environment on
+  every load, so the scenario the comment was written to prevent is live. The
+  working counterexample is in the same file: `CredentialStatus.locked` IS read
+  and DOES make its field read-only.
+- **`forgetCursor` (`server/ingest/cursors.ts`) and `fetchWithTimeout`
+  (`server/probes.ts`) have no caller either.** The second looks like residue
+  beside `fetchWithDeadline`; the first means there is no way for an operator to
+  make a source re-read its window after a bad cursor, which is a missing
+  feature rather than a defect.
+- **`validateCondition` (`server/engine/values.ts:243`) — checked and NOT a
+  defect**, recorded so a future night does not spend the evening I nearly did.
+  It has no product caller, but its callers are the two structural tests
+  (`workflows/routing.test.ts`, `workflows/pipeline.test.ts`), which assert
+  every shipped condition passes it. That is the right home now that the six
+  workflows are TypeScript compiled into the process: *there is no publish
+  step.* What is stale is its own comment — *« à la publication du workflow »*,
+  *« quand quelqu'un les écrit dans le formulaire »* — which describes the n8n
+  editor. A documentation row, not a bug.
+- The three leads carried by previous nights, untouched again: `attempts` in
+  `auth.ts` is never swept (entries with `until === 0` live for the process's
+  life); the login throttle collapses to one bucket behind the tunnel; and
+  `findingAlertId` in `server/findings.ts` still documents `NUL` as its
+  separator and uses `.join(' ')`. I opened that last one tonight and left it:
+  the collision needs an interior space landing exactly on a delimiter, which
+  today's VulnPipe output cannot produce (`str()` trims, so no field can carry a
+  leading or trailing one), and the fix changes **every** promoted alert id.
+  Still worth a night for the false comment alone.
+
+**Verified** (Node 22.22.2, `dashboard/`):
+
+| Command | Result |
+|---|---|
+| `npm run typecheck` | 0 errors |
+| `npm test` | **1406 passed, 1 skipped** (1403 \| 1 before: +3) |
+| `npm run build` | ✓ 671 ms |
+| `VulnPipe`: `npm test` | **407 passed** — untouched |
+
+Checked **RED first**, before the production line moved: of the three new tests
+2 failed and the control passed, which is the point of the control. Then by
+mutation, one at a time, restoring the file in between — all four red, each
+caught by the assertion that should catch it:
+
+| Mutation | Effect |
+|---|---|
+| back to `ran(steps, 'below-threshold')` | the 2 new tests fail |
+| `c.approval = null` unconditionally | **6** fail, incl. all five live approval tests |
+| `outputOf(steps, 'attente') === null` | the control and the deadline test fail |
+| guard deleted | 3 fail, incl. the pre-existing below-threshold case test |
+
+Also driven under `node --experimental-strip-types` — the runtime the console
+API actually uses, where `tsc` and vitest both lie — on all three shapes
+(refused / below threshold / a wait really open); same answers. No model key, no
+database and no network egress were needed by any of it. One probe was written
+to `dashboard/scripts/` and deleted; `git status` shows only the four intended
+files, and no lockfile moved.
+
 ## 2026-09-30 — Wednesday · Tests and QA
 
 **Subject**: **the relay to the code-analysis service swallowed its own
