@@ -191,6 +191,52 @@ leads rather than conclusions:
   `auth.ts` is never swept (entries with `until === 0` live for the process's
   life), and the login throttle collapses to one bucket behind the tunnel.
 
+**Two more, found late and read rather than reproduced** — I verified the code
+paths myself and wrote no failing test for either, so they are leads and not
+findings. Both are the *« two correct rules whose intersection loses data »*
+shape, and the first is the better subject of the two:
+
+- **The poller's no-cursor lookback is one interval, and the failure backoff
+  can make the gap between two polls thirty minutes.** `pollUrl`
+  (`server/ingest/poller.ts`) asks for `now − (intervalSeconds +
+  overlapSeconds)` when `since` is `null`, under a comment block whose closing
+  paragraph is the invariant the whole fix rests on: *« which is by
+  construction longer than the time since the previous poll — so consecutive
+  windows always overlap and nothing can fall between them »*. That was true
+  when it was written and the **failure backoff added later breaks it**:
+  `backoffFor` doubles per consecutive failure up to `BACKOFF_MAX_MS = 30 min`,
+  and `tick()` honours it by SKIPPING the source. So on a source that has never
+  yet delivered — the exact population this comment block exists for, since
+  `recordPoll` only writes a `since` taken off an alert we delivered — a few
+  refusals open a window of minutes that the next poll's 90-second lookback
+  never requests. An alert raised inside it is never fetched, the cursor stays
+  `null`, and the Ingestion tab shows an answered poll with zero alerts. This
+  is the same permanent silent hole that comment closed once, re-opened from
+  the other side. The data for a fix is already on the cursor (`lastPollAt`),
+  so it is small — but **how far to look back is a policy number**, and this
+  project's own rule is that a cap is chosen against data rather than set to
+  whatever the machine happens to allow. Worth a night, with a test that reads
+  a fixture's request log, which is how the original was found.
+- **`static.ts` promises a year of `immutable` on the strength of a
+  fingerprint that `public/` assets do not have.** Its header says *« that is
+  possible because Vite puts a fingerprint in every asset's name »*, and the
+  code decides on `file.endsWith('index.html')` — a different question. Vite
+  copies `public/` into `dist/` verbatim, and this repository has
+  `public/favicon.svg`, referenced by stable name from `index.html`: checked on
+  the built tree, `dist/favicon.svg` exists and would be served
+  `max-age=31536000, immutable`. Edit it and every browser that has opened the
+  console keeps the old bytes for up to a year, told not to revalidate even on
+  reload. Small today — `src/theme/favicon.ts` repaints the tab icon as a data
+  URI once the page mounts — and it is a trap for the next file dropped in
+  `public/`. The honest condition is whether the NAME carries a hash, not
+  whether it is the entry point.
+
+Both came out of a read-only subagent sweep for comments that vouch for a
+property the code does not have. **Everything that sweep returned was re-checked
+by hand before being written down here**, and that was not a formality: its
+single highest-ranked item was wrong, and one of its asides is what withdrew the
+`findingAlertId` lead above.
+
 **Verified** (Node 22.22.2, `dashboard/`):
 
 | Command | Result |
