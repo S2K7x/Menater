@@ -130,7 +130,7 @@ export const NODE_CONTRACT: Record<string, string[]> = {
   '02-enrichment': ['assemble', 'to-decision'],
   '03-ai-decision': ['finalize', 'to-routing'],
   '04-action-routing': [
-    'shadow-count', 'request', 'notify?', 'below-threshold', 'interpret', 'timeout',
+    'shadow-count', 'request', 'notify?', 'below-threshold', 'attente', 'interpret', 'timeout',
     'rejected', 'execute', 'executed', 'execute-failed', 'audit-record', 'to-audit',
   ],
   '05-audit-log': ['normalize', 'append', 'expose', 'unusable', 'write-failed'],
@@ -605,12 +605,35 @@ export function buildCases(
 
       // NEVER ASKED MEANS NO APPROVAL, not a pending one.
       //
-      // `request` runs before the threshold branch, so its output is there
-      // either way — and reading it unconditionally put a `pending` approval on
-      // a CLOSED case, which reads as a decision still waiting for somebody. An
-      // approval nobody was asked for is invented data on the card; the
-      // routing outcome already says what happened.
-      if (ran(steps, 'below-threshold')) c.approval = null;
+      // `request` runs before the branch that decides whether anybody is
+      // asked, so its output is there either way — and reading it
+      // unconditionally put a `pending` approval on a CLOSED case, which reads
+      // as a decision still waiting for somebody. An approval nobody was asked
+      // for is invented data on the card; the routing outcome already says
+      // what happened.
+      //
+      // THE CONDITION USED TO NAME ONE BRANCH, AND THERE ARE TWO. Both reach
+      // `audit-record` without a wait ever being opened, and the graph says
+      // they are the same shape in as many words: "it joins the audit record
+      // directly, exactly like a request Slack refused". So a request the chat
+      // transport REFUSED — a wrong channel, a revoked scope, an unreachable
+      // webhook — kept its `pending` approval, and the card offered a live
+      // Approve / Reject form whose buttons resolve through
+      // `RunStore.openWaitOfRun`: there is no open wait, so the answer is
+      // "that approval is not open any more; the first answer stands", about a
+      // first answer that never existed. `assistant/tools.ts` reads this same
+      // `outcome === 'pending'` three times — `alertRow`, `search_alerts` and
+      // `get_attention`, which is what the shift handover is built on — so the
+      // next shift was told to answer a question nobody had put.
+      //
+      // The fact is NOT "which branch suppressed it" but "was a wait ever
+      // opened", and `attente` is the node that opens one. `beginStep` runs
+      // before a handler, so a suspended wait already has its step row: a
+      // genuinely pending approval is untouched, and a third bypass branch is
+      // covered the day it is wired rather than the day somebody remembers a
+      // list. That also makes the id load-bearing — renaming it would null
+      // EVERY approval — which is why it is in `NODE_CONTRACT` above.
+      if (!ran(steps, 'attente')) c.approval = null;
 
       if (executed) {
         c.executed = true;
