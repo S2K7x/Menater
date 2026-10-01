@@ -4,6 +4,165 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-10-01 (second run) — Thursday · Bugs and technical debt
+
+**Subject**: the cursor-less poll lookback was `interval + overlap`, justified
+in its own comment block as *« by construction longer than the time since the
+previous poll »* — and the failure backoff added in the **same pass** makes
+that false. `tick` SKIPS a backed-off source for up to thirty minutes, so on a
+source that has never delivered (the only population that lookback exists for)
+every alert raised inside a skipped stretch was requested by nobody, for ever,
+under a green check.
+
+**Result**: PR opened on `claude/great-pascal-4iktke`. Six files: `poller.ts`
+(the window decision), `IngestionPanel.tsx` + the catalogue + `lib/ingestion.ts`
+(saying what was clipped), two test files, and the two documentation rows.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-4iktke` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Twenty-fifth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: `main` at 5b05cfd gave
+dashboard typecheck 0, **1406 passed | 1 skipped**, build clean, and
+`list_pull_requests --state open` was empty. This is the second run of the day
+(the first fired at 00:26 and shipped PR #53), so Thursday's reservoir had
+already been read once tonight: § 7's two remaining bolded rows are both
+explicitly *decisions for a human*, and the previous entry's own leads were the
+better list. I took the one it called **"the better subject of the two"** and
+"worth a night" — and it was: read rather than reproduced when it was filed, it
+reproduced on the first try.
+
+**What was actually wrong**, measured and not reasoned. Driving the real
+`pollSource` on ONE fake clock and reading the fetch stub's request log:
+
+| | asked for | unasked |
+|---|---|---|
+| poll at 12:00, answers, empty | `[11:58:30, ∞)` | — |
+| skipped until 12:20 by the backoff | nothing leaves | — |
+| poll at 12:20, before | `[12:18:30, ∞)` | **18 min 30 s** |
+| poll at 12:20, after | `[11:59:30, ∞)` | none |
+
+`recordPoll` only ever writes a `since` taken off an alert we DELIVERED, so the
+cursor stays `null` for as long as the source has delivered nothing — and the
+row prints *« answered, 0 alerts »*, green, over the gap.
+
+**What I learned that is written nowhere else.**
+
+1. **`lastPollAt` is exactly the right anchor and nobody had used it.** It is
+   written on any poll that got an answer and NOT on one that failed
+   (`cursors.ts` says so in a comment, and `cursors.test.ts` pins it), which
+   makes it *the instant after which nothing has been requested*. Anything
+   derived from the interval can only ever describe the SCHEDULE, and the
+   schedule is the thing the backoff overrides. The fix needed no new persisted
+   state.
+2. **`recordPoll` stamps `lastPollAt` off the ambient `Date`, not `deps.now`.**
+   A test that moves only `deps.now` is measuring two clocks and will disagree
+   with itself: the cursor lands in 2026-10 while the poller thinks it is
+   2026-09. `vi.useFakeTimers()` + `vi.setSystemTime` with `now: () => new
+   Date()` is what makes the relationship real, and `fetchWithDeadline`'s 20 s
+   `setTimeout` is harmless under fake timers because it is cleared in a
+   `finally` and we never advance.
+3. **The cap is the whole design question, and the first draft had no cap.**
+   Anchoring on the last answer makes the window as wide as the OUTAGE, and an
+   outage has no bound: a week in one request is how a response passes
+   `MAX_RESPONSE_BYTES`, which backs the source off, which widens the window
+   again — *a permanent wedge, built by the fix that closed a hole.* 24 h is
+   chosen against data (forty-eight of `BACKOFF_MAX_MS`), not against what the
+   machine allows.
+4. **The floor is not decoration.** Keeping the old `interval + overlap` as a
+   lower bound makes the change *strictly a widening*, which is the only claim
+   worth having here — and it is what stops a `lastPollAt` in the future (clock
+   skew, a cursor file copied between machines) from SHRINKING a window. The
+   mutation that deletes it is red on exactly one test.
+5. **Measured in the browser, on the real bundle**, because a clipped poll that
+   keeps the green check is this product's own defect on the tab that says how
+   alerts get in. `npm run serve` with `forceDemo` serves `dist/` and the real
+   API; Playwright then needs only `page.route` on `/api/ingestion/policy`. Six
+   themes: warning text on `--orange-bg` **9.22 (punk) → 15.94 (acme)**, the
+   clean row 4.57 → 6.92 on panel; no horizontal overflow at 320, 375 or
+   1280 px (`document.scrollWidth === innerWidth`, banner
+   `scrollWidth - clientWidth = 0`).
+6. **The console's main navigation is NOT `role="tab"`** — it is
+   `.soc-nav button.soc-tab`, while the SUB-navigation is. A Playwright
+   `getByRole('tab', { name: /Ingestion/ })` therefore matches the *Workflow*
+   sub-tab called « Ingestion v1 » and silently never opens the tab you wanted:
+   my first two sweeps reported `rowFound: false` on all twelve cells, which is
+   a broken ruler and not a finding. Use `.soc-nav button.soc-tab` for the ten
+   tabs, `[role="tab"]` for the sub-tabs.
+
+**Do not redo.**
+
+- **Do not keep the lookback as a multiple of the interval.** A 15 s interval
+  (the legal floor) times anything sane is still far under one 30-minute
+  backoff wait, so the gap would stay open on exactly the installs that poll
+  fastest. It has to be a wall-clock anchor.
+- **Do not drop the cap "because the source will page".** Paging is the
+  source's choice, not ours; `batchSize` bounds what we READ out of a response,
+  never what arrives. Without the cap the fix converts a silent hole into a
+  permanent named wedge, which is better and still wrong.
+- **Do not report the clip as `error`.** It would set `failures` and back the
+  source off over a poll that worked perfectly. It is a WARNING on the row —
+  `soc-banner-warn`, which already exists — not an error and not a muted
+  footnote under the green check.
+- **Do not persist the clip on the cursor without designing the forgetting.**
+  See "Found and NOT fixed" below: this is a real limitation of what shipped,
+  and the obvious fix is the permanent-alarm trap.
+- **Do not trust `vi.setSystemTime` alone**: in vitest it needs
+  `useFakeTimers()`, and the `finally { vi.useRealTimers() }` matters — a test
+  that throws with fake timers still installed poisons the files after it.
+
+**Found and NOT fixed** — one, and it is a limitation of tonight's own change
+rather than a lead:
+
+- **`unaskedSince` lives on the poll OUTCOME, so it is visible for about one
+  polling interval.** `Poller.lastOutcomes()` keeps the last outcome per source
+  until the next poll replaces it; the clipped poll advances `lastPollAt` to
+  now, so the following poll reports `null` and the warning goes. An operator
+  who was away for the outage will not see it. Persisting it is not obviously
+  right: a clip is permanent history, so a cursor field would be a banner that
+  never clears — the `diagnostic_probe` row's *« a permanent alarm stops being
+  read »* — and the honest clearing is a human acknowledging it, which is a
+  feature with a button, not a bug fix. **Left open on purpose, named in the
+  PR.** The alternative worth considering first is cheaper: the condition
+  *« this source has not answered for longer than one poll re-reads »* is
+  derivable at any time from the persisted `lastPollAt` alone, with no new
+  state at all.
+- The leads the previous entry left are **untouched and still open**:
+  `readVariables`/`writeVariables` with no caller (the best of them),
+  `Settings.meta.from_env` written and never read, `forgetCursor` and
+  `fetchWithTimeout` with no caller, `static.ts`'s `immutable` on
+  non-fingerprinted `public/` assets, `attempts` in `auth.ts` never swept, and
+  the login throttle collapsing to one bucket behind the tunnel.
+
+**Verified** (Node 22.22.2, `dashboard/`):
+
+| Command | Result |
+|---|---|
+| `npm run typecheck` | 0 errors |
+| `npm test` | **1414 passed, 1 skipped** (1406 \| 1 before: +8) |
+| `npm run build` | ✓ 354 ms |
+| `VulnPipe` | untouched — not run, nothing in `VulnPipe/` is modified |
+
+Checked **RED first**: the three `pollSource` tests all failed before the
+production change, the first of them reporting `1788524310000` (12:18:30)
+against `1788523200000` (12:00:00) — the hole itself, in milliseconds. Then by
+mutation, one at a time, restoring the pristine file INSIDE the loop:
+
+| Mutation | Failing tests |
+|---|---|
+| `lastPollAt` ignored (back to `interval + overlap`) | 3 — the two gap tests and the cap |
+| the cap removed | 1 — `caps the lookback, and SAYS what it did not ask for` |
+| the floor removed | 1 — `never NARROWS the window, whatever the cursor file claims` |
+| the clip never reported | 1 — the cap test |
+| the banner back to two states | 1 — `warns rather than reassures` |
+| the day tier removed from `ago` | 1 — same test, on « 72 h » |
+
+The control — *claims nothing unasked on a poll that covered its gap* — passed
+under all six, which is what makes it a control.
+
 ## 2026-10-01 — Thursday · Bugs and technical debt
 
 **Subject**: `cases.ts` nulled a never-asked approval for **one** of the two

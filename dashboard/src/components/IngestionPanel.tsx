@@ -144,7 +144,11 @@ function ago(iso: string | null, never: string): string {
   if (!Number.isFinite(ms)) return never;
   if (ms < 60_000) return `${Math.max(0, Math.round(ms / 1000))} s`;
   if (ms < 3_600_000) return `${Math.round(ms / 60_000)} min`;
-  return `${Math.round(ms / 3_600_000)} h`;
+  if (ms < 86_400_000) return `${Math.round(ms / 3_600_000)} h`;
+  // A DAY TIER, because the clipped-window sentence below can name a gap of
+  // weeks: "720 h" is the `max / 1024 / 1024` trap in another unit — a number
+  // an operator cannot say out loud is one they cannot act on.
+  return `${Math.round(ms / 86_400_000)} d`;
 }
 
 /**
@@ -244,6 +248,9 @@ function PullSourceRow({
   const t = c.ingestion;
   const error = outcome?.error ?? cursor?.lastError ?? null;
   const nextAt = outcome?.nextAttemptAt ?? cursor?.nextAttemptAt ?? null;
+  // Not read off the cursor: it is a fact about the window the LAST poll used,
+  // and the cursor records no window. `null` there is "nothing to report".
+  const unasked = outcome?.unaskedSince ?? null;
   // Only while it is still in the future: a stale instant would read as a
   // source being held back when the next tick will in fact try it.
   const waitingUntil = nextAt && Date.parse(nextAt) > Date.now() ? nextAt : null;
@@ -330,8 +337,18 @@ function PullSourceRow({
           has been refusing us for an hour, is exactly the failure the Tracking
           tab exists to expose — filing it behind a fold would rebuild that
           defect here. */}
-      <div className={error ? 'soc-banner soc-banner-error' : 'soc-quiet soc-quiet-ok'}>
-        <Icon name={error ? 'alert' : 'check'} size={15} />
+      {/* THREE STATES, BECAUSE GREEN IS EARNED. A poll whose window was
+          clipped answered perfectly and still left history nobody will ask
+          for; the plain check it used to print is this product's own defining
+          defect — a failure showing green — on the screen that says how alerts
+          get in. It is a warning, not an error: nothing is broken, and the
+          source is not backed off. */}
+      <div className={
+        error ? 'soc-banner soc-banner-error'
+          : unasked ? 'soc-banner soc-banner-warn'
+            : 'soc-quiet soc-quiet-ok'
+      }>
+        <Icon name={error || unasked ? 'alert' : 'check'} size={15} />
         <p>
           {error
             ? t.pull.lastError(error)
@@ -342,6 +359,10 @@ function PullSourceRow({
               and someone would sit watching a row that will not move. It sits
               INSIDE the error banner because it is part of the same fact. */}
           {waitingUntil ? ` ${t.pull.backingOff(ago(waitingUntil, t.pull.never))}` : ''}
+          {/* INSIDE the banner, like the backoff sentence above it and for the
+              same reason: it is part of the same fact about this poll, not a
+              footnote under it. */}
+          {unasked ? ` ${t.pull.unasked(ago(unasked, t.pull.never))}` : ''}
         </p>
       </div>
       {outcome && outcome.unusable > 0 ? (

@@ -24,7 +24,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { defaultPolicy, type PullSource } from './policy.ts';
 import {
-  Poller, backoffFor, extractItems, newestTimestamp, pollSource, pollUrl, readCapped,
+  Poller, backoffFor, extractItems, newestTimestamp, pollSource, pollUrl, pollWindow, readCapped,
 } from './poller.ts';
 import { recordPoll, resetCursorCache } from './cursors.ts';
 
@@ -100,14 +100,25 @@ describe('newestTimestamp', () => {
 });
 
 describe('pollUrl', () => {
-  it('reaches back further than the cursor, by the overlap', () => {
-    const url = pollUrl(SOURCE, '2026-09-04T12:00:00.000Z', 30, new Date('2026-09-04T12:05:00Z'));
-    expect(new URL(url).searchParams.get('since')).toBe('2026-09-04T11:59:30.000Z');
-  });
-
   it('names the parameter the source asked for, not one we chose', () => {
-    const url = pollUrl({ ...SOURCE, cursorParam: 'from' }, null, 0, new Date('2026-09-04T12:00:00Z'));
+    const url = pollUrl({ ...SOURCE, cursorParam: 'from' }, new Date('2026-09-04T12:00:00Z'));
     expect(new URL(url).searchParams.get('from')).toBe('2026-09-04T12:00:00.000Z');
+  });
+});
+
+describe('pollWindow', () => {
+  /** The window's start, as the URL would carry it. */
+  const from = (
+    cursor: { since: string | null; lastPollAt: string | null },
+    overlap: number,
+    interval: number,
+    now: string,
+  ) => pollWindow(cursor, overlap, interval, new Date(now)).from.toISOString();
+  const noAnswer = (since: string | null) => ({ since, lastPollAt: null });
+
+  it('reaches back further than the cursor, by the overlap', () => {
+    expect(from(noAnswer('2026-09-04T12:00:00.000Z'), 30, 60, '2026-09-04T12:05:00Z'))
+      .toBe('2026-09-04T11:59:30.000Z');
   });
 
   it('LOOKS BACK when there is no cursor yet, instead of asking for "now"', () => {
@@ -116,8 +127,7 @@ describe('pollUrl', () => {
     // time meant the window BETWEEN two polls was requested by neither, and
     // every alert raised before the first delivery fell into it — permanently,
     // under a green check.
-    const url = pollUrl(SOURCE, null, 30, new Date('2026-09-04T12:00:00Z'), 60);
-    expect(new URL(url).searchParams.get('since')).toBe('2026-09-04T11:58:30.000Z');
+    expect(from(noAnswer(null), 30, 60, '2026-09-04T12:00:00Z')).toBe('2026-09-04T11:58:30.000Z');
   });
 
   it('looks back further than the gap between two polls, so windows overlap', () => {
@@ -128,16 +138,43 @@ describe('pollUrl', () => {
     const overlap = 30;
     const first = new Date('2026-09-04T12:00:00Z');
     const second = new Date(first.getTime() + interval * 1000);
-    const askedFirst = Date.parse(
-      new URL(pollUrl(SOURCE, null, overlap, first, interval)).searchParams.get('since')!,
-    );
-    const askedSecond = Date.parse(
-      new URL(pollUrl(SOURCE, null, overlap, second, interval)).searchParams.get('since')!,
-    );
+    const askedFirst = Date.parse(from(noAnswer(null), overlap, interval, first.toISOString()));
+    const askedSecond = Date.parse(from(noAnswer(null), overlap, interval, second.toISOString()));
     // The second window starts before the first poll happened: nothing can sit
     // between them.
     expect(askedSecond).toBeLessThan(first.getTime());
     expect(askedFirst).toBeLessThan(askedSecond);
+  });
+
+  it('anchors on the last ANSWER, so a skipped stretch is still requested', () => {
+    // Twenty minutes of backoff skips: `lastPollAt` is the only record of when
+    // anybody last asked this source anything.
+    expect(from({ since: null, lastPollAt: '2026-09-04T12:00:00.000Z' }, 30, 60, '2026-09-04T12:20:00Z'))
+      .toBe('2026-09-04T11:59:30.000Z');
+  });
+
+  it('never NARROWS the window, whatever the cursor file claims', () => {
+    // A `lastPollAt` in the future — clock skew, a cursor file copied between
+    // machines — must not shrink the window below the interval + overlap this
+    // function has always asked for. The old lookback is kept as a floor.
+    const w = pollWindow(
+      { since: null, lastPollAt: '2026-09-04T13:00:00.000Z' }, 30, 60,
+      new Date('2026-09-04T12:00:00Z'),
+    );
+    expect(w.from.toISOString()).toBe('2026-09-04T11:58:30.000Z');
+    // And it claims no loss: there is no measurable gap, only a wrong clock.
+    expect(w.unaskedSince).toBeNull();
+  });
+
+  it('a cursor outranks the last answer: delivery is the better anchor', () => {
+    // The cursor is a timestamp an alert carried; `lastPollAt` is when we got
+    // an answer. Where both exist the first is the one that means something.
+    const w = pollWindow(
+      { since: '2026-09-04T11:00:00.000Z', lastPollAt: '2026-09-04T09:00:00.000Z' },
+      30, 60, new Date('2026-09-04T12:00:00Z'),
+    );
+    expect(w.from.toISOString()).toBe('2026-09-04T10:59:30.000Z');
+    expect(w.unaskedSince).toBeNull();
   });
 });
 
@@ -525,5 +562,85 @@ describe('the poller does not hammer, and does not skip in silence', () => {
     poller.sync();
     expect(impl).toHaveBeenCalledTimes(1);
     poller.stop();
+  });
+});
+
+/**
+ * THE GAP BETWEEN TWO ANSWERED POLLS, ON A SOURCE THAT HAS NEVER DELIVERED.
+ *
+ * `pollWindow`'s own comment block closes with the invariant the cursor-less
+ * lookback rests on: `interval + overlap` is "by construction longer than the
+ * time since the previous poll". That was true when it was written, and the
+ * failure backoff added afterwards makes it false — `tick` SKIPS a backed-off
+ * source, for up to `BACKOFF_MAX_MS`, so the time since the previous poll is
+ * not the interval any more.
+ *
+ * These drive the real `pollSource` on one fake clock — `recordPoll` stamps
+ * `lastPollAt` off the ambient `Date`, so a test that moved only `deps.now`
+ * would be measuring two different clocks — and read what was ASKED out of the
+ * fetch stub's request log, which is how the original hole was found.
+ */
+describe('the window after a gap nobody polled', () => {
+  const logged = () => {
+    const seen: string[] = [];
+    const impl = vi.fn(async (url: string) => {
+      seen.push(String(url));
+      return new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } });
+    });
+    return { seen, deps: { deliver: async () => 'run-1', fetchImpl: impl as unknown as typeof globalThis.fetch, now: () => new Date() } };
+  };
+  const asked = (url: string) => Date.parse(new URL(url).searchParams.get('since')!);
+
+  it('asks for the whole stretch nobody polled, not just one interval', async () => {
+    const { seen, deps } = logged();
+    vi.useFakeTimers();
+    try {
+      // Answered, and empty: `lastPollAt` moves, the cursor does NOT, because
+      // nothing was delivered. That is the population this test is about.
+      vi.setSystemTime(new Date('2026-09-04T12:00:00Z'));
+      await pollSource(SOURCE, defaultPolicy(), deps);
+      // Twenty minutes of nothing: the backoff skips the source, so no request
+      // leaves at all. Any alert raised in there was raised while nobody asked.
+      vi.setSystemTime(new Date('2026-09-04T12:20:00Z'));
+      await pollSource(SOURCE, defaultPolicy(), deps);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(asked(seen[1])).toBeLessThanOrEqual(Date.parse('2026-09-04T12:00:00.000Z'));
+  });
+
+  it('caps the lookback, and SAYS what it did not ask for', async () => {
+    const { seen, deps } = logged();
+    let out;
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-09-04T12:00:00Z'));
+      await pollSource(SOURCE, defaultPolicy(), deps);
+      // Three days. A window that wide is how a busy source answers past the
+      // 16 MB cap, which would back it off for ever — so it is clipped. The
+      // clip is a loss, and a loss this console does not get to keep quiet.
+      vi.setSystemTime(new Date('2026-09-07T12:00:00Z'));
+      out = await pollSource(SOURCE, defaultPolicy(), deps);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(asked(seen[1])).toBe(Date.parse('2026-09-06T12:00:00.000Z'));
+    expect(out!.unaskedSince).toBe('2026-09-04T11:59:30.000Z');
+  });
+
+  it('claims nothing unasked on a poll that covered its gap', async () => {
+    const { seen, deps } = logged();
+    let out;
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-09-04T12:00:00Z'));
+      await pollSource(SOURCE, defaultPolicy(), deps);
+      vi.setSystemTime(new Date('2026-09-04T12:20:00Z'));
+      out = await pollSource(SOURCE, defaultPolicy(), deps);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(seen).toHaveLength(2);
+    expect(out!.unaskedSince).toBeNull();
   });
 });

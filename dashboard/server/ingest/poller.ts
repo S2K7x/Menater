@@ -51,7 +51,7 @@ import { humanBytes } from '../respond.ts';
 import { isManagedCredential } from '../credentials.ts';
 import { mappingFor, normalize, PayloadTooDeep } from '../engine/transforms/normalize.ts';
 import { readPath } from '../engine/values.ts';
-import { readCursor, recordPoll } from './cursors.ts';
+import { readCursor, recordPoll, type Cursor } from './cursors.ts';
 import type { IngestionPolicy, PullSource } from './policy.ts';
 
 /**
@@ -129,6 +129,29 @@ export function backoffFor(failures: number, intervalMs: number): number {
   return Math.round(floor + Math.random() * (capped - floor));
 }
 
+/**
+ * How far back a cursor-less poll may reach, at most.
+ *
+ * The lookback below is anchored on the last answer this source gave, so its
+ * width is the OUTAGE's width — and an outage has no bound. Asking a busy
+ * source for a week in one request is how a response passes
+ * `MAX_RESPONSE_BYTES`, and that failure backs the source off, which widens
+ * the window again: a permanent wedge, built by the fix that closed a hole.
+ *
+ * A POLICY NUMBER, chosen against data, not the largest the machine allows —
+ * the same rule as `normalize`'s nesting floor. Twenty-four hours is forty-
+ * eight of the longest wait the backoff can impose (`BACKOFF_MAX_MS`, 30 min),
+ * so every outage this poller produces by its own design is covered whole: a
+ * SIEM restarted, a key rotated and fixed the next morning, a network cut
+ * overnight, a console stopped for the evening. It is also a range a log API
+ * is built to answer, where a week is not.
+ *
+ * Past it, history is NOT requested, and the outcome says so — a clip that
+ * nobody is told about is the silent hole this whole function exists against,
+ * moved one day further out.
+ */
+const MAX_LOOKBACK_MS = 24 * 60 * 60 * 1000;
+
 /** What one poll did, for the interface and for the tests. */
 export interface PollOutcome {
   source: string;
@@ -145,6 +168,16 @@ export interface PollOutcome {
    * a silent skip is the failure showing green all over again.
    */
   nextAttemptAt: string | null;
+  /**
+   * The start of a stretch of history this poll did NOT request, because the
+   * gap since this source last answered is wider than `MAX_LOOKBACK_MS`.
+   *
+   * `null` means two different things on purpose, and neither is a claim that
+   * nothing was missed: on a poll that ran, nothing was left unasked; on a
+   * source `tick` skipped, no window was computed at all, so there is nothing
+   * to report rather than a zero to print.
+   */
+  unaskedSince: string | null;
 }
 
 export interface PollerDeps {
@@ -267,8 +300,16 @@ export function newestTimestamp(alerts: Record<string, unknown>[]): string | nul
   return bestRaw;
 }
 
+/** Where one poll's window starts, and what it could not reach. */
+export interface PollWindow {
+  /** The instant the request's cursor parameter is set to. */
+  from: Date;
+  /** `PollOutcome.unaskedSince`: the start of what this window left out. */
+  unaskedSince: string | null;
+}
+
 /**
- * The address to call, cursor and overlap applied.
+ * Where to start asking, from the cursor and the last answer.
  *
  * ============================================================================
  * WITH NO CURSOR YET, IT LOOKS BACK. IT USED TO ASK FOR "NOW".
@@ -287,23 +328,66 @@ export function newestTimestamp(alerts: Record<string, unknown>[]): string | nul
  * with a green check on screen and a cursor that looked perfectly healthy.
  * The two rules were each right and their intersection was a data-loss bug.
  *
- * The lookback is `interval + overlap`, which is by construction longer than
- * the time since the previous poll — so consecutive windows always overlap and
- * nothing can fall between them. Deduplication throws the repeats away, which
- * is the same bargain the overlap already makes.
+ * ============================================================================
+ * AND `interval + overlap` WAS THE SAME HOLE, RE-OPENED FROM THE OTHER SIDE.
+ *
+ * The fix above was a lookback of `interval + overlap`, justified as being "by
+ * construction longer than the time since the previous poll". That was true
+ * when it was written. THE FAILURE BACKOFF ADDED AFTERWARDS MAKES IT FALSE:
+ * `tick` SKIPS a backed-off source — up to `BACKOFF_MAX_MS`, half an hour —
+ * and `inFlight`, a restart and polling switched off for an evening all open
+ * the same kind of gap. So:
+ *
+ *   poll at 12:00 answers, empty      → lastPollAt 12:00, cursor still null
+ *   three refusals, the source is skipped until 12:20
+ *   poll at 12:20 asks for [12:18:30, ∞)
+ *
+ * Eighteen and a half minutes requested by nobody, on the one population this
+ * block exists for — `recordPoll` only ever writes a `since` taken off an
+ * alert we delivered, so a source that has never delivered keeps a `null`
+ * cursor for as long as that lasts. The alert is never fetched, the cursor
+ * stays `null`, and the row says "answered, 0 alerts" under a green check.
+ *
+ * THE ANCHOR IS THEREFORE THE LAST ANSWER, not the cadence: `lastPollAt` is on
+ * the cursor already, and it is written on any poll that got an answer and NOT
+ * on one that failed — which is exactly the instant after which nothing has
+ * been requested. Minus the overlap, for the indexing lag the overlap is for.
+ *
+ * It may only ever WIDEN the window: the old `interval + overlap` is kept as a
+ * floor, so a `lastPollAt` in the future — clock skew, a cursor file copied
+ * between machines — cannot shrink a window below what this function has
+ * always asked for. And `MAX_LOOKBACK_MS` bounds it from the other end, which
+ * is a loss, and therefore said rather than absorbed.
  * ============================================================================
  */
-export function pollUrl(
-  src: PullSource,
-  since: string | null,
+export function pollWindow(
+  cursor: Pick<Cursor, 'since' | 'lastPollAt'>,
   overlapSeconds: number,
+  intervalSeconds: number,
   now: Date,
-  intervalSeconds = 0,
-): string {
+): PollWindow {
+  const overlapMs = overlapSeconds * 1000;
+  if (cursor.since) {
+    return { from: new Date(Date.parse(cursor.since) - overlapMs), unaskedSince: null };
+  }
+  // What this function asked for before the gap was accounted for, and the
+  // narrowest window it is still allowed to return.
+  const floor = now.getTime() - (intervalSeconds + overlapSeconds) * 1000;
+  const heard = cursor.lastPollAt ? Date.parse(cursor.lastPollAt) : NaN;
+  // Never answered at all: there is no gap to measure, only the cadence.
+  if (!Number.isFinite(heard)) return { from: new Date(floor), unaskedSince: null };
+
+  const wanted = heard - overlapMs;
+  const cap = now.getTime() - MAX_LOOKBACK_MS;
+  return {
+    from: new Date(Math.min(floor, Math.max(wanted, cap))),
+    unaskedSince: wanted < cap ? new Date(wanted).toISOString() : null,
+  };
+}
+
+/** The address to call, for a window already decided. */
+export function pollUrl(src: PullSource, from: Date): string {
   const url = new URL(src.url);
-  const from = since
-    ? new Date(Date.parse(since) - overlapSeconds * 1000)
-    : new Date(now.getTime() - (intervalSeconds + overlapSeconds) * 1000);
   url.searchParams.set(src.cursorParam, from.toISOString());
   return url.toString();
 }
@@ -317,6 +401,11 @@ export async function pollSource(
   const now = (deps.now ?? (() => new Date()))();
   const cursor = readCursor(src.source);
   const intervalMs = policy.pull.intervalSeconds * 1000;
+  // ONCE, and before `fail`: two places computing this would be two spellings
+  // of one number, which is how they start disagreeing.
+  const asked = pollWindow(
+    cursor, policy.pull.overlapSeconds, policy.pull.intervalSeconds, now,
+  );
   const fail = (message: string): PollOutcome => {
     const out = recordPoll(src.source, {
       error: message,
@@ -327,6 +416,7 @@ export async function pollSource(
     return {
       source: src.source, accepted: 0, unusable: 0,
       error: message, since: cursor.since, nextAttemptAt: out.nextAttemptAt,
+      unaskedSince: asked.unaskedSince,
     };
   };
 
@@ -353,7 +443,7 @@ export async function pollSource(
   let res: Response;
   try {
     res = await fetchWithDeadline(
-      pollUrl(src, cursor.since, policy.pull.overlapSeconds, now, policy.pull.intervalSeconds),
+      pollUrl(src, asked.from),
       { method: 'GET', headers },
       { timeoutMs: 20_000, fetchImpl: deps.fetchImpl },
     );
@@ -472,6 +562,7 @@ export async function pollSource(
     return {
       source: src.source, accepted, unusable, error: detail,
       since: outcome.since, nextAttemptAt: outcome.nextAttemptAt,
+      unaskedSince: asked.unaskedSince,
     };
   }
 
@@ -480,6 +571,7 @@ export async function pollSource(
   return {
     source: src.source, accepted, unusable, error: null,
     since: outcome.since, nextAttemptAt: null,
+    unaskedSince: asked.unaskedSince,
   };
 }
 
@@ -587,7 +679,7 @@ export class Poller {
       // gains the time of the next attempt.
       skipped.push({
         source: src.source, accepted: 0, unusable: 0,
-        error: lastError, since, nextAttemptAt,
+        error: lastError, since, nextAttemptAt, unaskedSince: null,
       });
       return false;
     });
