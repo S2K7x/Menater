@@ -38,7 +38,7 @@ import { ioHandlers } from './nodes/io.ts';
 import { controlHandlers } from './nodes/control.ts';
 import { PIPELINE_WORKFLOWS } from './workflows/pipeline.ts';
 import { ROUTING_WORKFLOWS } from './workflows/routing.ts';
-import { buildCases, replayPayload } from './cases.ts';
+import { buildCases, replayPayload, CASE_OUTPUTS } from './cases.ts';
 import { DEFAULT_LOCALE } from '../i18n.ts';
 import type { RunRecord, StepRecord } from './types.ts';
 
@@ -101,7 +101,12 @@ function assemble() {
 
 async function collect(store: MemoryRunStore) {
   const runs: RunRecord[] = await store.recentRuns({ limit: 200 });
-  const steps: Map<string, StepRecord[]> = await store.stepsOfMany(runs.map((r) => r.id));
+  const steps: Map<string, StepRecord[]> = await store.stepsOfMany(
+    runs.map((r) => r.id),
+    // The projection `snapshot.ts` passes: these harnesses exist to assert on
+    // what an operator sees, so they must read the window production reads.
+    { outputsOf: CASE_OUTPUTS },
+  );
   return buildCases(runs, steps, { limit: 200, locale: DEFAULT_LOCALE, now: () => NOW });
 }
 

@@ -193,13 +193,37 @@ export type StepStatus =
   | 'skipped'
   | 'indeterminate';
 
+/**
+ * The step's output was not fetched, because the caller said it would not read it.
+ *
+ * ============================================================================
+ * WHY THIS IS NOT `null`, AND WHY IT IS NOT A STRING EITHER
+ *
+ * `null` on this field already MEANS something: the node ran and produced
+ * nothing. That is the fact `cases.ts` reads to tell a handoff that passed
+ * zero items (`empty`) from one that never ran (`absent`) — the detection the
+ * Tracking tab exists for. A window that read "not fetched" as `null` would
+ * therefore report every chain `broken`, over healthy data, on the one screen
+ * whose red must be trustworthy.
+ *
+ * A symbol, because an output is arbitrary JSON: any string, number or object
+ * sentinel is a value some node could legitimately produce one day, and this
+ * one cannot be. It never crosses a wire — step outputs are read by the case
+ * builder and nothing else serialises them.
+ * ============================================================================
+ */
+export const OUTPUT_NOT_READ: unique symbol = Symbol('step output not read');
+
 export interface StepRecord {
   runId: string;
   nodeId: string;
   /** Numéro de passage : un nœud dans une boucle en a plusieurs. */
   attempt: number;
   status: StepStatus;
-  /** Sortie du nœud. `null` tant qu'il n'a pas abouti. */
+  /**
+   * Sortie du nœud. `null` tant qu'il n'a pas abouti — et `OUTPUT_NOT_READ`
+   * quand le lecteur a déclaré ne pas la lire (voir `StepReadOptions`).
+   */
   output: unknown;
   /** Port emprunté en sortie, qui décide de la suite. */
   port: string | null;

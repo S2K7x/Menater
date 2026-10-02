@@ -59,7 +59,7 @@ import { buildRegistry } from './transforms/registry.ts';
 import { pureHandlers } from './nodes/pure.ts';
 import { ioHandlers } from './nodes/io.ts';
 import { controlHandlers } from './nodes/control.ts';
-import { buildCases } from './cases.ts';
+import { buildCases, CASE_OUTPUTS } from './cases.ts';
 import { DEFAULT_LOCALE } from '../i18n.ts';
 import { PIPELINE_WORKFLOWS } from './workflows/pipeline.ts';
 import { ROUTING, ROUTING_WORKFLOWS } from './workflows/routing.ts';
@@ -239,7 +239,11 @@ describe('the audit record of an executed action', () => {
     });
 
     const runs = await live.store.recentRuns({ limit: 200 });
-    const steps = await live.store.stepsOfMany(runs.map((r) => r.id));
+    // The projection `snapshot.ts` passes: this asserts on the row an operator
+    // gets, so it reads the window production reads.
+    const steps = await live.store.stepsOfMany(
+      runs.map((r) => r.id), { outputsOf: CASE_OUTPUTS },
+    );
     const { cases } = buildCases(runs, steps, { limit: 200, locale: DEFAULT_LOCALE, now: () => T0 });
 
     expect(cases[0].executed).toBe(true);
