@@ -28,6 +28,7 @@
  * ============================================================================
  */
 
+import { OUTPUT_NOT_READ } from './types.ts';
 import type {
   RunRecord,
   RunStatus,
@@ -35,6 +36,33 @@ import type {
   StepStatus,
   WaitRecord,
 } from './types.ts';
+
+/**
+ * What a reader of several runs' steps declares it will READ.
+ *
+ * ============================================================================
+ * THE JOURNAL HOLDS FAR MORE THAN THE CONSOLE READS
+ *
+ * Every node writes its output, and that is the point: six months later it is
+ * the only thing that explains why a branch was taken. But the case builder
+ * reads the output of a DECLARED set of node ids — `NODE_CONTRACT` — and of
+ * the 81 nodes in the six workflows, 29 ids are in it. Measured on a real
+ * Postgres over a window of the documented size, the rest is 70% of the jsonb
+ * the query pulls: fetched, parsed into JavaScript objects, and dropped.
+ *
+ * So the caller says which outputs it wants. Omitting the option asks for
+ * everything, which is what a reader that needs the whole journal gets.
+ *
+ * WHAT A STEP OUTSIDE THE LIST CARRIES IS `OUTPUT_NOT_READ`, never `null`:
+ * see the comment on that constant. Both stores must do this identically, or
+ * the console shows one thing on Postgres and another in the tests —
+ * `store-contract.test.ts` is where that is held.
+ * ============================================================================
+ */
+export interface StepReadOptions {
+  /** Node ids whose `output` the caller will read. Absent = every output. */
+  outputsOf?: ReadonlySet<string>;
+}
 
 export interface RunStore {
   createRun(run: RunRecord): Promise<void>;
@@ -68,7 +96,7 @@ export interface RunStore {
    * of them on every refresh — the same shape as the "Promise.all over the
    * whole window" trap, moved into the database. One query, grouped here.
    */
-  stepsOfMany(runIds: string[]): Promise<Map<string, StepRecord[]>>;
+  stepsOfMany(runIds: string[], opts?: StepReadOptions): Promise<Map<string, StepRecord[]>>;
 
   /**
    * Enregistre l'INTENTION d'exécuter une étape, avant de l'exécuter.
@@ -187,13 +215,23 @@ export class MemoryRunStore implements RunStore {
       .map((r) => MemoryRunStore.copy(r));
   }
 
-  async stepsOfMany(runIds: string[]): Promise<Map<string, StepRecord[]>> {
+  async stepsOfMany(
+    runIds: string[],
+    opts: StepReadOptions = {},
+  ): Promise<Map<string, StepRecord[]>> {
     const wanted = new Set(runIds);
     const out = new Map<string, StepRecord[]>();
     for (const id of runIds) out.set(id, []);
     for (const step of this.steps) {
       if (!wanted.has(step.runId)) continue;
-      out.get(step.runId)!.push(MemoryRunStore.copy(step));
+      const copy = MemoryRunStore.copy(step);
+      // The projection is applied to the COPY. The memory store hands back
+      // copies precisely so a reader cannot reach into what it holds, and
+      // blanking the output in place would delete the journal it keeps.
+      if (opts.outputsOf !== undefined && !opts.outputsOf.has(copy.nodeId)) {
+        copy.output = OUTPUT_NOT_READ;
+      }
+      out.get(step.runId)!.push(copy);
     }
     return out;
   }

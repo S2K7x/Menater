@@ -18,10 +18,13 @@
 
 import { describe, expect, it } from 'vitest';
 
+import { readFileSync } from 'node:fs';
+
 import { buildCases, NODE_CONTRACT, WORKFLOW_LABELS } from './cases.ts';
 import { PIPELINE_WORKFLOWS } from './workflows/pipeline.ts';
 import { ROUTING_WORKFLOWS } from './workflows/routing.ts';
 import { DEFAULT_LOCALE } from '../i18n.ts';
+import { OUTPUT_NOT_READ } from './types.ts';
 import type { RunRecord, StepRecord } from './types.ts';
 
 const run = (over: Partial<RunRecord> = {}): RunRecord => ({
@@ -69,6 +72,44 @@ describe('the node contract', () => {
     for (const w of [...PIPELINE_WORKFLOWS, ...ROUTING_WORKFLOWS]) {
       expect(WORKFLOW_LABELS[w.id], `no label for ${w.id}`).toBeTruthy();
     }
+  });
+
+  it('DECLARES every output this file reads — the other direction', () => {
+    // THE HALF NOBODY HAD WRITTEN. The test above checks every id in the
+    // contract EXISTS in a workflow; nothing checked that every id the reader
+    // reads is in the contract. `respond-500` was not — read by `noteFor` for
+    // the "dedup unavailable" stage note — so renaming that node would have
+    // dropped the sentence in silence, which is the defect the table exists
+    // to prevent, inside the table.
+    //
+    // It matters more now: the contract IS the query. An output the reader
+    // reads and does not declare is no longer fetched at all.
+    //
+    // COMMENTS ARE STRIPPED FIRST. This file's own prose quotes
+    // `outputOf(steps, '…')`, and a test whose explanation vouches for the
+    // strings it hunts is a test that goes green on its own comment.
+    const src = readFileSync(new URL('./cases.ts', import.meta.url), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/[^\n]*/g, '');
+    const read = [...src.matchAll(/outputOf\(steps, '([^']+)'\)/g)].map((m) => m[1]);
+    expect(read.length, 'no outputOf call site found — has the reader been renamed?')
+      .toBeGreaterThan(10);
+    const declared = new Set(Object.values(NODE_CONTRACT).flat());
+    for (const id of new Set(read)) {
+      expect(declared.has(id), `cases.ts reads "${id}" and NODE_CONTRACT does not declare it`)
+        .toBe(true);
+    }
+  });
+
+  it('refuses an output the window did not fetch, instead of reading it as empty', () => {
+    // The net under the net. If the test above is ever defeated — a read built
+    // from a variable, a contract edited without it — the reader must FAIL,
+    // not quietly decide the node produced nothing: an undeclared handoff read
+    // that way reports `empty`, i.e. every chain BROKEN over healthy runs, on
+    // the one screen whose red has to be worth believing.
+    const r = run({ id: 'r1', workflowId: '01-ingestion' });
+    const notRead = { ...step('r1', 'validate', null), output: OUTPUT_NOT_READ };
+    expect(() => build([r], [notRead])).toThrow(/"validate" was not fetched/);
   });
 });
 

@@ -21,7 +21,9 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { OUTPUT_NOT_READ } from './engine/types.ts';
 import type { RunRecord, StepRecord } from './engine/types.ts';
+import { CASE_OUTPUTS } from './engine/cases.ts';
 
 /** The run journal the console reads, under test control. */
 let runs: RunRecord[] = [];
@@ -45,10 +47,25 @@ const store = {
     if (gate) await gate.promise;
     return answer;
   },
-  async stepsOfMany(ids: string[]): Promise<Map<string, StepRecord[]>> {
-    return new Map(ids.map((id) => [id, steps.get(id) ?? []]));
+  async stepsOfMany(
+    ids: string[],
+    opts: { outputsOf?: ReadonlySet<string> } = {},
+  ): Promise<Map<string, StepRecord[]>> {
+    // RECORDED AND HONOURED, both. Recorded because the saving is the option
+    // being passed — a fake that ignored it would go green over a
+    // `snapshot.ts` that asks for every output again. Honoured because every
+    // other test in this file then reads the window production reads.
+    askedFor = opts.outputsOf ?? null;
+    return new Map(ids.map((id) => [id, (steps.get(id) ?? []).map((st) => (
+      opts.outputsOf === undefined || opts.outputsOf.has(st.nodeId)
+        ? st
+        : { ...st, output: OUTPUT_NOT_READ }
+    ))]));
   },
 };
+
+/** The outputs the last rebuild asked the journal for. */
+let askedFor: ReadonlySet<string> | null = null;
 
 const steps = new Map<string, StepRecord[]>();
 
@@ -94,7 +111,40 @@ beforeEach(() => {
   gate = null;
   reads = 0;
   runs = [];
+  askedFor = null;
   steps.clear();
+});
+
+describe('what a rebuild asks the run journal for', () => {
+  /**
+   * THE SAVING IS THIS ONE ARGUMENT, so it is what the test claims.
+   *
+   * Every node writes its output to the journal and that is the point — six
+   * months later it is the only thing that explains why a branch was taken.
+   * But a rebuild reads the outputs of the node ids `NODE_CONTRACT` declares,
+   * 29 of the 81 nodes in the six workflows, and measured against a real
+   * Postgres the rest was 70% of the jsonb the query pulled: fetched, parsed
+   * into JavaScript objects and dropped, on the single thread that also
+   * answers the ingestion webhook.
+   */
+  it('asks for exactly the outputs the case builder declares it reads', async () => {
+    runs = [run('A')];
+    await snapshot(DEFAULT_LOCALE);
+    expect(askedFor, 'the rebuild asked for every output').not.toBeNull();
+    // Equality with the reader's own derived set, not a list retyped here: a
+    // second list is a second thing to keep in step, and this project has paid
+    // for that more than once.
+    expect([...askedFor!].sort()).toEqual([...CASE_OUTPUTS].sort());
+  });
+
+  it('does not ask for the outputs of the nodes it never reads', async () => {
+    // Named one by one because they are the expensive ones: `prompt` carries
+    // the whole triage prompt with the raw log inside it, `model` the answer,
+    // and the three enrichment nodes a provider payload each.
+    for (const id of ['prompt', 'model', 'shodan', 'abuseipdb', 'virustotal', 'in']) {
+      expect(CASE_OUTPUTS.has(id), `${id} is being fetched`).toBe(false);
+    }
+  });
 });
 
 describe('a rebuild that invalidate() disowned', () => {

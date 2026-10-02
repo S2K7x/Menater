@@ -48,6 +48,7 @@ import {
 import { messages, type Locale } from '../i18n.ts';
 import { tagAttack } from './attack.ts';
 import { codeLead } from './code-lead.ts';
+import { OUTPUT_NOT_READ } from './types.ts';
 import type { RunRecord, StepRecord } from './types.ts';
 
 /**
@@ -124,9 +125,24 @@ export const WORKFLOW_LABELS: Record<string, string> = {
  * coupling: `cases.test.ts` asserts every id here exists in the workflow
  * definitions, so renaming a node fails a test instead of silently emptying
  * the queue.
+ *
+ * ============================================================================
+ * IT IS NOW THE QUERY AS WELL, WHICH MAKES IT CHECKED IN BOTH DIRECTIONS
+ *
+ * `CASE_OUTPUTS` below is derived from this table and handed to
+ * `stepsOfMany`, so the window fetches exactly the outputs this file declares
+ * it reads. That turned the half of the assertion nobody had written into a
+ * requirement: the old test checked every id here EXISTS, and nothing checked
+ * that every id read is here. `respond-500` was not — read on line ~258 for
+ * the "dedup unavailable" stage note, declared nowhere, so renaming that node
+ * would have dropped the sentence in silence, which is the exact defect this
+ * table exists to prevent. `cases.test.ts` now reads this file's own
+ * `outputOf` call sites and fails on an undeclared one.
+ * ============================================================================
  */
 export const NODE_CONTRACT: Record<string, string[]> = {
-  '01-ingestion': ['validate', 'read-dedup', 'tuning', 'to-enrichment'],
+  // `respond-500` is the dedup-unavailable answer, read by `noteFor`.
+  '01-ingestion': ['validate', 'read-dedup', 'tuning', 'to-enrichment', 'respond-500'],
   '02-enrichment': ['assemble', 'to-decision'],
   '03-ai-decision': ['finalize', 'to-routing'],
   '04-action-routing': [
@@ -136,6 +152,17 @@ export const NODE_CONTRACT: Record<string, string[]> = {
   '05-audit-log': ['normalize', 'append', 'expose', 'unusable', 'write-failed'],
   '06-error-handler': ['normalize', 'assess', 'outcome'],
 };
+
+/**
+ * The outputs one snapshot rebuild needs, as `stepsOfMany` takes them.
+ *
+ * DERIVED, never restated: a second list would be a second thing to keep in
+ * step with the reader, and the whole point is that there is one. The union of
+ * the per-workflow ids is deliberately coarser than the contract — a node id
+ * two workflows share is fetched for both — because over-fetching is the safe
+ * direction and it keeps the query free of a join.
+ */
+export const CASE_OUTPUTS: ReadonlySet<string> = new Set(Object.values(NODE_CONTRACT).flat());
 
 /**
  * The pipeline's wiring order, used to break a timestamp tie.
@@ -156,7 +183,25 @@ function outputOf(steps: StepRecord[], nodeId: string): Record<string, unknown> 
   // LAST entry wins: a node the engine re-ran — a `pure` or `read` step whose
   // process died mid-way and was replayed on resume — is described by what it
   // finally produced, not by its first stumble. Not by a retry: there is none.
-  const matching = steps.filter((s) => s.nodeId === nodeId && s.output !== null && s.output !== undefined);
+  const matching: StepRecord[] = [];
+  for (const s of steps) {
+    if (s.nodeId !== nodeId) continue;
+    // A READ THIS FILE DID NOT DECLARE FAILS LOUDLY, HERE AND NOW.
+    //
+    // The alternative is to treat `OUTPUT_NOT_READ` as "no output", and that
+    // is the silent version of the same bug: an undeclared handoff node would
+    // read `empty`, i.e. every chain reported BROKEN over healthy runs, on the
+    // screen whose red has to be worth believing. `cases.test.ts` makes this
+    // unreachable by reading the call sites, so this is the net under the net
+    // — and the message names the fix rather than the symptom.
+    if (s.output === OUTPUT_NOT_READ) {
+      throw new Error(
+        `the output of "${nodeId}" was not fetched for run ${s.runId}: `
+        + 'the case builder reads it, so NODE_CONTRACT must declare it',
+      );
+    }
+    if (s.output !== null && s.output !== undefined) matching.push(s);
+  }
   if (matching.length === 0) return null;
   const last = matching[matching.length - 1];
   return typeof last.output === 'object' ? rec(last.output) : null;

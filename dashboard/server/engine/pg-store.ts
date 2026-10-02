@@ -36,7 +36,8 @@
 
 import { Pool, type PoolClient } from 'pg';
 
-import type { RunStore } from './store.ts';
+import type { RunStore, StepReadOptions } from './store.ts';
+import { OUTPUT_NOT_READ } from './types.ts';
 import type {
   RunRecord, RunStatus, StepRecord, StepStatus, WaitRecord,
 } from './types.ts';
@@ -233,20 +234,46 @@ export class PgRunStore implements RunStore {
     return rows.map(toRun);
   }
 
-  async stepsOfMany(runIds: string[]): Promise<Map<string, StepRecord[]>> {
+  async stepsOfMany(
+    runIds: string[],
+    opts: StepReadOptions = {},
+  ): Promise<Map<string, StepRecord[]>> {
     const out = new Map<string, StepRecord[]>();
     for (const id of runIds) out.set(id, []);
     if (runIds.length === 0) return out;
+    const wanted = opts.outputsOf;
     // ONE query, not one per run. `stepsOf` in a loop is a round trip per run
     // and the queue reads a hundred of them per refresh — the same shape as
     // the "Promise.all over the whole window" trap, moved into the database.
-    const rows = await this.q(
-      `SELECT * FROM soc_run_step WHERE run_id = ANY($1::text[])
-        ORDER BY started_at, node_id`,
-      [runIds],
-    );
+    //
+    // AND ONLY THE OUTPUTS THE CALLER SAID IT WOULD READ. The `CASE` is what
+    // keeps the other outputs out of the answer: a jsonb column is read, sent,
+    // and `JSON.parse`d per row, so selecting it for a node nobody asks about
+    // is paid three times for nothing. The filter is on `node_id` alone rather
+    // than on the (workflow, node) pair the contract declares, which
+    // over-fetches the handful of ids two workflows share — five rows in a
+    // 980-row window, measured — and buys a query with no join.
+    const rows = wanted === undefined
+      ? await this.q(
+        `SELECT * FROM soc_run_step WHERE run_id = ANY($1::text[])
+          ORDER BY started_at, node_id`,
+        [runIds],
+      )
+      : await this.q(
+        `SELECT run_id, node_id, attempt, status, port, error, started_at, ended_at,
+                CASE WHEN node_id = ANY($2::text[]) THEN output END AS output
+           FROM soc_run_step WHERE run_id = ANY($1::text[])
+          ORDER BY started_at, node_id`,
+        [runIds, [...wanted]],
+      );
     for (const row of rows) {
       const step = toStep(row);
+      // THE SENTINEL IS DECIDED BY THE LIST, NEVER BY THE VALUE. The `CASE`
+      // above hands back SQL NULL both for an output we did not ask for and
+      // for one the node really left empty, and those are different facts: a
+      // declared node whose output is genuinely `null` must stay `null`, or
+      // `handoffState` stops being able to say `empty`.
+      if (wanted !== undefined && !wanted.has(step.nodeId)) step.output = OUTPUT_NOT_READ;
       out.get(step.runId)?.push(step);
     }
     return out;

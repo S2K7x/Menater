@@ -4,6 +4,200 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-10-02 — Friday · Performance and cost
+
+**Subject**: `stepsOfMany` read the console's window with `SELECT *` over
+`soc_run_step`, whose biggest column is a jsonb output per node — and
+`cases.ts` reads the outputs of **29 node ids against the 81 nodes** in the six
+workflows. 70% of the jsonb pulled every rebuild was fetched, parsed into
+JavaScript objects and dropped, on the single thread that also answers the
+ingestion webhook.
+
+**Result**: PR opened on `claude/great-pascal-gvupmc`. Sixteen files: five
+production (`engine/types.ts`, `engine/store.ts`, `engine/pg-store.ts`,
+`engine/cases.ts`, `snapshot.ts`), eight test, three documentation (this
+journal included). +9 tests, nothing skipped or weakened.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-gvupmc` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Twenty-sixth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: `main` at a532363 gave
+dashboard typecheck 0, **1414 passed | 1 skipped**, build clean, and
+`list_pull_requests --state open` was empty. § 7 has no open cost row left —
+every performance item in it is struck through — so this is priority (5), a
+measured optimisation, and it came out of the one surface no previous
+performance night could reach: **the real database**. Every earlier Friday
+measured the memory store or the sample window, because the environment was
+believed to have no Postgres. It has `psql` 16 and the binaries, which is how
+09-30 ran the store contract's Postgres half for the first time; the recipe is
+below.
+
+**Measured**, on a window seeded by driving the REAL six workflows through the
+REAL engine into a REAL `PgRunStore` (100 Wazuh-shaped alerts with per-alert
+entropy → 501 runs, 4,100 steps), median of eleven rounds on the same data, the
+two variants A/B in one process:
+
+| window | read path before | after | `stepsOfMany` alone |
+|---|---|---|---|
+| 120 runs (**default**) | 16.52 ms | **11.94 ms** (−27.7%) | 11.09 → 7.36 ms |
+| 500 runs (ceiling) | 54.85 ms | **39.17 ms** (−28.6%) | 42.19 → 27.33 ms |
+
+- step outputs a window holds: **4,138,933 → 1,243,661 B (−70.0%)**;
+- heap held while a 500-run window is in hand: **15.98 → 13.09 MB**, identical
+  on repeated runs (one variant per process, two forced `gc()` before reading
+  `heapUsed` — the in-process A/B version of that number was GC noise and
+  reported the saving BACKWARDS, so it is not in the PR);
+- identical output: same cases, same chains, same `broken` count (0/0) at both
+  window sizes, asserted in the probe before any of the timings were believed.
+
+The expensive unread ones are worth naming: `prompt` (the whole triage prompt
+with the raw log inside it), `model`, the three enrichment payloads, and every
+sub-workflow's `in`, which is the alert again.
+
+**What I learned that is written nowhere else.**
+
+1. **This environment has Postgres 16, and the premise that it does not cost
+   four nights.** `which psql` → `/usr/bin/psql`, `/usr/lib/postgresql/16/bin`
+   has the server. The session runs as **root**, and Postgres refuses to run as
+   root, so: `initdb`/`pg_ctl` under `su postgres`, a data directory the
+   `postgres` user can reach (**not** the scratchpad — its parents are `700
+   root`, and `initdb` fails with *could not access directory*; I used
+   `/var/lib/postgresql/probe`), `mkdir /var/run/postgresql` owned by
+   `postgres`, then `-p 55432 -c fsync=off`. `sql/*.sql` applies with
+   `psql -v app_password=… -f`, all six files, no error. The contract's gate
+   then wants a URL: `MENATER_TEST_PG=postgres://postgres:x@localhost:55432/menater`
+   — **the TCP form, not the socket path**, because the file parses it with
+   `new URL()` and reads `hostname`/`port`.
+2. **`NODE_CONTRACT` was checked in one direction only, and the missing id was
+   real.** The old test asserts every id in the table EXISTS in a workflow;
+   nothing asserted that every id the reader reads is in the table.
+   `respond-500` was not — read by `noteFor` for the *« the deduplication store
+   is unavailable »* stage note — so renaming that node would have dropped the
+   sentence in silence, which is the defect the table exists to prevent. Found
+   by writing the fetch list, not by reading the file: making the declaration
+   decide the SQL is what made the second direction a requirement.
+3. **The sentinel is the whole safety argument, and `null` was the trap.**
+   `StepRecord.output === null` already MEANS *the node ran and produced
+   nothing* — the fact `handoffState` reads to tell `empty` from `absent`. A
+   window reporting *not fetched* as `null` would call **every chain broken over
+   healthy runs**: a false red on the one screen whose red has to be worth
+   believing. Hence `OUTPUT_NOT_READ`, a **symbol** (an output is arbitrary
+   JSON, so any string or object sentinel is a value some node could one day
+   legitimately produce), and it is decided by the LIST, never by the value: a
+   SQL `CASE` with no `ELSE` returns NULL for both facts, so keying the sentinel
+   on `output === null` reproduces the conflation inside its own fix. That
+   mutation is red on exactly one test.
+4. **`node_id` alone, no join.** The contract declares (workflow, node) pairs;
+   filtering on the pair needs `JOIN soc_run`. Measured both: the join version
+   and the by-id version are within noise of each other (22.38 vs 22.55 ms at
+   the ceiling) and the by-id one over-fetches **five rows in a 980-row
+   window** — the handful of ids two workflows share. Over-fetching is the safe
+   direction, and it keeps the query joinless.
+5. **The five real-pipeline harnesses had to move with it.**
+   `pipeline-to-case`, `findings`, `audit-record`, `trace-payload` and
+   `approval-route` all call `stepsOfMany` and hand the result to `buildCases`;
+   left on the full window they would have vouched for a window nobody serves.
+   Pointed at the production call shape, all 1,414 pre-existing tests still
+   pass, which is the real proof the projection loses nothing — those files
+   assert audit rows, approvals, decisions, promoted findings, replay payloads
+   and stage notes built from the real pipeline.
+6. **A fake that ignores an option goes green over the option not being
+   passed.** `snapshot.test.ts`'s store double now RECORDS `outputsOf` and
+   HONOURS it. Without the recording, the mutation that deletes the argument
+   from `snapshot.ts` — i.e. the whole saving — is invisible. Same lesson as
+   `redirect: 'manual'` against an injected transport.
+
+**Do not redo.**
+
+- **Do not make the projection return `null` for an unfetched output.** See
+  point 3. It is the plausible small version and it rebuilds the Tracking tab's
+  own defect; mutation M4 carries it.
+- **Do not key the sentinel on the value coming back null.** Mutation M5. A
+  declared handoff that genuinely passed nothing must stay `null`.
+- **Do not make `outputOf` skip an unfetched output instead of throwing.**
+  Mutation M6. The silent version of the same mistake; the structural test makes
+  the throw unreachable, which is why a throw is affordable.
+- **Do not project IN PLACE in `MemoryRunStore`.** Mutation M8 is red on
+  **eleven** tests: the store hands back copies precisely so a reader cannot
+  reach into the journal it holds, and blanking in place deletes it for the next
+  reader — `stepsOf`, which is what a resume reads.
+- **Do not restate the fetch list.** `CASE_OUTPUTS` is derived from
+  `NODE_CONTRACT`. A second list is a second thing to keep in step, and the
+  entire value here is that there is one.
+- **Do not take the `recentRuns` / `input` half as "the same change".** It is
+  measured and left open on purpose (§ 7 has the row): 809,974 B of `input` at
+  the ceiling, 81,030 of it read, 6.5 → 2.5 ms. The reason it is separate is
+  that its predicate is not a list of names the reader already declares but a
+  boolean over two columns (`workflow_id = '01-ingestion' OR alert_id IS NULL`),
+  so shipping it would put the reader's logic in SQL in two stores — three
+  copies of one rule. It needs a shape nobody has yet.
+- **Do not trust an in-process heap A/B.** Measuring `heapUsed` before and
+  after each variant in one process reported the projected window as *larger*
+  (12.22 vs 8.96 MB) because GC had not run where it mattered. One variant per
+  process plus two forced `gc()` is reproducible to the hundredth of a MB.
+
+**Found and NOT fixed** — leads, none root-caused:
+
+- The leads the previous entries left are **untouched and still open**:
+  `readVariables`/`writeVariables` with no caller (still the best of them),
+  `Settings.meta.from_env` written and never read, `forgetCursor` and
+  `fetchWithTimeout` with no caller, `static.ts`'s `immutable` on
+  non-fingerprinted `public/` assets, `attempts` in `auth.ts` never swept for
+  entries below the lock threshold, and the login throttle collapsing to one
+  bucket behind the tunnel.
+- **Measured and ruled out tonight, so nobody re-measures them**:
+  `src/i18n/console.ts` is 147 kB of source and the Guide's prose inside it is
+  **47,880 B raw / 15,579 B gzipped** — about 11% of the gzipped main bundle,
+  and splitting it out of a catalogue every screen imports buys one chunk per
+  deployment behind an `immutable` year, against a `React.lazy` failure path
+  this project already has a trap row about. `src/i18n/dictionary.ts` (50 kB,
+  the analysis catalogue) is **already** only in the lazy `VulnPipeSection`
+  chunk — the one console importer takes a type, which erases.
+  `groupBySystem` (J0.4) is `useMemo`'d on `cases`.
+
+**Verified** (Node 22.22.0, `dashboard/`, commands run and output read):
+
+| Command | Result |
+|---|---|
+| `npm run typecheck` | 0 errors |
+| `npm test` | **1423 passed, 1 skipped** (1414 \| 1 before: +9) |
+| `npm run build` | ✓ 402 ms, bundle unchanged (server-side change) |
+| `MENATER_TEST_PG=… npx vitest run store-contract` | **56 passed**, both halves, on real Postgres 16 |
+| `node --experimental-strip-types` on the five changed modules | all load |
+| `VulnPipe` | untouched — not run, nothing in `VulnPipe/` is modified |
+
+Checked **RED first**, by putting `git show HEAD:` back over the five
+production files and running the three test files: **6 of the 9 new tests
+failed**, the sharpest being *« cases.ts reads "respond-500" and NODE_CONTRACT
+does not declare it »* — a defect on code nobody had touched. The other three
+claim boundaries and pass before AND after on purpose (an omitted option still
+asks for everything; a requested output comes back whole; the journal survives a
+projected read). One of the six is red only because `CASE_OUTPUTS` does not
+exist on `main`, which is an import-shaped red, not a behavioural one — said
+here rather than counted as four.
+
+Then **eight mutations, one at a time, pristine restored INSIDE the loop**:
+
+| Mutation | Failing tests |
+|---|---|
+| M1 `snapshot.ts` asks for every output again | 1 — *asks for exactly the outputs the case builder declares* |
+| M2 Postgres keeps the `CASE`, drops the sentinel | 1 — *marks the output of a node nobody asked for as NOT READ* |
+| M3 the memory store ignores the projection | 1 — same |
+| M4 the sentinel is `null` | 1 — same |
+| M5 the sentinel decided by the VALUE | 1 — *keeps a REQUESTED output that is really empty as null* |
+| M6 `outputOf` skips an unfetched output | 1 — *refuses an output the window did not fetch* |
+| M7 `respond-500` undeclared again | 1 — *DECLARES every output this file reads* |
+| M8 the memory store projects in place | **11** — the contract test plus eight real-pipeline assertions |
+
+The control (no mutation) was green at 154 passed under the same loop, with
+`MENATER_TEST_PG` set so the Postgres half ran on every pass. The six
+measurement probes were written under `dashboard/scripts/`, run, and deleted;
+the throwaway Postgres cluster is outside the repository.
+
 ## 2026-10-01 (second run) — Thursday · Bugs and technical debt
 
 **Subject**: the cursor-less poll lookback was `interval + overlap`, justified

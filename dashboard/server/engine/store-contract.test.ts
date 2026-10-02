@@ -30,6 +30,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { MemoryRunStore, type RunStore } from './store.ts';
 import { PgRunStore, createPool } from './pg-store.ts';
+import { OUTPUT_NOT_READ } from './types.ts';
 import type { RunRecord, StepRecord } from './types.ts';
 
 const PG_URL = process.env.MENATER_TEST_PG;
@@ -181,6 +182,74 @@ function contract(name: string, make: () => Promise<RunStore>) {
       await store.createRun(b);
       await store.beginStep(step(a.id));
       expect(await store.stepsOf(b.id)).toEqual([]);
+    });
+
+    // --- La projection des sorties ----------------------------------------
+    //
+    // WRITTEN ONCE AND RUN AGAINST BOTH, for the reason this whole file
+    // exists. `snapshot.ts` asks for the outputs `NODE_CONTRACT` declares and
+    // no others, and Postgres does it with a `CASE` in SQL while the memory
+    // store does it in JavaScript — two implementations of one promise, which
+    // is precisely the shape that diverges in production and nowhere else.
+
+    it('hands back the output of a node the caller asked for', async () => {
+      const r = run();
+      await store.createRun(r);
+      await store.beginStep(step(r.id, { nodeId: 'validate' }));
+      await store.endStep(r.id, 'validate', 1, { status: 'ok', output: { validation_ok: true } });
+      const steps = await store.stepsOfMany([r.id], { outputsOf: new Set(['validate']) });
+      expect(steps.get(r.id)![0].output).toEqual({ validation_ok: true });
+    });
+
+    it('marks the output of a node nobody asked for as NOT READ', async () => {
+      const r = run();
+      await store.createRun(r);
+      await store.beginStep(step(r.id, { nodeId: 'prompt' }));
+      await store.endStep(r.id, 'prompt', 1, { status: 'ok', output: { messages: ['…'] } });
+      const steps = await store.stepsOfMany([r.id], { outputsOf: new Set(['validate']) });
+      const [only] = steps.get(r.id)!;
+      // NOT `null`, and that is the whole point: `null` means the node ran and
+      // produced nothing, which is what tells `empty` from `absent` on a
+      // handoff. Collapsing the two would report every chain broken.
+      expect(only.output).toBe(OUTPUT_NOT_READ);
+      expect(only.output).not.toBeNull();
+      // Everything else about the step is still there: the projection is about
+      // the output alone, and the Tracking tab reads the rest.
+      expect(only.nodeId).toBe('prompt');
+      expect(only.status).toBe('ok');
+    });
+
+    it('keeps a REQUESTED output that is really empty as null', async () => {
+      const r = run();
+      await store.createRun(r);
+      await store.beginStep(step(r.id, { nodeId: 'to-enrichment' }));
+      // A handoff that ran and passed nothing — the `empty` the Tracking tab
+      // exists to show. The sentinel must be decided by the LIST, never by the
+      // value coming back null.
+      await store.endStep(r.id, 'to-enrichment', 1, { status: 'ok' });
+      const steps = await store.stepsOfMany([r.id], { outputsOf: new Set(['to-enrichment']) });
+      expect(steps.get(r.id)![0].output).toBeNull();
+    });
+
+    it('asks for every output when no list is given', async () => {
+      const r = run();
+      await store.createRun(r);
+      await store.beginStep(step(r.id, { nodeId: 'prompt' }));
+      await store.endStep(r.id, 'prompt', 1, { status: 'ok', output: { messages: ['…'] } });
+      const steps = await store.stepsOfMany([r.id]);
+      expect(steps.get(r.id)![0].output).toEqual({ messages: ['…'] });
+    });
+
+    it('does not blank the journal it holds — a second read still has the output', async () => {
+      const r = run();
+      await store.createRun(r);
+      await store.beginStep(step(r.id, { nodeId: 'prompt' }));
+      await store.endStep(r.id, 'prompt', 1, { status: 'ok', output: { messages: ['…'] } });
+      await store.stepsOfMany([r.id], { outputsOf: new Set(['validate']) });
+      // The projection is a VIEW. A memory store that blanked the output in
+      // place would lose the journal, and the loss would only show on the next
+      // reader — `stepsOf`, which is what a resume reads.
+      expect((await store.stepsOf(r.id))[0].output).toEqual({ messages: ['…'] });
     });
 
     // --- Attentes ---------------------------------------------------------

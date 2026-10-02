@@ -55,7 +55,7 @@ import { ioHandlers } from './engine/nodes/io.ts';
 import { controlHandlers } from './engine/nodes/control.ts';
 import { PIPELINE_WORKFLOWS } from './engine/workflows/pipeline.ts';
 import { ROUTING_WORKFLOWS } from './engine/workflows/routing.ts';
-import { buildCases } from './engine/cases.ts';
+import { buildCases, CASE_OUTPUTS } from './engine/cases.ts';
 import { interpretApproval } from './engine/transforms/routing.ts';
 import { computeMetrics } from './snapshot.ts';
 import { DEFAULT_LOCALE } from './i18n.ts';
@@ -222,7 +222,12 @@ async function auditRecord() {
 /** Every run with its steps, handed to the reader the console screens use. */
 async function collect() {
   const runs: RunRecord[] = await live.store.recentRuns({ limit: 200 });
-  const steps: Map<string, StepRecord[]> = await live.store.stepsOfMany(runs.map((r) => r.id));
+  const steps: Map<string, StepRecord[]> = await live.store.stepsOfMany(
+    runs.map((r) => r.id),
+    // The projection `snapshot.ts` passes: these harnesses exist to assert on
+    // what an operator sees, so they must read the window production reads.
+    { outputsOf: CASE_OUTPUTS },
+  );
   return buildCases(runs, steps, { limit: 200, locale: DEFAULT_LOCALE, now: () => NOW });
 }
 
