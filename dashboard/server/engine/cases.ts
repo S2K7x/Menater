@@ -48,8 +48,9 @@ import {
 import { messages, type Locale } from '../i18n.ts';
 import { tagAttack } from './attack.ts';
 import { codeLead } from './code-lead.ts';
-import { OUTPUT_NOT_READ } from './types.ts';
+import { INPUT_NOT_READ, OUTPUT_NOT_READ } from './types.ts';
 import type { RunRecord, StepRecord } from './types.ts';
+import type { RunInputFilter } from './store.ts';
 
 /**
  * The alert as the webhook received it, kept for `POST /api/replay`.
@@ -165,6 +166,42 @@ export const NODE_CONTRACT: Record<string, string[]> = {
 export const CASE_OUTPUTS: ReadonlySet<string> = new Set(Object.values(NODE_CONTRACT).flat());
 
 /**
+ * The runs one snapshot rebuild opens the `input` of, as `recentRuns` takes it.
+ *
+ * ============================================================================
+ * THE RULE LIVES HERE AND NOWHERE ELSE
+ *
+ * This file reads `run.input` in exactly two places, and both are below:
+ *
+ *   - a `01-ingestion` run, for the alert as the webhook received it (the card's
+ *     fields, and the payload `POST /api/replay` re-sends);
+ *   - a run with NO `alert_id`, for the `diagnostic_probe` marker — the Health
+ *     tab's probe is deliberately invalid, so it has none, and counted as an
+ *     anomaly it would raise `attention` after every connectivity test.
+ *
+ * THE SECOND TEST IS FALSY, NOT `=== null`, because that is what the reader
+ * below writes (`if (!alertId)`). A predicate that is stricter than the read it
+ * authorises is the same defect as one that is looser: an `alertId` of `''`
+ * would take the orphan branch, open the input, and find the sentinel. The two
+ * have to be the same test, not two tests that agree today.
+ *
+ * The four sub-workflow runs an alert produces carry the alert again and nobody
+ * opens them: 895,641 bytes of input in a seeded window against 99,049 read.
+ *
+ * It is a FUNCTION rather than a list because it selects rows by a rule over
+ * two columns, and a rule restated per store is a rule that drifts. The
+ * trade-off is in `RunReadOptions`.
+ *
+ * NOT A SECOND LIST EITHER: `inputOf` below is the only way this file reads the
+ * field, and `cases.test.ts` reads this file's own source to prove it — a raw
+ * `run.input` would receive the sentinel and read a probe as an anomaly in
+ * silence.
+ * ============================================================================
+ */
+export const CASE_INPUTS: RunInputFilter = (run) =>
+  run.workflowId === '01-ingestion' || !run.alertId;
+
+/**
  * The pipeline's wiring order, used to break a timestamp tie.
  *
  * `06-error-handler` is last because it is never IN the sequence: it is called
@@ -177,6 +214,26 @@ const WORKFLOW_ORDER = [
 ];
 
 const rec = (v: unknown): Record<string, unknown> => (v ?? {}) as Record<string, unknown>;
+
+/**
+ * The payload a run received.
+ *
+ * Throws on an input the window did not fetch, for the reason `outputOf` throws
+ * on an output: the silent version reads `undefined`, which is what a payload
+ * that simply does not carry the probe marker also reads as — so a connectivity
+ * test would file itself among the anomalies, on the tab whose alarm has to be
+ * worth reading. `cases.test.ts` makes this unreachable by reading the call
+ * sites; this is the net under the net, and the message names the fix.
+ */
+function inputOf(run: RunRecord): unknown {
+  if (run.input === INPUT_NOT_READ) {
+    throw new Error(
+      `the input of run ${run.id} (${run.workflowId}) was not fetched: `
+      + 'the case builder reads it, so CASE_INPUTS must select it',
+    );
+  }
+  return run.input;
+}
 
 /** The output of a node, or `null` if it never produced one. */
 function outputOf(steps: StepRecord[], nodeId: string): Record<string, unknown> | null {
@@ -513,8 +570,9 @@ export function buildCases(
       //
       // It is LISTED, never counted: `UNEXPECTED_ORPHANS` is the list the
       // counter uses, and `diagnostic_probe` is deliberately not in it.
-      const marker = rec(run.input).diagnostic_probe === true
-        || rec(rec(run.input).extensions).diagnostic_probe === true;
+      const received = rec(inputOf(run));
+      const marker = received.diagnostic_probe === true
+        || rec(received.extensions).diagnostic_probe === true;
       exec.orphan_reason = marker
         ? 'diagnostic_probe'
         : steps.length === 0 ? 'empty_input' : 'no_alert_id';
@@ -535,7 +593,7 @@ export function buildCases(
     // never went through 01 keeps `null`: `POST /api/replay` refuses rather
     // than replaying an alert reconstructed from memory.
     if (run.workflowId === '01-ingestion') {
-      const alert = rec(run.input);
+      const alert = rec(inputOf(run));
       applyAlertFields(c, alert);
       c.received_at = run.startedAt;
       // AS THE WEBHOOK RECEIVED IT, not as a card would print it: this is

@@ -20,11 +20,11 @@ import { describe, expect, it } from 'vitest';
 
 import { readFileSync } from 'node:fs';
 
-import { buildCases, NODE_CONTRACT, WORKFLOW_LABELS } from './cases.ts';
+import { buildCases, CASE_INPUTS, NODE_CONTRACT, WORKFLOW_LABELS } from './cases.ts';
 import { PIPELINE_WORKFLOWS } from './workflows/pipeline.ts';
 import { ROUTING_WORKFLOWS } from './workflows/routing.ts';
 import { DEFAULT_LOCALE } from '../i18n.ts';
-import { OUTPUT_NOT_READ } from './types.ts';
+import { INPUT_NOT_READ, OUTPUT_NOT_READ } from './types.ts';
 import type { RunRecord, StepRecord } from './types.ts';
 
 const run = (over: Partial<RunRecord> = {}): RunRecord => ({
@@ -99,6 +99,66 @@ describe('the node contract', () => {
       expect(declared.has(id), `cases.ts reads "${id}" and NODE_CONTRACT does not declare it`)
         .toBe(true);
     }
+  });
+
+  it('SELECTS every run whose input this file reads — the same direction, for the window', () => {
+    // `CASE_INPUTS` decides which inputs the window fetches, so a run the
+    // reader opens and the predicate does not select arrives with the sentinel
+    // and takes the rebuild down. Both kinds are claimed here.
+    expect(CASE_INPUTS({ workflowId: '01-ingestion', alertId: 'ALT-1' })).toBe(true);
+    // THE SHARP ONE. The connectivity probe is recognised by a marker inside
+    // the input, and it has no `alert_id` by design. Dropped from the
+    // predicate, every probe would read as `no_alert_id` — i.e. `attention` on
+    // the Tracking tab after every connectivity test, which is the permanent
+    // alarm this product refuses. And a sub-workflow started with nothing is
+    // the same shape: `empty_input` is read off a run with no `alert_id` too.
+    expect(CASE_INPUTS({ workflowId: '01-ingestion', alertId: null })).toBe(true);
+    expect(CASE_INPUTS({ workflowId: '02-enrichment', alertId: null })).toBe(true);
+    // AND THE SAME TEST THE READER WRITES, which is falsy and not `=== null`:
+    // `buildCases` takes the orphan branch on `if (!alertId)`, so a run whose
+    // `alert_id` came back as the empty string opens its input too. A predicate
+    // stricter than the read it authorises sends the rebuild into the throw.
+    expect(CASE_INPUTS({ workflowId: '02-enrichment', alertId: '' })).toBe(true);
+    // And the four runs per alert that carry the alert again, which nobody
+    // opens. This is the saving; it is asserted so a predicate widened by
+    // accident fails here rather than going quietly back to `SELECT *`.
+    for (const workflowId of ['02-enrichment', '03-ai-decision', '04-action-routing',
+      '05-audit-log', '06-error-handler']) {
+      expect(CASE_INPUTS({ workflowId, alertId: 'ALT-1' }), `${workflowId} is fetched for nothing`)
+        .toBe(false);
+    }
+  });
+
+  it('reads a run\'s input through ONE accessor, so the sentinel cannot be read as absent', () => {
+    // The input half of the test above this one, and it has to be read off the
+    // SOURCE: `INPUT_NOT_READ` is a symbol, so `rec(run.input).diagnostic_probe`
+    // compiles, runs, and answers `undefined` — exactly what a payload that does
+    // not carry the marker answers. There is no type and no runtime check that
+    // would catch a raw read; the only thing that can is that there is one way
+    // in. Comments are stripped first: this file's prose quotes `run.input`, and
+    // a test whose explanation vouches for the strings it hunts goes green on
+    // its own comment.
+    const src = readFileSync(new URL('./cases.ts', import.meta.url), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/[^\n]*/g, '');
+    const start = src.indexOf('function inputOf(');
+    expect(start, 'inputOf has gone — has the accessor been renamed?').toBeGreaterThan(-1);
+    const end = src.indexOf('\n}', start);
+    const outside = src.slice(0, start) + src.slice(end);
+    const raw = [...outside.matchAll(/\brun\.input\b/g)];
+    expect(raw.length, 'cases.ts reads run.input outside inputOf(): the sentinel '
+      + 'would read as a payload carrying no marker, in silence').toBe(0);
+    // And the accessor is really used, or the rule above is vacuous.
+    expect([...src.matchAll(/inputOf\(run\)/g)].length).toBeGreaterThan(1);
+  });
+
+  it('refuses an input the window did not fetch, instead of reading it as absent', () => {
+    // The net under the net, for the input half. A run with no `alert_id` whose
+    // input was not fetched would otherwise be filed `no_alert_id` instead of
+    // `diagnostic_probe` — a counted anomaly after every connectivity test,
+    // which is the permanent alarm that stops being read.
+    const r = run({ id: 'r9', alertId: null, input: INPUT_NOT_READ });
+    expect(() => build([r], [])).toThrow(/input of run r9 .* was not fetched/);
   });
 
   it('refuses an output the window did not fetch, instead of reading it as empty', () => {

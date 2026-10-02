@@ -21,9 +21,9 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { OUTPUT_NOT_READ } from './engine/types.ts';
+import { INPUT_NOT_READ, OUTPUT_NOT_READ } from './engine/types.ts';
 import type { RunRecord, StepRecord } from './engine/types.ts';
-import { CASE_OUTPUTS } from './engine/cases.ts';
+import { CASE_INPUTS, CASE_OUTPUTS } from './engine/cases.ts';
 
 /** The run journal the console reads, under test control. */
 let runs: RunRecord[] = [];
@@ -38,12 +38,20 @@ const deferred = () => {
 };
 
 const store = {
-  async recentRuns(): Promise<RunRecord[]> {
+  async recentRuns(
+    opts: { inputOf?: (r: Pick<RunRecord, 'workflowId' | 'alertId'>) => boolean } = {},
+  ): Promise<RunRecord[]> {
     reads += 1;
+    // RECORDED AND HONOURED, for the reason `stepsOfMany` below is: the saving
+    // is the option being passed, so a fake that ignored it would stay green
+    // over a `snapshot.ts` that went back to asking for every input.
+    inputsAskedFor = opts.inputOf ?? null;
     // What the journal held WHEN IT WAS ASKED, not when it got round to
     // answering. That is the whole shape of the defect: a slow answer to an
     // early question, arriving after a write it knows nothing about.
-    const answer = runs;
+    const answer = opts.inputOf === undefined
+      ? runs
+      : runs.map((r) => (opts.inputOf!(r) ? r : { ...r, input: INPUT_NOT_READ }));
     if (gate) await gate.promise;
     return answer;
   },
@@ -66,6 +74,9 @@ const store = {
 
 /** The outputs the last rebuild asked the journal for. */
 let askedFor: ReadonlySet<string> | null = null;
+/** The input predicate the last rebuild handed the journal. */
+let inputsAskedFor:
+  ((r: Pick<RunRecord, 'workflowId' | 'alertId'>) => boolean) | null = null;
 
 const steps = new Map<string, StepRecord[]>();
 
@@ -112,6 +123,7 @@ beforeEach(() => {
   reads = 0;
   runs = [];
   askedFor = null;
+  inputsAskedFor = null;
   steps.clear();
 });
 
@@ -135,6 +147,44 @@ describe('what a rebuild asks the run journal for', () => {
     // second list is a second thing to keep in step, and this project has paid
     // for that more than once.
     expect([...askedFor!].sort()).toEqual([...CASE_OUTPUTS].sort());
+  });
+
+  it('asks for exactly the inputs the case builder declares it reads', async () => {
+    // The same claim one level up, and the one the whole night is about: the
+    // other four runs an alert produces each carry the alert AGAIN as their
+    // sub-workflow payload, and nobody opens it. Measured on a real Postgres
+    // over a seeded window: 895,641 bytes of input in the table, 99,049 read.
+    runs = [run('A')];
+    await snapshot(DEFAULT_LOCALE);
+    expect(inputsAskedFor, 'the rebuild asked for every input').not.toBeNull();
+    // Identity with the reader's own predicate, not a predicate retyped here:
+    // the rule has to exist once, which is why it is a function and not data.
+    expect(inputsAskedFor).toBe(CASE_INPUTS);
+  });
+
+  it('still reads the input of a run with no alert id, which is a SUB-workflow too', async () => {
+    // THE HALF A LIST OF WORKFLOW IDS WOULD HAVE LOST, and it is behavioural
+    // rather than a property of the predicate: `cases.ts` opens the input of
+    // EVERY run without an `alert_id`, to tell the Health tab's connectivity
+    // probe from a real anomaly. A sub-workflow trigger that ran without
+    // receiving anything has no `alert_id` either — that is the `empty_input`
+    // signature the Tracking tab exists to show — so a predicate narrowed to
+    // `01-ingestion` sends the rebuild into `inputOf`'s throw, and the console
+    // falls back to the sample set with a message about the database.
+    runs = [{
+      id: 'run-orphan',
+      workflowId: '02-enrichment',
+      workflowVersion: 1,
+      status: 'done',
+      alertId: null,
+      input: null,
+      startedAt: '2026-09-11T10:00:00.000Z',
+      endedAt: '2026-09-11T10:00:01.000Z',
+      error: null,
+    }];
+    const snap = await snapshot(DEFAULT_LOCALE);
+    expect(snap.health.mode, 'the rebuild threw and fell back to the sample set').toBe('live');
+    expect(snap.trace.orphans.map((o) => o.orphan_reason)).toEqual(['empty_input']);
   });
 
   it('does not ask for the outputs of the nodes it never reads', async () => {

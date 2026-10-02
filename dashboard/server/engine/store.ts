@@ -28,7 +28,7 @@
  * ============================================================================
  */
 
-import { OUTPUT_NOT_READ } from './types.ts';
+import { INPUT_NOT_READ, OUTPUT_NOT_READ } from './types.ts';
 import type {
   RunRecord,
   RunStatus,
@@ -64,6 +64,50 @@ export interface StepReadOptions {
   outputsOf?: ReadonlySet<string>;
 }
 
+/**
+ * Which runs' `input` a reader of a window declares it will READ.
+ *
+ * ============================================================================
+ * A PREDICATE, NOT A LIST — AND THAT IS THE WHOLE DECISION
+ *
+ * `soc_run.input` is the payload a run received, kept so a replay is possible.
+ * Four of the five runs an alert produces are sub-workflow calls, and each of
+ * them carries the alert AGAIN; the case builder opens the input of exactly two
+ * kinds of run — the one that entered through `01-ingestion`, and one with no
+ * `alert_id`, where a marker inside the payload tells the connectivity probe
+ * from a real anomaly. Measured on a real Postgres over a seeded window:
+ * **895,641 bytes of input, 99,049 of it read**.
+ *
+ * `outputsOf` above can be a SET because what it selects is a column's own
+ * value. This selects a ROW, by a rule over two columns — and a rule has to
+ * live in one place. Expressed as data (a workflow-id list plus an orphan
+ * flag) it would be interpreted twice, once in SQL and once in JavaScript, so
+ * the reader's logic would exist in three copies; expressed as a function it
+ * exists once, in `cases.ts`, beside the lines that read the field.
+ *
+ * The price is that the Postgres store cannot push it down, so it reads the
+ * window's identity first and the inputs it was asked for second — ONE extra
+ * round trip for the whole window, not one per run. That trip is AWAITED,
+ * which is the opposite of the cost this change removes: the bytes it no
+ * longer fetches were parsed ON the single thread that also answers the
+ * ingestion webhook. Both numbers are in the pull request.
+ *
+ * A RUN OUTSIDE THE PREDICATE CARRIES `INPUT_NOT_READ`, never `null`: see the
+ * comment on that constant. Both stores must do this identically, or the
+ * console shows one thing on Postgres and another in the tests —
+ * `store-contract.test.ts` is where that is held.
+ * ============================================================================
+ */
+export type RunInputFilter = (run: Pick<RunRecord, 'workflowId' | 'alertId'>) => boolean;
+
+export interface RunReadOptions {
+  limit: number;
+  /** Lower bound on `startedAt`, so a short window does not page a year. */
+  since?: string | null;
+  /** Runs whose `input` the caller will read. Absent = every input. */
+  inputOf?: RunInputFilter;
+}
+
 export interface RunStore {
   createRun(run: RunRecord): Promise<void>;
   getRun(runId: string): Promise<RunRecord | null>;
@@ -87,7 +131,7 @@ export interface RunStore {
    * two-hour window does not page through a year of history.
    * ==========================================================================
    */
-  recentRuns(opts: { limit: number; since?: string | null }): Promise<RunRecord[]>;
+  recentRuns(opts: RunReadOptions): Promise<RunRecord[]>;
 
   /**
    * The steps of several runs at once.
@@ -203,7 +247,7 @@ export class MemoryRunStore implements RunStore {
       .map(MemoryRunStore.copy);
   }
 
-  async recentRuns(opts: { limit: number; since?: string | null }): Promise<RunRecord[]> {
+  async recentRuns(opts: RunReadOptions): Promise<RunRecord[]> {
     const floor = opts.since ? Date.parse(opts.since) : null;
     return [...this.runs.values()]
       .filter((r) => floor === null || Date.parse(r.startedAt) >= floor)
@@ -212,7 +256,15 @@ export class MemoryRunStore implements RunStore {
       // itself between two refreshes for no reason the operator can see.
       .sort((a, b) => (Date.parse(b.startedAt) - Date.parse(a.startedAt)) || b.id.localeCompare(a.id))
       .slice(0, opts.limit)
-      .map((r) => MemoryRunStore.copy(r));
+      .map((r) => {
+        const copy = MemoryRunStore.copy(r);
+        // ON THE COPY, never on the record this store holds. The memory store
+        // hands back copies precisely so a reader cannot reach into its
+        // journal, and blanking the input in place would delete it for the
+        // next reader — `getRun`, which is what a resume reads.
+        if (opts.inputOf !== undefined && !opts.inputOf(copy)) copy.input = INPUT_NOT_READ;
+        return copy;
+      });
   }
 
   async stepsOfMany(

@@ -32,7 +32,7 @@ import { injectAlert } from './injection.ts';
 import { isolationTarget } from './engine/transforms/domain.ts';
 import { UNTRUSTED_ALERT_FIELDS } from './assistant/sanitize.ts';
 import { alertSeverity, findingAlertId, findingToAlert, scanRepository } from './findings.ts';
-import { buildCases, CASE_OUTPUTS } from './engine/cases.ts';
+import { buildCases, CASE_INPUTS, CASE_OUTPUTS } from './engine/cases.ts';
 import { DEFAULT_LOCALE } from './i18n.ts';
 import type { RunRecord, StepRecord } from './engine/types.ts';
 
@@ -369,7 +369,7 @@ function assemble(opts: { dedup?: boolean } = {}) {
 
 /** The journal the engine just wrote, read the way `snapshot.ts` reads it. */
 async function casesOf(store: MemoryRunStore) {
-  const runs: RunRecord[] = await store.recentRuns({ limit: 200 });
+  const runs: RunRecord[] = await store.recentRuns({ limit: 200, inputOf: CASE_INPUTS });
   const steps: Map<string, StepRecord[]> = await store.stepsOfMany(
     runs.map((r) => r.id),
     // The projection `snapshot.ts` passes: these harnesses exist to assert on

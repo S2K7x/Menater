@@ -214,6 +214,31 @@ export type StepStatus =
  */
 export const OUTPUT_NOT_READ: unique symbol = Symbol('step output not read');
 
+/**
+ * The run's input was not fetched, because the caller said it would not read it.
+ *
+ * ============================================================================
+ * THE SAME ARGUMENT AS `OUTPUT_NOT_READ`, AND A DIFFERENT FACT UNDERNEATH
+ *
+ * `soc_run.input` is `jsonb NOT NULL`, which does not make `null` impossible:
+ * `createRun` writes `JSON.stringify(run.input ?? null)`, so a run started with
+ * nothing holds JSON `null` and comes back as JavaScript `null`. That is the
+ * `empty_input` signature the Tracking tab exists to show — a sub-workflow
+ * trigger that ran without receiving anything.
+ *
+ * So `null` here means *this run received nothing*, and a window that reported
+ * *not fetched* the same way would turn the diagnostic probe into an
+ * `no_alert_id` anomaly after every connectivity test: `cases.ts` recognises
+ * the probe by a marker INSIDE the input, and `undefined` on that read is
+ * indistinguishable from a payload that does not carry it.
+ *
+ * A symbol, for the reason the constant above gives: an input is arbitrary
+ * JSON, so any string or object sentinel is a payload some source could send.
+ * It never crosses a wire — `cases.ts` reads it and nothing serialises it.
+ * ============================================================================
+ */
+export const INPUT_NOT_READ: unique symbol = Symbol('run input not read');
+
 export interface StepRecord {
   runId: string;
   nodeId: string;
@@ -239,7 +264,12 @@ export interface RunRecord {
   status: RunStatus;
   /** Corrélation métier. C'est par lui que la console recolle les cas. */
   alertId: string | null;
-  /** Charge utile d'entrée, conservée telle quelle pour permettre un rejeu. */
+  /**
+   * Charge utile d'entrée, conservée telle quelle pour permettre un rejeu.
+   *
+   * `INPUT_NOT_READ` quand le lecteur a déclaré ne pas la lire (voir
+   * `RunReadOptions`).
+   */
   input: unknown;
   startedAt: string;
   endedAt: string | null;

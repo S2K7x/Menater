@@ -36,8 +36,8 @@
 
 import { Pool, type PoolClient } from 'pg';
 
-import type { RunStore, StepReadOptions } from './store.ts';
-import { OUTPUT_NOT_READ } from './types.ts';
+import type { RunReadOptions, RunStore, StepReadOptions } from './store.ts';
+import { INPUT_NOT_READ, OUTPUT_NOT_READ } from './types.ts';
 import type {
   RunRecord, RunStatus, StepRecord, StepStatus, WaitRecord,
 } from './types.ts';
@@ -119,6 +119,17 @@ export function describePgError(err: unknown, where: string): string {
 
 const iso = (v: unknown): string | null =>
   v instanceof Date ? v.toISOString() : v === null || v === undefined ? null : String(v);
+
+/**
+ * Every column of `soc_run` except `input`.
+ *
+ * Written out rather than subtracted, because a `SELECT *` minus one column is
+ * not something SQL can say — and because `toRun` reads these names, so a
+ * column added to the table and not here is a field that silently stops
+ * arriving on a projected read.
+ */
+const COLS_WITHOUT_INPUT =
+  'id, workflow_id, workflow_version, status, alert_id, started_at, ended_at, error';
 
 function toRun(row: Record<string, unknown>): RunRecord {
   return {
@@ -216,22 +227,51 @@ export class PgRunStore implements RunStore {
     return rows.map(toRun);
   }
 
-  async recentRuns(opts: { limit: number; since?: string | null }): Promise<RunRecord[]> {
+  async recentRuns(opts: RunReadOptions): Promise<RunRecord[]> {
     // `started_at DESC, id DESC` and a hard LIMIT: this is the console's
     // hottest read, and an unbounded ORDER BY over a year of runs is how a
     // triage queue becomes slower every week it is used. `id` breaks ties so
     // the order is stable between two refreshes.
+    //
+    // AND ONLY THE INPUTS THE CALLER SAID IT WOULD READ. `input` is by far the
+    // widest column here — the alert as it arrived, raw log included — and the
+    // predicate selects a ROW rather than a column, so it cannot travel into
+    // this query the way `stepsOfMany`'s list of node ids does. The window's
+    // identity comes back first, the inputs asked for second: one extra round
+    // trip for the whole window, against 750 kB of jsonb this process no longer
+    // fetches and parses. See `RunReadOptions`.
+    const cols = opts.inputOf === undefined ? '*' : COLS_WITHOUT_INPUT;
     const rows = opts.since
       ? await this.q(
-        `SELECT * FROM soc_run WHERE started_at >= $1
+        `SELECT ${cols} FROM soc_run WHERE started_at >= $1
            ORDER BY started_at DESC, id DESC LIMIT $2`,
         [opts.since, opts.limit],
       )
       : await this.q(
-        'SELECT * FROM soc_run ORDER BY started_at DESC, id DESC LIMIT $1',
+        `SELECT ${cols} FROM soc_run ORDER BY started_at DESC, id DESC LIMIT $1`,
         [opts.limit],
       );
-    return rows.map(toRun);
+    const runs = rows.map(toRun);
+    if (opts.inputOf === undefined) return runs;
+
+    // THE SENTINEL IS SET FIRST, FOR EVERY RUN. A row the second query does not
+    // answer for therefore stays `INPUT_NOT_READ` and fails loudly where it is
+    // read, instead of arriving as `null` — which is a legitimate payload here
+    // and would make a diagnostic probe look like an anomaly. Nothing deletes
+    // from `soc_run` (it is the journal) and `input` is written once, at INSERT
+    // and never updated, so the two reads cannot disagree about a row they both
+    // see.
+    for (const r of runs) r.input = INPUT_NOT_READ;
+    const wanted = runs.filter((r) => opts.inputOf!(r)).map((r) => r.id);
+    if (wanted.length === 0) return runs;
+    const inputs = new Map<string, unknown>();
+    for (const row of await this.q(
+      'SELECT id, input FROM soc_run WHERE id = ANY($1::text[])', [wanted],
+    )) {
+      inputs.set(String(row.id), row.input);
+    }
+    for (const r of runs) if (inputs.has(r.id)) r.input = inputs.get(r.id);
+    return runs;
   }
 
   async stepsOfMany(
