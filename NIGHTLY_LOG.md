@@ -4,6 +4,240 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-10-02 (second run) — Friday · Performance and cost
+
+**Subject**: the mirror half of the previous run's change, and the row § 7 left
+open with its shape undecided. `recentRuns` — the console's hottest read — was
+`SELECT *` over `soc_run`, whose widest column is `input`, the payload a run
+received. `cases.ts` opens that payload for **two kinds of run out of five**: a
+`01-ingestion` run (the alert fields and the replay payload) and a run with no
+`alert_id` (the `diagnostic_probe` marker). The other four runs an alert
+produces each carry the alert AGAIN as their sub-workflow payload, and nobody
+opens it.
+
+**Result**: PR opened on `claude/great-pascal-t5zal8`. Fourteen files: five
+production (`engine/types.ts`, `engine/store.ts`, `engine/pg-store.ts`,
+`engine/cases.ts`, `snapshot.ts`), eight test (one new), three documentation
+(this journal included). **+14 tests**, nothing skipped or weakened.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-t5zal8` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Twenty-seventh entry saying so**; it is a line
+in the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: `main` at f49929d gave
+dashboard typecheck 0, **1423 passed | 1 skipped**, build clean, and
+`list_pull_requests --state open` was empty. This is priority (3) — the one
+open performance row in § 7 — and (5), a measured optimisation. The previous
+run deliberately did not take it and said why: *« the honest version needs the
+predicate to be derived from something, or the field to be asked for per run
+id; neither is obvious »*. The second of those is what shipped.
+
+**The shape, because it is the whole decision.** `outputsOf` on `stepsOfMany`
+can be a `Set` because it selects a COLUMN's value by name. This selects a ROW,
+by a rule over two columns (`workflow_id = '01-ingestion' OR alert_id IS NULL`).
+Expressed as data — a workflow-id list plus an orphan flag — it is interpreted
+once in SQL and once in JavaScript, which is the reader's logic in three
+copies; that is what § 7 refused. So `RunReadOptions.inputOf` is a
+**predicate function**, `CASE_INPUTS`, exported from `cases.ts` and sitting
+beside the two lines that read the field. The price is that `PgRunStore` cannot
+push it down: it reads the window's identity first and the inputs it was asked
+for second, one extra round trip for the whole window.
+
+**That price is not the cost being removed**, and this is the argument the
+numbers had to settle: the extra trip is AWAITED — the event loop is free
+during it — while the bytes it no longer fetches were `JSON.parse`d ON the
+single thread that also answers the ingestion webhook. So CPU is reported
+separately from wall clock.
+
+**Measured**, on a window produced by driving the REAL six workflows through
+the REAL engine into a REAL `PgRunStore` (100 Wazuh-shaped alerts with
+per-alert entropy and a moving clock → 501 runs, 4,104 steps), median of 21
+rounds with the two variants **alternating** inside the loop, three independent
+seeded runs:
+
+| | before | after |
+|---|---|---|
+| `input` in the table / read by the reader | 895,641 B | 99,049 B (11.1%) |
+| `recentRuns`, 500-run ceiling — wall | 7.4–9.0 ms | **4.8–5.7 ms** |
+| `recentRuns`, 500-run ceiling — **CPU** | 7.3–8.4 ms | **3.6–4.3 ms** |
+| input bytes in hand, ceiling | 846,725 B | **95,248 B (−88.8%)** |
+| input bytes in hand, default 120-run window | 202,443 B | **22,891 B** |
+| `recentRuns`, default window — CPU | 2.0–2.8 ms | 1.5–2.1 ms |
+| whole read path (`recentRuns` + `stepsOfMany` + `buildCases`), ceiling | 48.1–48.8 ms | 43.7–45.9 ms |
+| heap held with a 500-run window in hand | 14.38 MB | **13.53 MB** |
+
+The heap figure is one variant per process with two forced `gc()` — the lesson
+the previous run wrote down — and it reproduced to the hundredth of a MB on
+repeat. The whole-path saving is **small and said so**: ~5 ms of CPU at the
+ceiling, within noise at the default window. § 7 called this saving a quarter of
+the previous one and it was right.
+
+Identity was asserted BEFORE any timing was believed: same window size, same
+order, same `input` for every run the predicate selects, and `buildCases`
+producing byte-identical cases, `broken` count and orphan reasons — the
+diagnostic probe among them — at both window sizes.
+
+**What I learned that is written nowhere else.**
+
+1. **A projection applied AFTER the rows are in hand is invisible to every test
+   of what the answer says.** `PgRunStore` sets `INPUT_NOT_READ` in JavaScript
+   once the rows arrive, so putting `SELECT *` back satisfies the whole store
+   contract — sentinel still set, values still right, both stores still agree —
+   and `SELECT *` is the entire defect. The first mutation pass had **nine
+   killed and the tenth was the change itself**, surviving all 1,432 tests.
+   What closes it counts the WORK: a pool double that hands back only the
+   columns a query NAMED, and an assertion on how many `input` values crossed
+   the pool (0 on the window query, 2 on the narrow one). Not the SQL text — a
+   reformat would break it — and not milliseconds, which is the flaky kind this
+   project removed once already. `pg-projection.test.ts`, and it says in its
+   header why a double is the right instrument *here* when real sockets were
+   the right one for the redirect tests: what is being stood in for is the wire.
+2. **A fixture whose nullable columns are all null cannot tell a forgotten
+   column from an empty one.** `toRun` reads a missing column as `undefined`
+   and then `?? null`, so dropping `error` from the hand-written column list
+   passed all 66 contract tests. Fixed by giving the contract's run a value in
+   `workflowVersion`, `status`, `endedAt` and `error`, and comparing the
+   projected record WHOLE (`toEqual({ ...r, input: INPUT_NOT_READ })`). Both
+   M11 (`error` dropped) and M12 (`workflow_version` dropped) are red now.
+3. **The orphan half of the predicate is required, not defensive.** `cases.ts`
+   opens the input of EVERY run without an `alert_id`, and a sub-workflow
+   trigger that ran without receiving anything has none either — that is the
+   `empty_input` signature. A predicate narrowed to `01-ingestion` therefore
+   sends the rebuild into `inputOf`'s throw and the console falls back to the
+   sample set with a message about the database. A diagnostic probe is itself a
+   `01-ingestion` run, so it is NOT what proves the orphan half; the
+   non-ingestion orphan is.
+4. **A predicate that authorises a read must be the SAME test as the read, not
+   a test that agrees with it.** The first version wrote `run.alertId === null`
+   while `buildCases` takes the orphan branch on `if (!alertId)`, so a run whose
+   `alert_id` came back as the empty string would have opened its input and
+   found the sentinel — a rebuild in the throw, the console on the sample set.
+   Caught by reading the diff adversarially against the reader, not by a test;
+   M13 carries it now. Being *stricter* than the read you authorise is the same
+   defect as being looser, and it is the harder one to see because it looks
+   careful.
+5. **A seeding harness with a fixed clock does not produce the window
+   production reads.** The engine takes `now()` from its deps, so every seeded
+   run shared one `started_at` and `ORDER BY started_at DESC, id DESC` fell
+   back to the UUID — a *random* 120 of 501 runs, and the default-window byte
+   figure moved by ±8% between runs. A clock advanced per alert fixed it and
+   the number is now deterministic. (The ratio happened to be right either way,
+   because every run in this window carries roughly the same payload size —
+   which is the defect itself.)
+6. **The first seeding attempt passed `alertId: null` to `engine.start`**, which
+   `server/injection.ts` does not: it passes the alert's id. Every run in the
+   window was then an orphan, `read_bytes` equalled `input_bytes`, and the
+   projected variant measured *slower* — a correct measurement of a window that
+   does not exist. Read the production call site before seeding from a test
+   harness.
+7. **Postgres recipe, confirmed a second time** (it is in the previous entry and
+   it worked unchanged): `initdb`/`pg_ctl` under `su postgres`, data directory
+   `/var/lib/postgresql/probe`, `mkdir /var/run/postgresql` owned by `postgres`,
+   `-p 55432 -c fsync=off`, the six `sql/*.sql` applied with
+   `psql -v app_password=…`, and `MENATER_TEST_PG` in **TCP URL** form.
+
+**Do not redo.**
+
+- **Do not put the predicate in SQL**, as data or otherwise. It is the thing
+  § 7 refused, for the reason it gave: the rule would exist in three copies.
+  The function costs one awaited round trip and that is measured as cheaper
+  than the bytes, locally, on both wall clock and CPU.
+- **Do not make the sentinel `null`** (M2) or **`undefined`**. `null` means
+  *this run received nothing* — `empty_input` — and `undefined` is what a
+  payload merely not carrying the probe marker reads as, so the silent version
+  files a connectivity test among the anomalies: the permanent alarm the
+  `diagnostic_probe` trap row refuses.
+- **Do not make `inputOf` return `undefined` instead of throwing** (M7). Same
+  reason, one level in.
+- **Do not project IN PLACE in `MemoryRunStore`** (M8, red on 16 tests). The
+  store hands back copies so a reader cannot reach into its journal; blanking
+  the input in place deletes the payload a replay is kept for, and the loss
+  shows only on the next reader — `getRun`.
+- **Do not narrow `CASE_INPUTS` to `01-ingestion`** (M5) and **do not widen it
+  to `() => true`** (M10). See point 3 for the first; the second is the saving.
+- **Do not add `inputOf: () => false` to `diagnostics.ts`.** It reads only
+  `runs.length`, over 20 runs, on a button pressed by hand — ~36 kB per
+  connectivity test. Taking it would put a sentinel on a second read path with
+  no accessor guarding it, for a saving nobody can measure. Left alone on
+  purpose.
+- **Do not add the projection to `replay-route.test.ts`'s `recentRuns`.** That
+  one reads the journal DIRECTLY, the way a resume does, and asserts on the
+  input of an `01-ingestion` run; it is not a snapshot-shaped read.
+
+**Found and NOT fixed** — leads, none root-caused:
+
+- The standing leads are **untouched and still open**: `readVariables` /
+  `writeVariables` with no caller (still the best of them),
+  `Settings.meta.from_env` written and never read, `forgetCursor` and
+  `fetchWithTimeout` with no caller, `static.ts`'s `immutable` on
+  non-fingerprinted `public/` assets, `attempts` in `auth.ts` never swept for
+  entries below the lock threshold, and the login throttle collapsing to one
+  bucket behind the tunnel.
+- **`buildCases` is now the read path's cost, and nobody has measured inside
+  it.** With both projections in place the whole path at the 500-run ceiling is
+  ~44 ms of which `recentRuns` is ~5 and `stepsOfMany` ~27 (previous entry), so
+  the builder itself is the remaining double-digit figure. Not opened tonight:
+  it is a different subject and it needs its own measurement.
+- Still ruled out and not re-measured: `src/i18n/console.ts` splitting,
+  `dictionary.ts` (already lazy), `groupBySystem` (memoised) — see the previous
+  entry.
+
+**Verified** (Node 22.22.0, `dashboard/`, commands run and output read):
+
+| Command | Result |
+|---|---|
+| `npm run typecheck` | 0 errors |
+| `npm test` | **1437 passed, 1 skipped** (1423 \| 1 before: **+14**) |
+| `MENATER_TEST_PG=… npm test` | **1470 passed, 0 skipped** — the contract's Postgres half on real Postgres 16.14 |
+| `npm run build` | ✓ 694 ms, bundle byte-identical (server-side change) |
+| `node --experimental-strip-types` on the five changed modules | all load |
+| `VulnPipe` | untouched — not run, nothing in `VulnPipe/` is modified |
+
+Checked **RED first**, by putting `git show HEAD:` back over the five
+production files and running the affected test files. Nine of the fourteen new
+tests existed at that point — `pg-projection.test.ts` (4) and the behavioural
+orphan test were written afterwards, *because* the mutation pass showed the
+first nine did not cover the saving — and **6 instances failed, 5 distinct
+tests** (one of them twice, once per store): the behavioural ones being *« marks the input of a run nobody
+asked for as NOT READ »* on **both stores** (the store handed the input back
+anyway), *« asks for exactly the inputs the case builder declares it reads »*
+(the rebuild asked for every input) and *« refuses an input the window did not
+fetch »* (the reader read the sentinel as absent, silently). Two of the six are
+absence-shaped (`CASE_INPUTS is not a function`, `inputOf has gone`), said here
+rather than counted as behavioural. The five tests written after the red check
+are covered by mutations instead, which is the stronger claim where it was
+measured: without them M4 fails **nothing**, M5 fails one test instead of two,
+and M11 fails nothing. The remaining boundary tests claim the other side and
+pass before AND after on purpose: an omitted option still asks for every input,
+a requested input comes back whole, a requested input that is really `null`
+stays `null`, and the journal survives a projected read.
+
+Then **thirteen mutations, one at a time, pristine restored INSIDE the loop**,
+with `MENATER_TEST_PG` set so the Postgres half ran on every pass:
+
+| Mutation | Failing tests |
+|---|---|
+| M1 `snapshot.ts` asks for every input again | 1 |
+| M2 the Postgres sentinel is `null` | 2 |
+| M3 the memory store ignores the filter | 1 |
+| M4 the Postgres store keeps `SELECT *` | 2 — **0 before `pg-projection.test.ts` existed** |
+| M5 `CASE_INPUTS` drops the orphan half | 2 — **1 before the behavioural orphan test** |
+| M6 `CASE_INPUTS` drops the ingestion half | **41** |
+| M7 `inputOf` reads the sentinel as absent | 1 |
+| M8 the memory store projects in place | **16** |
+| M9 `cases.ts` reads `run.input` raw | 1 |
+| M10 `CASE_INPUTS` widened to everything | 3 |
+| M11 `error` dropped from the column list | 1 — **0 before the fixture carried values** |
+| M12 `workflow_version` dropped from the column list | 1 |
+| M13 the predicate tests `alertId === null` where the reader tests `!alertId` | 1 |
+
+The control (no mutation) was green at 1,470 under the same conditions. The
+measurement probe was written under `dashboard/scripts/`, run, and deleted; the
+throwaway Postgres cluster is outside the repository.
+
 ## 2026-10-02 — Friday · Performance and cost
 
 **Subject**: `stepsOfMany` read the console's window with `SELECT *` over

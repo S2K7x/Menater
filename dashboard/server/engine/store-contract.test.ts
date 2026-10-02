@@ -30,7 +30,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { MemoryRunStore, type RunStore } from './store.ts';
 import { PgRunStore, createPool } from './pg-store.ts';
-import { OUTPUT_NOT_READ } from './types.ts';
+import { INPUT_NOT_READ, OUTPUT_NOT_READ } from './types.ts';
 import type { RunRecord, StepRecord } from './types.ts';
 
 const PG_URL = process.env.MENATER_TEST_PG;
@@ -250,6 +250,79 @@ function contract(name: string, make: () => Promise<RunStore>) {
       // place would lose the journal, and the loss would only show on the next
       // reader — `stepsOf`, which is what a resume reads.
       expect((await store.stepsOf(r.id))[0].output).toEqual({ messages: ['…'] });
+    });
+
+    // --- La projection des entrées ----------------------------------------
+    //
+    // The same promise one level up, and the two stores keep it very
+    // differently: Postgres reads the window's identity and then the inputs it
+    // was asked for, because the predicate picks a ROW and cannot travel into
+    // the first query, while the memory store applies it to the copy it hands
+    // back. Two mechanisms, one behaviour — which is this file's whole job.
+
+    it('hands back the input of a run the caller asked for', async () => {
+      const r = run({ workflowId: '01-ingestion', input: { alert_id: 'A-1', raw_log: 'x' } });
+      await store.createRun(r);
+      const [got] = await store.recentRuns({ limit: 10, inputOf: (x) => x.workflowId === '01-ingestion' });
+      expect(got.input).toEqual({ alert_id: 'A-1', raw_log: 'x' });
+    });
+
+    it('marks the input of a run nobody asked for as NOT READ', async () => {
+      // EVERY NULLABLE FIELD CARRIES A VALUE, on purpose. `toRun` reads a
+      // missing column as `undefined` and then `?? null`, so a run whose
+      // `error` and `ended_at` are null cannot tell a column the projected
+      // query forgot from a column that is genuinely empty — and the whole
+      // assertion below would pass over a dropped one.
+      const r = run({
+        workflowId: '02-enrichment',
+        workflowVersion: 3,
+        status: 'failed',
+        input: { alert_id: 'A-1' },
+        endedAt: new Date('2026-08-24T10:00:09Z').toISOString(),
+        error: 'Database (SELECT): the database refused the connection',
+      });
+      await store.createRun(r);
+      const [got] = await store.recentRuns({ limit: 10, inputOf: (x) => x.workflowId === '01-ingestion' });
+      // NOT `null`, and NOT `undefined`. `null` is what a run started with
+      // nothing holds — the `empty_input` signature — and `undefined` is what a
+      // payload that simply does not carry the probe marker reads as. Either
+      // one turns a connectivity test into an anomaly on the Tracking tab.
+      expect(got.input).toBe(INPUT_NOT_READ);
+      expect(got.input).not.toBeNull();
+      expect(got.input).not.toBeUndefined();
+      // EVERY OTHER FIELD IS STILL THERE, compared whole rather than one by
+      // one: the Postgres store can no longer say `SELECT *` on this read, so it
+      // names its columns — and a column `toRun` reads but the list forgets
+      // would otherwise stop arriving in silence, on the queue's own query.
+      expect(got).toEqual({ ...r, input: INPUT_NOT_READ });
+    });
+
+    it('keeps a REQUESTED input that is really null as null', async () => {
+      // A run started with nothing — the `empty_input` anomaly the Tracking tab
+      // exists to show. `soc_run.input` is `jsonb NOT NULL`, which stores JSON
+      // `null` happily, so this value is reachable and must survive: the
+      // sentinel is decided by the PREDICATE, never by what came back.
+      const r = run({ workflowId: '02-enrichment', input: null });
+      await store.createRun(r);
+      const [got] = await store.recentRuns({ limit: 10, inputOf: () => true });
+      expect(got.input).toBeNull();
+    });
+
+    it('asks for every input when no filter is given', async () => {
+      const r = run({ workflowId: '05-audit-log', input: { alert_id: 'A-1' } });
+      await store.createRun(r);
+      const [got] = await store.recentRuns({ limit: 10 });
+      expect(got.input).toEqual({ alert_id: 'A-1' });
+    });
+
+    it('does not blank the journal it holds — a second read still has the input', async () => {
+      const r = run({ workflowId: '02-enrichment', input: { alert_id: 'A-1' } });
+      await store.createRun(r);
+      await store.recentRuns({ limit: 10, inputOf: () => false });
+      // The projection is a VIEW. A memory store that blanked the input in
+      // place would lose the payload a replay is kept for, and the loss would
+      // only show on the next reader — `getRun`, which is what a resume reads.
+      expect((await store.getRun(r.id))!.input).toEqual({ alert_id: 'A-1' });
     });
 
     // --- Attentes ---------------------------------------------------------

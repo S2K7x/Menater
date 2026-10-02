@@ -59,7 +59,7 @@ import { buildRegistry } from './transforms/registry.ts';
 import { pureHandlers } from './nodes/pure.ts';
 import { ioHandlers } from './nodes/io.ts';
 import { controlHandlers } from './nodes/control.ts';
-import { buildCases, CASE_OUTPUTS } from './cases.ts';
+import { buildCases, CASE_INPUTS, CASE_OUTPUTS } from './cases.ts';
 import { DEFAULT_LOCALE } from '../i18n.ts';
 import { PIPELINE_WORKFLOWS } from './workflows/pipeline.ts';
 import { ROUTING, ROUTING_WORKFLOWS } from './workflows/routing.ts';
@@ -176,13 +176,13 @@ const ALERT = {
 async function awaitingApproval(): Promise<string> {
   await live.engine.start('01-ingestion', ALERT, ALERT.alert_id);
   expect(live.calls).toContain('https://slack.com/api/chat.postMessage');
-  const runs = await live.store.recentRuns({ limit: 200 });
+  const runs = await live.store.recentRuns({ limit: 200, inputOf: CASE_INPUTS });
   return runs.find((r) => r.workflowId === '04-action-routing')!.id;
 }
 
 /** The record 04 composed, i.e. exactly what 05 seals into the hash chain. */
 async function auditRecord(): Promise<Record<string, any>> {
-  const runs = await live.store.recentRuns({ limit: 200 });
+  const runs = await live.store.recentRuns({ limit: 200, inputOf: CASE_INPUTS });
   const routing = runs.find((r) => r.workflowId === '04-action-routing')!;
   const steps = await live.store.stepsOf(routing.id);
   return steps.find((st) => st.nodeId === 'audit-record')?.output as Record<string, any>;
@@ -238,7 +238,7 @@ describe('the audit record of an executed action', () => {
       decision: 'approve', approver: 'alice', reason: 'Owner confirmed the maintenance window.',
     });
 
-    const runs = await live.store.recentRuns({ limit: 200 });
+    const runs = await live.store.recentRuns({ limit: 200, inputOf: CASE_INPUTS });
     // The projection `snapshot.ts` passes: this asserts on the row an operator
     // gets, so it reads the window production reads.
     const steps = await live.store.stepsOfMany(

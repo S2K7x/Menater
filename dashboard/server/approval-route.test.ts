@@ -55,7 +55,7 @@ import { ioHandlers } from './engine/nodes/io.ts';
 import { controlHandlers } from './engine/nodes/control.ts';
 import { PIPELINE_WORKFLOWS } from './engine/workflows/pipeline.ts';
 import { ROUTING_WORKFLOWS } from './engine/workflows/routing.ts';
-import { buildCases, CASE_OUTPUTS } from './engine/cases.ts';
+import { buildCases, CASE_INPUTS, CASE_OUTPUTS } from './engine/cases.ts';
 import { interpretApproval } from './engine/transforms/routing.ts';
 import { computeMetrics } from './snapshot.ts';
 import { DEFAULT_LOCALE } from './i18n.ts';
@@ -204,7 +204,7 @@ async function alertAwaitingApproval() {
 
 /** What `interpret` concluded — the node that DECIDES, not the branch below it. */
 async function interpreted() {
-  const runs = await live.store.recentRuns({ limit: 200 });
+  const runs = await live.store.recentRuns({ limit: 200, inputOf: CASE_INPUTS });
   const routing = runs.find((r) => r.workflowId === '04-action-routing')!;
   const steps = await live.store.stepsOf(routing.id);
   return steps.find((st) => st.nodeId === 'interpret')?.output as
@@ -213,7 +213,7 @@ async function interpreted() {
 
 /** The audit record as 04 composed it, i.e. the row the hash chain seals. */
 async function auditRecord() {
-  const runs = await live.store.recentRuns({ limit: 200 });
+  const runs = await live.store.recentRuns({ limit: 200, inputOf: CASE_INPUTS });
   const routing = runs.find((r) => r.workflowId === '04-action-routing')!;
   const steps = await live.store.stepsOf(routing.id);
   return steps.find((st) => st.nodeId === 'audit-record')?.output as Record<string, any>;
@@ -221,7 +221,7 @@ async function auditRecord() {
 
 /** Every run with its steps, handed to the reader the console screens use. */
 async function collect() {
-  const runs: RunRecord[] = await live.store.recentRuns({ limit: 200 });
+  const runs: RunRecord[] = await live.store.recentRuns({ limit: 200, inputOf: CASE_INPUTS });
   const steps: Map<string, StepRecord[]> = await live.store.stepsOfMany(
     runs.map((r) => r.id),
     // The projection `snapshot.ts` passes: these harnesses exist to assert on
@@ -271,7 +271,7 @@ describe('an approval answered in the console', () => {
     expect(ap.execution_id).toBeTruthy();
 
     // And it is the RUN that holds the wait, which is what the route resolves.
-    const runs = await live.store.recentRuns({ limit: 200 });
+    const runs = await live.store.recentRuns({ limit: 200, inputOf: CASE_INPUTS });
     const routing = runs.find((r) => r.workflowId === '04-action-routing')!;
     expect(ap.execution_id).toBe(routing.id);
   });
@@ -470,7 +470,7 @@ describe('an approval answered in the console', () => {
      */
     await alertAwaitingApproval();
 
-    const runs = await live.store.recentRuns({ limit: 200 });
+    const runs = await live.store.recentRuns({ limit: 200, inputOf: CASE_INPUTS });
     const routing = runs.find((r) => r.workflowId === '04-action-routing')!;
     const steps = await live.store.stepsOf(routing.id);
     const request = steps.find((st) => st.nodeId === 'request')!.output as never;

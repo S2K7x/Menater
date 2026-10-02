@@ -23,7 +23,7 @@
  * ============================================================================
  */
 
-import { buildCases, CASE_OUTPUTS } from './engine/cases.ts';
+import { buildCases, CASE_INPUTS, CASE_OUTPUTS } from './engine/cases.ts';
 import { getEngineStore } from './runtime.ts';
 import { demoCases } from './demo.ts';
 import { messages, type Locale } from './i18n.ts';
@@ -223,7 +223,17 @@ async function buildSnapshot(locale: Locale): Promise<ConsoleSnapshot> {
   if (!store) return demoSnapshot(checkedAt, h.noDatabase, locale);
 
   try {
-    const runs = await store.recentRuns({ limit: conf.console.executionWindow });
+    // AND ONLY THE INPUTS `buildCases` OPENS. A run's input is the payload it
+    // received, kept so a replay is possible — and four of the five runs an
+    // alert produces are sub-workflow calls carrying the alert again, which
+    // nobody reads. Measured on a real Postgres over a seeded window: 895,641
+    // bytes of input in the table, 99,049 of it read, and the window's CPU on
+    // this thread goes 6.97 → 3.50 ms at the 500-run ceiling. `CASE_INPUTS` is
+    // the reader's own rule, so the two cannot drift.
+    const runs = await store.recentRuns({
+      limit: conf.console.executionWindow,
+      inputOf: CASE_INPUTS,
+    });
 
     // The engine is mounted and has run nothing yet: the demonstration beats an
     // empty page, which reads as a failure on a screen whose whole job is to

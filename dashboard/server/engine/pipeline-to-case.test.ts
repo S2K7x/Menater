@@ -33,7 +33,7 @@ import { ioHandlers } from './nodes/io.ts';
 import { controlHandlers } from './nodes/control.ts';
 import { PIPELINE_WORKFLOWS } from './workflows/pipeline.ts';
 import { ROUTING_WORKFLOWS } from './workflows/routing.ts';
-import { buildCases, replayPayload, CASE_OUTPUTS } from './cases.ts';
+import { buildCases, replayPayload, CASE_INPUTS, CASE_OUTPUTS } from './cases.ts';
 import { computeMetrics } from '../snapshot.ts';
 import { DEFAULT_LOCALE } from '../i18n.ts';
 import type { RunRecord, StepRecord } from './types.ts';
@@ -139,7 +139,7 @@ function assemble(
 
 /** Every run the store holds, with its steps — what `snapshot.ts` reads. */
 async function collect(store: MemoryRunStore) {
-  const runs: RunRecord[] = await store.recentRuns({ limit: 200 });
+  const runs: RunRecord[] = await store.recentRuns({ limit: 200, inputOf: CASE_INPUTS });
   const steps: Map<string, StepRecord[]> = await store.stepsOfMany(
     runs.map((r) => r.id),
     // The projection `snapshot.ts` passes: these harnesses exist to assert on
@@ -468,7 +468,7 @@ describe('an alert put to a human, end to end', () => {
       },
     });
 
-    const runs = await store.recentRuns({ limit: 200 });
+    const runs = await store.recentRuns({ limit: 200, inputOf: CASE_INPUTS });
     const routing = runs.find((r) => r.workflowId === '04-action-routing')!;
     const steps = await store.stepsOf(routing.id);
     const interpreted = steps.find((st) => st.nodeId === 'interpret')!.output as { outcome: string };
@@ -544,7 +544,7 @@ describe('an approval request the chat transport refused', () => {
 
     // The branch under test was really taken: the post was attempted and the
     // graph left `post-approval` by its error port.
-    const runs = await store.recentRuns({ limit: 200 });
+    const runs = await store.recentRuns({ limit: 200, inputOf: CASE_INPUTS });
     const routing = runs.find((r) => r.workflowId === '04-action-routing')!;
     const steps = await store.stepsOf(routing.id);
     expect(calls).toContain('https://slack.com/api/chat.postMessage');
