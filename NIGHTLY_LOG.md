@@ -4,6 +4,208 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-10-03 — Saturday · Interface, clarity, accessibility
+
+**Subject**: the live-region rule, applied to the half of the product that
+wrote it down. `src/components/status-messages.test.tsx` exists because
+`role="status"` appeared **zero** times in the console half while
+`src/vulnpipe/` used it twenty-two times — and the comment that taught the
+console the vocabulary is still in `vulnpipe/components/PromoteFinding.tsx`.
+Nobody had read the file the rule was copied FROM.
+
+**Result**: PR opened on `claude/great-pascal-e5pr9s`. Ten files: six
+production (all under `src/vulnpipe/`), four test (one new,
+`vulnpipe/components/status-messages.test.tsx`, 16 tests), plus `CLAUDE.md`,
+`CLARITY.md`, `ROADMAP.md` (C0.33 / R48 / R49) and this journal. **+16 tests**,
+nothing skipped or weakened. The built stylesheet is **byte-identical**.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-e5pr9s` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Twenty-eighth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: `main` at 0fb4f38 gave
+typecheck 0, **1437 passed | 1 skipped**, build clean, and
+`list_pull_requests --state open` was empty. The 2026-09-26 (second run) entry
+named this subject in its *Found and NOT fixed* list and called it « a
+well-shaped Saturday subject » — 21 regions, one primitive that already exists
+and is already imported by this half, and a boundary rule the console half has
+written as tests. It is priority (2), a real defect with a measurement.
+
+**Measured, and the headline number is the whole case.** A throwaway vitest
+probe mounted every screen in `src/vulnpipe/` and counted the live regions in
+the document BEFORE anything was written into one:
+
+| screen | regions before the message | the region that arrives |
+|---|---|---|
+| engine keys, a refused save | **0** | `role="alert"`, created with it |
+| engines, « key missing » | **0** | `role="alert"`, created with it |
+| Code settings, three standing warnings | **0** | 3 × `role="status"` |
+| Code settings, a failed request | **0** | `role="alert"` |
+| the estimate's warnings | **0** | `role="status"` per warning |
+| a report, « marked fixed and still found » | **0** | `role="alert"` |
+| a copy that failed | **0** | `role="alert"` |
+| the promote outcome | **0** | `role="status"` |
+| the launcher's empty target | **0** | `role="alert"` |
+
+Twenty-five occurrences across the directory and **not one region that
+pre-exists its sentence** — the state `Announce` is a WRAPPER to remove.
+Confirmed in **real Chromium 1194** on the built console served by the console's
+own API (`scripts/start.ts soc`, sample window, no database, analysis service
+absent): the **Code tab held 0 live regions** before a press, so nothing
+announced *« reading your code to price the work »*; Settings → *Engines and
+preferences* held exactly **one**, and it was assertive.
+
+**The line this pass had to draw, because the obvious one is wrong.** Not
+« produced by a press » versus « on screen at mount » — half the messages here
+are both. It is: **a region holds THE ANSWER TO A REQUEST, not a fact inside the
+answer.** « The analysis service is not answering » is the answer; « the
+"verdicts" memory could not be picked up again » is one of twelve facts in a
+payload that arrived perfectly. Announcing one line of a report as if it were
+the reply is worse than announcing none, because it sounds like the whole reply.
+That test sorts all twenty-five cleanly, and it is what the new test file's
+header states.
+
+**What I learned that is written nowhere else.**
+
+1. **A live region inside a `Fold` can never speak, and both the usual rulers
+   say the opposite.** The Code-settings request failure sat inside a closed
+   `<details>`. Probed with CDP `Accessibility.getFullAXTree` on the built
+   console: the closed fold's content is **absent from the accessibility tree**
+   — while `getBoundingClientRect()` reports **597 px** for its body and
+   `offsetParent` is **not null**. So `innerText`/`offsetParent` filters (the
+   instrument `CLARITY.md` § 7 recommends) and a rect check both call it
+   rendered. Wrapping it in `Announce` where it stood would have been dead code
+   that looks load-bearing. It is also a failure, which § 3 keeps out of a fold
+   anyway, so it moved out of the fold entirely.
+2. **jsdom cannot see that half either**, which is why the property is asserted
+   structurally. jsdom renders the body of a closed `<details>` like any other
+   element, so the mutation « put the region back inside the fold » passes every
+   rendering assertion. `expect(region.closest('details')).toBeNull()` is what
+   fails it — the same device `narrow-viewport.test.tsx` uses for layout, for the
+   same reason.
+3. **An always-present region is a flex ITEM, and that is why four sites are
+   deliberately untouched.** `.vp-promote`, `.vp-fix-prompt`,
+   `.vp-report-export` and `.vp-status-form` are flex containers with a `gap`
+   (6 px, and 6/10 px on the first), so the empty slot adds one gap — the exact
+   reason `CLAUDE.md` records for the console leaving `.soc-actions` alone. And
+   `.vp-promote-note` carries `flex-basis: 100%`: wrapping it makes the WRAPPER
+   the flex item, so the sentence would move back onto the button's line. 6 px
+   per finding card times a report's findings is a layout decision with its own
+   measurement, not a free one.
+4. **Margin collapsing through a bare wrapper was verified, not assumed.** The
+   `Announce` header asserts it ("the banners space themselves with
+   `margin-bottom`, which collapses through a bare wrapper"); measured in
+   Chromium on the Code tab, `document.documentElement.scrollHeight` is
+   **2070 → 2070** at 1280 px and **3183 → 3183** at 320 px with two empty
+   regions added. Byte-for-byte.
+5. **Four existing tests used a role as a HANDLE, not as a claim.**
+   `cache.test.tsx` (×2), `status.test.tsx` and `ui.test.tsx` found their
+   paragraph with `getByRole('status')` / `getByRole('alert')` and then asserted
+   on its TEXT. The queries are narrowed to the sentence and **strengthened** to
+   assert the warning CLASS (`vp-banner-error`, `vp-provider-warning`) — which
+   `role="alert"` never claimed. Same answer as the `role="note"` row in
+   `CLAUDE.md`: the tests were right and the query had merely stopped matching.
+6. **Playwright is available to a nightly session without touching
+   `dashboard/package.json`**: `require('/opt/node-tools/node_modules/playwright')`
+   with `executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome'`.
+   `require('playwright')` does NOT resolve from the repository. The 09-26 entry's
+   CDP recipe still works unchanged (`page.accessibility` is still `undefined`).
+   This does not close ROADMAP § 7's missing console `check.cjs`, which is a CI
+   and dependency decision — but it means a night never has to guess at layout
+   or at the accessibility tree.
+7. **The console's own `Announce` slots pollute a document-wide region count.**
+   My first browser sweep queried the whole document and reported six regions on
+   the Settings tab, four of them empty: they were `RulesPage`/`McpPanel`'s
+   console-half slots in hidden sub-panels. Scope the count to `.vp-embed`. Same
+   family as a ruler measuring the wrong thing.
+
+**Do not redo.**
+
+- **Do not wrap the promote outcome, the two copy failures or the refused
+  status note in `Announce` without deciding the layout question.** See point 3:
+  measured, and `.vp-promote-note`'s `flex-basis: 100%` is the sharp end of it.
+  A test in the new file states their position out loud so the next reader does
+  not take it for the rule.
+- **Do not take `role="alert"` off the launcher's missing-target error.** It
+  refuses the action just attempted, and the input names it through
+  `aria-describedby`, so it is reachable from the control and not only from a
+  region elsewhere. A boundary test claims that side and passes before AND after.
+- **Do not touch `LiveActivity`'s two regions.** They are the only content in
+  this directory that changes BY ITSELF — a new address every few seconds. What
+  is arguably wrong with them (created with their first message, and an
+  `aria-live` list that announces every appended finding) is a different
+  subject: it is about a stream, not about an answer.
+- **Do not put the Code-settings failure back inside the arbitration fold**, and
+  do not try to fix it with `defaultOpen` instead. That was the first plan and it
+  is worse: a region that becomes visible when a fold opens is « created with its
+  content » all over again from the accessibility tree's point of view, and the
+  fold would pop open under the reader. Out of the fold is the simple answer and
+  it satisfies § 3 at the same time.
+- **Do not give `Announce` a `className` prop** for the four flex sites without
+  measuring first. It is API surface on a shared primitive for one parent's
+  benefit, and `display: contents` to keep the layout is worse than the defect:
+  it is precisely the kind of thing that removes the element from the
+  accessibility tree, which is what the always-present region exists for.
+
+**Found and NOT fixed** — leads, each verified, none root-caused tonight:
+
+- **Two user-facing FRENCH sentences in `dashboard/server/vulnpipe.ts:194-197`**,
+  and they are on screen right now on any install whose analysis service is not
+  running: *« Le service d'analyse de code ne repond pas sur … Le demarrer :
+  `npm run serve` … »*. Read off the rendered page in Chromium, not out of the
+  source. They are the 503 the relay composes, forwarded into the Code tab's
+  banner and into Settings → *Engines and preferences*. **Nothing can catch
+  them**: `n8n-removed.test.ts` walks `src/i18n/console.ts` and
+  `server/i18n.ts`, and this is a hardcoded template literal in a route module —
+  the exact hole the « a screen you cannot reach without credentials » row
+  describes, one notch worse because here the screen needs a service to be DOWN.
+  Four accented or French strings in that file. Small, well-shaped, and a
+  different subject (D / English-only).
+- **`LiveActivity`'s feed is `aria-live="polite"` on an `<ol>` that grows**, so
+  every finding of a scan is announced as it arrives, and the region is created
+  with its first item. Whether a scan should narrate itself that way is a product
+  question; I did not take it.
+- The standing leads from previous nights are **untouched**: `readVariables` /
+  `writeVariables` with no caller, `Settings.meta.from_env` written and never
+  read, `forgetCursor` and `fetchWithTimeout` with no caller, `static.ts`'s
+  `immutable` on non-fingerprinted `public/` assets, `attempts` in `auth.ts`
+  never swept below the lock threshold, the login throttle collapsing to one
+  bucket behind the tunnel, and `buildCases` being the read path's remaining
+  double-digit cost.
+- Still open from 09-26 and 09-19, and deliberately not taken: the four console
+  tables with no accessible name, the two `H4`-after-`H2` heading jumps, the
+  Ingestion tab's « Poll now » announcement, the assistant's `aria-busy`, and the
+  console's missing `check.cjs` (ROADMAP § 7).
+
+**Verified** (Node 22.22.0, `dashboard/`, commands run and output read):
+
+| Command | Result |
+|---|---|
+| `npm ci` | lockfile unchanged |
+| `npm run typecheck` | 0 errors |
+| `npm test` | **1453 passed, 1 skipped** (1437 \| 1 before: **+16**) |
+| `npm run build` | CSS **90.77 kB, hash `index-Bmsh0y4D` — byte-identical to `main`**; `VulnPipeSection` 63.63 → 63.61 kB |
+| Chromium 1194, built bundle, 1280 and 320 px | Code tab `scrollHeight` 2070 → 2070 and 3183 → 3183; Settings → Engines +53 px / +163 px (the failure leaving the fold); `scrollWidth === innerWidth` at 320 on both screens, before and after |
+| CDP `Accessibility.getFullAXTree` | the request failure is reachable **without opening a fold** after the change and was not before; a closed fold's content is absent from the tree |
+
+Checked **RED first** by restoring the six production files from `HEAD~1` and
+keeping the tests: **13 of 16 fail**. The three that pass do so by design — the
+launcher's field error, `LiveActivity`, and the test that states the four flex
+sites are not moved. **Twelve mutations, each caught**: eleven by exactly one
+test, and « the engine-key slot made conditional » by two, because both of that
+screen's tests assert the slot. The fix was **committed before mutating**, per
+the 09-26 lesson. The one skipped test is the pre-existing
+`store-contract.test.ts > contrat — postgres`, which needs a database.
+`VulnPipe/` untouched — `dashboard/src/vulnpipe/` is the console's embedded
+section, not the service — so its suite was not run. The vitest probe and the
+four Chromium scripts lived in the scratchpad (one probe briefly inside `src/`,
+deleted); `git status` is clean apart from the diff.
+
+---
+
 ## 2026-10-02 (second run) — Friday · Performance and cost
 
 **Subject**: the mirror half of the previous run's change, and the row § 7 left
