@@ -152,8 +152,15 @@ export function EstimatePanel({ estimate, onConfirm, onCancel, busy }: EstimateP
         <p className="vp-banner vp-banner-info">{estimate.cost.unknown_reason}</p>
       )}
 
+      {/*
+        NO LIVE REGION. A warning is one of a dozen facts this panel states
+        about the estimate, and the panel is the answer. Announcing one line of
+        a report as if it were the reply is worse than announcing none: it
+        sounds like the whole reply. (And `role="status"` is atomic, so N
+        warnings were N regions, each re-read whole on any change.)
+      */}
       {estimate.warnings.map((warning, index) => (
-        <p key={index} className="vp-banner vp-banner-warn" role="status">
+        <p key={index} className="vp-banner vp-banner-warn">
           {warning}
         </p>
       ))}

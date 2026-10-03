@@ -34,6 +34,7 @@ import { useState } from 'react';
 import { api, ApiError, type KeyStatus, type ManagedKey } from '../lib/api.ts';
 import { useI18n } from '../../i18n/context.tsx';
 import { Icon } from './Icon.tsx';
+import { Announce } from '../../components/Guidance.tsx';
 import type { ProviderAvailability } from './ProviderSwitcher.tsx';
 
 export function ProviderKeys({
@@ -178,16 +179,19 @@ export function ProviderKeys({
         <span className="vp-field-help">{s.keysEffect}</span>
       </div>
 
-      {error && (
-        <p className="vp-field-error" role="alert">
-          {error}
-        </p>
-      )}
-      {done && (
-        <p className="vp-field-help vp-field-note" role="status">
-          {done}
-        </p>
-      )}
+      {/*
+        ONE SLOT FOR BOTH ANSWERS, AND IT EXISTS BEFORE THERE IS ONE.
+        `send()` clears `error` and `done` together, so only one of the two can
+        ever be on screen: they are the same answer slot, and a second region
+        would be a second thing for a screen reader to find. The region is the
+        wrapper rather than an attribute on the paragraph because a region born
+        with its content is announced by some screen readers and missed by
+        others.
+      */}
+      <Announce>
+        {error && <p className="vp-field-error">{error}</p>}
+        {done && <p className="vp-field-help vp-field-note">{done}</p>}
+      </Announce>
     </div>
   );
 }

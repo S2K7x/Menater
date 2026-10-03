@@ -395,7 +395,11 @@ describe('ProviderSwitcher', () => {
     render(<ProviderSwitcher settings={settings} available={available} onChange={() => {}} />);
     const option = screen.getAllByRole('option', { name: /Claude \(Anthropic\)/ })[0]!;
     expect(option.hasAttribute('disabled')).toBe(true);
-    expect(screen.getByRole('alert').textContent).toContain('ANTHROPIC_API_KEY absente');
+    // By sentence, not by `role="alert"`: this form is rendered twice on the
+    // page and the warning is true from the first render, so it is no longer a
+    // live region. See `status-messages.test.tsx`.
+    const warning = screen.getByText(/ANTHROPIC_API_KEY absente/);
+    expect(warning.className).toContain('vp-provider-warning');
   });
 
   it("n'active « Appliquer » que si un réglage a changé", async () => {

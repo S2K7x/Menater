@@ -16,7 +16,7 @@
 import { useState } from 'react';
 
 import { useI18n } from '../../i18n/context.tsx';
-import { Explain } from '../../components/Guidance.tsx';
+import { Announce, Explain } from '../../components/Guidance.tsx';
 
 export type ProviderName =
   | 'gemini'
@@ -131,10 +131,16 @@ function ProviderSelect({
 
       <p className="vp-provider-hint">{t.providers.descriptions[value]}</p>
 
+      {/*
+        NO LIVE REGION: THIS IS A STATE, NOT AN ANSWER.
+        It is true from the first render on any install that picked an engine
+        and never set its key — and this form is rendered TWICE on the page,
+        one per role, so an assertive region here interrupted twice over
+        something nobody had just done. The sentence sits under the field it is
+        about, which is where somebody choosing an engine reads it.
+      */}
       {current && !current.available && (
-        <p className="vp-provider-warning" role="alert">
-          {t.providers.cannotUse(current.why ?? '')}
-        </p>
+        <p className="vp-provider-warning">{t.providers.cannotUse(current.why ?? '')}</p>
       )}
 
       {/*
@@ -247,11 +253,11 @@ export function ProviderSwitcher({ settings, available, onChange, disabled }: Pr
         onEffort={(masterEffort) => setDraft((d) => ({ ...d, masterEffort }))}
       />
 
-      {error && (
-        <p className="vp-provider-warning" role="alert">
-          {error}
-        </p>
-      )}
+      {/* The answer to « Apply », so: a region that pre-exists it, and polite —
+          somebody waiting for this sentence must not be interrupted with it. */}
+      <Announce>
+        {error && <p className="vp-provider-warning">{error}</p>}
+      </Announce>
 
       <button type="button" onClick={apply} disabled={!dirty || saving || disabled}>
         {saving ? t.providers.applying : t.providers.apply}
