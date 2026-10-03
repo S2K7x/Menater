@@ -132,25 +132,54 @@ export function RulesPage() {
     load();
   }
 
+  /**
+   * The head of the screen, reached by the failure branch as well as by the
+   * page.
+   *
+   * `RulesPage` IS the Rules tab — not a section of one, the way
+   * `WorkflowPanel` and `SettingsSetup` are sections of Ingestion and
+   * Settings, whose own page head stays on screen behind their banners. So
+   * returning a bare banner here left the tab with NO heading at all:
+   * measured in Chromium, 0 headings and 104 px of content, against
+   * Tracking's 3 and Health's 7 on the same unreachable database. A reader
+   * navigating by heading found nothing, and the screen stopped saying which
+   * screen it was at the one moment that matters.
+   *
+   * Written once and shared rather than copied, because two copies of a title
+   * are how a screen ends up with two of them.
+   */
+  const head = (
+    <section className="soc-panel soc-page-head">
+      <span className="soc-kicker">{t.kicker}</span>
+      <h2>{t.title}</h2>
+      <p className="soc-muted" style={{ margin: 0 }}>{t.lede}</p>
+    </section>
+  );
+
   if (error) {
     return (
-      <section className="soc-panel">
-        <div className="soc-banner soc-banner-error">
-          <Icon name="alert" size={16} />
-          <p>{error}</p>
-        </div>
-      </section>
+      <>
+        {head}
+        {/* The sentence stays the SERVER's: only it knows whether no database
+            is configured or a configured one refused, and the catalogue's own
+            "Database unreachable" would have been wrong on the first of those
+            — see `rules-failure.test.tsx`. The editor deliberately does not
+            come back with the head: a rule saved against a set nobody can
+            read is a rule nobody can see. */}
+        <section className="soc-panel">
+          <div className="soc-banner soc-banner-error">
+            <Icon name="alert" size={16} />
+            <p>{error}</p>
+          </div>
+        </section>
+      </>
     );
   }
   if (!rules) return <p className="soc-empty">{c.common.loading}</p>;
 
   return (
     <>
-      <section className="soc-panel soc-page-head">
-        <span className="soc-kicker">{t.kicker}</span>
-        <h2>{t.title}</h2>
-        <p className="soc-muted" style={{ margin: 0 }}>{t.lede}</p>
-      </section>
+      {head}
 
       {needsReview > 0 ? (
         <section className="soc-panel soc-setup">

@@ -601,7 +601,6 @@ export interface ConsoleDictionary {
   rules: {
     kicker: string; title: string; lede: string;
     empty: string; emptyHint: string;
-    noDatabase: string;
     add: string; fromTemplate: string; templatesTitle: string; templatesLede: string;
     use: string; placeholderWarn: (fields: string) => string;
     name: string; owner: string; ownerHelp: string; reason: string; reasonHelp: string;
@@ -1873,7 +1872,6 @@ const EN: ConsoleDictionary = {
     empty: 'No rules yet.',
     emptyHint:
       'Start from a template: they are written as conjunctions — the address AND the expected activity — because an exception on a single identity is a hole shaped like an intrusion.',
-    noDatabase: 'Database unreachable: the rules cannot be read.',
     add: 'New rule',
     fromTemplate: 'Start from a template',
     templatesTitle: 'Templates',

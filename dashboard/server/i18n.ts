@@ -406,7 +406,9 @@ const EN: ServerMessages = {
     ruleNotFound: (id) => `Rule ${id} not found.`,
     rulesNoDatabase:
       'No database configured: the rules cannot be read. An empty list would read '
-      + 'as "no rules", which is not the same thing.',
+      // WHERE TO FIX IT, like `simulateNoEngine` just below — same missing
+      // database, and that key has ended this way since it was written.
+      + 'as "no rules", which is not the same thing. Settings → Database.',
     simulateNoEngine:
       'No database configured: the built-in engine is not mounted, so the test alert '
       + 'has nowhere to go. Settings → Database.',

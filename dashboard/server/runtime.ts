@@ -166,7 +166,14 @@ export async function ruleDb<T>(op: () => Promise<T>): Promise<T> {
   try {
     return await op();
   } catch (err) {
-    throw new RuleDbError(describePgError(err, 'Base de données (règles)'));
+    // ENGLISH, like `PgRunStore.q()`'s `Database (SELECT)` — the sibling that
+    // describes every other query failure, imported on the line above. This
+    // one said `Base de données (règles)`, and it is the WHOLE content of the
+    // Rules tab on an install whose database refuses: read off the rendered
+    // page in Chromium, not out of the source. No catalogue sweep could see
+    // it, because a template literal in a server module was never asked
+    // anything.
+    throw new RuleDbError(describePgError(err, 'Database (rules)'));
   }
 }
 
