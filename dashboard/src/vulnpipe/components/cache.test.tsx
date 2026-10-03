@@ -89,7 +89,10 @@ describe('Panneau du cache', () => {
       })
     );
 
-    const warning = await screen.findByRole('status');
+    // Found by its SENTENCE, not by `role="status"`: this paragraph is a line
+    // inside the settings payload, not the answer to asking for it, so it is
+    // deliberately no longer a live region. See `status-messages.test.tsx`.
+    const warning = await screen.findByText(/could not be picked up again/i);
     expect(warning.textContent).toContain('verdicts');
     expect(warning.textContent).toContain('another format');
     // Et surtout : ce n'est PAS une panne. Le texte doit le dire, sinon on
@@ -100,7 +103,7 @@ describe('Panneau du cache', () => {
   it("ne signale rien quand la reprise s'est bien passée", async () => {
     mount();
     await screen.findByText('12');
-    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.queryByText(/could not be picked up again/i)).toBeNull();
   });
 
   it('offre l oubli, et affiche le nouvel état sans recharger la page', async () => {

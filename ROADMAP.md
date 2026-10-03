@@ -809,6 +809,47 @@ stayed exactly where it was.*
 **What R does not do.** It adds no per-user layout preference; that is C1.5. It
 leaves the eight facts of a triage row intact: the table got shorter, not poorer.
 
+### C0.33 ✅ — The half that wrote the live-region rule down, and kept neither half of it
+
+*C0.30 gave the console `Announce`, and said so in its own words: the rule was
+found in a comment in `vulnpipe/components/PromoteFinding.tsx`. Nobody then read
+the file the rule was copied from. Measured by mounting every screen under
+`src/vulnpipe/` and counting the live regions present before a message was
+written into one: **0, on every screen** — twenty-five occurrences of
+`role="status"` / `role="alert"` / `aria-live`, and not one region that
+pre-exists its sentence. Confirmed in Chromium 1194 on the built console: the
+Code tab holds **0** before a press, and nothing announced « reading your code
+to price the work ».*
+
+| # | Feature | What it changes |
+|---|---|---|
+| ~~R48~~ ✅ | **Seven answers land in a slot that was already there, politely** — the engine-key save (one slot for both outcomes: `send()` clears them together), the engines' Apply, the Code-settings request failure, the reset confirmation, the whole section failing to load, and the Code tab's « reading your code to price the work ». Six of the seven were `role="alert"` — assertive, interrupting somebody to deliver what they had just asked for | Measured per screen: regions before a press go 0 → 1 where there is one answer, and the sentence's region is the one that was already in the document |
+| ~~R49~~ ✅ | **Six regions that held no answer lose theirs** — a warning about a setting's value (twice), a provider whose key is missing (the form renders TWICE per page), a failed cache restore, the warnings inside an estimate, and « you marked this fixed and the scan still finds it ». The line the pass had to draw: **a region holds the answer to a request, not a fact inside the answer** — announcing one line of a report as if it were the reply is worse than announcing none, because it sounds like the whole reply | Two of them were assertive, one once per stale finding in a report |
+
+**The region that could not speak.** The Code-settings request failure sat
+inside a closed `Fold`. Probed with CDP `Accessibility.getFullAXTree` on the
+built console: a closed `<details>`'s content is **absent from the accessibility
+tree**, while `getBoundingClientRect()` still reports **597 px** for its body
+and `offsetParent` is not null — both the usual rulers call it rendered. It is
+also a failure, which `CLARITY.md` § 3 keeps out of a fold anyway. Moving it out
+is the pass's **only visible change**: **+53 px at 1280 px and +163 px at
+320 px** on an install whose analysis service is unreachable, **0 px** when it
+answers. Built stylesheet byte-identical; every other screen's `scrollHeight`
+unchanged to the pixel, and no horizontal overflow at 320 px.
+
+**What is deliberately NOT done, and it is layout and not doubt.** Four answers
+in this half — the promote outcome, the two copy failures, the refused status
+note — sit inside flex containers with a `gap` (`.vp-promote`, `.vp-fix-prompt`,
+`.vp-report-export`, `.vp-status-form`), where an always-present region becomes
+an extra flex item: the reason the console deliberately left `.soc-actions`
+alone. `.vp-promote-note` carries `flex-basis: 100%`, so wrapping it would put
+the sentence back on the button's line. 6 px per finding card, times a report's
+findings, is a decision with its own measurement — and one test says out loud
+that their current state is not the rule. The launcher's field error keeps
+`role="alert"`: it refuses the action just attempted and the input names it
+through `aria-describedby`. `LiveActivity` keeps its regions: it is the only
+content here that changes by itself.
+
 ### C0.32 ✅ — Two widgets that promised a keyboard and had none
 
 *C0.30 made `SectionTabs` keep the contract `role="tab"` announces, and it

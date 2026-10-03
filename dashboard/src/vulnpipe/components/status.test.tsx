@@ -180,7 +180,13 @@ describe('Statut à l écran', () => {
     setStatus(findingKey(finding), 'fixed');
     render(<FindingCard finding={finding} />);
 
-    expect(screen.getByRole('alert').textContent).toMatch(/still finds it/i);
+    // Found by its sentence and checked for the WARNING treatment. It used to
+    // be read through `role="alert"`, which it no longer carries: the notice is
+    // on screen the moment a report renders — the status lives in browser
+    // storage — so an assertive region announced it to somebody who had just
+    // arrived. `status-messages.test.tsx` carries that claim.
+    const warning = screen.getByText(/still finds it/i);
+    expect(warning.className).toContain('vp-banner-error');
   });
 
   it('estompe une faille écartée mais ne la RETIRE PAS', () => {

@@ -46,6 +46,7 @@ import { useScan } from './lib/useScan.ts';
 import { usePreferences } from './lib/preferences.ts';
 import { Icon } from './components/Icon.tsx';
 import { useI18n } from '../i18n/context.tsx';
+import { Announce } from '../components/Guidance.tsx';
 import { stepTranslations, STEP_ORDER, type StepName } from './lib/step_translations.ts';
 
 /**
@@ -166,11 +167,14 @@ export function VulnPipeSection({ prefill = null }: { prefill?: ScanPrefill | nu
             defaultKind={prefill && /^https?:\/\//i.test(prefill.target) ? 'github' : preferences.defaultKind}
             defaultMode={preferences.defaultMode}
           />
-          {state.phase === 'estimating' && (
-            <p className="vp-banner vp-banner-info" role="status">
-              {t.estimate.estimating}
-            </p>
-          )}
+          {/* The answer to « Estimate, then analyze ». The slot is rendered at
+              `idle` too, so it is already in the document when the press puts a
+              sentence in it. */}
+          <Announce>
+            {state.phase === 'estimating' && (
+              <p className="vp-banner vp-banner-info">{t.estimate.estimating}</p>
+            )}
+          </Announce>
           <PipelineExplainer />
           <p className="vp-section-note">
             {c.code.docsHint} · {c.code.settingsHint}
@@ -178,11 +182,11 @@ export function VulnPipeSection({ prefill = null }: { prefill?: ScanPrefill | nu
         </>
       )}
 
-      {state.error && (
-        <p className="vp-banner vp-banner-error" role="alert">
-          {state.error}
-        </p>
-      )}
+      {/* Polite, like every other answer here: whoever pressed is waiting for
+          it, and an interruption buys nothing. */}
+      <Announce>
+        {state.error && <p className="vp-banner vp-banner-error">{state.error}</p>}
+      </Announce>
 
       {state.phase === 'estimated' && state.estimate && (
         <EstimatePanel

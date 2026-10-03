@@ -138,9 +138,11 @@ export function StaleStatusNotice({
   const entry = statusOf(findingKey(finding));
   if (entry.status !== 'fixed') return null;
 
+  // NO LIVE REGION: the status is kept in browser storage, so this is on
+  // screen the moment a report renders — once per finding somebody had marked
+  // fixed in an earlier session. Assertive, it interrupted once per stale
+  // finding, about a contradiction nobody had just produced.
   return (
-    <p className="vp-banner vp-banner-error vp-status-stale" role="alert">
-      {t.status.staleWarning}
-    </p>
+    <p className="vp-banner vp-banner-error vp-status-stale">{t.status.staleWarning}</p>
   );
 }

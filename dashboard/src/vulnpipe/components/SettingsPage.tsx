@@ -25,7 +25,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError, type CacheState, type KeyStatus, type ScanSettings } from '../lib/api.ts';
 import { usePreferences, type EditorTarget } from '../lib/preferences.ts';
 import { useI18n } from '../../i18n/context.tsx';
-import { Fold } from '../../components/Guidance.tsx';
+import { Announce, Fold } from '../../components/Guidance.tsx';
 import { Icon } from './Icon.tsx';
 import { ProviderKeys } from './ProviderKeys.tsx';
 import {
@@ -193,6 +193,19 @@ export function SettingsPage({
 
       {/* --- Arbitrage -------------------------------------------------------- */}
       <section className="vp-settings-block">
+        {/*
+          THE REQUEST'S ANSWER, AND IT IS NOT FOLDED.
+          `scanError` is what the server said when these settings could not be
+          read or written — a failure, so `CLARITY.md` § 3 keeps it out of a
+          fold, and it could not be announced from inside one anyway: a closed
+          `<details>` is not in the accessibility tree, so a live region in
+          there is a region that can never speak. The slot pre-exists the
+          sentence and is polite.
+        */}
+        <Announce>
+          {scanError && <p className="vp-provider-warning">{scanError}</p>}
+        </Announce>
+
         <Fold title={s.arbitrationTitle} hint={<Scope kind="server" />}>
         <p className="vp-field-help">{s.arbitrationLede}</p>
 
@@ -204,15 +217,13 @@ export function SettingsPage({
           disabled={busy || scan === null}
           onChange={(next) => void applyScan({ bypassClaudeForHighConfidence: next })}
         />
+        {/* NO LIVE REGION: a warning about a setting's VALUE, true for as long
+            as the setting has it, and already on screen when the page loads on
+            an install that turned it on. */}
         {scan?.bypassClaudeForHighConfidence && (
-          <p className="vp-provider-warning" role="status">
+          <p className="vp-provider-warning">
             <Icon name="warning" size={15} />
             {s.bypassWarning}
-          </p>
-        )}
-        {scanError && (
-          <p className="vp-provider-warning" role="alert">
-            {scanError}
           </p>
         )}
 
@@ -244,8 +255,9 @@ export function SettingsPage({
             }}
           />
         </div>
+        {/* Same: a warning about a setting's value, not an answer to a press. */}
         {scan !== null && scan.detectionConcurrency > 8 && (
-          <p className="vp-provider-warning" role="status">
+          <p className="vp-provider-warning">
             <Icon name="warning" size={15} />
             {s.concurrencyWarning}
           </p>
@@ -308,7 +320,9 @@ export function SettingsPage({
           {cache.restored
             .filter((entry) => entry.why !== null)
             .map((entry) => (
-              <p key={entry.kind} className="vp-provider-warning" role="status">
+              /* NO LIVE REGION: a line INSIDE the settings payload, not the
+                 answer to asking for it. See `status-messages.test.tsx`. */
+              <p key={entry.kind} className="vp-provider-warning">
                 <Icon name="warning" size={15} />
                 {s.cacheRestoreFailed(entry.kind, entry.why ?? '')}
               </p>
@@ -514,11 +528,12 @@ export function SettingsPage({
           <Icon name="reset" size={15} />
           {s.reset}
         </button>
-        {resetDone && (
-          <p className="vp-field-help vp-field-note" role="status">
-            {s.resetDone}
-          </p>
-        )}
+        {/* The answer to « Reset my preferences ». The slot is inside this fold
+            on purpose: it is the fold somebody has to open to reach the button,
+            so the region is on screen before the press. */}
+        <Announce>
+          {resetDone && <p className="vp-field-help vp-field-note">{s.resetDone}</p>}
+        </Announce>
         </Fold>
       </section>
     </div>
@@ -581,11 +596,12 @@ export function VulnPipeSettings() {
 
   return (
     <>
-      {error && (
-        <p className="vp-banner vp-banner-error" role="alert">
-          {error}
-        </p>
-      )}
+      {/* The answer to the request this screen makes on opening. Polite: the
+          person is looking at a form that will never fill in, and interrupting
+          them to say so costs the reading they were in the middle of. */}
+      <Announce>
+        {error && <p className="vp-banner vp-banner-error">{error}</p>}
+      </Announce>
       <SettingsPage
         providers={providers}
         keys={keys}
