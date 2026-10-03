@@ -217,20 +217,37 @@ describe('a sentence produced by a button lands in a live region that pre-exists
     expect(regions(container).length).toBeGreaterThan(0);
 
     const said = await screen.findByText(/is not answering/);
-    expect(announcer(said)?.getAttribute('role')).toBe('status');
+    const region = announcer(said);
+    expect(region?.getAttribute('role')).toBe('status');
+    /*
+     * AND NOT INSIDE A FOLD. Asserted structurally, because jsdom renders the
+     * body of a closed `<details>` like any other element: measured in Chromium
+     * 1194 on the built console, a closed fold's content is NOT in the
+     * accessibility tree (`Accessibility.getFullAXTree` does not carry it),
+     * while `getBoundingClientRect` still reports a height for it. So a region
+     * in there is a region that can never speak, and the sentence it holds is
+     * a failure, which `CLARITY.md` § 3 keeps out of a fold anyway.
+     */
+    expect(region!.closest('details')).toBeNull();
   });
 
   it('code settings — the confirmation that preferences were reset', async () => {
     vi.spyOn(api, 'getScanSettings').mockResolvedValue(scanSettings());
-    render(<SettingsPage providers={null} onProviderChange={async () => {}} busy={false} />);
+    const { container } = render(
+      <SettingsPage providers={null} onProviderChange={async () => {}} busy={false} />,
+    );
 
     // The control is behind a fold, which is what somebody opens before
-    // pressing it.
+    // pressing it — so the slot is on screen with them.
     await userEvent.click(await screen.findByText(new RegExp(t.settings.resetHelp.slice(0, 30), 'i')));
+    const before = regions(container);
     await userEvent.click(screen.getByRole('button', { name: new RegExp(t.settings.reset, 'i') }));
 
     const said = await screen.findByText(new RegExp(t.settings.resetDone, 'i'));
-    expect(announcer(said)).not.toBeNull();
+    const region = announcer(said);
+    expect(region).not.toBeNull();
+    // The slot the press wrote into is one that was already there.
+    expect(before).toContain(region);
   });
 
   it('code settings — the whole section failing to load', async () => {
