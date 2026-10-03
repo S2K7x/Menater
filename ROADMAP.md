@@ -809,6 +809,42 @@ stayed exactly where it was.*
 **What R does not do.** It adds no per-user layout preference; that is C1.5. It
 leaves the eight facts of a triage row intact: the table got shorter, not poorer.
 
+### C0.34 ✅ — The one screen that answers a failure by deleting itself
+
+*`RulesPage` IS the Rules tab, not a section of one — unlike `WorkflowPanel`
+and `SettingsSetup`, whose banners sit under the page head of Ingestion and
+Settings. Its `if (error)` branch returned a bare banner INSTEAD of the page,
+so the tab lost its title, its kicker and its lede exactly when somebody needs
+to know which screen is broken. Measured in Chromium 1194 on the built console,
+against a database that is configured and refuses:*
+
+| tab | headings | content height | what it says |
+|---|---|---|---|
+| Tracking | 3 | 583 px | "No run in the window: the pipeline processed nothing, or is unreachable." |
+| Health | 7 | 1389 px | "Unreachable — postgresql://…" |
+| **Rules, before** | **0** | **104 px** | `Base de données (règles): connect ECONNREFUSED 127.0.0.1:5432` |
+| **Rules, after** | **1** | **292 px** | `Database (rules): connect ECONNREFUSED 127.0.0.1:5432` |
+
+| # | Feature | What it changes |
+|---|---|---|
+| ~~R50~~ ✅ | **The page head is written once and reached by both branches** — the failure is a banner UNDER the screen it is a failure of, not instead of it. The editor deliberately does not come back with it: a rule saved against a set nobody can read is a rule nobody can see | A reader navigating by heading finds the screen; Chromium reports `heading "RULES"` where it reported nothing |
+| ~~R51~~ ✅ | **The sentence is English, like the sibling one import away** — `ruleDb` labelled the cause `Base de données (règles)` while `PgRunStore.q()`, which it imports `describePgError` from, writes `Database (SELECT)` for every other query failure | The whole content of the Rules tab on an install whose database refuses stops being French |
+| ~~R52~~ ✅ | **Both sentences name where to fix it** — `rulesNoDatabase` stopped at "the rules cannot be read"; `simulateNoEngine`, the next key in the same catalogue for the same missing database, has ended with "Settings → Database." since it was written | The screen of a fresh install says what to do, not only what is wrong |
+
+**The dead key is removed, not wired in, and that is the decision.** The console
+catalogue has held `rules.noDatabase` — *"Database unreachable: the rules cannot
+be read."* — referenced by nothing since it was written. Only the SERVER knows
+whether no database is configured or a configured one refused, so the browser
+owning that sentence would make "unreachable" reachable from a state it does not
+describe, and would displace the named reason `api-named-failures.test.ts`
+exists to protect. The orphan sweep in `n8n-removed.test.ts` cannot report it:
+it searches the bare key name over one merged corpus, and the server
+catalogue's own `health.noDatabase` is referenced from `snapshot.ts`, so one
+catalogue's dead key is vouched for by the other's identical leaf name. Scoping
+the corpus per directory was measured as the obvious repair and rejected — it
+reports 11 console orphans, 10 of them `workflow.varHelp.*`, which are reached
+dynamically by the pipeline-variable key.
+
 ### C0.33 ✅ — The half that wrote the live-region rule down, and kept neither half of it
 
 *C0.30 gave the console `Announce`, and said so in its own words: the rule was

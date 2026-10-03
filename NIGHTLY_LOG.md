@@ -4,6 +4,174 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-10-03 (second run) — Saturday · Interface, clarity, accessibility
+
+**Subject**: the one screen in this console that answers a failure by deleting
+itself. `RulesPage` IS the Rules tab — not a section of one, the way
+`WorkflowPanel` and `SettingsSetup` are sections of Ingestion and Settings — so
+its `if (error)` branch, which returned a bare banner INSTEAD of the page, left
+the tab with **no heading at all**, and the one line it left was in **French**.
+
+**Result**: PR opened on `claude/great-pascal-k7shvn`. Seven files: four
+production (`src/components/RulesPage.tsx`, `server/runtime.ts`,
+`server/i18n.ts`, `src/i18n/console.ts`), one new test
+(`src/components/rules-failure.test.tsx`, 9 tests), plus `CLAUDE.md`,
+`CLARITY.md`, `ROADMAP.md` (C0.34 / R50-R52) and this journal. **+9 tests**,
+nothing skipped or weakened.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-k7shvn` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Twenty-ninth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: `main` at 85b9753 gave
+typecheck 0, **1453 passed | 1 skipped**, build clean, and
+`list_pull_requests --state open` was empty. This is the SECOND run carrying
+2026-10-03; the entry below is the first (the live-region rule in the VulnPipe
+half). I did **not** take any of its *Found and NOT fixed* leads. This one came
+out of a fresh browser sweep and is priority (2), a real defect with a
+measurement — not the (6) clarity pass the carried leads would have been.
+
+**How it was found.** Not from the lead list: by driving the built console in
+Chromium 1194 and dumping, per tab, the tables, the heading outline and the
+live regions. The Rules tab came back with `headings: []` — the only tab in the
+product with none — and the visible text of the whole tab was one sentence,
+in French.
+
+**Measured** (Chromium 1194, built bundle served by the console's own API, no
+model key, a database configured on 5432 with nothing listening):
+
+| tab | headings | content height | what it says |
+|---|---|---|---|
+| Tracking | 3 | 583 px | "No run in the window: the pipeline processed nothing, or is unreachable." |
+| Health | 7 | 1389 px | "Unreachable — postgresql://…" |
+| **Rules, before** | **0** | **104 px** | `Base de données (règles): connect ECONNREFUSED 127.0.0.1:5432` |
+| **Rules, after** | **1** | **292 px** | `Database (rules): connect ECONNREFUSED 127.0.0.1:5432` |
+
+CDP `Accessibility.getPartialAXTree` on the restored title: `role: heading,
+name: "RULES"`, where there was no heading node at all. The no-database state
+was measured on a second instance started against an empty database block: same
+head, and the sentence now ends "Settings → Database." No horizontal overflow
+at 320, 375 or 1280 px; the built stylesheet is **byte-identical** (same hash
+`index-Bmsh0y4D`, 90.77 kB), which is the claim that nothing here is visible to
+somebody using a mouse on a working install.
+
+**What I learned that is written nowhere else.**
+
+1. **The dead key for this exact failure had been in the catalogue since it was
+   written, and the orphan sweep is structurally unable to report it.**
+   `rules.noDatabase` — "Database unreachable: the rules cannot be read." — is
+   referenced by nothing. `n8n-removed.test.ts` searches the bare key NAME over
+   ONE merged corpus of `server/` + `src/`, and `server/i18n.ts`'s own
+   `health.noDatabase` is referenced from `snapshot.ts:223`: **one catalogue's
+   dead key is vouched for by the OTHER catalogue's identical leaf name.** That
+   is a second blind spot beside the documented one (a key colliding with an
+   ordinary word).
+2. **Scoping that corpus per directory is the obvious repair, and it is wrong.**
+   Measured with a throwaway probe (console keys searched in `src/` only,
+   server keys in `server/` only): **11 console orphans, and 10 of them are
+   `workflow.varHelp.*`** — reached dynamically as `t.varHelp[variable.key]`,
+   where the key is server vocabulary (`approval.timeoutMinutes`,
+   `slack.criticalChannel`…). Server orphans: 0. So a per-directory sweep is
+   91 % false positives on this repository, and the honest version needs a
+   carve-out by prefix plus a test that the carve-out cannot go stale. A
+   different night.
+3. **The dead key must not be wired in, and that is the design decision, not
+   tidiness.** Only the server knows whether no database is CONFIGURED or a
+   configured one REFUSED; the browser holds a sentence. "Database unreachable"
+   over an install that never configured one is a sentence reachable from a
+   state it does not describe — the `makeLlm` "answered with no content"
+   family — and showing it would displace the named reason
+   `api-named-failures.test.ts` exists to protect. Removed.
+4. **The English spelling of the cause was one import away.** `ruleDb` imports
+   `describePgError` from `engine/pg-store.ts`, whose own `q()` labels every
+   other query failure `Database (SELECT)`. The French label sat in the
+   function that imports it. Twelfth-odd recurrence of *the mirror of a rule is
+   not the rule*, and the shortest distance yet.
+5. **No catalogue sweep could have caught that string.** It is a template
+   literal in a server module: a typed catalogue refuses a key added on one
+   side only, and it cannot refuse a string that never asked it anything. The
+   same hole the 10-03 first run recorded for `server/vulnpipe.ts`.
+
+**Do not redo.**
+
+- **Do not scope the orphan sweep per directory** — see point 2, measured.
+- **Do not wire `rules.noDatabase` back in**, or any client-side sentence in
+  that banner: a mutation that replaces `{error}` with `{t.loadFailed}` fails
+  **4** of the 9 tests, on purpose.
+- **Do not bring the editor back with the page head.** A rule saved against a
+  set nobody can read is a rule nobody can see; one test claims that boundary
+  and a mutation that adds the button back fails it.
+- **Do not put the failure banner in a live region.** It is standing — it is
+  there on arrival and it stays — and the console re-renders on every poll.
+  `CLARITY.md` § 8. One test claims that side and passes before AND after.
+- **Do not "fix" `WorkflowPanel` or `SourcesPanel` the same way.** They are
+  the other two `if (error)` branches in the console, and they are sections of
+  a tab that keeps its own page head: `IngestionPanel` renders `PageHead` above
+  both (lines 439 and 687), and `SettingsPage` carries its own
+  `soc-page-head`. Their bare banner is in context; `RulesPage` is the only
+  component in the product that IS its tab.
+
+**Found and NOT fixed** — leads, each verified tonight, none taken:
+
+- **The Alerts queue puts `aria-selected` on seven `<tr>` of a plain
+  `<table>`, and it can never be true.** ARIA supports that attribute on a row
+  only inside a `grid` or a `treegrid`, and this is a `table` — measured with
+  CDP, Chromium's AX tree gives those rows `focusable=true` and **no `selected`
+  property at all**. Measured on the rendered page as well: all seven read
+  `aria-selected="false"`, and **clicking one unmounts the table** (the tab
+  swaps the queue for the case view), so the `true` branch has no screen to
+  appear on. Either the attribute goes, or the table takes the `grid` role and
+  the keyboard that comes with it — a decision, not a cleanup.
+- **The four console tables still have no accessible name** (`soc-queue` ×2,
+  `soc-table-compact` ×2) while `vulnpipe/components/UsagePanel.tsx` uses
+  `<caption>` twice. Carried from 09-19 and 09-26; still true, still a scoped
+  Saturday subject, and tonight's defect outranked it.
+- **The two `H4`-after-`H2` heading jumps** ("Log sources", Settings → Engines
+  "Analysis speed") are untouched, as are the Ingestion tab's "Poll now"
+  announcement, the assistant's `aria-busy`, and the console's missing
+  `check.cjs` (ROADMAP § 7).
+- **The Metrics tab prints `METRICS` as an `h2` twice** — the page title and
+  the section below it. Noticed in the heading sweep; a wording question, not a
+  defect.
+- The standing leads from previous nights are untouched: the four French
+  strings in `dashboard/server/vulnpipe.ts`, `readVariables`/`writeVariables`
+  with no caller, `Settings.meta.from_env` written and never read,
+  `forgetCursor` and `fetchWithTimeout` with no caller, `static.ts`'s
+  `immutable` on non-fingerprinted `public/` assets, and the login throttle
+  collapsing to one bucket behind the tunnel.
+
+**Verified** (Node 22.22.0, `dashboard/`, commands run and output read):
+
+| Command | Result |
+|---|---|
+| `npm ci` | lockfile unchanged |
+| `npm run typecheck` | 0 errors |
+| `npm test` | **1462 passed, 1 skipped** (1453 \| 1 before: **+9**) |
+| `npm run build` | CSS **90.77 kB, hash `index-Bmsh0y4D` — byte-identical to `main`**; JS 483.07 → 483.06 kB |
+| Chromium 1194, built bundle, 1280 / 375 / 320 px | Rules tab: 0 → 1 heading, 104 → 292 px, no horizontal overflow at any of the three |
+| CDP `Accessibility.getPartialAXTree` | `heading "RULES"` where there was no heading node |
+
+Checked **RED first**: the test file was written before any fix and **4 of its
+9 tests failed** on unmodified `main` (the page head missing in both failure
+states, the French prefix, the missing remedy). The five that passed do so by
+design — the server's reason already travelled, the editor was already absent,
+the banner was already outside a live region, and the success path already
+carried one title. The fix was **committed before mutating**, per the 09-26
+lesson. **Seven mutations, each caught**: the head removed from the failure
+branch (2 tests), the head rendered twice (1), the editor brought back (1), the
+banner given `role="alert"` (1), the French prefix restored (1), the remedy
+dropped from `rulesNoDatabase` (1), and `{error}` replaced by the catalogue's
+own sentence (4). The one skipped test is the pre-existing
+`store-contract.test.ts > contrat — postgres`, which needs a database.
+`VulnPipe/` untouched, its suite not run. The browser probes and the orphan
+probe lived in the scratchpad (one probe briefly inside `src/`, deleted);
+`git status` is clean apart from the diff.
+
+---
+
 ## 2026-10-03 — Saturday · Interface, clarity, accessibility
 
 **Subject**: the live-region rule, applied to the half of the product that
