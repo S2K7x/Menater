@@ -67,7 +67,7 @@ const payload = (entries: InventoryEntry[]): SettingsPayload =>
       meta: {
         config_path: '/tmp/config.json',
         config_exists: true,
-        from_env: { db_host: false, db_password: false },
+        from_env: { database: {} },
       },
     },
     connection_string: 'postgres://localhost:5432/menater',

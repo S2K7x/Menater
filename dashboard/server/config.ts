@@ -17,12 +17,20 @@
  *  3. THE FILE IS 0600 AND GITIGNORED. It holds database passwords.
  *
  * ============================================================================
- * PRECEDENCE: FILE > ENVIRONMENT > DEFAULT
+ * PRECEDENCE: FILE > ENVIRONMENT > DEFAULT — EXCEPT THE DATABASE BLOCK
  *
  * The environment bootstraps (containerised deployment, CI); the file is what
  * the interface edits. Without that order, a setting changed in the interface
  * would be overwritten at the next start by a forgotten variable — the kind of
  * inconsistency that takes an hour to understand.
+ *
+ * The database coordinates are the one exception, and it runs the other way:
+ * `DB_ENV` names six variables that WIN over the file, because a `config.json`
+ * laid down at first start with the `localhost` default would otherwise mask a
+ * deployment decision for ever. That exception is total — `applyEnvOverrides`
+ * is applied on a cold read, on a save and to what a save writes — and the
+ * screen is told which fields it took, or it offers an input the server will
+ * refuse.
  * ============================================================================
  */
 
@@ -396,20 +404,50 @@ function migrateVariables(c: AppConfig): AppConfig {
   return c;
 }
 
+/**
+ * The database fields the environment owns, and the variable that owns each.
+ *
+ * ONE TABLE, TWO READERS, ON PURPOSE. `applyEnvOverrides` moves these values
+ * and `publicView` tells the screen which of them moved — so a seventh
+ * variable cannot be added without the field it locks learning its name. The
+ * previous shape wrote the two lists separately and they had drifted: the
+ * override moved six fields and the screen was told about two, as booleans,
+ * and read them nowhere.
+ */
+export const DB_ENV = {
+  host: 'MENATER_DB_HOST',
+  port: 'MENATER_DB_PORT',
+  database: 'MENATER_DB_NAME',
+  user: 'MENATER_DB_USER',
+  password: 'MENATER_DB_PASSWORD',
+  ssl: 'MENATER_DB_SSL',
+} as const;
+
+type DbEnvField = keyof typeof DB_ENV;
+
 function applyEnvOverrides(c: AppConfig): AppConfig {
-  const host = env('MENATER_DB_HOST');
-  const port = env('MENATER_DB_PORT');
-  const name = env('MENATER_DB_NAME');
-  const user = env('MENATER_DB_USER');
-  const password = env('MENATER_DB_PASSWORD');
-  const ssl = env('MENATER_DB_SSL');
-  if (host !== undefined) c.database.host = host;
-  if (port !== undefined) c.database.port = Number(port) || c.database.port;
-  if (name !== undefined) c.database.database = name;
-  if (user !== undefined) c.database.user = user;
-  if (password !== undefined) c.database.password = password;
-  if (ssl !== undefined) c.database.ssl = ssl === 'true';
+  for (const field of Object.keys(DB_ENV) as DbEnvField[]) {
+    const raw = env(DB_ENV[field]);
+    if (raw === undefined) continue;
+    switch (field) {
+      // A variable that is not a number names no port, and the file's value is
+      // a better answer than `NaN` — `saveConfig` clamps the typed one the
+      // same way.
+      case 'port': c.database.port = Number(raw) || c.database.port; break;
+      case 'ssl': c.database.ssl = raw === 'true'; break;
+      default: c.database[field] = raw;
+    }
+  }
   return c;
+}
+
+/** Which of those fields a variable is actually naming right now. */
+function databaseFromEnv(): Partial<Record<DbEnvField, string>> {
+  const named: Partial<Record<DbEnvField, string>> = {};
+  for (const field of Object.keys(DB_ENV) as DbEnvField[]) {
+    if (env(DB_ENV[field]) !== undefined) named[field] = DB_ENV[field];
+  }
+  return named;
 }
 
 export function saveConfig(patch: any): AppConfig {
@@ -451,6 +489,22 @@ export function saveConfig(patch: any): AppConfig {
   // exported, and a caller that skipped the route must not be able to write a
   // shape the resolver cannot read.
   sanitizeInventory(next);
+
+  /**
+   * THE ENVIRONMENT WINS HERE TOO, AND BEFORE THE WRITE.
+   *
+   * `getConfig()` was the only place that applied the override, so a save
+   * installed `next` raw: the live process — `connectionString`, the engine,
+   * the scheduler reading `getEngine()` on every tick — followed what had been
+   * typed, and the next restart silently put the variable back. Two answers one
+   * container restart apart, under a screen that says this page "does not
+   * redirect a running stack".
+   *
+   * Applied BEFORE the write so the refused value is not left in the file
+   * either: it would otherwise spring to life the day somebody removes the
+   * variable, which is the same surprise one deployment further out.
+   */
+  applyEnvOverrides(next);
 
   writeFileSync(CONFIG_PATH, JSON.stringify(next, null, 2), { mode: 0o600 });
   try {
@@ -495,13 +549,14 @@ export function publicView() {
     meta: {
       config_path: CONFIG_PATH,
       config_exists: existsSync(CONFIG_PATH),
-      from_env: {
-        // A field that is already filled must say
-        // where it came from, or someone rewrites it without understanding why
-        // it keeps coming back.
-        db_host: env('MENATER_DB_HOST') !== undefined,
-        db_password: env('MENATER_DB_PASSWORD') !== undefined,
-      },
+      /**
+       * A field that is already filled must say where it came from, or someone
+       * rewrites it without understanding why it keeps coming back — and the
+       * screen shows it read-only, because offering an input the server will
+       * refuse is worse than offering none. Same rule, and the same wording,
+       * as `CredentialStatus.locked`.
+       */
+      from_env: { database: databaseFromEnv() },
     },
   };
 }

@@ -4,6 +4,223 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-10-04 (second run) — Sunday · Maintenance and state of the project
+
+**Subject**: the carried recommendation, finally run as a night's subject —
+*take one page of `CLAUDE.md`/the code and check every claim against the other*.
+It found a real defect on the first file opened. `applyEnvOverrides` is the
+reason a containerised console reaches its database at all, and it was called by
+`getConfig()` on a cold read and **by nothing else**: `saveConfig` ended with
+`cached = next`, so a save from Settings re-pointed the LIVE process at whatever
+had been typed, and the next container restart silently put the variable back.
+Two answers one restart apart, under a screen whose own lede promises the first.
+
+**Result**: PR opened on `claude/great-pascal-03qasm`. Nine files: four
+production (`server/config.ts`, `src/components/SettingsPage.tsx`,
+`src/lib/types.ts`, `src/i18n/console.ts`), two new tests
+(`server/config-env.test.ts` 8, `src/components/settings-database-env.test.tsx`
+10), two stale fixtures, plus `CLAUDE.md`, `CLARITY.md`, `ROADMAP.md` (C0.35 /
+R53-R56) and this journal. **+18 tests**, nothing skipped or weakened.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-03qasm` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Thirty-first entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: `main` at c68a6ec gave
+typecheck 0, **1462 passed | 1 skipped**, build clean on the console, 413 passed
+and typecheck 0 on VulnPipe, and `npm audit` is **0 / 0** on both halves,
+production and dev — the lockfile work of the FIRST run of today still holds, so
+Sunday's dependency reservoir was empty. That leaves Sunday's second item,
+*bring `CLAUDE.md` and `ROADMAP.md` back in line with what the code actually
+does*, which is the same instruction as the recommendation carried since 09-20.
+Priority (2): a reproducible defect with a measurement, not a (6) clarity pass.
+
+**How it was found, and it is the transferable part.** Not by grepping for a
+pattern. By opening `server/config.ts` and reading its banner next to its own
+code: the header says **« PRECEDENCE: FILE > ENVIRONMENT > DEFAULT »** and
+explains that the reverse would mean *« a setting changed in the interface would
+be overwritten at the next start by a forgotten variable »* — and 370 lines
+below, `applyEnvOverrides` does exactly that to the database block, on purpose.
+Two doctrines in one file. The previous entry had noted that contradiction and
+filed it as a comment-only fix that *« cannot carry a failing test »*. It can:
+the contradiction was the tell, and the function it pointed at was applied in
+one place out of two.
+
+**Measured, through the real module, one `MENATER_DB_HOST` set:**
+
+| moment | `getConfig().database.host` | `connectionString(true)` |
+|---|---|---|
+| cold boot, variable set | `from-env.local` | `…@from-env.local:5432/…` |
+| **after any save from Settings** | **`typed-by-operator.local`** | **`…@typed-by-operator.local:…`** |
+| **after a restart, same file** | **`from-env.local`** | **`…@from-env.local:5432/…`** |
+| after a restart, variable since removed | `typed-by-operator.local` | — |
+
+**`docker-compose.yml` sets five of the six** (`MENATER_DB_HOST`, `_PORT`,
+`_NAME`, `_USER`, `_PASSWORD`; not `_SSL`), and Docker is the normal
+installation mode — so this was the state of every deployed console, not an edge
+case. `scheduler.ts` and the engine read `getEngine()` on every tick, so row 2 is the
+next alert going to the new address. Row 4 is the refused value left in the
+file, springing to life one deployment later. The screen said none of it could
+happen: *« In Docker these come from the environment, which wins over what is
+saved here … it does not redirect a running stack. »*
+
+**Measured on the built console in Chromium 1194**, served by the console's own
+API with `MENATER_DB_HOST=postgres MENATER_DB_PASSWORD=…` and a `config.json`
+holding `from-file.local`, Database sub-tab selected and not hidden:
+
+| field | label | value | disabled |
+|---|---|---|---|
+| Host | `Host · from the environment` | `postgres` | **true** |
+| Port | `Port` | `5432` | false |
+| Database | `Database` | `menater` | false |
+| User | `User` | `menater` | false |
+| Password | `Password · from the environment — set` | — | **true** |
+| TLS | `Require TLS (mandatory on Supabase)` | on | false |
+
+Note names both variables; `postgresql://menater:********@postgres:5432/menater`
+in the clear below it. **Horizontal overflow 0 at 320, 375 and 1280 px**
+(`mobile: false`, all transitions killed before sampling). The built stylesheet
+is **byte-identical** (`index-Bmsh0y4D`, 90.77 kB) — nothing here is visible on
+an install where no variable is set.
+
+**What I learned that is written nowhere else.**
+
+1. **`saveConfig` was the only place in the module that installed a
+   configuration without passing it through `applyEnvOverrides`.** The grep that
+   finds this class is not *who calls the thing you fixed* but *who else writes
+   the variable the fix reads* — here `cached`, assigned in exactly two places.
+   One had the override, one did not.
+2. **`meta.from_env` is the `NodeDef.retry` shape, third sighting.** Written by
+   `publicView`, declared on `Settings`, satisfied by two test fixtures, read by
+   **no production code** — and it covered **two of the six** fields the
+   override moves, as booleans, so even wired up it could not have named four of
+   them. Its own comment states the rule it exists for. Both test fixtures were
+   `as never` / `as unknown as SettingsPayload`, so `tsc` could not see them
+   either: **a cast fixture is a fixture the typecheck does not hold to the
+   contract.**
+3. **The fix the screen needed was already written, in the same screen.**
+   `CredentialStatus.locked` + `disabled={k.locked}` + `t.locked(k.env)` is the
+   whole pattern, 400 lines up in `SettingsPage.tsx`'s own imports. Thirteenth
+   recurrence of *the mirror of a rule is not the rule*, and the shortest
+   distance yet after 10-03's one-import hop.
+4. **The per-field branch is not defensive coding, it is the preset buttons.**
+   `DB_PRESETS` rewrites the WHOLE database block into the draft, so it takes no
+   keystroke to put a refused value on screen — and the draft was also what the
+   save SENT and what *Test reachability* probed. One derived `effectiveDb(…)`
+   object fixes display, dirty, save and probe together; a mutation replacing it
+   with `draft.db` kills three tests at once.
+5. **The real `DB_PRESETS` is not what its own hint says.** The Supabase hint
+   says *« the pooler listens on 6543 »* and `DB_PRESETS.supabase` sets
+   **`port: 5432`**. Two of my test expectations were written from the hint and
+   were wrong; the code is what they now assert. Not changed — which preset port
+   is right is a product decision, and it is in *Found and NOT fixed*.
+6. **A disabled input has no `:disabled` rule in `styles.css`.** The credentials
+   panel has shipped browser-default greying since it was written, so this
+   change inherits it rather than introducing it; the authoritative value is
+   also readable in the connection string below, which is not disabled. A
+   themed read-only field is a Saturday subject, named in ROADMAP C0.35.
+7. **CDP has two ways to lie to you here, and both bit.**
+   `Emulation.setDeviceMetricsOverride` with `mobile: true` reports an
+   `innerWidth` you did not ask for (already in the traps table), and a probe
+   whose selector silently finds nothing returns a clean-looking result — my
+   first run reported `fields: []` and `overflow: 0` together, and only the
+   second asserted the panel was the SELECTED, non-hidden one. **Print what the
+   ruler matched, not only what it measured.**
+
+**Do not redo.**
+
+- **Do not revert `applyEnvOverrides(next)` to after the `writeFileSync`.**
+  Before the write is deliberate: after it, the refused value stays in the file
+  and springs to life the day the variable is removed. One test claims exactly
+  that and nothing else does.
+- **Do not make the whole database block read-only when one variable is set.**
+  A mutation doing that fails two tests on purpose — `MENATER_DB_PASSWORD` alone
+  must not lock the host field.
+- **Do not key the locked state on a boolean.** The screen has to print WHICH
+  variable to go and change; that is the half `from_env` was missing, not the
+  flag.
+- **Do not add `npm audit` to `ci.yml`** — unchanged from the first run of
+  today, see that entry and ROADMAP § 7.
+- **Do not "fix" `DB_PRESETS.supabase` to port 6543 as part of another
+  subject.** Its own hint disagrees with it and a test now pins the code's
+  answer; changing it changes what a preset DOES on somebody's install.
+
+**Found and NOT fixed.**
+
+- **`DB_PRESETS.supabase` sets port 5432 while its own hint says the pooler
+  listens on 6543.** One of them is wrong and only a human can say which: the
+  direct connection really is 5432 and Supabase's docs push the pooler. Two
+  lines either way, and it changes behaviour on existing installs.
+- **The Database sub-tab's effect pill is *To copy elsewhere*** — right on a
+  containerised install, and generous on one where no variable is set, where a
+  save really does re-point the engine on the next tick. Making the pill
+  conditional is a one-line change I did not take: the lede now carries the
+  whole rule and a second signal saying nearly-the-same thing is the *same
+  thing said three times* trap.
+- **Standing leads, untouched**: the four French strings in
+  `dashboard/server/vulnpipe.ts`, `readVariables`/`writeVariables` with no
+  caller, `forgetCursor` and `fetchWithTimeout` with no caller, `static.ts`'s
+  `immutable` on non-fingerprinted `public/` assets, the login throttle
+  collapsing to one bucket behind the tunnel, the Alerts queue's seven
+  `aria-selected` rows on a plain `<table>`, the four console tables with no
+  accessible name, the two `H4`-after-`H2` jumps, `METRICS` printed twice as an
+  `h2`, and the ninety-odd French strings in `server/engine/` (ROADMAP § 7).
+
+**State of the week.**
+
+- **Seven nights, nine PRs, all merged**, #51 → #59; none open at the start of
+  tonight (checked, not assumed).
+- **Dependencies: clean again.** `npm audit` 0 on both halves, production and
+  dev, after the first run of today closed fifteen advisories. The detector is
+  still a weekly human `npm audit` — nothing in this repository notices one
+  between Sundays, and that is in § 7 as a decision for a human.
+- **The 09-20 recommendation is DISCHARGED, and it paid on the first file.**
+  Reading one module next to its own prose found a reproducible defect in about
+  twenty minutes. The method generalises and I recommend it again rather than
+  calling it done: the strongest version is *read a file's banner, then read the
+  function it describes*, because this repository's banners are long, carefully
+  argued and written once.
+- **Two stale documentation counts corrected while here**, both verified against
+  the code: CLAUDE.md said Settings has *nine* sub-tabs (it has ten — nine
+  unconditional plus the code-analysis one `App.tsx` always supplies, which the
+  traps table and ROADMAP C0.30 already said) and *1462 tests* (1480 now).
+- **Recommendation for next week**: `server/credentials.ts` next to CLAUDE.md's
+  *Two credential stores, same rule* paragraph — it is the file tonight's fix
+  copied its pattern FROM, it is the other half of the same precedence claim,
+  and the same reading has now paid once.
+
+**Verified** (Node 22.22.0, npm 10.9.4; every command run and its output read):
+
+| Command | Result |
+|---|---|
+| `dashboard: npm run typecheck` | 0 errors |
+| `dashboard: npm test` | **1480 passed, 1 skipped** (1462 + 1 before: **+18**) |
+| `dashboard: npm run build` | CSS 90.77 kB `index-Bmsh0y4D` — **byte-identical to `main`**; JS 484.34 kB (483.06 before) |
+| `VulnPipe: npm test` | 413 passed — untouched |
+| `VulnPipe: npm run typecheck` | 0 errors |
+| `npm audit` both halves | 0 / 0, production and dev |
+
+Checked **RED first**, before any production line was touched:
+`server/config-env.test.ts` was **5 failed | 3 passed**, the three passes being
+the boundary claims written to pass before AND after. **Eight mutations, each
+killed by a named test**: the override removed from `saveConfig` (3 tests),
+`from_env` back to a boolean (2), the render reading `draft.db` again (3), the
+`disabled` dropped on the host field (1), the probe reading the draft (1), the
+whole block locked as soon as one variable is set (2 — the over-reach boundary),
+the save sending the draft (1), the note deleted (1). The pristine files were
+restored from a copy each time and `git status` is clean apart from the diff.
+
+The probes lived in `dashboard/scripts/` for the measurement and are
+**deleted**; the Chromium driver and the throwaway `config.json` ran in the
+scratchpad. No model key and no database were needed — the Chromium pass was run
+against a database that is configured and refuses, which is the state the
+screen's own sentence is about.
+
+---
+
 ## 2026-10-04 — Sunday · Maintenance and state of the project
 
 **Subject**: fifteen published advisories were sitting in the two dependency

@@ -230,6 +230,13 @@ A screen that needs a model key, real code, a completed scan or a live database
 is a screen no browser sweep covers. Nine French strings and a whole empty-state
 defect lived there. **List them deliberately, or read the components.**
 
+**An ENVIRONMENT VARIABLE is the cheapest such gate, and the easiest to
+forget.** Settings → Database shows six fields read-only when `MENATER_DB_*`
+names them, which is every containerised install and no development one — so
+the default sweep renders the state nobody deploys. Start the console with the
+variable set; the whole defect in C0.35 lived in the half of that screen a
+`npm run dev` can never show.
+
 ### `innerText` is the hiding test
 
 It returns only *rendered* text. If a heading's `innerText` contains what you

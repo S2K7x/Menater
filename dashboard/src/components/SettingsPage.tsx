@@ -62,6 +62,32 @@ type Draft = {
 };
 
 /**
+ * The database block as the console will REALLY use it.
+ *
+ * `DB_ENV` in `server/config.ts` names six variables that WIN over the file
+ * for this block alone, and the override now applies to a save as well as to a
+ * cold read — so a field a variable owns cannot be changed from here at all.
+ * Reading the draft for such a field would show, TEST and send a value the
+ * server has already decided against: the preset buttons rewrite the whole
+ * block into the draft, so it does not even take a keystroke.
+ *
+ * `password` is deliberately not carried over. It never comes back out of the
+ * server, so there is nothing to put back; the field is shown read-only and an
+ * empty secret keeps whatever is stored.
+ */
+function effectiveDb(db: Draft['db'], s: Settings): Draft['db'] {
+  const owned = s.meta.from_env.database;
+  return {
+    ...db,
+    ...(owned.host !== undefined ? { host: s.database.host } : null),
+    ...(owned.port !== undefined ? { port: s.database.port } : null),
+    ...(owned.database !== undefined ? { database: s.database.database } : null),
+    ...(owned.user !== undefined ? { user: s.database.user } : null),
+    ...(owned.ssl !== undefined ? { ssl: s.database.ssl } : null),
+  };
+}
+
+/**
  * Prereglages de base : seule la TRANSFORMATION vit ici. Le libelle et
  * l'explication sont dans le catalogue, sinon la page reste francaise quand on
  * bascule en anglais.
@@ -94,14 +120,22 @@ function CheckField({
   checked,
   onChange,
   children,
+  disabled,
 }: {
   checked: boolean;
   onChange: (next: boolean) => void;
   children: ReactNode;
+  /** Read-only when the environment owns the value; see `effectiveDb`. */
+  disabled?: boolean;
 }) {
   return (
     <label className="soc-field soc-check-field">
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.checked)}
+      />
       <span>{children}</span>
     </label>
   );
@@ -113,12 +147,15 @@ function SecretField({
   value,
   onChange,
   help,
+  disabled,
 }: {
   label: string;
   isSet: boolean;
   value: string;
   onChange: (v: string) => void;
   help?: string;
+  /** Read-only when the environment owns the value; see `effectiveDb`. */
+  disabled?: boolean;
 }) {
   const { c } = useI18n();
   return (
@@ -134,6 +171,7 @@ function SecretField({
       <input
         type="password"
         value={value}
+        disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
         placeholder={isSet ? c.settings.secretKeep : c.settings.secretNone}
         autoComplete="new-password"
@@ -382,7 +420,7 @@ export function SettingsPage({
   }, []);
 
   async function save() {
-    if (!draft) return;
+    if (!draft || !payload) return;
     setBusy(true);
     setError(null);
     setSaved(false);
@@ -391,7 +429,7 @@ export function SettingsPage({
         console: draft.cons,
         assistant: draft.assistant,
         auth: { enabled: draft.authEnabled, password: draft.authPassword },
-        database: { ...draft.db, password: draft.db.password },
+        database: effectiveDb(draft.db, payload.settings),
         pipeline: draft.pipeline,
         webhook: { mode: draft.webhookMode, secret: draft.webhookSecret },
         tunnel: { token: draft.tunnelToken, hostname: draft.tunnelHostname },
@@ -449,6 +487,10 @@ export function SettingsPage({
 
   const s = payload.settings;
   const set = (patch: Partial<Draft>) => setDraft({ ...draft, ...patch });
+  /** `{ host: 'MENATER_DB_HOST', … }` for the fields a variable owns. */
+  const dbEnv = s.meta.from_env.database;
+  const dbEnvNames = Object.values(dbEnv);
+  const db = effectiveDb(draft.db, s);
   // Le commentaire du bloc a copier suit la langue : c'est du texte lu, pas
   // une commande.
   const psql = [
@@ -469,7 +511,11 @@ export function SettingsPage({
     draft.authEnabled !== s.auth.enabled ||
     draft.authPassword !== '' ||
     draft.db.password !== '' ||
-    JSON.stringify({ ...draft.db, password: undefined }) !==
+    // Compared on the EFFECTIVE block, like the inventory below: a preset
+    // button that rewrote a field the environment owns is not an unsaved
+    // change, and lighting the warning for one is a warning that never goes
+    // out.
+    JSON.stringify({ ...db, password: undefined }) !==
       JSON.stringify({ ...s.database, password: undefined }) ||
     JSON.stringify(draft.pipeline) !== JSON.stringify(s.pipeline) ||
     JSON.stringify(draft.cons) !== JSON.stringify(s.console) ||
@@ -618,43 +664,81 @@ export function SettingsPage({
         </div>
         <p className="soc-faint" style={{ marginTop: -6 }}>{st.database.presets[draft.db.preset].hint}</p>
 
+        {/* WHICH FIELDS THE OPERATOR CANNOT CHANGE, AND WHERE TO CHANGE THEM.
+            The lede above already says the environment wins; this names the
+            variables, once for the block rather than once per field — the same
+            help printed six times is invisible in the code and obvious on
+            screen. The marker on each label is what says WHICH field. */}
+        {dbEnvNames.length > 0 ? (
+          <p className="soc-faint">{st.database.fromEnvNote(dbEnvNames)}</p>
+        ) : null}
+
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '0 14px' }}>
           <label className="soc-field">
-            <span>{st.database.host}</span>
-            <input value={draft.db.host} onChange={(e) => set({ db: { ...draft.db, host: e.target.value } })} />
+            {/* The marker goes INSIDE the label's span, as the credentials
+                panel already does: `.soc-field span` is (0,1,1) and dresses
+                every span under a field in small grey capitals, so a sibling
+                span would be a second one of those. */}
+            <span>{st.database.host}{dbEnv.host ? <b> · {st.database.fromEnv}</b> : null}</span>
+            <input
+              value={db.host}
+              disabled={dbEnv.host !== undefined}
+              onChange={(e) => set({ db: { ...draft.db, host: e.target.value } })}
+            />
           </label>
           <label className="soc-field">
-            <span>{st.database.port}</span>
+            <span>{st.database.port}{dbEnv.port ? <b> · {st.database.fromEnv}</b> : null}</span>
             <input
               type="number"
-              value={draft.db.port}
+              value={db.port}
+              disabled={dbEnv.port !== undefined}
               onChange={(e) => set({ db: { ...draft.db, port: Number(e.target.value) } })}
             />
           </label>
           <label className="soc-field">
-            <span>{st.database.name}</span>
-            <input value={draft.db.database} onChange={(e) => set({ db: { ...draft.db, database: e.target.value } })} />
+            <span>{st.database.name}{dbEnv.database ? <b> · {st.database.fromEnv}</b> : null}</span>
+            <input
+              value={db.database}
+              disabled={dbEnv.database !== undefined}
+              onChange={(e) => set({ db: { ...draft.db, database: e.target.value } })}
+            />
           </label>
           <label className="soc-field">
-            <span>{st.database.user}</span>
-            <input value={draft.db.user} onChange={(e) => set({ db: { ...draft.db, user: e.target.value } })} />
+            <span>{st.database.user}{dbEnv.user ? <b> · {st.database.fromEnv}</b> : null}</span>
+            <input
+              value={db.user}
+              disabled={dbEnv.user !== undefined}
+              onChange={(e) => set({ db: { ...draft.db, user: e.target.value } })}
+            />
           </label>
         </div>
 
         <SecretField
-          label={st.database.password}
+          label={
+            dbEnv.password
+              ? `${st.database.password} \u00b7 ${st.database.fromEnv}`
+              : st.database.password
+          }
           isSet={s.database.passwordSet}
-          value={draft.db.password}
+          value={db.password}
+          disabled={dbEnv.password !== undefined}
           onChange={(v) => set({ db: { ...draft.db, password: v } })}
         />
 
-        <CheckField checked={draft.db.ssl} onChange={(v) => set({ db: { ...draft.db, ssl: v } })}>
-          {st.database.ssl}
+        <CheckField
+          checked={db.ssl}
+          disabled={dbEnv.ssl !== undefined}
+          onChange={(v) => set({ db: { ...draft.db, ssl: v } })}
+        >
+          {st.database.ssl}{dbEnv.ssl ? ` \u00b7 ${st.database.fromEnv}` : ''}
         </CheckField>
 
+        {/* Probes the coordinates the console will REALLY dial. Reading the
+            draft here answered about a host nobody would ever connect to —
+            "a diagnostic that answered about a port it had not dialled". */}
         <TestButton
           label={st.database.test}
-          run={() => api.testDatabase({ host: draft.db.host, port: draft.db.port })}
+          run={() => api.testDatabase({ host: db.host, port: db.port })}
         />
 
         <div style={{ marginTop: 18 }}>
