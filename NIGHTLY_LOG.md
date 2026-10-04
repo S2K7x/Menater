@@ -4,6 +4,231 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-10-04 — Sunday · Maintenance and state of the project
+
+**Subject**: fifteen published advisories were sitting in the two dependency
+trees under four green checks, because **nothing in this repository runs
+`npm audit`**. Four on `ip-address` in VulnPipe's **production** tree (two SSRF
+and trust-boundary bypasses, a cross-family subnet comparison that admits an
+address outside its allowlist, an unbounded parse diagnostic) via
+`@modelcontextprotocol/sdk` → `express-rate-limit`; eleven on `undici`, **high**,
+in the console's dev tree via `jsdom`. Both fixes are lockfile-only.
+
+**Result**: PR opened on `claude/great-pascal-xe2kvq`. Five files: two lockfiles
+(3 lines each), one test (`VulnPipe/src/lockfile.test.ts`, +6 tests), plus
+`CLAUDE.md` and `ROADMAP.md`. **+6 tests**, nothing skipped or weakened. No
+manifest change on either half, no production dependency added.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-xe2kvq` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Thirtieth entry saying so**; it is a line in the
+routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: `main` at db9e51f gave
+typecheck 0, **1462 passed | 1 skipped**, build clean on the console, 413 passed
+and typecheck 0 on VulnPipe, and `list_pull_requests --state open` was empty.
+Sunday's reservoir opens on *dependencies: only known vulnerabilities or broken
+versions* — and there were some, in the half whose job is reading other people's
+code. That outranked the two other candidates (below), both of which are
+clarity-grade and would have been priority (6).
+
+**Measured.**
+
+| | before | after |
+|---|---|---|
+| `npm audit`, VulnPipe, all | 1 moderate (4 advisories) | **0** |
+| `npm audit`, VulnPipe, `--omit=dev` | 1 moderate — **production** | **0** |
+| `npm audit`, dashboard, all | 1 high (11 advisories) | **0** |
+| `npm audit`, dashboard, `--omit=dev` | 0 | 0 |
+| `ip-address` | 10.5.0 (`<= 10.7.0` vulnerable) | **10.7.3** |
+| `undici` | 8.10.0 (`8.0.0 - 8.10.1` vulnerable) | **8.11.2** |
+| lockfile diff | — | **3 lines each**, `libc` preserved |
+
+**Reachability, measured and not assumed**, because it is the whole of the
+urgency the traps row claims. An instrument recording ESM resolutions (a
+`module.register` hook) *and* CJS `require`s (a patched `Module._load`):
+
+| SDK entry point | modules loaded | `ip-address` | `express-rate-limit` | `hono` |
+|---|---|---|---|---|
+| `server/mcp.js` † | 224 | **0** | 0 | 0 |
+| `client/index.js` † | 218 | **0** | 0 | 0 |
+| `client/stdio.js` † | 101 | **0** | 0 | 0 |
+| `server/stdio.js` † | 84 | **0** | 0 | 0 |
+| `inMemory.js` † | 1 | **0** | 0 | 0 |
+| `server/auth/router.js` | 247 | **19** | 4 | 0 |
+| `server/streamableHttp.js` | 93 | 0 | 0 | **1** |
+
+† the five VulnPipe actually imports (`src/mcp-server/server.ts`,
+`src/nodes/shared/mcp-client.ts`, `src/mcp-server/server.test.ts`). The last two
+rows are the controls, and they are the reason a zero is worth reading: the
+09-20 pass learned that *an instrument reading zero everywhere is a broken
+ruler, not a finding*, and its first probe (an ESM `load` hook) reported
+`fast-uri: 0` — the opposite of the truth — because it could not see CJS
+`require` chains. `undici` is a devDependency and `dashboard/Dockerfile` builds
+the runtime image with `--omit=dev`, so it never ships; Node's own `fetch` is a
+*bundled* undici, not this entry. **So both are hygiene and neither is a live
+hole**, and the PR says that rather than dressing a lockfile refresh as an
+incident.
+
+**What I learned that is written nowhere else.**
+
+1. **`npm update --package-lock-only` deletes ten blocks of `libc` metadata
+   from VulnPipe's lockfile**, on the `@rolldown` and `lightningcss` optional
+   binaries — 33 lines, measured identically under **npm 10.9.4 and 10.9.7**, so
+   it is not a mismatch with this container's npm: npm 10 simply does not write
+   that field. `libc` is what tells npm whether a musl or a glibc binary
+   applies. I committed the version change as the three lines it is and left the
+   metadata alone.
+2. **ROADMAP § 7 asserted that lockfile carried "no npm-12-only fields", and it
+   carries ten.** The 09-20 pass regenerated it with npm 12.0.2 (npm 10.9.7
+   cannot resolve `vitest@4.1.11` in that half) and wrote the claim honestly;
+   `libc` is exactly such a field. Corrected in place, dated.
+3. **The two halves' lockfiles are written by different npm majors.** VulnPipe's
+   has 10 `libc` blocks, the console's has **0** — and they describe the same
+   optional binaries (`@rolldown/binding-linux-x64-gnu`,
+   `lightningcss-linux-x64-musl`…). So a refresh of either arrives with noise
+   belonging to whichever npm ran, and a nightly diff that looks like a rewrite
+   is one nobody reviews. **Not fixed**: normalising them is a bump "to be
+   current" over files tonight's subject does not otherwise touch.
+4. **`npm ci` is the real test of a hand-edited lockfile**, and that is why
+   editing three fields was safe: it verifies the integrity hash against the
+   tarball, so a wrong hash fails loudly rather than installing something else.
+   Ran on both halves; both installed the intended version and reported 0.
+5. **A test must not be an audit.** `npm audit` from the suite needs the network
+   — the flaky class this project has removed twice — and a *new* upstream
+   advisory would turn the suite red overnight for something the diff did not
+   do, while `automerge.yml` merges on a green check. So the guard is the
+   offline half only: a FLOOR per resolution, taken from the advisory's own
+   boundary (`10.7.1`, `8.10.2`) rather than from tonight's resolution, so a
+   newer version keeps passing and only a slide back INTO a closed range fails.
+6. **The floor guard cannot check its own ruler, and that needed its own
+   tests.** Every entry is comfortably above its floor today, so
+   `isAtLeast → true` is indistinguishable from a working comparator on live
+   data: a mutation survives. Six assertions on both sides of a floor kill it,
+   and the one that matters is `9.9.9` against `10.7.1` — a string comparison
+   answers `'9' > '1'` and waves a vulnerable major through. Same family as *a
+   contrast measured during the theme cross-fade*: a measurement is code and can
+   be wrong in both directions.
+
+**Do not redo.**
+
+- **Do not add an `npm audit` step to `ci.yml`** without deciding the automerge
+  question first. It goes red for an advisory published upstream, i.e. for
+  something the diff did not do, and automerge merges on a green check — one
+  advisory at 3 a.m. blocks every nightly PR. It is in ROADMAP § 7 as a decision
+  for a human, with the alternative named (a scheduled job whose failure does
+  not gate a merge).
+- **Do not run `npm audit fix`.** It is free to touch anything in range;
+  `npm update <one package> --package-lock-only` plus a read of the diff is what
+  keeps the change reviewable.
+- **Do not bump `@modelcontextprotocol/sdk`.** `1.30.0` is still the latest, as
+  on 09-20: every fix sits inside a caret range the tree already declares, so no
+  manifest change closes anything. This is the second night to verify it.
+- **Do not normalise the `libc` asymmetry between the two lockfiles** as part of
+  another subject — see point 3. If it is ever done it is its own PR, with
+  `npm ci` byte-stability checked on both halves under both npm majors.
+- **Do not replace the floors with a semver dependency.** The console has
+  exactly one production dependency and VulnPipe's three are fixed; a
+  three-number comparison with an explicit refusal of anything that is not a
+  plain release is nine lines and is tested.
+
+**Found and NOT fixed** — two leads, each verified tonight, neither taken:
+
+- **`Settings.meta.from_env` is written by the server and read by nothing, and
+  it covers two of the six fields it would need to.** `publicView()` in
+  `server/config.ts:498` computes `{ db_host, db_password }` under a comment
+  saying *« a field that is already filled must say where it came from, or
+  someone rewrites it without understanding why it keeps coming back »* —
+  grepped: the only references in `src/` are two test fixtures satisfying the
+  type. Meanwhile `applyEnvOverrides` overrides **six** fields (host, port,
+  database, user, password, ssl), so four of them have no `from_env` entry even
+  if somebody wired it up. The credentials half of the same product got the full
+  treatment — `CredentialStatus.locked`, whose type header states the rule (*« the
+  field must be shown read-only: offering an input that the server will refuse
+  is worse than offering none »*), and `SettingsSetup.tsx:225` really does
+  `disabled={k.locked}` and names the variable. **Thirteenth-odd recurrence of
+  *the mirror of a rule is not the rule*.** Why I did not take it: the screen is
+  not silent — `st.database.lede` says *« In Docker these come from the
+  environment, which wins over what is saved here »* — so this is a per-install
+  precision the prose gives as a blanket condition, i.e. priority (6) clarity,
+  and Saturday is the night for it. **And a third, cheaper finding sits beside
+  it**: `server/config.ts`'s own banner says **« PRECEDENCE: FILE > ENVIRONMENT
+  > DEFAULT »** and explains that the reverse would mean *« a setting changed in
+  the interface would be overwritten at the next start by a forgotten
+  variable — the kind of inconsistency that takes an hour to understand »*,
+  which is exactly what `applyEnvOverrides`, 370 lines below in the same file,
+  now does to the database block on purpose (CLAUDE.md's traps table owns that
+  decision). Two doctrines in one file; the header is the stale one. A
+  comment-only fix cannot carry a failing test, which is why it did not become
+  tonight's subject on its own.
+- **The standing leads from previous nights are untouched**: the four French
+  strings in `dashboard/server/vulnpipe.ts`, `readVariables`/`writeVariables`
+  with no caller, `forgetCursor` and `fetchWithTimeout` with no caller,
+  `static.ts`'s `immutable` on non-fingerprinted `public/` assets, the login
+  throttle collapsing to one bucket behind the tunnel, the Alerts queue's seven
+  `aria-selected` rows on a plain `<table>`, the four console tables with no
+  accessible name, the two `H4`-after-`H2` jumps, and `METRICS` printed twice as
+  an `h2`.
+
+**State of the week.**
+
+- **Six nights, eight PRs, all merged**, #51 → #58, none open at the start of
+  tonight — checked against the API, not assumed.
+- **Dependencies: NOT clean, for the first time in four Sundays.** The three
+  previous Sunday entries recorded *0 vulnerabilities, both halves, production
+  and dev*, and that was true when written. Tonight: 15 advisories, closed. The
+  lesson is in point 5 above and in § 7 — **nothing in this repository notices
+  this between Sundays**, and a weekly human `npm audit` is the whole detector.
+- **The recommendation carried since 09-20 — take one page of `CLAUDE.md` and
+  check every claim against the code — is still open and still the strongest
+  method**, and it half-paid tonight by accident: two of the three *Found and
+  NOT fixed* findings came out of reading `server/config.ts` next to
+  `CLAUDE.md`'s credential-precedence paragraph. It has still never been run
+  deliberately as a night's subject.
+- **What CI still cannot see**, carried forward and now one item longer: a
+  UID-dependent test (closed 09-20), a lockfile describing the wrong package
+  (closed 09-20), a declaration nothing reads (closed 09-27), and **a published
+  advisory in the tree** (partly closed tonight — the slide-back half; the
+  new-advisory half is a decision). I do not recommend a speculative guard for
+  the fourth.
+- **Recommendation for next week**: the `from_env` lead above is a scoped
+  Saturday subject with a measurement already done, and `server/config.ts`'s
+  contradictory header should ride with it rather than alone.
+
+**Verified** (Node 22.22.0, npm 10.9.7 — installed in this container to match
+the npm that wrote VulnPipe's lockfile; commands run and output read):
+
+| Command | Result |
+|---|---|
+| `dashboard: npm ci` | lockfile unchanged, `undici@8.11.2` installed |
+| `dashboard: npm audit` / `--omit=dev` | **0** / **0** (1 high before) |
+| `dashboard: npm run typecheck` | 0 errors |
+| `dashboard: npm test` | **1462 passed, 1 skipped** — unchanged, console untouched |
+| `dashboard: npm run build` | CSS 90.77 kB `index-Bmsh0y4D`, JS 483.06 kB `index-B0_9oATg` — **both hashes byte-identical to `main`** |
+| `VulnPipe: npm ci` | lockfile unchanged, `ip-address@10.7.3` installed |
+| `VulnPipe: npm audit` / `--omit=dev` | **0** / **0** (1 moderate, production, before) |
+| `VulnPipe: npm run typecheck` | 0 errors |
+| `VulnPipe: npm test` | **413 passed** (407 before: **+6**) |
+
+Checked **RED first**: the guard was written before the lockfiles were touched,
+and with both lockfiles restored from `main` it is **2 failed | 8 passed**,
+each failure naming the live version and the reason — `node_modules/ip-address
+is 10.5.0, inside a published advisory` and `node_modules/undici is 8.10.0,
+inside a published advisory`. **Three mutations, each caught by exactly one
+test**: the comparator forced to `true` (the `9.9.9` vs `10.7.1` assertion), the
+release regex replaced by a bare `split('.')` (the prerelease refusal), and a
+floor naming a package that is not in the tree (the presence assertion, plus the
+version one). The mutated file was restored from a copy and `git status` is clean
+apart from the diff. The one skipped test is the pre-existing
+`store-contract.test.ts > contrat — postgres`, which needs a database. No model
+key and no database were needed. The reachability probe lived in
+`VulnPipe/scripts/` for the measurement and is **deleted**; everything else ran
+in the scratchpad.
+
+---
+
 ## 2026-10-03 (second run) — Saturday · Interface, clarity, accessibility
 
 **Subject**: the one screen in this console that answers a failure by deleting
