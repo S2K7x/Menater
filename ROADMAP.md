@@ -809,6 +809,51 @@ stayed exactly where it was.*
 **What R does not do.** It adds no per-user layout preference; that is C1.5. It
 leaves the eight facts of a triage row intact: the table got shorter, not poorer.
 
+### C0.35 ✅ — A save that redirected the stack a screen said it could not
+
+*`applyEnvOverrides` exists so that a `config.json` laid down at first start
+with the `localhost` default cannot mask a deployment decision for ever — its
+own header says the alternative is an engine that "keeps looking for a database
+inside its own container". It was applied by `getConfig()` on a cold read and by
+nothing else. `saveConfig` ended with `cached = next`, so a save from Settings
+installed the typed coordinates over the variable, for the whole life of the
+process, and the next container restart silently put the variable back. Measured
+through the real module, one `MENATER_DB_HOST` set:*
+
+| moment | `getConfig().database.host` | `connectionString` |
+|---|---|---|
+| cold boot, variable set | `from-env.local` | `…@from-env.local:5432/…` |
+| **after any save from Settings** | **`typed-by-operator.local`** | **`…@typed-by-operator.local:5432/…`** |
+| **after a restart, same file** | **`from-env.local`** | **`…@from-env.local:5432/…`** |
+| after a restart, variable since removed | `typed-by-operator.local` | — |
+
+*The two states are one container restart apart, and the screen's own lede
+promises the first: "In Docker these come from the environment, which wins over
+what is saved here — so this page tests reachability and hands you the
+connection string, **it does not redirect a running stack**." It did. The
+scheduler and the engine read `getConfig()` on every tick, so the next alert
+went to the new address; the last row is the same surprise one deployment
+further out, with the refused value waiting in the file.*
+
+| # | Feature | What it changes |
+|---|---|---|
+| ~~R53~~ ✅ | **The override applies to a save, and before the write** — one line in `saveConfig`. A save leaves the process in exactly the state a restart would produce, and the value the environment refused is not left in the file to spring to life the day somebody removes the variable | The screen's sentence becomes true, and the two answers one restart apart become one |
+| ~~R54~~ ✅ | **The screen says which fields it cannot change, and names the variable** — `meta.from_env` was written by the server, declared in `Settings`, satisfied by two test fixtures and **read by no production code**, and it covered two of the six fields the override moves. It is now `{ field: VARIABLE }`, the fields a variable owns are shown read-only, and one note per block names them. Same rule and the same wording as `CredentialStatus.locked`, whose type header already states it: *offering an input that the server will refuse is worse than offering none* | An operator stops retyping a field that keeps coming back, and knows where to go instead |
+| ~~R55~~ ✅ | **One table, two readers** — `DB_ENV` is what `applyEnvOverrides` moves AND what `publicView` tells the screen, so a seventh variable cannot be added without the field it locks learning its name. The two lists were written separately and had drifted by four fields | The declaration is also the query, so it is checked in both directions by construction |
+| ~~R56~~ ✅ | **The preset buttons, the save bar and the reachability probe read the effective block** — a preset rewrites the whole block into the draft, so it took no keystroke to put a refused value on screen, send it, or probe a host the console will never dial | "A diagnostic that answered about a port it had not dialled", one field over, closed before it was reported |
+
+**What this does not do.** The `config.json` written by a save now carries the
+value the environment imposed, for every field a variable names — which is the
+point of the fix, and it does mean a `config.json` copied off such an install
+carries that deployment's host. The database sub-tab keeps its *To copy
+elsewhere* pill, which is right on a containerised install and generous on one
+where no variable is set: there a save really does re-point the engine on the
+next tick. And a disabled input takes the browser's own greying — `styles.css`
+has no `:disabled` rule for inputs, as the credentials panel has shipped since
+it was written — so the authoritative value is also readable in the connection
+string below, which is not disabled. A themed read-only field is a Saturday
+subject.
+
 ### C0.34 ✅ — The one screen that answers a failure by deleting itself
 
 *`RulesPage` IS the Rules tab, not a section of one — unlike `WorkflowPanel`

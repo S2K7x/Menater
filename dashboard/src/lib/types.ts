@@ -403,7 +403,14 @@ export interface Settings {
   meta: {
     config_path: string;
     config_exists: boolean;
-    from_env: { db_host: boolean; db_password: boolean };
+    /**
+     * The database fields a variable owns, as `{ field: VARIABLE }`.
+     *
+     * Named rather than flagged: the screen has to be able to print WHICH
+     * variable to go and change, the way the credentials half already does.
+     * Absent means no variable names that field, so it is an ordinary setting.
+     */
+    from_env: { database: Partial<Record<'host' | 'port' | 'database' | 'user' | 'password' | 'ssl', string>> };
   };
 }
 

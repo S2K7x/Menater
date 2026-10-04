@@ -862,6 +862,10 @@ export interface ConsoleDictionary {
       user: string;
       password: string;
       ssl: string;
+      /** Marker on a field the container's environment owns. */
+      fromEnv: string;
+      /** Named once for the block: which variables own a field, and the rule. */
+      fromEnvNote: (names: string[]) => string;
       test: string;
       connectionString: string;
       applySchema: string;
@@ -2234,6 +2238,9 @@ const EN: ConsoleDictionary = {
       user: 'User',
       password: 'Password',
       ssl: 'Require TLS (mandatory on Supabase)',
+      fromEnv: 'from the environment',
+      fromEnvNote: (names) =>
+        `Read-only here: ${names.join(', ')} ${names.length > 1 ? 'come' : 'comes'} from the container's environment (shell, Docker or CI). That is a deployment decision and the console will not override it \u2014 change it where it is defined.`,
       test: 'Test reachability',
       connectionString: 'Connection string (password masked)',
       applySchema: 'Apply the schema — without it, no deduplication and no audit',
