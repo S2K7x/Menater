@@ -764,6 +764,41 @@ code, .soc-mono { font-family: var(--mono); }
 }
 .soc-check-remedy b { color: var(--accent); }
 
+/* --- Audit chain: the rows the replayed computation disagrees with (S1.3) ---
+   NEXT TO the diagnostic it sits under on the Health tab, and not at the
+   bottom of this sheet: a stylesheet whose media queries are in the middle
+   has no "end", and a rule appended past the 760 px block silently cancels
+   the mobile overrides. That has already cost this project two.
+
+   `soc-seal-` was checked free before it was written. `soc-chain-` was NOT
+   free — it dresses the execution chain on the Tracking tab, which is a
+   different chain entirely.
+
+   The status colour is `--red` on `--surface`, which is the pair
+   `themes.test.ts` already measures at 4.5:1 on all six palettes. That is
+   why this list is NOT inside a `.soc-health-item`: that card paints
+   `--panel`, and `--red` on `--panel` is a pair nothing measures.
+
+   `overflow-wrap: anywhere` on both values, for the reason the card above
+   spells out at length: an `alert_id` is whatever a source sent, and one long
+   unbreakable token in a flex item floors its minimum size and takes the
+   whole document sideways at 320 px. `break-word` would look applied and do
+   nothing. */
+.soc-seal-breaks { list-style: none; padding: 0; margin: 10px 0 0; }
+.soc-seal-breaks li {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px;
+  padding: 8px 0; border-bottom: 1px solid var(--line);
+}
+.soc-seal-breaks li:last-child { border-bottom: none; }
+.soc-seal-id { font-family: var(--mono); font-size: 0.78rem; color: var(--faint); }
+.soc-seal-alert {
+  font-family: var(--mono); font-size: 0.78rem; min-width: 0; overflow-wrap: anywhere;
+}
+.soc-seal-status {
+  color: var(--red); font-size: 0.86rem; flex: 1 1 220px;
+  min-width: 0; overflow-wrap: anywhere;
+}
+
 
 /* ==========================================================================
  * ELEMENTS ADDED BY THE MERGE

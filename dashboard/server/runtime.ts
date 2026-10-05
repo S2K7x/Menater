@@ -24,6 +24,7 @@ import { buildRegistry } from './engine/transforms/registry.ts';
 import { PIPELINE_WORKFLOWS } from './engine/workflows/pipeline.ts';
 import { ROUTING_WORKFLOWS } from './engine/workflows/routing.ts';
 import { RuleStore } from './rules-store.ts';
+import type { Queryable } from './audit-chain.ts';
 import { getConfig } from './config.ts';
 
 /**
@@ -131,6 +132,24 @@ export function getEngineStore(): RunStore | null {
   // cannot end up reading a store the engine is not using.
   getEngine();
   return engineCache?.store ?? null;
+}
+
+/**
+ * The pool, narrowed to the one thing the audit-chain check needs (S1.3).
+ *
+ * `Queryable` and not `Pool`: this returns a connection pool to a module whose
+ * whole job is to run ONE read-only `SELECT`, and handing it `connect()` and
+ * `end()` would hand it the lifecycle this file owns. It mirrors
+ * `getEngineStore()` rather than `getRuleStore()` for the same reason that one
+ * gives: verifying what was already written must not require the engine to be
+ * startable.
+ */
+export function getAuditPool(): Queryable | null {
+  // Mounting the engine is what builds the pool, and it is idempotent per
+  // database key — so this cannot end up reading a database the engine is not
+  // using.
+  getEngine();
+  return engineCache?.pool ?? null;
 }
 
 export function getRuleStore(): RuleStore | null {

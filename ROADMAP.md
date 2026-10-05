@@ -1679,7 +1679,7 @@ shares opens in the language they shared it in.
 |---|---|---|---|
 | S1.1 | **Case assignment and status** | XSOAR, D3 | Two analysts stop working on the same alert |
 | S1.2 | **Investigation notes** (light war room) | XSOAR | Human reasoning joins machine reasoning on the same card |
-| S1.3 | **One-click audit chain verification** | — | The "tamper-evident" promise becomes demonstrable |
+| ~~**S1.3**~~ ✅ | ~~**One-click audit chain verification**~~ — `server/audit-chain.ts`, `POST /api/audit/verify`, a section on the Health tab. The database’s own `soc_audit_verify_chain()` replayed row by row; four outcomes, not a boolean; the walk is bounded and says what it did not read | The "tamper-evident" promise is testable by the person who has to defend it, instead of by somebody with a `psql` session |
 | S1.4 | **Full history instead of the last 120 runs** | — | Removes the inference about database health |
 | S1.5 | **Alert correlation** (IP, hash, sliding window) | all | 40 alerts from one scan become 1 incident |
 | ~~S1.6~~ ✅ | **Replay queue** exposed from the console | — | Delivered by C0.10 |
@@ -1688,6 +1688,54 @@ shares opens in the language they shared it in.
 | S2.2 | **Real ATT&CK mapping**, versioned | Swimlane, D3 | Replaces the heuristic with a defensible reference |
 | S2.3 | **Asset criticality** injected into the prompt and the blast radius | XSOAR | Isolating a test machine ≠ isolating the payroll server |
 | S2.4 | **Scheduled reports** (volume, MTTR, human disagreement, cost) | Splunk, D3 | Management reads the SOC without opening the console |
+
+### S1.3 ✅ — the tamper-evidence promise, pressable
+
+**What it is.** A section on the Health tab, under *Pipeline state*: one button
+that replays the audit chain's hash computation and names anything that no
+longer matches. `server/audit-chain.ts` holds the query and the reading,
+`POST /api/audit/verify` answers it, `HealthPanel` renders it.
+
+**Why it was the subject.** The database already does all of the work.
+`soc_audit_seal()` hashes every row's canonical form against its
+predecessor's, under an advisory lock, with the id allocated inside that lock;
+`soc_audit_verify_chain()` replays it. The console's entire contribution was a
+**string**: `audit.ts` writes `chain_verify_hint: "SELECT * FROM
+soc_audit_verify_chain() WHERE status <> 'ok';"` onto every audit record, and
+nothing in the process has ever run that query. So the one claim this product
+makes that an auditor would actually test was verifiable only from a `psql`
+session on the container — and `CLAUDE.md` documents the command because there
+was no other way. Same family as the approval sweep that had no clock behind
+it: everything around the guarantee was built and correct, and the thing that
+exercises it had no caller.
+
+**Four decisions, and three of them are refusals.**
+
+| Decision | Why the other answer was worse |
+|---|---|
+| **The verdict is a WORD, and there are four of them** | `intact`, `partial`, `broken`, `empty` — plus `unavailable` on the wire. A boolean holds two, and the one that would be lost is `empty`: `broken === 0` is also true of a table nobody has written a decision to, and `pg` sends that zero as the TRUTHY string `"0"`. A green check there congratulates an install on a guarantee it has not yet had the chance to keep. `partial` is the same argument about coverage |
+| **The walk is bounded, and the clip changes the TITLE** | The pool's `statement_timeout` is 15 s and the walk costs 24 µs a row, so it would stop answering at about 620,000 rows — two months for a console taking ten thousand alerts a day. A check that works until an install has been running long enough to need it is not a check. Measured, and this is the whole reason the clip travels: a 69,643-row table with two genuinely tampered rows answered `broken: 0` over a walk of its 50,000 most recent |
+| **It is its own button, not a thirty-first connectivity check** | The diagnostic is the first reflex after any change and is pressed often; this recomputes a SHA-256 per row. Folding it in would make the cheap button expensive and make the integrity check happen as a side effect of a different question |
+| **It reads, and it answers 200 when it could not look** | No row is touched — the table is immutable by design and rows sealed before the lock fix keep their broken links for ever. And « no database configured » leaves as a **200** in the route's own envelope, because `lib/api.ts` replaces the body of any 503 with « start the console server »: a status code is not the place to say there is no chain to verify |
+
+**What it does NOT do, and is honest to say so:**
+
+- **It does not repair anything, and never will.** A mismatch is accounted
+  for. `soc_audit_log` is append-only with triggers refusing `UPDATE`,
+  `DELETE` and `TRUNCATE` — verified as the application role, which gets
+  `permission denied for table soc_audit_log` on both.
+- **It is not on a timer and not in the snapshot.** A deliberate human act,
+  like the diagnostic beside it. Nothing periodic pays for a SHA-256 per row
+  on the thread that also answers the ingestion webhook.
+- **It is not in the assistant's catalogue or on the MCP surface.** Same line
+  J0.2 and J0.3 drew: not widening a change into the fenced surface.
+- **It cannot tell a tampered row from a row sealed before the lock fix.**
+  Nothing can, from the table alone — and that is why the one benign cause is
+  named on screen, behind the disc, rather than being guessed at in the code.
+- **The suffix verification is not exposed as a control.** `p_from` is read
+  from the window's anchor; an operator cannot choose a range. Verifying a
+  million-row chain whole is still the `psql` command, which the partial
+  answer prints.
 
 ### V — Code analysis
 

@@ -209,6 +209,28 @@ export interface ServerMessages {
     replaySent: (id: string) => string;
     replayRefused: (status: number, detail: string | null) => string;
     replayUnreachable: (error: string) => string;
+
+    /* --- S1.3: the audit chain's own verification ------------------------ */
+    /** No database means there is no chain, which is not an intact one. */
+    chainNoDatabase: string;
+    /**
+     * The walk could not be made. `cause` already carries `describePgError`'s
+     * sentence, so this adds the CONSEQUENCE and never re-describes the fault:
+     * describing it twice prints one cause under two prefixes.
+     */
+    chainUnreadable: (cause: string) => string;
+    /** Nothing has been audited yet. Not a verified chain — an empty table. */
+    chainEmpty: string;
+    /** Every row walked matches, and the walk was the whole table. */
+    chainIntact: (checked: number) => string;
+    /** Every row walked matches, and the walk was NOT the whole table. */
+    chainPartial: (checked: number, total: number) => string;
+    /**
+     * Rows that no longer match. Says how much of the table was walked,
+     * because "3 rows are wrong" means something different over 2,644 rows
+     * and over the most recent 50,000 of a million.
+     */
+    chainBroken: (broken: number, checked: number, complete: boolean) => string;
   };
 
   /** État lisible de la source de données, affiché dans l'onglet Santé. */
@@ -239,6 +261,13 @@ export interface ServerMessages {
 /* ==========================================================================
  * ENGLISH
  * ========================================================================== */
+
+/**
+ * A count an operator reads out loud. Grouped, because these are the only
+ * numbers in this catalogue that run to six digits \u2014 the rest count broken
+ * chains, and `12` needs no separator.
+ */
+const n = (value: number): string => value.toLocaleString('en-US');
 
 const EN: ServerMessages = {
   variables: {
@@ -511,6 +540,25 @@ const EN: ServerMessages = {
     },
     replayUnreachable: (error) =>
       `The entry point did not answer: ${error}. Nothing was replayed.`,
+
+    chainNoDatabase:
+      'No database configured: there is no audit chain to verify. Settings \u2192 Database.',
+    chainUnreadable: (cause) => `${cause}. Nothing was verified.`,
+    chainEmpty:
+      'No decision has been audited yet, so there is no chain to verify. This is an empty '
+      + 'table, not a verified one.',
+    chainIntact: (checked) =>
+      `Chain intact: ${n(checked)} audit row${checked === 1 ? '' : 's'} recomputed from the `
+      + 'first, every link and every row hash matches.',
+    chainPartial: (checked, total) =>
+      `No mismatch in the ${n(checked)} most recent of ${n(total)} audit rows. The rows below `
+      + 'that were NOT walked: this check is bounded so that it always answers, and what it '
+      + 'did not read it does not vouch for. Verify the whole table with '
+      + "`SELECT * FROM soc_audit_verify_chain() WHERE status <> 'ok';`.",
+    chainBroken: (broken, checked, complete) =>
+      `${n(broken)} of the ${n(checked)} audit row${checked === 1 ? '' : 's'} walked no longer `
+      + `match the sealed chain${complete ? '' : ' (and the older rows were not walked)'}. `
+      + 'The table is append-only: these rows cannot be repaired, only accounted for.',
   },
 
   health: {

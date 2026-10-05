@@ -9,7 +9,8 @@ import { json, readBody } from '../respond.ts';
 import { invalidate } from '../snapshot.ts';
 import { injectAlert } from '../injection.ts';
 import {
-  getEngine } from '../runtime.ts';
+  getAuditPool, getEngine } from '../runtime.ts';
+import { chainOutcome, verifyAuditChain } from '../audit-chain.ts';
 import { runDiagnostics } from '../diagnostics.ts';
 import { DEFAULT_SCENARIO, SCENARIOS, scenarioById } from '../scenarios.ts';
 import type { Ctx } from './context.ts';
@@ -39,6 +40,73 @@ export async function opsRoutes(c: Ctx): Promise<boolean> {
       // stale, so it is dropped for the next screen to show what was found.
       invalidate();
       return json(res, 200, diag);
+    }
+
+    /**
+     * S1.3 — replays the audit chain's hash computation, row by row.
+     *
+     * ======================================================================
+     * IT ANSWERS 200 IN ITS OWN ENVELOPE, EVEN WHEN IT COULD NOT LOOK
+     *
+     * The same decision `/api/simulate` records above, and for the same
+     * measured reason: `lib/api.ts` replaces the body of any 502/503/504 with
+     * « the console server is not answering », so a 503 for « no database
+     * configured » would throw away the one sentence naming the fix and send
+     * the operator to restart a server that had just answered them. A status
+     * code is not the place to say there is no chain to verify.
+     *
+     * ======================================================================
+     * THE VERDICT IS A WORD, NOT `ok`
+     *
+     * Four states, and a boolean can hold two of them. `empty` is the one that
+     * would be lost — and it is the one that matters, because `broken === 0`
+     * is also true of a table nobody has written a decision to. `partial` is
+     * the second: a bounded walk that found nothing has not verified the
+     * chain, it has verified its tail.
+     *
+     * Read-only, and deliberately not part of the connectivity diagnostic: the
+     * walk recomputes a SHA-256 per row, and the diagnostic is the thing an
+     * operator presses first and often.
+     *
+     * IT TAKES NO BODY, and reads none — `POST /api/auth/logout` is the same
+     * shape. `soc_audit_verify_chain()` does take a `p_from`, and it is NOT
+     * offered: a range an operator cannot judge is a control that invites the
+     * one mistake that manufactures a false red (an anchor id nobody holds
+     * seeds the walk with zeros, and the first row is then reported as a
+     * broken link). The window's anchor is derived; verifying a whole chain
+     * past the window is the `psql` command the partial answer prints.
+     */
+    if (req.method === 'POST' && path === '/api/audit/verify') {
+      const pool = getAuditPool();
+      if (!pool) {
+        return json(res, 200, {
+          outcome: 'unavailable', verification: null, response: am.chainNoDatabase });
+      }
+      try {
+        const v = await verifyAuditChain(pool);
+        const outcome = chainOutcome(v);
+        // One sentence per outcome, and the mapping is exhaustive rather than
+        // a chain of fallbacks: a sentence must not be reachable from a state
+        // it does not describe.
+        const said: Record<typeof outcome, string> = {
+          empty: am.chainEmpty,
+          intact: am.chainIntact(v.checked),
+          partial: am.chainPartial(v.checked, v.total),
+          broken: am.chainBroken(v.broken, v.checked, v.complete),
+        };
+        return json(res, 200, { outcome, verification: v, response: said[outcome] });
+      } catch (err) {
+        // DESCRIBED ONCE, AND NOT HERE. `verifyAuditChain` names the fault at
+        // its single choke point — `pg` fails `ECONNREFUSED` with an EMPTY
+        // message, so the cause has to be recovered from `.code` — and this
+        // adds only the CONSEQUENCE. Describing it a second time would print
+        // one cause under two prefixes, which is the mistake the approval
+        // sweep made and a test caught.
+        return json(res, 200, {
+          outcome: 'unavailable',
+          verification: null,
+          response: am.chainUnreadable((err as Error).message) });
+      }
     }
 
     /** Injects a test alert into the ingestion webhook. */
