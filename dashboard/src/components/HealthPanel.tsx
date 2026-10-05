@@ -26,7 +26,7 @@
 
 import { useEffect, useState } from 'react';
 import type { Check, Diagnostics, HealthReport } from '../lib/types.ts';
-import { api, ApiError, humanDuration } from '../lib/api.ts';
+import { api, ApiError, humanDuration, type ChainReport } from '../lib/api.ts';
 import { useI18n } from '../i18n/context.tsx';
 import { Icon, type IconName } from './Icon.tsx';
 import { Announce, Explain, Fold } from './Guidance.tsx';
@@ -38,6 +38,27 @@ const STATUS_META: Record<Check['status'], { cls: string; icon: IconName }> = {
   warn: { cls: 'soc-pill soc-pill-warn', icon: 'alert' },
   fail: { cls: 'soc-pill soc-pill-failed', icon: 'cross' },
   skip: { cls: 'soc-pill soc-pill-neutral', icon: 'skip' },
+};
+
+/**
+ * S1.3 — the tone of a chain verification, and the two states that are NOT red.
+ *
+ * `empty` and `unavailable` take the bare banner: grey left border, no
+ * background. That is this screen's own fourth state — ND, « the console
+ * cannot conclude » — and it is deliberate. Red on "no database configured"
+ * would say the audit chain is in trouble about a table that was never read,
+ * and a false red on the product's only tamper evidence is the one this
+ * project calls more expensive than no red at all.
+ *
+ * `partial` is WARN by this screen's published vocabulary: it works, and
+ * something reduces the coverage.
+ */
+const CHAIN_META: Record<ChainReport['outcome'], { cls: string; icon: IconName }> = {
+  intact: { cls: 'soc-banner soc-banner-ok', icon: 'check' },
+  partial: { cls: 'soc-banner soc-banner-warn', icon: 'alert' },
+  broken: { cls: 'soc-banner soc-banner-error', icon: 'cross' },
+  empty: { cls: 'soc-banner', icon: 'skip' },
+  unavailable: { cls: 'soc-banner', icon: 'alert' },
 };
 
 const VERDICT_CLASS: Record<Diagnostics['verdict'], string> = {
@@ -126,6 +147,15 @@ export function HealthPanel({
   const [diag, setDiag] = useState<Diagnostics | null>(null);
   const [diagBusy, setDiagBusy] = useState(false);
   const [diagError, setDiagError] = useState<string | null>(null);
+  const [chain, setChain] = useState<ChainReport | null>(null);
+  const [chainBusy, setChainBusy] = useState(false);
+  /**
+   * A refusal from the client layer rather than from the route. It shares the
+   * region with the report: both are the answer to one press, and
+   * `role="status"` is atomic, so a second region would re-read whichever of
+   * them was not the news.
+   */
+  const [chainError, setChainError] = useState<string | null>(null);
 
   async function runDiagnostics() {
     setDiagBusy(true);
@@ -139,6 +169,28 @@ export function HealthPanel({
       setDiagError(err instanceof ApiError ? err.message : h.diagFailed);
     } finally {
       setDiagBusy(false);
+    }
+  }
+
+  /**
+   * S1.3 — replays the audit chain's hash computation.
+   *
+   * It does NOT call `onRefresh()`. The diagnostic does, because it re-reads
+   * the instance and the snapshot is then stale; this reads one table without
+   * writing anything, so refreshing the console would be work bought for
+   * nothing — and it would drop the cache that `snapshot.ts` calls the most
+   * expensive thing this console does.
+   */
+  async function verifyChain() {
+    setChainBusy(true);
+    setChainError(null);
+    setChain(null);
+    try {
+      setChain(await api.verifyChain());
+    } catch (err) {
+      setChainError(err instanceof ApiError ? err.message : h.chainFailed);
+    } finally {
+      setChainBusy(false);
     }
   }
 
@@ -374,6 +426,76 @@ export function HealthPanel({
             ) : null}
           </div>
         </div>
+      </section>
+
+      {/*
+        S1.3 — the tamper-evidence promise, pressable.
+
+        ITS OWN SECTION, AND NOT A THIRTY-FIRST CHECK IN THE DIAGNOSTIC. The
+        connectivity test is the first reflex after any change and is pressed
+        often; this recomputes a SHA-256 per audit row — measured at 1.21 s
+        for 49,999 rows — so folding it in would make the cheap button
+        expensive, and would make the integrity check happen as a side effect
+        of asking a different question.
+
+        It sits under « Pipeline state » on purpose: the Audit database card
+        above says « no anomaly observed, inferred from run errors ». That is a
+        different question, honestly labelled, and this is the one that goes
+        and looks.
+      */}
+      <section className="soc-panel">
+        <div className="soc-panel-head">
+          <div>
+            <span className="soc-kicker">{h.chainKicker}</span>
+            <div className="soc-titled">
+              <h2>{h.chainTitle}</h2>
+              <Explain label={h.chainTitle}>{h.chainLede}</Explain>
+            </div>
+          </div>
+          <button type="button" className="soc-primary" onClick={verifyChain} disabled={chainBusy}>
+            <Icon name="chain" size={15} />
+            {chainBusy ? h.chainRunning : h.chainRun}
+          </button>
+        </div>
+
+        {/* The region PRE-EXISTS its sentence: one created in the same breath
+            as its first message is announced by some screen readers and missed
+            by others. */}
+        <Announce>
+          {chainError ? (
+            <div className="soc-banner soc-banner-error" style={{ marginTop: 14 }}>
+              <Icon name="alert" size={16} />
+              <p>{chainError}</p>
+            </div>
+          ) : chain ? (
+            <div className={CHAIN_META[chain.outcome].cls} style={{ marginTop: 14 }}>
+              <Icon name={CHAIN_META[chain.outcome].icon} size={16} />
+              {/* THE SERVER'S SENTENCE, SHOWN AS IT IS — the same rule the
+                  injection button obeys. It already carries the counts and
+                  how much of the table was walked; a second composition in
+                  the browser is two spellings of one number. */}
+              <p>{chain.response}</p>
+            </div>
+          ) : null}
+        </Announce>
+
+        {chain?.verification && chain.verification.sample.length > 0 ? (
+          <div className="soc-block">
+            <div className="soc-titled">
+              <h3>{h.chainBreaksTitle}</h3>
+              <Explain label={h.chainBreaksTitle}>{h.chainHistoricNote}</Explain>
+            </div>
+            <ul className="soc-seal-breaks">
+              {chain.verification.sample.map((b) => (
+                <li key={b.id}>
+                  <code className="soc-seal-id">{b.id}</code>
+                  <code className="soc-seal-alert">{b.alert_id}</code>
+                  <span className="soc-seal-status">{b.status}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
       </section>
 
       {/*

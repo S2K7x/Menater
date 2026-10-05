@@ -4,6 +4,230 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-10-05 — Monday · Feature
+
+**Subject**: **S1.3** — *one-click audit chain verification*. The database does
+all of the work already: `soc_audit_seal()` hashes every row's canonical form
+against its predecessor's under an advisory lock, and
+`soc_audit_verify_chain()` replays it row by row. **The console's entire
+contribution was a string.** `engine/transforms/audit.ts` writes
+`chain_verify_hint: "SELECT * FROM soc_audit_verify_chain() WHERE status <>
+'ok';"` onto every audit record, and nothing in this process has ever run that
+query — so the one claim this product makes that an auditor would actually test
+was checkable only from a `psql` session on the container, and `CLAUDE.md`
+documents the command because there was no other way.
+
+**Result**: PR opened on `claude/great-pascal-z7ykoq`. Eleven files: one new
+module (`server/audit-chain.ts`), one route (`routes/ops.ts`), one accessor
+(`runtime.ts`), both catalogues, the client, `HealthPanel.tsx`, `styles.css`,
+three new test files, plus `CLAUDE.md`, `ROADMAP.md` and this journal.
+**+37 tests**, nothing skipped or weakened, no production dependency added.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/great-pascal-z7ykoq` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Thirty-second entry saying so**; it is a line
+in the routine's configuration, not a thing a night can fix.
+
+**Why this subject, and why it is not J0.** The calendar rule did not preempt:
+`main` at 811ff16 gave typecheck 0, **1480 passed | 1 skipped**, build clean,
+VulnPipe 413 and typecheck 0, `npm audit` 0/0 on both halves, and
+`list_pull_requests --state open` was empty (checked, not assumed). Monday's
+reservoir is ROADMAP, and J0 outranks everything — so the first job was to
+read what is LEFT of J0. **J0.1, J0.2 and J0.3 are ✅ and J0.4 is ◐, and every
+remaining piece of J0.4 is either a permanent refusal or needs a store**: its
+own section says reading a scan report *"would mean the console holding scan
+results of its own, which is a store, a retention policy and a fourth copy of
+code excerpts — a subject, not a slice"*, per-system history needs the same,
+and the other three bullets (never starts anything, no CIDR, not on the fenced
+surface) are decisions, not gaps. **There is no named J0 slice that fits a
+night.** I read `systems.ts`, `SystemPanel.tsx`, `inventory.ts`,
+`findings.ts`, `code-lead.ts` and `withRepositories` looking for a defect there
+instead — priority (2) beats (3) — and found none: the display-em-dash guard,
+the repository-first grouping key and the empty-inventory early return are all
+already handled, each with the trap row that paid for it. So I went one item
+down, to the highest-value numbered item I could finish and verify: S1.3.
+
+**The `read`-node retry (ROADMAP § 7) was the other candidate and I did NOT
+take it.** It is specified in full, the value is concrete (one transient 429
+from OpenRouter currently costs an alert its verdict), and tonight is the
+feature night the § 7 row says it belongs to. Two reasons it stayed shut.
+`drive()`'s catch sees `(err as Error).message` and nothing else, so telling a
+429 from a 401 would mean **matching on error text** — the thing this project
+refuses by name — and doing it properly means a typed transient error through
+`io.ts`, `http.ts` and the `llm` branch, plus attempt accounting in the
+journal: 300+ lines across the security engine's failure semantics, which is
+not a ten-minute review. And § 7 words it as a **decision** (*"do the two
+`read` node types get a bounded retry?"*), while `CLAUDE.md` § Rules currently
+states *"none of them is retried"* as a rule. NIGHTLY.md says take the
+conservative option and leave an architecture decision to the person. It is in
+the PR as a decision for a human.
+
+**Measured, through the real `soc_audit_verify_chain()`.** This container has
+PostgreSQL **16.14** installed; I started the cluster, applied all six `sql/`
+files, and ran as **`n8n_soc`** — the role `docker-compose.yml` actually gives
+the console — because `sql/10-engine.sql` shipping with no grants has already
+cost this project a night.
+
+| state | ms | outcome | verification |
+|---|---|---|---|
+| empty table | 12 | `empty` | `{checked:0, broken:0, total:0, complete:true}` |
+| 1 row | 3 | `intact` | |
+| 2,644 rows (the documented QA size) | 66 | `intact` | `{checked:2644, broken:0}` |
+| one row edited | 75 | `broken` | `TAMPERED` named, with its id and alert |
+| one also deleted | 101 | `broken` | `broken:2`, the second `BROKEN_LINK` |
+| 69,643 rows | 1,225 | **`partial`** | `{checked:50000, total:69643, from_id:278576, complete:false}` |
+
+Then through the **real HTTP route**, console API on 4400 against that
+database: `empty` 200 in 67 ms, `intact` 200 in 67 ms, `broken` 200 carrying
+both rows, `partial` 200 in 1.22 s. `GET` on it answers 404 (POST-only).
+`requiresAuth('/api/audit/verify')` is **true** with the lock on, like
+`/api/diagnostics` and unlike `/api/ingest/*`.
+
+**On the built console, Chromium 1194**, served by the console's own API with a
+2,643-row chain holding two breaks:
+
+| check | result |
+|---|---|
+| horizontal overflow at 320 / 375 / 1280 px | **0 / 0 / 0** (`innerWidth` equal to the width asked for, `mobile: false`) |
+| live regions in the section before any press | **1** |
+| banner on `broken` | `soc-banner soc-banner-error`, inside `role="status"` |
+| `--red` status on `--surface`, six themes | 4.72 / 4.60 / 4.61 / 4.62 / 5.80 / 5.26 — all ≥ 4.5 |
+| `--faint` id on `--surface`, six themes | 3.20–4.09 — all ≥ 3 |
+| heading outline | `H2 VERIFY THE AUDIT CHAIN` → `H3 ROWS THAT NO LONGER MATCH`, no jump |
+| the benign-cause note | in the DOM, **absent from `innerText`** — folded, so not read out |
+| section height | 115 px with no answer, 316 px with two breaks |
+
+**What I learned that is written nowhere else.**
+
+1. **`"0"` out of `pg` is TRUTHY, and that is the mirror of the bigint trap.**
+   The existing row is about a false RED (`typeof v === 'number'` turning
+   `"2651"` into `null`, and the Health tab announcing 38 untraceable
+   decisions over a healthy chain). The same column read carelessly in the
+   other direction is a false GREEN: `count(*)` arrives as text, and
+   `broken === 0` is also true of a table nobody has written a decision to.
+   Hence a WORD and not a boolean, and `empty` is one of its values.
+2. **A bounded verification rebuilds the hole it exists to close, unless the
+   clip is carried.** Measured: 69,643 rows holding two genuinely tampered
+   rows answered **`broken: 0`** over a 50,000-row window, because both sat
+   below the anchor. That is what added the fourth word `partial` — a
+   coverage hole changes the TITLE, it is not a footnote under an unchanged
+   one.
+3. **The window's anchor has to be an id that EXISTS.**
+   `soc_audit_verify_chain(p_from)` seeds its running hash from
+   `WHERE l.id = p_from`; an id nobody holds seeds sixty-four zeros, and the
+   first row walked is then reported `BROKEN_LINK`. A false red manufactured
+   by the bound. `ORDER BY id DESC OFFSET $1 LIMIT 1`, never arithmetic on
+   `max(id)`.
+4. **An id RANGE is not a row count on this table**, and this is the trap a
+   future optimisation will reach for. The seal calls `nextval` a second time
+   INSIDE the advisory lock and the value the column default already burned is
+   skipped, so a healthy 49,999-row table measured here ran id 2, 4, 6 …
+   100000. `last - first + 1` would call every install tampered.
+5. **The function runs once, and `EXPLAIN` is what says so.** Five sub-selects
+   read the walk; `WITH v AS MATERIALIZED` keeps it at
+   `Function Scan on soc_audit_verify_chain q (actual rows=49999 loops=1)`.
+   Without `MATERIALIZED` a CTE referenced several times is materialised
+   anyway on PG 12+, but writing it is the difference between a property and a
+   coincidence.
+6. **A test over a real dependency proves what that dependency happens to do
+   on this machine.** My route test drives a real closed port to show
+   `describePgError` recovering a cause `pg` does not put in `.message` — and
+   the mutation replacing it with `err.message` **survived**. The empty-message
+   `AggregateError` `CLAUDE.md` documents only happens when the host resolves
+   to several addresses; probed here, `127.0.0.1` AND `localhost` both reject
+   with a plain `Error` carrying `connect ECONNREFUSED 127.0.0.1:38503`
+   (`::1` gives `EAFNOSUPPORT`). The description moved into
+   `verifyAuditChain`'s single choke point and the documented shape is now
+   injected. Only mutation found this; the test read perfectly.
+7. **The append-only triggers really hold, as the application role.** To seed a
+   tampered chain at all I had to `ALTER TABLE ... DISABLE TRIGGER` as the
+   owner. As `n8n_soc`, `UPDATE` and `DELETE` both answer
+   `42501 permission denied for table soc_audit_log`, and `TRUNCATE` hits
+   `soc_audit_log est append-only : TRUNCATE interdit` — which is also one more
+   French engine string, already in § 7.
+8. **`soc-chain-` was not free.** It dresses the execution chain on the
+   Tracking tab. And `.soc-wf-list`, the obvious list to reuse, is
+   `display: none` above 700 px — a mobile-only step list with two
+   definitions. `soc-seal-` was checked before it was written.
+
+**Do not redo.**
+
+- **Do not fold this into `POST /api/diagnostics`.** The diagnostic is the
+  first reflex after any change and is pressed often; this recomputes a
+  SHA-256 per row. Folding it in makes the cheap button expensive and makes
+  the integrity check a side effect of a different question.
+- **Do not make the route answer 503 when there is no database.**
+  `lib/api.ts` replaces the body of any 502/503/504 with « start the console
+  server », and the one sentence naming *Settings → Database* would never reach
+  the screen. One route test fails on exactly that mutation.
+- **Do not add an `ok` boolean to the envelope.** Four states; a boolean holds
+  two, and the one it loses is `empty`.
+- **Do not put `empty` or `unavailable` on a green or a red tone.** Three
+  component tests claim that, in both directions.
+- **Do not run it periodically, or from the snapshot.** 24 µs a row, on the
+  single thread that answers the ingestion webhook.
+- **Do not expose a `p_from` control, or put this in the assistant/MCP
+  catalogue.** The first is a range an operator cannot judge; the second is the
+  line J0.2 and J0.3 both drew.
+- **Do not take `npm audit` into `ci.yml`** — unchanged from 10-04, see
+  ROADMAP § 7.
+
+**Found and NOT fixed.**
+
+- **The `read`-node retry**, above and in § 7. A decision for a human.
+- **`MENATER_TEST_PG` is still never set, and this container can serve it.**
+  PostgreSQL 16.14 is installed here and the six `sql/` files apply cleanly in
+  about four seconds, so `store-contract.test.ts`'s Postgres half — the one
+  10-03 found red on unmodified `main` the first time it ever ran — could run
+  on every nightly and, with a service container, in CI. I did not wire it:
+  that is a change to `ci.yml` and to how the suite is invoked, which is its
+  own subject, and tonight's assertions deliberately use a pool double so they
+  do not become a second conditional claim about an environment. **Recommended
+  as a Wednesday subject.**
+- **Standing leads, untouched**: the four French strings in
+  `dashboard/server/vulnpipe.ts`, `readVariables`/`writeVariables`,
+  `forgetCursor` and `fetchWithTimeout` with no caller, `static.ts`'s
+  `immutable` on non-fingerprinted `public/` assets, the login throttle
+  collapsing to one bucket behind the tunnel, the Alerts queue's seven
+  `aria-selected` rows on a plain `<table>`, the four console tables with no
+  accessible name, the two `H4`-after-`H2` jumps, `METRICS` printed twice as an
+  `h2`, `DB_PRESETS.supabase`'s port disagreeing with its own hint, and the
+  ninety-odd French strings in `server/engine/` (§ 7).
+
+**Verified** (Node 22.22.0, npm 10.9.4, PostgreSQL 16.14; every command run and
+its output read):
+
+| Command | Result |
+|---|---|
+| `dashboard: npm run typecheck` | 0 errors |
+| `dashboard: npm test` | **1517 passed, 1 skipped** (1480 + 1 before: **+37**) |
+| `dashboard: npm run build` | CSS 91.27 kB (90.77 before), JS 487.58 kB (484.34 before) |
+| `VulnPipe: npm test` | 413 passed — untouched |
+| `VulnPipe: npm run typecheck` | 0 errors |
+
+Checked **RED first**: `server/audit-chain.test.ts` was written before the
+module and failed on `Cannot find module './audit-chain.ts'`. **Nineteen
+mutations, each killed by a named test** — `counter()` defaulting to 0,
+`counter()` accepting numbers only, the `empty` branch dropped, coverage
+ignored, `broken` read off the sample length, `complete` hardcoded, the two SQL
+parameters swapped, the chain walked twice, a break row rendered half-read, the
+no-database answer as a 503, the query fault forwarded raw, the reading fault
+dressed as a database fault, the route describing it twice, `empty` taking the
+green tone, `unavailable` taking the red tone, `partial` taking the green tone,
+the read-only walk refreshing the console, and the benign explanation printed
+in the clear. Two SURVIVED on the first pass and both were real weaknesses in
+the TESTS, not in the code: see learning 6, and a loose `/no row/i` that an
+anchored assertion now replaces. The pristine files were restored from a copy
+each time.
+
+The probes lived in `dashboard/scripts/` and are **deleted**; the Chromium
+driver, the throwaway `config.json` and the seeded database ran in the
+scratchpad and in the container's own Postgres. No model key was needed.
+
+---
+
 ## 2026-10-04 (second run) — Sunday · Maintenance and state of the project
 
 **Subject**: the carried recommendation, finally run as a night's subject —

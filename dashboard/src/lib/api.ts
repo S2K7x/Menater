@@ -184,6 +184,33 @@ export interface SimulateResult {
   response: string;
 }
 
+/**
+ * What `POST /api/audit/verify` answers (S1.3).
+ *
+ * NO `ok`, and that is the shape rather than an omission: four states, and a
+ * boolean holds two. `empty` — a table nobody has written a decision to — is
+ * the one that would land on whichever side the boolean chose, and reporting
+ * it as a verified chain is the failure that shows green, committed against
+ * the product's only tamper evidence.
+ *
+ * `response` is always the SERVER's sentence. The browser does not compose a
+ * second one out of the numbers: two spellings of one count is how the two
+ * start disagreeing.
+ */
+export interface ChainReport {
+  outcome: 'intact' | 'partial' | 'broken' | 'empty' | 'unavailable';
+  response: string;
+  /** `null` exactly when the walk could not be made. */
+  verification: {
+    checked: number;
+    broken: number;
+    total: number;
+    from_id: number;
+    complete: boolean;
+    sample: Array<{ id: number; alert_id: string; status: string }>;
+  } | null;
+}
+
 export const api = {
   snapshot: (force = false) => call<ConsoleSnapshot>(withLocale(`/api/snapshot${force ? '?force=1' : ''}`)),
   case: (id: string) => call<AlertCase>(withLocale(`/api/cases/${encodeURIComponent(id)}`)),
@@ -209,6 +236,12 @@ export const api = {
 
   simulate: (payload: Record<string, unknown> = {}) =>
     call<SimulateResult>('/api/simulate', { method: 'POST', body: JSON.stringify(payload) }),
+  /**
+   * Replays the audit chain's hash computation (S1.3). Read-only, and slow by
+   * nature — it recomputes a SHA-256 per row — so it is a button, never a poll.
+   */
+  verifyChain: () =>
+    call<ChainReport>(withLocale('/api/audit/verify'), { method: 'POST', body: '{}' }),
   /**
    * Rejeu d'une alerte dont la chaine s'est cassee. `sameId` reposte sous
    * l'identifiant d'origine : la deduplication l'ecartera, ce qui n'a de sens

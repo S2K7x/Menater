@@ -550,6 +550,23 @@ export interface ConsoleDictionary {
     workflowsEmpty: string;
     loaded: string;
     notLoaded: string;
+
+    /* --- S1.3: replaying the audit chain's hash computation -------------- */
+    chainKicker: string;
+    chainTitle: string;
+    /** What the check does, and the two things it cannot do. Read once. */
+    chainLede: string;
+    chainRun: string;
+    chainRunning: string;
+    /** Column help for the mismatch list, which is read rarely and closely. */
+    chainBreaksTitle: string;
+    /**
+     * The one benign cause of a mismatch, and it EXPLAINS rather than reports:
+     * rows sealed before the id-inside-the-lock fix keep their broken links,
+     * and the table cannot be rewritten to repair them.
+     */
+    chainHistoricNote: string;
+    chainFailed: string;
   };
   /** Onglet Workflow : le pipeline lui-même, et ses variables. */
   workflow: {
@@ -1754,6 +1771,27 @@ const EN: ConsoleDictionary = {
     followLost: (id, seconds) =>
       `${id} produced no step in ${seconds} s. It arrived nowhere: see the Tracking tab.`,
     followOpen: 'Open in the alert queue',
+    chainKicker: 'Tamper evidence',
+    chainTitle: 'Verify the audit chain',
+    chainLede:
+      'Every audit row is sealed by the database against the one before it: a SHA-256 of its '
+      + 'own canonical form plus its predecessor\u2019s hash. This replays that computation row '
+      + 'by row and names anything that no longer matches \u2014 which is the only way to find '
+      + 'out that a decision was altered or deleted. It is read-only: the table is append-only '
+      + 'by design, so a mismatch can be accounted for and never repaired. And it is bounded, '
+      + 'so that it answers on a chain of any size \u2014 the result says how much of the table '
+      + 'it walked.',
+    chainRun: 'Verify the chain',
+    chainRunning: 'Recomputing\u2026',
+    chainBreaksTitle: 'Rows that no longer match',
+    chainHistoricNote:
+      'One cause is known and benign. Until the sealing fix, the row id was allocated OUTSIDE '
+      + 'the advisory lock, so two rows written at the same instant could seal in the opposite '
+      + 'order to their ids \u2014 an intact chain that is no longer in id order, which this '
+      + 'verifier reads as a broken link. Measured at 22 rows in 3,195 under concurrent load. '
+      + 'Rows sealed before that fix keep their broken links for ever: the table cannot be '
+      + 'rewritten, which is the point of it.',
+    chainFailed: 'The chain could not be verified.',
     workflowsTitle: 'Workflows in the engine',
     workflowsEmpty: 'List unavailable — the pipeline did not answer, or no workflow was found.',
     // The engine holds its six definitions compiled in: there is no publish
