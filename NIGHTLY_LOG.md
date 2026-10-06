@@ -4,6 +4,231 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-10-06 — Tuesday · Security
+
+**Subject**: **the login throttle's table only ever shrank when somebody
+SUCCEEDED.** `attempts` in `server/auth.ts` is the one process-lifetime table
+an unauthenticated caller can write to — `/api/auth/login` is in
+`PUBLIC_ROUTES` because otherwise nobody could ever log in — and a record
+carrying a partial failure streak had no expiry instant at all, so nothing in
+the module could remove it. One wrong password bought a permanent entry, and
+the same immortality locked the OPERATOR out of their own console with no
+attacker anywhere.
+
+**Result**: PR opened on `claude/sleepy-volta-yjhqw5`. Five files: one
+production module (`server/auth.ts`), one new test file
+(`server/auth-throttle.test.ts`, **+8 tests**), plus `CLAUDE.md`, `ROADMAP.md`
+§ 7 and this journal. Nothing skipped or weakened, no production dependency
+added, no user-facing string changed.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-yjhqw5` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Thirty-third entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: `main` at 96006b0 gave
+typecheck 0, **1517 passed | 1 skipped**, build clean, and
+`list_pull_requests --state open` was empty (checked, not assumed). Tuesday's
+reservoir is security, and its listed order reaches denial of service fourth.
+This is priority (2) — a real, reproducible defect — and it is the lead the
+09-22 and both 09-29 entries recorded as *« small, unbounded, unauthenticated.
+This is the best remaining security lead and it is genuinely small — it is the
+one I would pick next. »* It was never abandoned; it was recommended three
+times and never taken, so the first job was to demonstrate it rather than
+inherit the claim.
+
+**What was actually wrong.** The record is `{ count, until }` and `until` was
+written **only when a streak reached the lock**. So 1 to 7 failures left a
+record with `until: 0`; `throttle` deleted a record only when its `until` was
+non-zero (`if (rec.until && rec.until <= Date.now())`); and the module's own
+`sweep()` walks `sessions`, a different table. Of the three functions that
+touch `attempts`, the only two that removed anything were a lapsed lock and
+`recordSuccess` — i.e. **somebody getting the password right.**
+
+Measured on the real module, before:
+
+| measurement | result |
+|---|---|
+| 200,000 addresses, one wrong password each | **24.7 MiB, 129 B an entry** |
+| `throttle()` called on all 200,000 — the only function that deletes | **0% reclaimed** |
+| 7 failures, then one 8th a month later, ×7 months | `{"blocked":true,"retryInSeconds":300}` |
+
+And after:
+
+| measurement | result |
+|---|---|
+| the same 200,000, then **ONE** failed login an hour later | **99.9% reclaimed**, 1 record left |
+| the eighth typo, seven months after the first | `{"blocked":false,"retryInSeconds":0}` |
+| eight failures in one burst | `blocked, 300 s` → at +4m59s `blocked, 1 s` → at +5m `not blocked` |
+
+Through the **real login route**, `handleRequest` driven with a socket address:
+8 × `401 {"error":"Wrong password."}`, the ninth
+`429 {"error":"Too many attempts. Try again in 300 s."}`, and a different
+address straight afterwards `401` — unchanged by the fix, which is the point.
+
+Scan cost by table size, the sweep being the only new work on the request
+thread: **512 → 0.10 ms, 1,000 → 0.79 ms, 10,000 → 3.2 ms, 100,000 → 21.4 ms,
+200,000 → 39.5 ms**, at most once per window.
+
+**What I learned that is written nowhere else.**
+
+1. **The honest fix is expiry, and a CAP would have been a credential-guessing
+   primitive.** The obvious bound on an unbounded map is a maximum size with
+   oldest-first eviction. Here that hands an attacker the way to flush their
+   own lock: spray addresses until the record holding their block is the one
+   dropped. So the sweep deletes only what has genuinely EXPIRED and the table
+   is allowed to exceed its floor — *« a cap that evicts something still in
+   use »*, turned from a lost scan into a lifted lockout. One test exists only
+   to refuse that fix, and it is green before AND after.
+2. **A size-triggered scan would have been work bought with the leak's own
+   money.** My first design swept on size with a geometric threshold. Nothing
+   in this table expires sooner than the streak window, so scanning more often
+   than that window cannot reclaim more — and under a spray every record is
+   still live, so a scan deletes **nothing at all**. Worse, a geometric
+   threshold that rose to 131,072 during a spray would never be reached again
+   once the spray stopped, so the expired entries would have been held anyway:
+   **the leak rebuilt inside its own repair.** The trigger is the window.
+3. **A test that checks a lockout on the NEXT VISIT cannot see it.** My first
+   draft of the operator test asserted a month after the eighth typo and went
+   **green over the defect**, because the five-minute lock had itself lapsed by
+   then. The assertion has to be at the instant the operator presses the
+   button. I only caught it because the test passed when I had predicted red.
+4. **`recordFailure` looked correct for a reason that lived in its caller.**
+   The route calls `throttle` first, whose lazy delete usually clears an
+   expired record before `recordFailure` ever sees it. So the mutation that
+   reuses an expired record instead of restarting it **survived** until a test
+   drove the write with no read in between — *« a guard that was right until a
+   second thing could answer »*, at the level of one function's dependence on
+   its caller's order.
+5. **A millisecond timestamp does not fit in a V8 SMI, and that is 16 bytes an
+   entry.** The SMI ceiling on this build is 2,147,483,647 and `Date.now()` is
+   ~1.77e12, so `until` is now a boxed heap number where most records
+   previously held `until: 0`. Isolated on the two record shapes alone:
+   **133 → 149 B an entry.** The fix therefore makes a full table 12% heavier
+   and makes it a table that empties. Worth knowing before somebody "optimises"
+   a timestamp field somewhere hotter.
+6. **`POST /api/auth/login` has no route-level test at all**, and the throttle
+   had none of any kind. `app.test.ts` covers `/api/auth/status` and stops; its
+   `call` helper hardcodes `remoteAddress: '127.0.0.1'`, so the per-address
+   property could not have been expressed there anyway. See **Found and NOT
+   fixed**.
+
+**Do not redo.**
+
+- **Do not bound this table by size.** Learning 1. The eviction test
+  (`never evicts a record still in use, and lets the table exceed its floor`)
+  is red on a mutation that trims to the floor, and the live record in it is
+  deliberately the OLDEST thing in the table at the instant the sweep runs —
+  the only arrangement in which an oldest-first eviction and an expiry sweep
+  disagree.
+- **Do not replace the window trigger with a size trigger.** Learning 2.
+- **Do not shorten the streak window to `LOCK_MS`.** It works, and it hands an
+  evading attacker back an order of magnitude: >1 guess an hour becomes >1
+  guess per 5 minutes, 24 a day against 288. The window is asserted on BOTH
+  sides, so that mutation is red.
+- **Do not reinstate `rec.count = 0` on lock.** With the new reading, being
+  locked IS `count >= MAX_ATTEMPTS`, so resetting the count means the lock
+  never blocks at all. Red on four tests.
+- **Do not add a timer.** The table only ever grows in `recordFailure`, so the
+  work that creates the entries is the work that reclaims them — *« a limit
+  must be attached to the WORK »*. The residual is stated in the PR: if no
+  failed login ever arrives again, the last window's entries are held until one
+  does. They do not grow, and a console with no failed logins is not
+  accumulating.
+- **Do not trust a forwarded header to split the bucket.** Still not mine, and
+  unchanged from 09-22 and 09-29: the remedy for the tunnel collapsing every
+  caller into one address is to trust `x-forwarded-for`, and doing that without
+  a trusted-proxy list is a worse hole than the one it closes.
+
+**Three of twelve mutations survive, and the reason is written down rather than
+implied.** `M1` puts the old `rec.until &&` guard back and is **provably
+equivalent**: `until` is now assigned before every `attempts.set`, so no stored
+record has `until: 0` and the state that guard protected against no longer
+exists — its survival is evidence the fix worked, not a hole. `M10` and `M11`
+remove the two cost guards (`SWEEP_FLOOR`, the window interval). Neither is
+redundant — the floor alone gives a full scan on **every** failure past 512,
+i.e. quadratic under a spray, and the interval alone sweeps tables of one and
+leaves the eviction property untestable, because with it the oldest record at
+any sweep is necessarily already expired — so they bound different things and
+*« two guards where one suffices »* does not apply. But neither is a
+behavioural claim, so no behavioural test can see them: pinning the cadence
+would need a third test-only export counting scans, and I judged that not worth
+the backdoor. Said plainly rather than left to be discovered.
+
+**Found and NOT fixed.**
+
+- **`POST /api/auth/login` has no route-level test**, and the `call` helper in
+  `app.test.ts` hardcodes one address. A Wednesday subject: the route's failure
+  paths are the malformed body (fixed 10-01, tested), the throttle (now tested
+  at the unit level) and the 429 message, and none of them is driven through
+  the real handler. Adding it tonight would have been a control with no claim
+  about tonight's change.
+- **`MENATER_TEST_PG` is still never set**, and this container can serve it —
+  carried unchanged from 10-05, still recommended as a Wednesday subject.
+- **The `read`-node retry** (ROADMAP § 7) — still a decision for a human,
+  unchanged from 10-05.
+- **Standing leads, untouched and re-checked as still true**: the four French
+  strings in `dashboard/server/vulnpipe.ts`, `readVariables`/`writeVariables`,
+  `forgetCursor` and `fetchWithTimeout` with no caller, `static.ts`'s
+  `immutable` on non-fingerprinted `public/` assets, the Alerts queue's seven
+  `aria-selected` rows on a plain `<table>`, the four console tables with no
+  accessible name, the two `H4`-after-`H2` jumps, `METRICS` printed twice as an
+  `h2`, `DB_PRESETS.supabase`'s port disagreeing with its own hint, and the
+  ninety-odd French strings in `server/engine/` (§ 7).
+
+**Verified** (Node 22.22.0, npm 10.9.4; every command run and its output read):
+
+| Command | Result |
+|---|---|
+| `dashboard: npm run typecheck` | 0 errors |
+| `dashboard: npm test` | **1525 passed, 1 skipped** (1517 \| 1 before: **+8**) |
+| `dashboard: npm run build` | CSS 91.27 kB, JS 487.58 kB — **byte-identical**, no interface change |
+| `VulnPipe` | untouched, suite not run |
+
+Checked **RED first, and in two stages so the red is for the right reason.**
+The first run of the new file failed all 8 tests on `resetThrottle is not a
+function`, which proves nothing — so stage 1 added only the injectable clock
+and the two test-support exports, with the forgetting logic untouched, and the
+final test file was run against that: **3 failed, 4 passed.** The three say the
+defect — `expected 1 to be 0` (the record survives the hour),
+`expected { blocked: true, retryInSeconds: 300 } to deeply equal
+{ blocked: false, retryInSeconds: 0 }` (the operator), and
+`expected 601 to be 1` (the table). The four green ones are the controls and
+pass before AND after on purpose. Then stage 2, the expiry and the sweep: 8/8.
+
+Twelve mutations, one at a time, restoring the pristine file in between:
+
+| Mutation | Result |
+|---|---|
+| the old guard back (only a non-zero `until` is deleted) | **GREEN — provably equivalent, see above** |
+| the streak carries no expiry (the original defect) | RED — 5 |
+| the sweep call is dropped | RED — 2 |
+| the sweep deletes unconditionally, not only what expired | RED — 2 |
+| the sweep evicts the OLDEST back down to the floor | RED — 2 |
+| locked at the ninth failure instead of the eighth | RED — 4 |
+| the count is reset on lock, as it used to be | RED — 4 |
+| an expired record is reused instead of restarted | RED — 1 |
+| the streak window shortened to the lock's length | RED — 1 |
+| the sweep floor removed (a cost guard) | **GREEN — see above** |
+| the sweep interval removed (a cost guard) | **GREEN — see above** |
+| `recordSuccess` no longer forgets the address | RED — 1 |
+
+Two of those mutations were GREEN on the first pass and both were real
+weaknesses in the TESTS rather than in the code — the expired-record reuse
+(learning 4) and the window asserted on one side only — and both are red now.
+The eviction test was also strengthened mid-pass: it asserts **601 and not
+602**, so a deliberately-expired address having been dropped proves the scan
+ran at all, where the first version would have gone green over a sweep that
+never happened.
+
+No model key, no database and no network egress were needed by any of it. The
+probes lived in the session scratchpad, never the repository, and are deleted;
+`git status` shows no stray file and no lockfile moved.
+
+---
+
 ## 2026-10-05 — Monday · Feature
 
 **Subject**: **S1.3** — *one-click audit chain verification*. The database does

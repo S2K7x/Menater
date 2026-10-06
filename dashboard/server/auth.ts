@@ -153,31 +153,123 @@ export function requiresAuth(path: string): boolean {
 /**
  * Limitation des tentatives. Un mot de passe unique sur un reseau interne reste
  * devinable si l'on peut essayer mille fois par seconde.
+ *
+ * AND AN ADDRESS THAT HAS GONE QUIET IS FORGOTTEN. That half was missing, and
+ * it was missing in the single field this record has: `until` was written only
+ * when a streak REACHED the lock, so a record carrying 1 to 7 failures had no
+ * expiry instant at all and nothing in this module could remove it —
+ * `throttle` deleted a record only when its `until` was non-zero, and `sweep()`
+ * above walks `sessions`, a different table. Two costs followed, and the
+ * second needs no attacker at all.
+ *
+ * `/api/auth/login` is in `PUBLIC_ROUTES` because otherwise nobody could ever
+ * log in, so ONE unauthenticated request with a wrong password bought a
+ * permanent entry: measured on this module at 129 B an entry, 200,000
+ * addresses cost 24.7 MiB, and calling `throttle` on every one of them — the
+ * only function here that deletes anything — reclaimed 0%. Only a restart did.
+ *
+ * And the streak never decayed, so it accumulated across the life of the
+ * install: eight typos spread over seven months, one a month, on a console
+ * nobody was attacking, answered `blocked, 300 s`. A counter that drifts
+ * towards a lockout is not a stronger throttle, and this one guards the
+ * console's own front door — see CLAUDE.md's « the lock that locked the
+ * operator out », one function over.
+ *
+ * So `until` now means ONE thing for both shapes of record — the instant after
+ * which this record carries nothing — and being locked is `count >=
+ * MAX_ATTEMPTS` rather than a second field. There is no longer a state in
+ * which a record is live and undated.
+ *
+ * The rule was already written one directory away: `routes/intel.ts` keys its
+ * own per-address budget this way and sweeps it, under a comment naming THIS
+ * throttle as the sibling it inherited the shared-bucket property from. The
+ * mirror of a rule is not the rule.
  */
 const attempts = new Map<string, { count: number; until: number }>();
 const MAX_ATTEMPTS = 8;
 const LOCK_MS = 5 * 60 * 1000;
 
-export function throttle(ip: string): { blocked: boolean; retryInSeconds: number } {
-  const rec = attempts.get(ip);
-  if (!rec) return { blocked: false, retryInSeconds: 0 };
-  if (rec.until > Date.now()) {
-    return { blocked: true, retryInSeconds: Math.ceil((rec.until - Date.now()) / 1000) };
-  }
-  if (rec.until && rec.until <= Date.now()) attempts.delete(ip);
-  return { blocked: false, retryInSeconds: 0 };
+/**
+ * How long one failure goes on counting towards the next lock.
+ *
+ * It is a POLICY NUMBER and not a measured maximum, so what has to be checked
+ * is that forgetting cannot make anybody faster than this design already is.
+ * The lock permits 8 guesses per 5 minutes per address — 2,304 a day — and
+ * always did, because a lapsed lock was already deleted outright. Pacing
+ * slower than this window to avoid the lock entirely therefore costs an
+ * attacker everything above 24 guesses a day: a 96x slowdown on a password
+ * stored with scrypt. Shorter would work and hands that order of magnitude
+ * back; longer starts counting last week's typos again, which is the half
+ * above.
+ */
+const STREAK_MS = 60 * 60 * 1000;
+
+/**
+ * Housekeeping, driven by the work that CREATES the entries rather than by a
+ * timer: a clean-up postponed far enough is a clean-up that does not happen,
+ * and the table only ever grows in `recordFailure`.
+ *
+ * Two properties, and both are arguments rather than details.
+ *
+ * It deletes only what has genuinely EXPIRED. A cap that evicted "the oldest"
+ * would hand an attacker the way to flush their own lock — spray addresses
+ * until the record holding their block is the one dropped — so the table is
+ * allowed to exceed this floor instead of throwing away a record still in use.
+ * Memory is cheaper than a throttle that reports it is throttling somebody it
+ * has just forgotten.
+ *
+ * And it scans at most once per STREAK_MS. Nothing here expires sooner than
+ * that window except a lapsed lock, which `throttle` deletes the moment that
+ * address comes back, so scanning more often cannot reclaim more. Under a
+ * spray it would reclaim NOTHING, because every record is then still inside
+ * its window — holding one window's worth of addresses is what this table is
+ * for. A size-triggered scan would have been pure work bought with the leak's
+ * own money.
+ */
+const SWEEP_FLOOR = 512;
+let lastSweptAt = 0;
+
+function forgetQuietAddresses(now: number) {
+  if (attempts.size < SWEEP_FLOOR || now - lastSweptAt < STREAK_MS) return;
+  for (const [addr, rec] of attempts) if (rec.until <= now) attempts.delete(addr);
+  lastSweptAt = now;
 }
 
-export function recordFailure(ip: string) {
-  const rec = attempts.get(ip) ?? { count: 0, until: 0 };
-  rec.count += 1;
-  if (rec.count >= MAX_ATTEMPTS) {
-    rec.until = Date.now() + LOCK_MS;
-    rec.count = 0;
+export function throttle(ip: string, now = Date.now()): { blocked: boolean; retryInSeconds: number } {
+  const rec = attempts.get(ip);
+  if (!rec) return { blocked: false, retryInSeconds: 0 };
+  // Expired is expired whichever shape it is: a lapsed lock and a streak that
+  // has gone quiet are both records carrying nothing, and the second one is
+  // the shape this used to keep for ever.
+  if (rec.until <= now) {
+    attempts.delete(ip);
+    return { blocked: false, retryInSeconds: 0 };
   }
+  if (rec.count < MAX_ATTEMPTS) return { blocked: false, retryInSeconds: 0 };
+  return { blocked: true, retryInSeconds: Math.ceil((rec.until - now) / 1000) };
+}
+
+export function recordFailure(ip: string, now = Date.now()) {
+  const prev = attempts.get(ip);
+  const rec = prev && prev.until > now ? prev : { count: 0, until: 0 };
+  rec.count += 1;
+  rec.until = now + (rec.count >= MAX_ATTEMPTS ? LOCK_MS : STREAK_MS);
   attempts.set(ip, rec);
+  forgetQuietAddresses(now);
 }
 
 export function recordSuccess(ip: string) {
   attempts.delete(ip);
 }
+
+/**
+ * Exposed for the tests, and for nothing else.
+ *
+ * The bound this module keeps is a statement about the TABLE, and a test that
+ * cannot see the table can only assert the lazy delete in `throttle` — the one
+ * half that was never the leak. `routes/intel.ts` exports `resetIntelThrottle`
+ * for the same reason: a throttle is module state, so a test that does not
+ * start from a clean budget is reading the previous test's.
+ */
+export const resetThrottle = (): void => { attempts.clear(); lastSweptAt = 0; };
+export const throttleRecordCount = (): number => attempts.size;
