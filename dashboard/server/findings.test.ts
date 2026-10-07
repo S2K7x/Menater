@@ -386,7 +386,9 @@ describe('a promoted finding, through the workflows that really run', () => {
     if (!mapped.ok) throw new Error(mapped.errors.join('; '));
 
     const result = await injectAlert(
-      engine, { ...mapped.alert, source: 'vulnpipe' }, mapped.alert_id);
+      engine, { ...mapped.alert, source: 'vulnpipe' }, mapped.alert_id,
+      // The counter is not what this file claims; see `rules-match.test.ts`.
+      () => {});
 
     // 202 is the only acceptance. Anything else here means the mapping builds
     // an alert the pipeline's own validator rejects — which is precisely what
@@ -402,7 +404,9 @@ describe('a promoted finding, through the workflows that really run', () => {
     if (!mapped.ok) throw new Error(mapped.errors.join('; '));
 
     const result = await injectAlert(
-      engine, { ...mapped.alert, source: 'vulnpipe' }, mapped.alert_id);
+      engine, { ...mapped.alert, source: 'vulnpipe' }, mapped.alert_id,
+      // The counter is not what this file claims; see `rules-match.test.ts`.
+      () => {});
 
     // No second case, and the console is told so rather than shown a green
     // banner over a chain that deliberately did not start.
@@ -424,7 +428,8 @@ describe('a promoted finding, through the workflows that really run', () => {
     // And if one ever got past it, `01-Ingestion` says the same thing.
     const { engine } = assemble();
     const result = await injectAlert(
-      engine, { ...alertOf(promote()), severity: 'catastrophic', source: 'vulnpipe' }, 'x');
+      engine, { ...alertOf(promote()), severity: 'catastrophic', source: 'vulnpipe' }, 'x',
+      () => {});
     expect(result.status).toBe(400);
     expect(result.detail).toContain('invalid_severity');
   });
@@ -454,7 +459,7 @@ describe('the code a promoted case came from', () => {
     const mapped = promote();
     if (!mapped.ok) throw new Error(mapped.errors.join('; '));
 
-    await injectAlert(engine, { ...mapped.alert, source: 'vulnpipe' }, mapped.alert_id);
+    await injectAlert(engine, { ...mapped.alert, source: 'vulnpipe' }, mapped.alert_id, () => {});
     const kase = (await casesOf(store)).find((c) => c.alert_id === mapped.alert_id);
     if (!kase) throw new Error('the promotion produced no case');
 

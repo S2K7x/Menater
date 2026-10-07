@@ -41,6 +41,7 @@
 
 import type { Engine } from './engine/engine.ts';
 import type { RunStatus } from './engine/types.ts';
+import { noteRuleMatch } from './rules-match.ts';
 
 export interface InjectionResult {
   /** True only when the pipeline ACCEPTED the alert (202). */
@@ -83,9 +84,22 @@ export async function injectAlert(
   engine: Engine,
   input: Record<string, unknown>,
   alertId: string,
+  /**
+   * How a tuning-rule match is recorded. Injected so a test of what the
+   * PIPELINE answered does not reach for the process's database to count
+   * something it is not asking about — in the spirit of the three locks
+   * `vitest.config.ts` already keeps on the config, the credentials and the
+   * poller's cursors.
+   */
+  note: (runId: string) => void = noteRuleMatch,
 ): Promise<InjectionResult> {
   const run = await engine.start('01-ingestion', input, alertId);
   const decided = await engine.responseOf(run.id);
+
+  // An alert injected from the console goes through the same rules a pushed one
+  // does, so it counts towards the same counter. The promise is dropped on
+  // purpose: a statistic must not be able to fail the injection it measures.
+  note(run.id);
 
   if (decided) {
     return {

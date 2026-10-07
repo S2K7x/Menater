@@ -19,6 +19,7 @@
 
 import { getConfig } from '../config.ts';
 import { getEngine } from '../runtime.ts';
+import { noteRuleMatch } from '../rules-match.ts';
 import { invalidate } from '../snapshot.ts';
 import { Poller } from './poller.ts';
 
@@ -41,6 +42,9 @@ export function getPoller(): Poller {
         );
         // An alert received changes what the console must show.
         invalidate();
+        // And a rule that matched is counted, whichever transport brought the
+        // alert in: one pipeline, one set of guardrails, one counter.
+        noteRuleMatch(run.id);
         return run.id;
       },
     });

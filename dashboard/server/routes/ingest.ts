@@ -9,6 +9,7 @@ import { json, readBodyOrNull } from '../respond.ts';
 import { invalidate } from '../snapshot.ts';
 import { getEngine } from '../runtime.ts';
 import { handleAlert } from '../webhook.ts';
+import { noteRuleMatch } from '../rules-match.ts';
 import {
   MAPPINGS, mappingFor, normalize, PayloadTooDeep } from '../engine/transforms/normalize.ts';
 import {
@@ -160,6 +161,15 @@ export async function ingestRoutes(c: Ctx): Promise<boolean> {
        * console that got slow.
        */
       if (result.ran) invalidate();
+
+      /**
+       * A RULE THAT MATCHED IS COUNTED, and counted off this answer's path.
+       *
+       * The counter is what the Rules tab reads to tell tuning from debt, and
+       * nothing wrote it. The promise is dropped on purpose: a measurement must
+       * never be able to delay — or fail — the handling of an alert.
+       */
+      if (result.runId) noteRuleMatch(result.runId);
 
       // N5 — WHICH LANE THIS ALERT SHOULD HAVE TAKEN, said in the reply.
       //

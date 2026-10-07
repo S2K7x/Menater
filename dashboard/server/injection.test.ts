@@ -105,6 +105,8 @@ describe('an alert the pipeline REFUSES is not reported as injected', () => {
       engine,
       { ...alert, source: 'simulator' },
       String(alert.alert_id),
+      // The counter is not what this file claims; see `rules-match.test.ts`.
+      () => {},
     );
 
     // The pipeline rejected it. Anything else on this line is the console
@@ -125,6 +127,8 @@ describe('an alert the pipeline REFUSES is not reported as injected', () => {
       engine,
       { ...alert, source: 'simulator' },
       String(alert.alert_id),
+      // The counter is not what this file claims; see `rules-match.test.ts`.
+      () => {},
     );
 
     // 200 is the pipeline saying "already seen": no new chain was started, so
@@ -145,6 +149,8 @@ describe('an alert the pipeline ACCEPTS is reported as accepted', () => {
       engine,
       { ...alert, source: 'simulator' },
       String(alert.alert_id),
+      // The counter is not what this file claims; see `rules-match.test.ts`.
+      () => {},
     );
 
     expect(result.ok).toBe(true);
@@ -163,6 +169,8 @@ describe('an alert the pipeline ACCEPTS is reported as accepted', () => {
       engine,
       { ...alert, source: 'simulator' },
       String(alert.alert_id),
+      // The counter is not what this file claims; see `rules-match.test.ts`.
+      () => {},
     );
 
     expect(result.ok).toBe(true);
