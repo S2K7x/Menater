@@ -118,6 +118,32 @@ describe('what it does once every guard has passed', () => {
     expect(start.mock.calls[0][1]).toMatchObject({ alert_id: 'ALT-1', source: 'wazuh' });
   });
 
+  it('names the run it started, beside `ran` and not inside `body`', async () => {
+    // `runId` exists so the route can act on the run — today, count a tuning
+    // rule that matched. The route must not fish it back out of `body`: that is
+    // this repository's « a node's output under a field name you remembered »,
+    // and it is the reason `ran` is a field rather than a status code.
+    const start = vi.fn(async () => ({ id: 'run-42', status: 'running' }));
+    const accepted = await handleAlert(deps({ engine: engine(start as never) }), auth, alert);
+    expect(accepted.runId).toBe('run-42');
+
+    // And it is carried on the pipeline's OWN answer too, including a refusal:
+    // a 400 has a run, visible in the Tracking tab, and whatever the rules did
+    // to that alert happened before the refusal was written.
+    const refused = await handleAlert(
+      deps({ engine: engine(start as never, async () => ({ status: 400, body: {} })) }),
+      auth, alert,
+    );
+    expect([refused.status, refused.runId]).toEqual([400, 'run-42']);
+  });
+
+  it('names no run where none was started', async () => {
+    for (const over of [{ mode: 'off' as const }, { secret: '' }, { engine: null }]) {
+      expect((await handleAlert(deps(over), auth, alert)).runId).toBeUndefined();
+    }
+    expect((await handleAlert(deps(), { 'x-soc-token': 'wrong' }, alert)).runId).toBeUndefined();
+  });
+
   it('RETURNS THE PIPELINE\u2019S OWN VERDICT, not a blanket 202', async () => {
     // The defect this pins: `01-Ingestion` refuses an invalid alert with a 400
     // that names the missing fields, and the entry point answered 202

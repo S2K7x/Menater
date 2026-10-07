@@ -75,6 +75,15 @@ export interface WebhookResult {
    * ==========================================================================
    */
   ran: boolean;
+  /**
+   * The run this alert created, when one exists.
+   *
+   * Said HERE for the reason `ran` is said here: the run id is already in
+   * `body`, and fishing it back out of a reply is « a node's output under a
+   * field name you remembered ». Absent on every refusal and on a `start` that
+   * threw, because there is then no journal worth reading.
+   */
+  runId?: string;
 }
 
 function secretMatches(expected: string, received: string): boolean {
@@ -162,6 +171,7 @@ export async function handleAlert(
       return {
         status: decided.status,
         ran: true,
+        runId: run.id,
         body: {
           // The body the pipeline wrote, when it wrote one.
           ...(decided.body && typeof decided.body === 'object'
@@ -183,6 +193,7 @@ export async function handleAlert(
     return {
       status: 202,
       ran: true,
+      runId: run.id,
       body: { status: 'accepted', alert_id: alertId, run_id: run.id, pipeline: 'console', source },
     };
   } catch (err) {

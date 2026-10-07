@@ -4,6 +4,196 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-10-07 — Wednesday · Tests and QA
+
+**Subject**: **`soc_tuning_rule.match_count` is read three times by the Rules
+page and written by nothing.** `RuleStore.noteMatch` is the UPDATE that moves
+it and the counter it maintains, and `grep` for a caller returns nothing — no
+route, no engine node, no trigger in `sql/`. So every rule on every install
+read `match_count: 0` for its whole life: a rule quietly closing alerts every
+day printed « Never matched », `rank()` lifted it into the attention tier, and
+the review banner at the top of the screen counted it. The screen inverted the
+one judgement it exists to support.
+
+**Result**: PR opened on `claude/sleepy-volta-se5col`. Nine files: one new
+production module (`server/rules-match.ts`), four one-line wirings
+(`routes/ingest.ts`, `injection.ts`, `ingest/runtime.ts`, plus `runId` on
+`WebhookResult`), one new test file (`server/rules-match.test.ts`, **+17**),
+two assertions in `webhook.test.ts` (**+2**), the no-op recorder passed at the
+eight existing `injectAlert` call sites, and `CLAUDE.md` / `ROADMAP.md` /
+this journal. Nothing skipped or weakened, no production dependency added, no
+user-facing string changed, **the built bundle is byte-identical**.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-se5col` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Thirty-fourth entry saying so**; it is a line
+in the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: `main` at b0b4347 gave
+typecheck 0, **1525 passed | 1 skipped**, build clean, and
+`list_pull_requests --state open` was empty (checked, not assumed). Wednesday's
+reservoir is tests and QA, and the lead came from asking its own question —
+*which module has no test, and which `catch` returns green* — over
+`server/`. `RuleStore` turned out to have **three methods with no caller**
+(`active()`, superseded by `rules-load`'s inline SQL; `history()`, whose own
+header says the history is meant to be read from the database without the
+console, so that one is consistent; and `noteMatch()`). The third is the one
+the interface depends on. It is priority (2) — a real, reproducible defect —
+and it was recorded nowhere: `grep` over `CLAUDE.md`, `ROADMAP.md` and this
+journal for `match_count` returns nothing at all.
+
+**What was actually wrong, and what was NOT.** `rules-store.ts` is untouched by
+this PR: `noteMatch` was already correct, and verified tonight against the real
+schema for the first time (see below). The whole defect was the absence of a
+call. The fact itself was being produced and thrown away all along —
+`applyTuningRules` writes `matched_rule` twice (the node output and the audit
+payload) and **nothing in the product reads either**.
+
+**Measured on real PostgreSQL 16.15, as the application role `n8n_soc`** — an
+UPDATE that had never once executed before tonight:
+
+| measurement | result |
+|---|---|
+| `noteMatch`, warm median of 20 | **0.19 ms** (min 0.15, max 0.61) |
+| the whole recorder: one journal read + the update, 12-step run, 6 kB raw log | **0.86 ms** (min 0.51, max 4.28) |
+| the no-match path (read only) | **0.43 ms** |
+| `match_count` as `pg` hands it back, before / after | `"0"` / `"3"` — **a STRING** |
+| the same through `store.list()` | `3`, `number` |
+
+**What I learned that is written nowhere else.**
+
+1. **The obvious fix is a `postgres` node in the graph, and `NODE_EFFECTS`
+   says why it is wrong.** `postgres` is classed `write` without nuance, so a
+   counter node interrupted mid-run marks its step `indeterminate` and FAILS
+   the alert's run for a human to settle. Paying for a statistic with a triage
+   settled by hand contradicts the rule `noteMatch` states in its own header —
+   *a counter is measurement, and measurement must never be able to delay, or
+   fail, the handling of an alert*. So the write is outside the graph, after
+   the run, and fire-and-forget.
+2. **A structural test that matches a bare name cannot fail.** My first draft
+   asserted `/noteRuleMatch/` over each door's source with comments stripped —
+   and `import { noteRuleMatch }` satisfies that after the only call to it is
+   deleted. Mutation said so: dropping the call in `routes/ingest.ts` and in
+   `ingest/runtime.ts` left the whole file **green**, i.e. two of the three
+   doors silently unwired by the test written to stop exactly that. Imports are
+   stripped alongside comments now, and the pattern requires a call or a
+   default (`noteRuleMatch(` or `= noteRuleMatch`). This is the family this
+   table already carries as *a test whose own prose vouches for the strings it
+   hunts*, one notch further in.
+3. **The bigint trap, read from the other side.** `pg` hands `match_count`
+   back as the string `"0"`, and `toRule`'s `Number()` is the ONLY reason
+   `RulesPage`'s `r.match_count === 0` is sound. A counter wired anywhere that
+   bypassed `toRule` would have printed « 0 matches » over a rule that had
+   never fired — the inverse of the false red the `soc_audit_log.id` row
+   records, and invisible to any hand-written fixture, which would have used a
+   number.
+4. **The store contract's Postgres half cannot run as the application role.**
+   Its reset is `DELETE FROM soc_run`, and `sql/10-engine.sql` deliberately
+   REVOKES `DELETE` on the three engine tables from `n8n_soc` — the journal is
+   append-only. `MENATER_TEST_PG=postgres://n8n_soc:…` therefore answers
+   `permission denied for table soc_run` on **33 of its 66 tests**, which reads
+   as a broken suite rather than as a correct refusal. As `postgres` (the owner,
+   which is what `dashboard/README.md` names) the whole suite is **1577 passed,
+   0 skipped**. A conditional test is a claim about an environment AND about
+   the role it connects as. In § 7, not fixed.
+5. **`injectAlert` takes the recorder as an argument, and that was not a
+   preference.** Wired to module state it would have made eight tests in
+   `injection.test.ts` and `findings.test.ts` dial `127.0.0.1:5432` in the
+   background — measured at 10 ms a go here, and on a developer machine with a
+   local `menater` database those are real `SELECT`s. Read-only and harmless,
+   but it is the family `vitest.config.ts` already keeps two locks for. The
+   env route is closed, incidentally: `config.ts`'s `env()` treats `''` as
+   unset, so `MENATER_DB_HOST: ''` in the vitest env falls back to `localhost`
+   and cannot blank the engine.
+6. **Three uncalled methods, and only one of them is a defect.** Worth saying
+   because the reflex is to delete all three. `history()` is consistent with
+   its own header (*answerable from the database alone, by someone without the
+   console open*); `active()` is a duplicate of `rules-load`'s inline `WHERE
+   enabled AND (expires_at IS NULL OR expires_at > now())` and is the one to
+   watch — two copies of a predicate that must not drift, and a lead for a
+   future night rather than tonight's subject.
+
+**Do not redo.**
+
+- **Do not put the counter in the pipeline graph.** Learning 1. A mutation
+  (`M7`) that counts only a rule which CLOSES is red on three tests, and the
+  `escalate` test exists to say the counter is « matched », not « closed ».
+- **Do not await it.** The three call sites drop the promise on purpose;
+  `recordRuleMatch` resolves for every outcome including its own failures, and
+  one test drives a collaborator that throws SYNCHRONOUSLY to pin that — an
+  unhandled rejection terminates a Node 22 process.
+- **Do not filter the journal on `status === 'ok'`.** My first version did;
+  `outputOf` in `cases.ts` filters on the OUTPUT being present instead, and a
+  step that produced nothing carries `null` whatever its status says. Mirroring
+  the existing reader is one guard, not two, and it is testable.
+- **Do not blank the database in `vitest.config.ts`.** Learning 5: `env()`
+  refuses an empty string, so it does nothing.
+- **Do not count a duplicate or an expired rule.** Both are already correct and
+  claimed by tests that pass before AND after: dedup short-circuits to
+  `respond-200` before `rules-load`, so there is no `tuning` step to read, and
+  `evaluateRules` reports a lapsed rule as EXPIRED rather than matched.
+- **A replay DOES count again, and that is deliberate.** `POST /api/replay`
+  runs the pipeline a second time; the rule matched a second time.
+
+**Twelve mutations, twelve killed** — the three doors, first-pass-wins, the
+empty-id check, the null-output filter, counting only closures, `no_database`
+becoming `failed`, a rethrowing catch, a silent catch, the dropped promise
+losing its reporter, and `webhook.ts` ceasing to carry the run id. Two needed
+tests I would not otherwise have written: the reporter one is read off the
+source, because the wired `console.error` can only be exercised by a real
+database refusing — *a test must provoke the failure it is testing, never
+borrow one from the machine* — and the `runId` one lives in `webhook.test.ts`
+because the field exists for no other purpose.
+
+**Found and NOT fixed.**
+
+- **`RuleStore.active()` duplicates `rules-load`'s `WHERE` clause.** Learning 6.
+  Identical today. The honest repair is to delete one, and deciding WHICH is a
+  question about whether the graph may import from `rules-store.ts`.
+- **`POST /api/auth/login` still has no route-level test** — carried unchanged
+  from 10-06, still the Wednesday subject I did not take. `app.test.ts`'s
+  `call` helper hardcodes `remoteAddress: '127.0.0.1'`, so the per-address
+  property cannot be expressed there as it stands.
+- **The store contract's Postgres half, and CI.** Learning 4 plus 10-05's
+  unchanged finding: CI still never sets `MENATER_TEST_PG`, so the next drift
+  between the two stores is as invisible as the last one was.
+- **The `read`-node retry** (ROADMAP § 7) — still a decision for a human,
+  unchanged from 10-05 and 10-06.
+- **Standing leads, untouched and re-checked as still true**: the four French
+  strings in `dashboard/server/vulnpipe.ts`, `readVariables`/`writeVariables`,
+  `forgetCursor` and `fetchWithTimeout` with no caller, `static.ts`'s
+  `immutable` on non-fingerprinted `public/` assets, the Alerts queue's seven
+  `aria-selected` rows on a plain `<table>`, the four console tables with no
+  accessible name, the two `H4`-after-`H2` jumps, `METRICS` printed twice as an
+  `h2`, `DB_PRESETS.supabase`'s port disagreeing with its own hint, and the
+  ninety-odd French strings in `server/engine/` (§ 7).
+
+**Verified** (Node 22.22.0, npm 10.9.4, PostgreSQL 16.15; every command run and
+its output read):
+
+| Command | Result |
+|---|---|
+| `dashboard: npm run typecheck` | 0 errors |
+| `dashboard: npm test` | **1544 passed, 1 skipped** (1525 \| 1 before: **+19**) |
+| `dashboard: MENATER_TEST_PG=postgres://postgres@127.0.0.1:55432/menater_test npm test` | **1577 passed, 0 skipped** — the store contract's Postgres half on real PostgreSQL 16.15 |
+| `dashboard: npm run build` | CSS 91.27 kB, JS 487.58 kB — **byte-identical**, no interface change |
+| `VulnPipe` | untouched, suite not run |
+
+Checked **RED first, and in two stages so the red is for the right reason.**
+Stage 1 was the structural test alone, which needs no new symbol: **3 failed, 1
+passed** — one per door, and the passing one is the control that DERIVES the
+set of doors from the code (`['webhook.ts', 'injection.ts',
+'ingest/runtime.ts']`), so the enumeration is the product's and not mine. Stage
+2 added the module as a stub returning `'no_match'` always, and the full test
+file was run against it: **10 failed, 5 passed**. The five green ones are
+controls — the no-match paths, a malformed output, a run that is not an
+ingestion — and they pass before AND after on purpose. Then the implementation:
+17/17, and the first of those is the one that matters, because it reads
+`tuning.matched_rule.id` off a journal the REAL engine wrote rather than off a
+fixture written from the same memory as the reader.
+
 ## 2026-10-06 — Tuesday · Security
 
 **Subject**: **the login throttle's table only ever shrank when somebody
