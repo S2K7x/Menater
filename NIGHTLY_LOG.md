@@ -4,6 +4,196 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-10-08 — Thursday · Bugs and technical debt
+
+**Subject**: **`static.ts` promised every browser that `favicon.svg` would
+never change, for a year.** The long cache was written as *everything that is
+not `index.html`*, and the header justifies it with *« Vite puts a fingerprint
+in every asset's name »* — which is true of what Vite BUILDS and false of what
+it COPIES. `public/` is handed to `dist/` verbatim, so the one file in it was
+served `Cache-Control: public, max-age=31536000, immutable`, and `immutable` is
+the directive that stops a client even asking: there is no header the server can
+send afterwards to take it back.
+
+**Result**: PR opened on `claude/sleepy-volta-n38equ`. Four files: one
+production module (`server/static.ts`), one test file (`server/static.test.ts`,
+**+13 tests**), plus `CLAUDE.md` (traps row, and the documented test count,
+stale at 1525 since 10-06) and `ROADMAP.md` § 7. Nothing skipped or weakened,
+no production dependency added, no user-facing string changed, **the built
+bundle is byte-identical** (same three asset hashes before and after).
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-n38equ` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Thirty-fifth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: `main` at ea0c669 gave
+typecheck 0, **1544 passed | 1 skipped**, build clean, and
+`list_pull_requests --state open` was empty (checked, not assumed). Thursday's
+reservoir is bugs and technical debt. This was a standing lead in this journal
+for **five** nights (`static.ts`'s `immutable` on non-fingerprinted `public/`
+assets) and tracked in no section of `ROADMAP.md`; it is priority (2), a real
+defect, and the first job was to demonstrate it rather than inherit the claim —
+which is what the probe below did, against a real `npm run build` over a real
+socket.
+
+**Measured, before** (`dist/` from this repository's own build, HEAD over a
+real socket):
+
+| file | `Cache-Control` |
+|---|---|
+| `/assets/index-CPvSnE5W.js` | `public, max-age=31536000, immutable` |
+| `/assets/index-DOkgV9eT.css` | `public, max-age=31536000, immutable` |
+| `/assets/VulnPipeSection-jY0mffti.js` | `public, max-age=31536000, immutable` |
+| **`/favicon.svg`** | **`public, max-age=31536000, immutable`** ← no hash in that name |
+| `/index.html` | `no-store` |
+
+And after: the three built assets unchanged, `index.html` unchanged,
+`/favicon.svg` → `no-cache` with a `Last-Modified`, and a conditional request
+answered **304 with a 0-byte body**.
+
+**The price, measured on a raw socket rather than reasoned about**, because
+dropping `immutable` buys a round trip:
+
+| | bytes on the wire |
+|---|---|
+| full 200 answer | **688 B** |
+| revalidation (304, no body) | **242 B** |
+
+So a returning browser pays 242 B a navigation instead of 0, and in exchange a
+changed file arrives on the next navigation instead of never for 365 days. That
+is why the validator is in this change and not a follow-up: `no-cache` ALONE
+would re-send the whole file every navigation, trading a year of staleness for a
+permanent bill, and this project treats a bill as a defect.
+
+**What I learned that is written nowhere else.**
+
+1. **The defect has a trigger inside the repository, which is what lifts it out
+   of hypothetical.** `public/favicon.svg` is the mark shown between the first
+   paint and React mounting, and `theme/favicon.ts` carries a test that forces
+   the two to stay in step. So editing `MARK_BARS` edits a file the server
+   guarantees cannot be delivered to anyone who has ever opened the console.
+2. **The stale claim was in FOUR places, which is why no sweep found it**:
+   `static.ts`'s defence 2, its own « AND NO MEMO » block, the comment on the
+   test asserting the year-long cache, and the `CLAUDE.md` row that closed the
+   compression subject — all four saying *every* asset carries a fingerprint.
+   Four copies agreeing is not evidence. All four are corrected.
+3. **`Number.isFinite` on a parsed date header is a second guard where the
+   first suffices.** `Date.parse('yesterday-ish')` is `NaN` and every comparison
+   against `NaN` is false (probed), so `modified <= since` already refuses an
+   unreadable header. The mutation removing `Number.isFinite` was the only
+   survivor of the first round — which is exactly how this repository words it:
+   *two guards where one suffices is a line no test can fail on.* Removed, with
+   the behaviour pinned by a test.
+4. **`Last-Modified` carries whole SECONDS.** Comparing it against `stat.mtimeMs`
+   reports every file as modified on every request, so the 304 would never fire
+   and `no-cache` would silently become the bandwidth regression above. The
+   mutation that drops the flooring is red on two tests.
+5. **My own test reproduced the trap this table already carries pointing
+   OUTWARD.** An assertion that read a 200's status and never its body held the
+   socket out of `fetch`'s pool, so `server.close()` in `afterEach` waited out
+   the keep-alive: **3.0 s for one assertion instead of 3 ms**, and the file went
+   3.70 s → 648 ms once the body was consumed. The row in `CLAUDE.md` is about
+   the enrichment sources; it costs the same inward, in a test.
+6. **One assertion passes before AND after on purpose, and its first comment
+   over-claimed.** *« delivers the new bytes once the file changes »* was
+   labelled THE WHOLE SUBJECT; with no validator the server always answered 200
+   with current bytes, so it was green before the fix. The defect itself cannot
+   be asserted server-side at all — `immutable` is obeyed by the BROWSER. What a
+   server test can claim is that the policy is not `immutable` and that
+   revalidation is honest, and the comment now says that instead.
+
+**Do not redo.**
+
+- **Do not cap `pollWindow`'s `cursor.since` branch.** Looked at first and ruled
+  out. `MAX_LOOKBACK_MS` guards only the cursor-LESS branch, and the comment
+  block beside it describes the exact wedge an uncapped window can build (a
+  response past `MAX_RESPONSE_BYTES` fails the poll, the backoff widens the
+  window, repeat). The asymmetry is deliberate and correct: clipping a REAL
+  checkpoint means skipping alerts you know you have not had, which is the
+  data-loss bug that whole file is written against. The honest repair is
+  pagination, i.e. a feature and an architecture decision, not a night.
+- **Do not key the long cache on the directory alone.** `public/assets/logo.png`
+  is copied verbatim into the build's own directory, and a mutation that drops
+  the name half is red.
+- **Do not key it on the name alone.** `site-manifest.json` at the root matches
+  any sane fingerprint pattern (`-manifest` is eight legal characters); the
+  mutation that drops the directory half is red.
+- **Do not let `-` into the hash character class.** The last hyphen of
+  `apple-touch-icon.png` then starts a ten-character match and a hand-written
+  file passes for a built one. Red on one test.
+- **Do not replace `no-cache` with a short `max-age`.** Tried as a mutation
+  (`max-age=300`), red on three tests: it is a magic number, and a change still
+  cannot be delivered for up to five minutes.
+- **Do not send `Content-Type` or `Content-Encoding` on the 304**, and do NOT
+  drop `Vary` from it: a cache keys the stored entry on `Vary`, so without it an
+  `identity` client can be handed the gzipped copy. Both directions are red
+  under mutation.
+
+**Thirteen mutations, thirteen killed** (after the first round left three
+survivors, each of which taught something — learning 3 removed a line, and the
+other two bought two assertions): the two halves of the fingerprint rule
+separately, three loosenings of the hash pattern, the 304 on any conditional
+request, the millisecond comparison, the validator on every policy, `max-age`
+instead of revalidation, the body headers on the 304, and `Vary` dropped from
+it.
+
+**Found and NOT fixed.**
+
+- **`pollWindow`'s uncapped `cursor.since` branch**, above. Not a defect to fix
+  blindly; worth a human's decision about pagination. Not added to § 7, because
+  I could not demonstrate the wedge without a source that actually holds a
+  month of alerts.
+- **Six exported symbols with no production caller, swept deliberately** —
+  `validateCondition` (`engine/values.ts`), `readVariables` / `writeVariables`
+  (`engine/pg-store.ts`), `fetchWithTimeout` (`probes.ts`), `forgetCursor`
+  (`ingest/cursors.ts`), `DISMISSING_STATUSES`
+  (`src/vulnpipe/lib/finding-status.ts`). The sweep script is in the scratchpad
+  and its one real lesson is a tooling one: **`grep` treats
+  `server/intel/lookup.ts`, `server/findings.ts` and
+  `server/assistant/assistant.test.ts` as BINARY** (they hold a NUL, which 10-04
+  already recorded), so a sweep without `-a` silently skips them and reports
+  `providersFor` as an orphan when `lookup.ts` calls it. An instrument that
+  under-reads is worse than none. `DISMISSING_STATUSES` is the one worth a
+  future look: it is byte-identical to `STATUSES_NEEDING_NOTE` beside it, so the
+  question is whether a « to handle » filter was meant to exist.
+- **`DB_PRESETS.supabase` sets `port: 5432` while its own hint says the pooler
+  listens on 6543.** Checked tonight, still true. Both ports are real on
+  Supabase (direct vs pooler), so this is a one-string judgement call about
+  which one the button should fill in, not a defect — and it is a decision for
+  a human rather than a night.
+- **Standing leads, untouched and re-checked as still true**: the four French
+  strings in `dashboard/server/vulnpipe.ts`, `RuleStore.active()` duplicating
+  `rules-load`'s `WHERE` clause, `POST /api/auth/login` with no route-level
+  test, the store contract's Postgres half never set in CI, the Alerts queue's
+  seven `aria-selected` rows on a plain `<table>`, the four console tables with
+  no accessible name, the two `H4`-after-`H2` jumps, `METRICS` printed twice as
+  an `h2`, the `read`-node retry (§ 7, a decision for a human), `npm audit` in
+  CI (§ 7, likewise), and the ninety-odd French strings in `server/engine/`.
+  The `static.ts` `immutable` lead leaves this list tonight.
+
+**Verified** (Node 22.22.0, npm 10.9.4; every command run and its output read):
+
+| Command | Result |
+|---|---|
+| `dashboard: npm run typecheck` | 0 errors |
+| `dashboard: npm test` | **1557 passed, 1 skipped** (1544 \| 1 before: **+13**) |
+| `dashboard: npm run build` | CSS 91.27 kB, JS 487.58 kB — **same three asset hashes**, no interface change |
+| `dashboard: npx vitest run server/static.test.ts` | 36 passed, **648 ms** (3.70 s before learning 5) |
+| real socket, real `dist/` | the two tables above |
+| `VulnPipe` | untouched, suite not run |
+
+Checked **RED first**: the five new assertions that name the defect fail on
+unmodified `main` — the three `it.each` paths (`/favicon.svg`,
+`/site-manifest.json`, `/assets/logo.png`), the `no-cache` + `Last-Modified`
+claim, and the 304 sequence, which cannot even begin because no validator is
+sent. The two controls in the same block — *no validator on the entry point*,
+*no validator on a fingerprinted asset* — pass before AND after, on purpose:
+they are the boundary, and the `no-store` one is the sharper of the two, because
+a 304 on `index.html` would serve the previous deployment's shell.
+
 ## 2026-10-07 — Wednesday · Tests and QA
 
 **Subject**: **`soc_tuning_rule.match_count` is read three times by the Rules
