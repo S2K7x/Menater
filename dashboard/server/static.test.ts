@@ -11,7 +11,7 @@
  * ============================================================================
  */
 
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -27,6 +27,21 @@ beforeEach(() => {
   mkdirSync(join(root, 'assets'));
   writeFileSync(join(root, 'index.html'), '<!doctype html>console');
   writeFileSync(join(root, 'assets', 'index-a1b2c3.js'), 'console.log(1)');
+  // WHAT VITE COPIES VERBATIM. `public/` lands at the root of `dist/` under
+  // the name it was written with, so these three carry no content hash — and
+  // each one defeats a different half of the rule below.
+  writeFileSync(join(root, 'favicon.svg'), '<svg>slate</svg>');
+  // Fingerprint-SHAPED and at the root: `-manifest` is eight legal characters.
+  writeFileSync(join(root, 'site-manifest.json'), '{"name":"menater"}');
+  // Under the build's own directory and NOT hashed: `public/assets/logo.png`.
+  writeFileSync(join(root, 'assets', 'logo.png'), 'PNG');
+  // Hyphenated, under the build's directory, and still not built. `-touch-icon`
+  // is ten characters a hash is allowed to use APART from the hyphen, so this
+  // is the file that says whether the hash class excludes one.
+  writeFileSync(join(root, 'assets', 'apple-touch-icon.png'), 'PNG');
+  // A `public/` copy big enough to be worth compressing, so the conditional
+  // answer below has an encoding and a `Vary` to get right.
+  writeFileSync(join(root, 'og-card.svg'), `<svg>${'card '.repeat(1200)}</svg>`);
   // Un fichier VOISIN de la racine : la cible classique d'une traversée.
   outside = join(root, '..', `secret-${Date.now()}.txt`);
   writeFileSync(outside, 'MOT DE PASSE');
@@ -98,6 +113,54 @@ describe('cache', () => {
     const { state } = get('/assets/index-a1b2c3.js');
     expect(state.headers['Cache-Control']).toMatch(/max-age=31536000/);
     expect(state.headers['Content-Type']).toMatch(/javascript/);
+  });
+
+  /* ------------------------------------------------------------------------
+   * A YEAR OF `immutable` IS EARNED BY THE FINGERPRINT, NOT BY NOT BEING THE
+   * ENTRY POINT.
+   *
+   * The header above justifies the long cache with "Vite puts a fingerprint in
+   * every asset's name". That is true of what Vite BUILDS and false of what it
+   * COPIES: `public/` is handed to `dist/` verbatim, so `favicon.svg` keeps its
+   * name across every deployment — and the rule, written as "everything except
+   * `index.html`", promised a browser it would never change.
+   *
+   * Three files, three ways of being wrong, so neither half of the rule can be
+   * dropped without a test naming it.
+   * --------------------------------------------------------------------- */
+  it.each([
+    // No hash at all, at the root. What `public/` actually holds today.
+    '/favicon.svg',
+    // Fingerprint-SHAPED at the root: only the directory tells it apart.
+    '/site-manifest.json',
+    // Under the build's directory and unhashed: only the name tells it apart.
+    '/assets/logo.png',
+    // Same, hyphenated: only a hash class that excludes `-` tells it apart.
+    '/assets/apple-touch-icon.png',
+  ])('never promises a file the build did not fingerprint is immutable — %s', (path) => {
+    const { state } = get(path);
+    expect(state.headers['Cache-Control']).not.toMatch(/immutable|max-age=31536000/);
+  });
+
+  it('asks before reusing a file the build did not fingerprint', () => {
+    // `no-cache` is "store it, then ask": a changed favicon reaches a browser
+    // on its next navigation instead of in a year. The validator is what makes
+    // the asking free — see the 304 block on a real socket below.
+    const { state } = get('/favicon.svg');
+    expect(state.headers['Cache-Control']).toBe('no-cache');
+    expect(state.headers['Last-Modified']).toEqual(expect.any(String));
+  });
+
+  it('sends no validator with the entry point', () => {
+    // `no-store` means do not keep it, so there is nothing to revalidate — and
+    // a 304 here would serve the previous deployment's shell.
+    expect(get('/').state.headers['Last-Modified']).toBeUndefined();
+  });
+
+  it('sends no validator with a fingerprinted asset', () => {
+    // Its name is the validator. Asking about a file that cannot change is a
+    // round trip bought for nothing.
+    expect(get('/assets/index-a1b2c3.js').state.headers['Last-Modified']).toBeUndefined();
   });
 });
 
@@ -256,5 +319,127 @@ describe('compression of the interface files', () => {
     const got = await onTheWire('/index.html', 'gzip');
     expect(got.encoding).toBeNull();
     expect(got.decoded).toBe('<!doctype html>console');
+  });
+});
+
+/* ==========================================================================
+ * REVALIDATION — ON A REAL SOCKET, FOR THE SAME REASON THE BLOCK ABOVE IS
+ *
+ * The fake response cannot vouch for a status line the client acts on, nor for
+ * a body that is absent on purpose. And what this claims is a sequence rather
+ * than a header: ask, be told nothing changed, change the file, be given it.
+ *
+ * `no-cache` without a validator would be a bandwidth regression — the file
+ * re-sent in full on every navigation — so the 304 is not decoration here, it
+ * is the half that makes the policy affordable.
+ * ========================================================================== */
+
+describe('revalidating a file the build did not fingerprint', () => {
+  let server: import('node:http').Server;
+  let base: string;
+
+  beforeEach(async () => {
+    const { createServer } = await import('node:http');
+    server = createServer((req, res) => {
+      if (!serveStatic(req, res, new URL(req.url ?? '/', 'http://x').pathname, { root })) {
+        res.writeHead(404).end();
+      }
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()));
+    base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+  });
+
+  afterEach(async () => {
+    await new Promise<void>((r) => server.close(() => r()));
+  });
+
+  const ask = (path: string, since?: string) =>
+    fetch(`${base}${path}`, { headers: since ? { 'if-modified-since': since } : {} });
+
+  it('answers 304 and no body when the file has not changed', async () => {
+    const first = await ask('/favicon.svg');
+    expect(first.status).toBe(200);
+    const validator = first.headers.get('last-modified');
+    expect(validator).toBeTruthy();
+    expect(await first.text()).toBe('<svg>slate</svg>');
+
+    const again = await ask('/favicon.svg', validator!);
+    expect(again.status).toBe(304);
+    expect((await again.arrayBuffer()).byteLength).toBe(0);
+  });
+
+  it('delivers the new bytes once the file changes', async () => {
+    // THIS ONE PASSES BEFORE THE FIX TOO, and it is here on purpose: with no
+    // validator the server always answered 200 with the current bytes. What it
+    // claims is the 304 logic the fix ADDS — a comparison that answered "not
+    // modified" to any conditional request would rebuild the staleness the fix
+    // removes, one layer in. The defect itself cannot be asserted from here:
+    // `immutable` is obeyed by the browser, so what a server test can claim is
+    // that the policy is not `immutable` (above) and that revalidation is
+    // honest (here).
+    const first = await ask('/favicon.svg');
+    const validator = first.headers.get('last-modified')!;
+
+    writeFileSync(join(root, 'favicon.svg'), '<svg>acme</svg>');
+    // `Last-Modified` carries whole seconds: a rewrite inside the same second
+    // is indistinguishable from no rewrite, and the test must not depend on how
+    // long it took to get here.
+    const ahead = new Date(Date.now() + 2000);
+    utimesSync(join(root, 'favicon.svg'), ahead, ahead);
+
+    const after = await ask('/favicon.svg', validator);
+    expect(after.status).toBe(200);
+    expect(await after.text()).toBe('<svg>acme</svg>');
+  });
+
+  it('never answers 304 for the entry point', async () => {
+    // `index.html` is `no-store`, so a conditional request can only come from a
+    // client that kept it anyway — and answering 304 would hand it the shell of
+    // the previous deployment, which is the failure the `no-store` exists for.
+    const res = await ask('/index.html', new Date(Date.now() + 60_000).toUTCString());
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe('<!doctype html>console');
+  });
+
+  it('never answers 304 for a fingerprinted asset', async () => {
+    // Its name is its validator. A cache that asks anyway is asking about a
+    // file that cannot have changed, and it gets the file.
+    const res = await ask('/assets/index-a1b2c3.js', new Date(Date.now() + 60_000).toUTCString());
+    expect(res.status).toBe(200);
+    // Read it. `fetch` keeps the socket checked out of the pool until the body
+    // is consumed, so `server.close()` then waits out the keep-alive — this
+    // very assertion took 3.0 s instead of 3 ms before the read was added. The
+    // trap is in CLAUDE.md pointing OUTWARD at the enrichment sources; it costs
+    // the same inward, in a test.
+    expect(await res.text()).toBe('console.log(1)');
+  });
+
+  it('describes no body on a 304, and still says what the entry varies on', async () => {
+    // RFC 9110 § 15.4.5: a 304 carries the fields a cache needs to update its
+    // stored entry, and not the ones describing a representation it is not
+    // being sent. `Vary` is the first kind — it is what the cache keys this
+    // entry on, and dropping it would let a later `identity` request be served
+    // the gzipped copy. `Content-Type` and `Content-Encoding` are the second:
+    // there is no body for them to describe.
+    const first = await fetch(`${base}/og-card.svg`, { headers: { 'accept-encoding': 'gzip' } });
+    expect(first.headers.get('content-encoding')).toBe('gzip');
+    expect(first.headers.get('vary')).toBe('Accept-Encoding');
+    const validator = first.headers.get('last-modified')!;
+    await first.arrayBuffer();
+
+    const again = await fetch(`${base}/og-card.svg`, {
+      headers: { 'accept-encoding': 'gzip', 'if-modified-since': validator },
+    });
+    expect(again.status).toBe(304);
+    expect(again.headers.get('vary')).toBe('Accept-Encoding');
+    expect(again.headers.get('content-encoding')).toBeNull();
+    expect(again.headers.get('content-type')).toBeNull();
+  });
+
+  it('ignores an unparseable `if-modified-since` instead of guessing', async () => {
+    // A header we cannot read is not a claim that the file is unchanged.
+    const res = await ask('/favicon.svg', 'yesterday-ish');
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe('<svg>slate</svg>');
   });
 });
