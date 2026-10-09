@@ -47,10 +47,14 @@ const html = readFileSync(join(root, 'index.html'), 'utf8');
  */
 const siteCss = readFileSync(join(root, '..', 'site', 'shared.css'), 'utf8');
 
-/** Every sheet that draws a focus indicator: both halves, and the site. */
+/** Every sheet that draws a focus indicator: both halves, the Guide's figures, and the site. */
 const SHEETS = [
   ['src/styles.css', readFileSync(join(root, 'src', 'styles.css'), 'utf8')],
   ['src/vulnpipe/styles.css', readFileSync(join(root, 'src', 'vulnpipe', 'styles.css'), 'utf8')],
+  // The code-analysis figures the Guide draws. Their own sheet since the Code
+  // tab's stylesheet left the render-blocking path; a sheet outside this list
+  // is a sweep that under-reads, which is worse than no sweep.
+  ['src/vulnpipe/diagrams.css', readFileSync(join(root, 'src', 'vulnpipe', 'diagrams.css'), 'utf8')],
   ['site/shared.css', siteCss],
 ] as const;
 

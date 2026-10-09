@@ -4,6 +4,194 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-10-09 — Friday · Performance and cost
+
+**Subject**: **`App.tsx` defers the Code tab's JavaScript and `main.tsx`
+imported its stylesheet anyway.** The lazy boundary exists for a reason written
+in its own comment — *« l'analyse de code pèse plus lourd que tout le reste de
+la console réuni »* — and the sheet beside it was not deferred with it. The
+sheet is the half the browser **blocks on**: one `<link rel="stylesheet">` in
+`<head>`, carrying the analysis section's 47 kB of source, paid before the
+alert queue can paint, on a tab most operators never open.
+
+**Result**: PR opened on `claude/sleepy-volta-ixytxw`. Seven files: three
+one-line import moves (`main.tsx`, `vulnpipe/VulnPipeSection.tsx`,
+`vulnpipe/components/Diagrams.tsx`), one new stylesheet
+(`vulnpipe/diagrams.css`, 91 lines and 32 selectors moved verbatim out of
+`vulnpipe/styles.css`), one new test file
+(`vulnpipe/stylesheet-boundary.test.ts`, **+13 tests**), one line plus a
+comment in `theme/themes.test.ts`, and `CLAUDE.md` / `ROADMAP.md` / this
+journal. Nothing skipped or weakened, no production dependency added, no
+user-facing string changed, **no CSS rule added, removed or edited** — the
+total stylesheet weight is unchanged to the byte.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-ixytxw` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Thirty-sixth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: `main` at 4cda583 gave
+dashboard typecheck 0, **1557 passed | 1 skipped**, build clean, and
+`list_pull_requests --state open` was empty (checked, not assumed). Friday's reservoir
+is performance and cost. The lead came from measuring rather than from a list:
+a sourcemap-attribution probe over the built chunk ranked every module by the
+bytes it contributes, and the CSS question fell out of reading `main.tsx` next
+to `App.tsx`. It is priority (5), a measured optimisation.
+
+**Measured, before and after, in the same Chromium 1194 against the same
+server** (`npm run serve` over this repository's own `dist/`, bytes taken from
+CDP `Network.loadingFinished.encodedDataLength`, i.e. what actually crossed the
+socket gzipped):
+
+| | render-blocking stylesheet | decoded |
+|---|---|---|
+| before | **16,419 B** | 91,278 B |
+| after | **12,264 B** | 64,195 B |
+| | **−4,155 B (−25.3 %)** | −27,083 B (−29.7 %) |
+
+The section's sheet is now `VulnPipeSection-*.css`, **5,506 B on the wire**,
+fetched only when somebody opens the Code tab — confirmed by the probe, which
+sees it appear in the request log only after the click. The main chunk grew
+**143,268 → 143,371 B (+103 B)**: one more `__vite__mapDeps` entry, the honest
+price of the split.
+
+**What I learned that is written nowhere else.**
+
+1. **The total is the wrong number, and it is the one a bundle report gives
+   you.** 91.27 kB of CSS before, 64.19 + 27.08 = 91.27 kB after. Nothing was
+   deleted; what changed is which bytes the browser must have before it paints.
+   So this saving is invisible to `vite build`'s summary and to any assertion
+   about bundle size — it is only visible by asking what blocks the first
+   paint, which is why the measurement is a browser and not a `wc -c`.
+2. **The obvious fix would have broken a screen in the other half of the
+   product.** `Diagrams.tsx` is the ONE file under `src/vulnpipe/` that console
+   code imports: `DocsPanel` draws its architecture figure, its confidence
+   bands and its cost funnel in the Guide. All 32 of their selectors sat in the
+   sheet about to be deferred, and none of them is scoped under `.vp-embed`, so
+   moving the whole sheet would have left three unstyled SVGs in the Guide
+   until somebody had opened the Code tab once — on a screen nobody would think
+   to connect to another tab. Found by grepping for `vp-` outside
+   `src/vulnpipe/` BEFORE moving anything; the only other hit in the repository
+   is a comment.
+3. **`src/styles.css` was the plausible wrong home for those rules.** It would
+   work today and it throws away the property that makes the split hold: in a
+   file of its own, imported by the component, the rules follow whoever renders
+   it — eager while the Guide is eager, off the render-blocking path by
+   themselves the day the Guide stops drawing them. In the console sheet the
+   bundler can no longer tell they belong to that component.
+4. **Vite awaits a chunk's stylesheet before running the chunk, and I read it
+   out of the built bundle rather than assuming it.** The preload helper
+   (minified as `Qn` in `dist/assets/index-*.js`) appends
+   `<link rel="stylesheet">` for every `.css` dependency and returns
+   `new Promise` on its `load` event, and only `.then`s into the dynamic
+   `import()`. So there is no unstyled frame, and a sheet that fails to arrive
+   **rejects** — `vite:preloadError`, then a throw — so it lands in
+   `SectionBoundary` exactly as a missing JS chunk already did. Confirmed on
+   screen too: after clicking Code, `.vp-embed h2` computes
+   `text-transform: uppercase` and `font-weight: 900`.
+5. **One predicate, used in both directions, and `every` is load-bearing.** A
+   selector belongs to the figures when EVERY class in it is one
+   `Diagrams.tsx` can render — read out of the component, with a class built by
+   interpolation (`` `vp-dgm-${tone}` ``) kept as a prefix. Written with `some`
+   the test goes red on correct code, because `.vp-card.vp-tone-green` is a
+   section rule that mentions the diagram prefix `vp-tone-`. The same predicate
+   then says both halves: the deferred sheet holds none of those selectors, and
+   the eager sheet holds nothing else — the second being the same bill rebuilt
+   on the other side.
+6. **A hand list of those classes would already have been wrong.**
+   `vp-dgm-edge-muted` is rendered by the component and styled by nothing at
+   all (it means "the default edge colour"). That is why the test refuses to
+   assert "every rendered class has a rule" — which is false — and asserts the
+   property that actually matters instead: no class the figures render may be
+   styled by the deferred sheet.
+7. **Where the bytes actually are, for a future night.** Sourcemap attribution
+   over `dist/assets/index-*.js` (487 kB): `react-dom` 174,531 B,
+   **`src/i18n/console.ts` 90,051 B (18.5 %)**, `src/i18n/dictionary.ts`
+   30,899 B, `SettingsPage.tsx` 24,921 B, nothing else above 13 kB. The script
+   is in the scratchpad and the technique is cheap: build with
+   `sourcemap: true`, VLQ-decode `mappings`, charge each generated byte to the
+   source it names.
+
+**Do not redo.**
+
+- **Do not defer `src/i18n/dictionary.ts` with the Code tab.** 30.9 kB of the
+  main chunk and it looks like the same subject; it is not. `I18nProvider`
+  builds BOTH catalogues eagerly (`t: dictionary(locale)`) because `DocsPanel`
+  reads `t.landing` for the diagram labels, so the analysis catalogue is
+  genuinely in the eager graph. Splitting it means restructuring the context
+  that provides `t` to the whole tree — a refactor, not a night.
+- **Do not move the diagram rules into `src/styles.css`.** Learning 3, and a
+  mutation carries it: appending them there makes *« the console sheet is not
+  where these rules went instead »* red.
+- **Do not key the test on whole families (`vp-dgm*`, `vp-funnel*`) spelled out
+  in the test file.** Tried first; it is a second list beside the component,
+  and learning 6 is the proof it would drift.
+- **Do not assert the saving as a bundle-size number.** Learning 1: the total
+  is identical before and after, so any such assertion passes either way.
+
+**Eleven mutations, eleven killed.** Four of them are the change itself, red on
+unmodified `main` (the 32 stranded selectors; `main.tsx` importing the deferred
+sheet; the section not importing its own; the figures not importing theirs).
+Seven more were injected and each killed by exactly one test: a section
+selector creeping into `diagrams.css`; the sheet dropped from
+`themes.test.ts`'s sweep; a hardcoded colour in `diagrams.css`; the rules moved
+into the console sheet; `App.tsx` importing the section statically; the class
+reader finding nothing (the vacuity guard); `every` → `some` in the predicate.
+
+**Two tests pass BEFORE and after, on purpose.** They are not the change, they
+are the premises that make it safe, and they are the two ways a later edit
+could silently undo the whole saving without touching any file in this diff:
+the section is reached only through `React.lazy`, and `Diagrams.tsx` is the one
+`vulnpipe/` module console code imports.
+
+**Found and NOT fixed.**
+
+- **`src/i18n/console.ts` is 90,051 bytes of a 487 kB chunk**, the largest
+  single thing in it after `react-dom`, and the Guide's seventeen sections are
+  most of it — documentation prose shipped to every browser before the alert
+  queue paints. Deferring it with `DocsPanel` is a real subject and it is not
+  this one: the catalogue is a single typed object imported by everything, and
+  CLAUDE.md calls that machinery *what keeps user-facing strings out of
+  components*. Worth a night with its own measurement; not added to § 7,
+  because it is a design question rather than a defect.
+- **The lazy chunk's hash can contain a hyphen** (`VulnPipeSection-C-eiUZyf.css`
+  tonight), which is one character away from the `FINGERPRINT` pattern 10-08
+  deliberately narrowed. Checked over a real socket rather than reasoned about:
+  both new assets answer `public, max-age=31536000, immutable`, because the
+  pattern is unanchored on the left and the final `-eiUZyf` is six legal
+  characters. No change needed; written down because the next person reading
+  that regex will have the same doubt.
+- **Standing leads, untouched and re-checked as still true**: the four French
+  strings in `dashboard/server/vulnpipe.ts`, `RuleStore.active()` duplicating
+  `rules-load`'s `WHERE` clause, `POST /api/auth/login` with no route-level
+  test, the store contract's Postgres half never set in CI, the Alerts queue's
+  seven `aria-selected` rows on a plain `<table>`, the four console tables with
+  no accessible name, the two `H4`-after-`H2` jumps, `METRICS` printed twice as
+  an `h2`, `DISMISSING_STATUSES` byte-identical to `STATUSES_NEEDING_NOTE`,
+  `DB_PRESETS.supabase`'s port disagreeing with its own hint, `pollWindow`'s
+  uncapped `cursor.since` branch, the `read`-node retry (§ 7, a decision for a
+  human), `npm audit` in CI (§ 7, likewise), and the ninety-odd French strings
+  in `server/engine/`.
+
+**Verified** (Node 22.22.0, npm 10.9.4, Chromium 1194; every command run and
+its output read):
+
+| Command | Result |
+|---|---|
+| `dashboard: npm run typecheck` | 0 errors |
+| `dashboard: npm test` | **1570 passed, 1 skipped** (1557 \| 1 before: **+13**) |
+| `dashboard: npm run build` | CSS 64.19 + 27.08 kB, JS 487.77 + 63.61 kB, clean |
+| real server + Chromium, before and after | the table above |
+| `curl -D -` on all five served paths | cache policies unchanged and correct |
+| `VulnPipe` | untouched, suite not run |
+
+Checked **RED first**: `npx vitest run src/vulnpipe/stylesheet-boundary.test.ts`
+with the production change reverted and `diagrams.css` kept — **4 failed | 9
+passed**, the four being exactly the claims the change makes, with the stranded
+selectors named one by one.
+
 ## 2026-10-08 — Thursday · Bugs and technical debt
 
 **Subject**: **`static.ts` promised every browser that `favicon.svg` would
