@@ -4,8 +4,13 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App.tsx';
 import { I18nProvider } from './i18n/context.tsx';
 import { ThemeProvider } from './theme/context.tsx';
+// The console's own sheet, and ONLY that one. The Code tab's stylesheet is
+// imported by the Code tab (`vulnpipe/VulnPipeSection.tsx`), so it travels
+// with the chunk `React.lazy` already defers: a stylesheet named here is
+// render-blocking, and 27 kB of it belonged to a tab most operators never
+// open. See the header of `vulnpipe/diagrams.css` for the one part of that
+// sheet the console does render.
 import './styles.css';
-import './vulnpipe/styles.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

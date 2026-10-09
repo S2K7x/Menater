@@ -22,6 +22,7 @@
  * ============================================================================
  */
 
+import '../diagrams.css';
 import type { Dictionary } from '../../i18n/dictionary.ts';
 
 type DiagramLabels = Dictionary['landing']['diagram'];

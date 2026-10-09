@@ -35,6 +35,14 @@
 
 import { useEffect } from 'react';
 
+// THE SECTION OWNS ITS STYLESHEET, and that is what keeps it off the first
+// paint. `App.tsx` reaches this module through `React.lazy` because the
+// analysis half weighs more than the rest of the console put together — and
+// for as long as `main.tsx` imported this sheet, half of that weight was
+// deferred and the other half was not. Vite emits it as the chunk's own CSS
+// asset and loads it before this module runs, so there is no unstyled frame.
+import './styles.css';
+
 import { ScanLauncher } from './components/ScanLauncher.tsx';
 import { EstimatePanel } from './components/EstimatePanel.tsx';
 import { LiveActivity } from './components/LiveActivity.tsx';
