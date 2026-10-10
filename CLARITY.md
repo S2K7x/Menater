@@ -57,15 +57,33 @@ The result of one pass, measured (content panels, 1280 px):
 
 ## 2. Three levels, and nothing between them
 
-| Level | What it is | Where |
-|---|---|---|
-| 1 | The page title — one per screen | `PageHead`, or the case rule when a case is open |
-| 2 | A section inside the page | Small display capitals, the size of a strong label |
-| 3 | A block inside a section | Quieter still; at that depth the content is the message |
+| Level | What it is | Element | Where |
+|---|---|---|---|
+| 1 | The page title — one per screen | `h1` | `PageHead`, the three screens that hand-roll `.soc-page-head`, and the sign-in screen |
+| 2 | A section inside the page | `h2` | Small display capitals, the size of a strong label |
+| 3 | A block inside a section | `h3` | Quieter still; at that depth the content is the message |
 
-`.soc-panel.soc-page-head h2` is (0,2,1) against `.soc-panel h2` (0,1,1): the
-page title wins **by specificity**, never by document order, which the next edit
-to the stylesheet would silently change.
+**The level is the ELEMENT, not the size.** It was the size alone until C0.36:
+`PageHead` rendered an `h2` and so did every section, so the page title won its
+size by specificity (`.soc-panel.soc-page-head h2` at (0,2,1) over
+`.soc-panel h2` at (0,1,1)) and won nothing at all in the outline — measured in
+Chromium, `h1` appeared **zero** times in the whole console, and on Health the
+page title was one of five peer `h2`s. A reader listing the headings of a
+screen could not tell which one NAMED it.
+
+So the page title is an `h1` and no longer has to beat anything: it is a
+different element from the sections. The sizes did not move — 280 headings over
+six themes, byte-identical.
+
+**A size may stay where a level moves.** The Settings checklist is a section
+and was an `h3`; it is now an `h2` carrying the level-3 size, because the
+heading holds a count under a kicker that already names the block. *Promote by
+meaning, not by how big you want the text* — and name the element when you do
+(`.soc-setup .soc-panel-head h2`), because `.soc-panel h2` is (0,1,1).
+
+**The one exception is the incident card**, whose rule is still an `h2`: its
+four blocks are `h3` in four different wrappers, so promoting the title alone
+skips level 2 and promoting them with it moves their size. ROADMAP § 7.
 
 If a screen seems to need a fourth level, the screen is doing two jobs. Split
 it, or accept that one of the two is secondary and demote it.
@@ -299,6 +317,7 @@ deletion.
 | A control whose whole content is an `Icon` | `Icon` keeps a captionless glyph `aria-hidden` on purpose — that is what stops « New rule » being read as « check New rule ». So a button holding an icon and nothing else has **no accessible name at all**: it reaches assistive technology as « button ». Give it an `aria-label` from the catalogue, the way `Assistant.tsx` does; do **not** give the icon a `title`, which announces the drawing beside every word it decorates. And when the control repeats per row, the label names the ROW — twenty identical « Delete » buttons name nothing, and one of them is the one that deletes |
 | A long unbreakable value in a grid or flex item | A grid item has `min-width: auto`, so a 51-character connection string becomes the item's minimum and **floors the track**: the diagnostic card's single column measured 503.6 px inside a 325 px grid, and the page scrolled 529 px at 375. The one-column override written for it in the 760 px block cannot help — it chooses how many tracks there are, not how narrow one may become. Let the value break, and mind the spelling: `overflow-wrap: anywhere` and `word-break: break-all` change min-content, `break-word` does not and leaves the overflow exactly where it was. A no-wrap flex line is the same rule for a row of buttons: it is as wide as their sum |
 | A whole screen replaced by its own failure | A component that IS a tab has no page head behind it. `RulesPage` returned a bare banner instead of the page, so an unreachable database left the Rules tab with **0 headings and 104 px** — against Tracking's 3 and Health's 7 on the same database, because those two are sections of a tab whose head stays on screen. Write the head once and let both branches reach it: the failure goes UNDER the screen it is a failure of, never instead of it. What does not come back with it is the editor — a rule saved against a set nobody can read is a rule nobody can see |
+| Three visual levels described by two heading levels | A heading level is a size AND an outline, and a stylesheet can only hold the first half. The page title and every section under it were both `h2`, differing by a specificity race — so the console carried **no `h1` at all** and, on Health, the title was one of five peers. The level belongs to the ELEMENT; the size may stay where it was (the Settings checklist is now an `h2` at the level-3 size). Measure it the way the defect was found: CDP `Accessibility.getFullAXTree`, heading nodes and their `level` property, per tab AND per sub-tab — and check the fix introduces no SKIP, which promoting a title over `h3` children does |
 | A composite role with no keyboard behind it | `role="tablist"` and `role="radiogroup"` promise ONE stop in the tab order and arrows that choose inside it, and a screen reader says so — « tab, 1 of 3 » — before anybody presses anything. Measured in Chromium: the theme grid was 6 stops of 6, the launcher's target bar 3 of 3, and every arrow key on both did nothing. Roving tabindex on the chosen member, and `components/arrow-keys.ts` for the index arithmetic rather than a copy per widget. The axis is not a detail: a horizontal bar leaves Up, Down and the page keys to the browser, a radio group answers to all four because a native one does. And `role="group"` is the honest role when you owe no keyboard — six pickers here use it, and nothing is owed there |
 
 The full table, with the story behind each, is in **CLAUDE.md**.

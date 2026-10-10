@@ -232,7 +232,7 @@ export function DocsPanel({ openSection }: { openSection?: string | null }) {
     <>
       <section className="soc-panel soc-page-head">
         <span className="soc-kicker">{d.kicker}</span>
-        <h2>{d.title}</h2>
+        <h1>{d.title}</h1>
         <p className="soc-muted" style={{ margin: '0 0 14px' }}>
           {d.lede}
         </p>

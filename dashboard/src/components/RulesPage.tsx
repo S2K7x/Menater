@@ -151,7 +151,7 @@ export function RulesPage() {
   const head = (
     <section className="soc-panel soc-page-head">
       <span className="soc-kicker">{t.kicker}</span>
-      <h2>{t.title}</h2>
+      <h1>{t.title}</h1>
       <p className="soc-muted" style={{ margin: 0 }}>{t.lede}</p>
     </section>
   );

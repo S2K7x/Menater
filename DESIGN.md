@@ -247,8 +247,8 @@ Sizes in `rem`, so a user's browser setting is respected.
 
 | Step | Size | Use |
 |---|---|---|
-| `h1` | `clamp(1.8rem, 4vw, 2.8rem)` | Login screen only |
-| page title | `clamp(1.5rem, 3vw, 2.1rem)` | `.soc-panel.soc-page-head h2` — **one per screen** |
+| `h1` | `clamp(1.8rem, 4vw, 2.8rem)` | **Nothing matches it.** It was filed as "login screen only" and that screen rendered an `h2`; C0.36 made it an `h1` and deliberately kept its 1rem size, because 44.8px would be larger than every other title in the product. Whether this step should exist is ROADMAP § 7 |
+| page title | `clamp(1.5rem, 3vw, 2.1rem)` | `.soc-panel.soc-page-head h1` — **one per screen** |
 | `h2` | `1rem`, tracking `+0.06em` | A section inside a page |
 | display | `1.7rem` | Big numbers, metric figures |
 | logo | `1.45rem` | The wordmark in the header |
@@ -264,9 +264,13 @@ stylesheets now hold exactly those and nothing else.
 
 **Three heading levels, and nothing between them.** A page title, a section, a
 block inside a section — the sizes above are that scale and not a suggestion.
-The page title wins by SPECIFICITY (`.soc-panel.soc-page-head h2` is (0,2,1)
-against `.soc-panel h2` at (0,1,1)), never by document order, which the next
-edit to the stylesheet would silently change. `.vp-embed` carries the same three
+Each level is its own ELEMENT: `h1`, `h2`, `h3`. That matters beyond tidiness —
+until C0.36 the page title was an `h2` winning its size by specificity over
+`.soc-panel h2`, which the eye read correctly and a screen reader did not: the
+console had no `h1` anywhere, and the title was a peer of its own sections.
+A size may still stay where a level moves — the Settings checklist is an `h2`
+at the level-3 size — but then the element is named, because `.soc-panel h2` is
+(0,1,1) and a bare class loses to it. `.vp-embed` carries the same three
 levels so the two halves of the application do not read as two applications.
 
 *Why the section heading is a label and not a headline:* every panel used to

@@ -118,7 +118,7 @@ function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
       </div>
       <section className="soc-panel">
         <span className="soc-kicker">{c.login.kicker}</span>
-        <h2>{c.login.title}</h2>
+        <h1>{c.login.title}</h1>
         <form onSubmit={submit}>
           <label className="soc-field">
             <span>{c.login.password}</span>

@@ -97,7 +97,7 @@ export function SetupChecklist({
       <div className="soc-panel-head">
         <div>
           <span className="soc-kicker">{t.title}</span>
-          <h3 style={{ margin: '2px 0 0' }}>{t.blocked(missing.length)}</h3>
+          <h2 style={{ margin: '2px 0 0' }}>{t.blocked(missing.length)}</h2>
         </div>
       </div>
       <ul className="soc-setup-list">

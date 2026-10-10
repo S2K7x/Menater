@@ -810,6 +810,26 @@ stayed exactly where it was.*
 **What R does not do.** It adds no per-user layout preference; that is C1.5. It
 leaves the eight facts of a triage row intact: the table got shorter, not poorer.
 
+### C0.36 ✅ — Three visual heading levels, and no level 1
+
+*`CLARITY.md` § 2 and `DESIGN.md` § The scale both declare three levels — a
+page title, a section inside the page, a block inside a section — and both
+describe them as SIZES. The markup kept the sizes and never gave the outline
+its top. Measured in Chromium 1194 out of CDP `Accessibility.getFullAXTree`,
+on all ten tabs: **`h1` count 0**. On Health, `h2 h2 h2 h2` was the page title
+followed by three of its own sections, as peers — a reader listing the headings
+of the screen could not tell which one NAMED it.*
+
+| Point | Detail |
+|---|---|
+| **What was wrong** | The page title won its size by SPECIFICITY — `.soc-panel.soc-page-head h2` (0,2,1) over `.soc-panel h2` (0,1,1) — which the eye reads correctly and a screen reader cannot read at all. A stylesheet can carry the size half of a heading level and never the outline half |
+| **Four things vouched for a level that did not exist** | `styles.css` holds `h1 { font-size: clamp(1.8rem, 4vw, 2.8rem) }`, matched by nothing in the product; `DESIGN.md` filed that step as « Login screen only » and the login screen rendered an `h2`; the comment on `.soc-case-title` says *« il reprend donc le niveau 1 »* about an `h2`; and `CLAUDE.md` already stated the rule, about the OTHER half of the product |
+| **The fix** | Level 1 is the `h1` element: `PageHead` (seven tabs), the three screens that hand-roll `.soc-page-head` (`RulesPage`, `SettingsPage`, `DocsPanel`) and the sign-in screen. Ten tabs of ten now carry exactly one `h1` and no skipped level |
+| **A size may stay where a level moves** | The setup checklist is a sibling panel of the ten setting blocks — a section — and was an `h3`, which under an `h1` title is a skipped level rather than a quiet one. It is an `h2` carrying the level-3 size, with the ELEMENT named (`.soc-setup .soc-panel-head h2`) because `.soc-panel h2` is (0,1,1) |
+| **Zero visual change, measured** | `letter-spacing` and `line-height` reached the titles from `.soc-panel h2`, which an `h1` no longer matches: unwritten, the page title's tracking goes 2.016px → -0.336px and the checklist's line height 14.448px → 17.888px. With them written out, **280 headings over six themes and 33 layouts at 1280 / 375 / 320 px: 0 style differences, 0 geometry differences** |
+| **What it did NOT touch** | The incident card. Its rule is still an `h2` — the one screen whose title is not an `h1` — because its four blocks are `h3` in four different wrappers, so promoting the title alone skips level 2 and promoting them with it moves their size, on the screen where a human approves a containment action. § 7 |
+| **The rule as a test** | `components/heading-outline.test.tsx`, **21 tests**. The page heads are swept by CLASS rather than by a list of files, so a fifth is covered the day it is written; the peer claim is made relative to the page title, because « every section is below level 1 » passes over the defect (2 is greater than 1); and the card's claim is that its own outline does not skip — with a fixture carrying every heading it can render, which a mutation is what forced |
+
 ### C0.35 ✅ — A save that redirected the stack a screen said it could not
 
 *`applyEnvOverrides` exists so that a `config.json` laid down at first start
@@ -2091,6 +2111,53 @@ holds the door on irreversible actions.
 ---
 
 ## 7. Known technical debt
+
+### The incident card's heading outline, and the `h1` size step
+
+Two leftovers of C0.36, both measured, both design decisions rather than
+defects — which is why they are here and not in the diff.
+
+**The card's rule is the one screen title that is not an `h1`.** Promoting it
+needs its four block headings promoted with it: they are `h3` in four different
+wrappers (`.soc-panel-head` inside `.soc-approval`, `.soc-titled`, `.soc-block`,
+and a bare `.soc-panel`), so an `h1` title alone measures `h1 h3 h3 h4 h4 h4 h4
+h3` — a skipped level, i.e. one outline defect traded for another — and taking
+them to `h2` moves their size from 13.76px to 16px because `.soc-panel h2` sets
+1rem. Four headings growing by 16% on the screen where a human approves a
+containment action is a look somebody has to choose. The four `h4` underneath
+move with them, or the skip reappears one level down.
+
+**`h1 { font-size: clamp(1.8rem, 4vw, 2.8rem) }` is now reachable and still
+unused.** The sign-in title is an `h1` and keeps its 1rem size: at 44.8px it
+would be the largest title in the product, on the screen `CLARITY.md` § 1 says
+the whole readability pass existed to de-billboard. Either that step becomes
+the sign-in title's — a visual decision — or the step and its `DESIGN.md` row
+go. Measured, if anybody wants the number: 16px → 44.8px at 1280, 28.8px at 375
+and 320, panel 278px → 304px, and no horizontal overflow at any of the three.
+
+### The incident card scrolls sideways at 320 and 375 px
+
+Found while measuring C0.36 and **not caused by it** — identical before and
+after. At 320 px the open case's document is **401 px**, and at 375 px it is
+401 px too; every other tab and sub-tab is clean at both widths, which is what
+`narrow-viewport.test.tsx` was written for. It did not catch this one because
+jsdom computes no layout and because the browser sweep behind that file walked
+the TABS: an open case is a state you have to click into. *The first sweep
+missed it* a second time.
+
+Two causes, both measured in Chromium by patching one and re-reading
+`document.documentElement.scrollWidth`:
+
+- `.soc-case-layout`'s one-column override is `grid-template-columns: 1fr`,
+  which is `minmax(auto, 1fr)`, so the track floors at the card's min-content.
+  Replacing it with `minmax(0, 1fr)` takes the document **401 px → 371 px**.
+  This is exactly the trap this repository already records for
+  `.soc-health-grid`: a one-column override chooses how many tracks there are,
+  not how narrow one may become.
+- the remaining 371 px is `.soc-verdict`, a flex row whose min-content is
+  **330 px inside 268 px** of available width.
+
+Worth a Saturday of its own: it is the screen a responder reads on a phone.
 
 ### The built-in engine writes French
 

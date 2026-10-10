@@ -562,7 +562,7 @@ export function SettingsPage({
     <>
       <section className="soc-panel soc-page-head">
         <span className="soc-kicker">{c.nav.settings}</span>
-        <h2>{st.title}</h2>
+        <h1>{st.title}</h1>
         <p className="soc-muted" style={{ margin: 0 }}>{st.lede}</p>
       </section>
 
