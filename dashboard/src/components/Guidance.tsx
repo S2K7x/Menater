@@ -67,7 +67,7 @@ export function PageHead({
       <div className="soc-panel-head">
         <div>
           <span className="soc-kicker">{kicker}</span>
-          <h2>{title}</h2>
+          <h1>{title}</h1>
         </div>
         {onGuide ? (
           <button type="button" className="soc-secondary soc-guide-link" onClick={onGuide}>

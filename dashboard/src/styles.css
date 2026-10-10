@@ -195,7 +195,7 @@ code, .soc-mono { font-family: var(--mono); }
   display: flex; align-items: baseline; justify-content: space-between;
   gap: 16px; flex-wrap: wrap; margin-bottom: 12px;
 }
-.soc-panel-head h2, .soc-panel-head h3 { margin: 0; }
+.soc-panel-head h1, .soc-panel-head h2, .soc-panel-head h3 { margin: 0; }
 
 /* --- Filtres -------------------------------------------------------------- */
 
@@ -805,7 +805,7 @@ code, .soc-mono { font-family: var(--mono); }
  * ========================================================================== */
 
 /* Page header: one title per tab, set once at the top. */
-.soc-page-head h2 { margin-bottom: 10px; }
+.soc-page-head h1 { margin-bottom: 10px; }
 
 /* The explanation line under the queue title. The sort order is not obvious;
    without it the screen looks broken. */
@@ -935,6 +935,20 @@ code, .soc-mono { font-family: var(--mono); }
    by an inline style; moving it here stops a rewrite of the component from
    erasing it unnoticed — which is exactly what happened. */
 .soc-login { max-width: 460px; padding-top: 80px; }
+
+/*
+ * The sign-in title is this screen's level 1 — the screen is a logo, a title
+ * and one field — and it was an `h2`, which took its size from `.soc-panel h2`,
+ * i.e. from the SECTION step. Those declarations are written out here because
+ * an `h1` no longer matches that rule, and this pass moves the OUTLINE and not
+ * the scale: the title measures 16px before and after, at every width.
+ *
+ * `h1 { font-size: clamp(1.8rem, 4vw, 2.8rem) }` is the step `DESIGN.md` files
+ * as « Login screen only », and nothing in the product has ever matched it. At
+ * 44.8px it would be larger than every other title here, so whether this
+ * screen should take it is a design decision rather than a defect — ROADMAP § 7.
+ */
+.soc-login h1 { font-size: 1rem; letter-spacing: 0.06em; line-height: 1.3; }
 
 /* --- Orientation ---------------------------------------------------------- */
 
@@ -1775,6 +1789,22 @@ code, .soc-mono { font-family: var(--mono); }
  */
 
 .soc-setup { border-left: 3px solid var(--orange); }
+
+/*
+ * The checklist is a SECTION of the Settings page — a sibling panel of the ten
+ * setting blocks — so its heading is level 2. It was an `h3`, which read as a
+ * block inside a section and, under an `h1` page title, skipped a level
+ * outright. Its SIZE does not follow its level: the heading carries a count
+ * under a kicker that already names the block, and it is deliberately quiet.
+ * « Promote by meaning, not by how big you want the text. »
+ *
+ * The ELEMENT is named because `.soc-panel h2` is (0,1,1) and a bare class
+ * would lose to it — the trap this project has paid for three times. And
+ * `line-height` is here because the measurement caught it: as an `h3` the
+ * heading took 1.05 from the base rule, `.soc-panel h2` says 1.3, and left to
+ * the cascade it grew 14.448px → 17.888px on all six themes.
+ */
+.soc-setup .soc-panel-head h2 { font-size: 0.86rem; letter-spacing: 0.06em; line-height: 1.05; }
 .soc-setup-ready { border-left-color: var(--green); }
 
 .soc-setup-row { display: flex; gap: 10px; align-items: flex-start; }
@@ -2357,13 +2387,23 @@ code, .soc-mono { font-family: var(--mono); }
  * ========================================================================== */
 
 /*
- * `.soc-panel.soc-page-head h2` is (0,2,1) and `.soc-panel h2` is (0,1,1), so
- * the page title wins wherever both apply — deliberately, and not by document
- * order, which the next edit to this file would silently change. Same lesson
- * as the `.soc-field span` trap: at this depth a single class is not enough.
+ * Level 1. The page title is an `h1`, so it no longer has to WIN a cascade
+ * race against the section titles — it is a different element from them, and
+ * the level this sheet sizes is the level the document declares. It used to be
+ * `.soc-panel.soc-page-head h2` (0,2,1) beating `.soc-panel h2` (0,1,1) on
+ * specificity, which worked for the eye and said nothing to a screen reader:
+ * the title and every section under it were both level 2, so a reader listing
+ * the headings of a screen could not tell which one NAMES it.
+ *
+ * `letter-spacing` and `line-height` are written out because the title used to
+ * inherit them from `.soc-panel h2`, which an `h1` no longer matches. Left to
+ * the cascade the tracking goes 2.016px → -0.336px and the line height
+ * 43.68px → 35.28px at 1280 px.
  */
-.soc-panel.soc-page-head h2 {
+.soc-panel.soc-page-head h1 {
   font-size: clamp(1.5rem, 3vw, 2.1rem);
+  letter-spacing: 0.06em;
+  line-height: 1.3;
   margin-bottom: 10px;
 }
 
@@ -2468,9 +2508,17 @@ h3 { font-size: 0.86rem; letter-spacing: 0.06em; }
 }
 
 /*
- * Quand un cas est ouvert, sa regle EST le titre de l'ecran : il n'y a pas
- * d'en-tete de page au-dessus. Il reprend donc le niveau 1, que la regle
- * `.soc-panel h2` lui avait retire avec les titres de section.
+ * When a case is open its rule IS the screen's title: there is no page head
+ * above it. It therefore takes level 1 — which this comment has said since it
+ * was written, while expressing it as a font-size on an `h2`.
+ *
+ * It is STILL an `h2`, and this is the one screen of the console whose title
+ * is not an `h1`. The four blocks under it are `h3` — in `.soc-panel-head`,
+ * `.soc-titled`, `.soc-block` and a bare `.soc-panel` — so promoting the title
+ * alone skips level 2 (measured: `h1 h3 h3 h4 h4 h4 h4 h3`), and promoting
+ * them with it moves their size from 13.76px to 16px on the screen where a
+ * human approves a containment action. That is a design decision, not a
+ * one-line fix: ROADMAP § 7.
  */
 .soc-case-title h2 {
   font-size: clamp(1.2rem, 2.2vw, 1.5rem);

@@ -4,6 +4,211 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-10-10 — Saturday · Interface, clarity, accessibility
+
+**Subject**: **the console declared three heading levels and had no level 1.**
+`CLARITY.md` § 2 and `DESIGN.md` § The scale both name a page title, a section
+and a block inside a section, and both describe them as SIZES. The markup kept
+the sizes and never gave the outline its top: `PageHead` rendered `<h2>`, every
+section rendered `<h2>`, and the title won its size by SPECIFICITY —
+`.soc-panel.soc-page-head h2` (0,2,1) over `.soc-panel h2` (0,1,1). That works
+for the eye and says nothing to a screen reader.
+
+**Result**: PR opened on `claude/sleepy-volta-ogp9i7`. Eleven files: seven
+production (six one-line markup changes, plus `styles.css`), one new test file
+(`src/components/heading-outline.test.tsx`, **+21 tests**), and `CLAUDE.md` /
+`CLARITY.md` / `DESIGN.md` / `ROADMAP.md` / this journal. Nothing skipped or
+weakened, no production dependency added, no user-facing string added or
+changed, and **zero visual change — measured, not asserted**.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-ogp9i7` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Thirty-seventh entry saying so**; it is a line
+in the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: `main` at 73cafe7 gave
+typecheck 0, **1570 passed | 1 skipped**, build clean, and
+`list_pull_requests --state open` was empty (checked, not assumed). Saturday's
+reservoir is interface, clarity and accessibility. The lead came from a sweep,
+not from the standing list: the console was served from its own `dist/` with
+the sample set (no database ⇒ `demoSnapshot`) and walked in Chromium 1194, tab
+by tab and sub-tab by sub-tab.
+
+**Measured, before and after, out of CDP `Accessibility.getFullAXTree`** — the
+heading nodes and their `level` property, i.e. what a screen reader is handed:
+
+| tab | before | after |
+|---|---|---|
+| HEALTH | `h2 h2 h2 h2 h3 h3 h3 h2` | `h1 h2 h2 h2 h3 h3 h3 h2` |
+| ALERTS | `h2 h2 h2 h3 h3 h3` | `h1 h2 h2 h3 h3 h3` |
+| SETTINGS | `h2 h3 h2` | `h1 h2 h2` |
+| all ten tabs | **`h1` count 0** | `h1` count 1 |
+
+On Health that leading `h2 h2 h2 h2` is the page title and three of its own
+sections, as peers: a reader listing the headings could not tell which one
+NAMES the screen.
+
+**Four things vouched for a level that did not exist**, which is why it lasted:
+
+1. `styles.css` carries `h1 { font-size: clamp(1.8rem, 4vw, 2.8rem) }` — a
+   rule **nothing in the product has ever matched**.
+2. `DESIGN.md` files that step as « Login screen only », and the login screen
+   rendered an `h2`.
+3. The comment on `.soc-case-title` says *« il reprend donc le niveau 1 »*
+   about an `h2` — the rule written on the very element that breaks it.
+4. `CLAUDE.md` already states the rule, about `UsagePanel` / `LiveActivity`, in
+   the OTHER half of the product. Sixteenth recurrence of *the mirror of a rule
+   is not the rule*.
+
+**What I learned that is written nowhere else.**
+
+1. **Promoting a title over `h3` children manufactures a SKIP, and the first
+   version of this fix shipped two.** Measured after the markup change:
+   Settings read `h1 h3 h2` (the setup checklist) and the incident card
+   `h1 h3 h3 h4 h4 h4 h4 h3`. One outline defect traded for another is exactly
+   what this project refuses, and only the per-sub-tab sweep saw it — the
+   single-view-per-tab sweep would not have. **26 views measured before and
+   after: 0 new skips, 2 pre-existing kept.**
+2. **A size may stay where a level moves, and that is the rule, not a
+   compromise.** The setup checklist is a sibling panel of the ten setting
+   blocks — a section — and was an `h3`. It is an `h2` carrying the level-3
+   size: the heading holds a count under a kicker that already names the block.
+   *Promote by meaning, not by how big you want the text*, read literally.
+3. **Two declarations travel with the element and nobody would notice their
+   loss by reading.** `letter-spacing: 0.06em` and `line-height: 1.3` reached
+   the page title from `.soc-panel h2`, which an `h1` no longer matches. Left
+   to the cascade the tracking goes **2.016px → -0.336px** and the line height
+   **43.68px → 35.28px** at 1280 px; the checklist's line height goes
+   **14.448px → 17.888px** (it took 1.05 from the base rule, `.soc-panel h2`
+   says 1.3). The computed-style diff is what found both, one after the other.
+4. **The page head is rendered in FOUR places.** `PageHead` covers seven tabs;
+   `RulesPage`, `SettingsPage` and `DocsPanel` each hand-roll
+   `.soc-panel.soc-page-head` with a heading of their own. A test of the
+   primitive vouches for three screens it cannot see, so the sweep in the test
+   file looks for the CLASS over `src/components/*.tsx` rather than listing
+   files — a fifth page head is covered the day it is written.
+5. **Two of the night's rulers read ZERO and were broken, both in the direction
+   that wastes a night.** A DOM approximation of the accessible name (aria-label
+   → aria-labelledby → `innerText` → title → alt) reported **38 unnamed
+   controls** — six `.soc-icon-button` links on Lookup, fifteen SVG graph
+   nodes, « Copy » buttons. Chromium's own computation
+   (`Accessibility.getFullAXTree`, plus `locator.ariaSnapshot()` per element)
+   names every one of them: the links are *« Get a key »*, the graph nodes take
+   their name from their `<text>` children, and those nodes even handle
+   Enter/Space. **Zero unnamed controls on all ten tabs.** And `innerText` is
+   `""` for a heading inside a **closed `<details>`** while `offsetParent` is
+   truthy and the rect is 18px — so « two empty `<h4>` on Settings → Engines »
+   was an artifact too. `CLARITY.md` § 7 says `innerText` falls back to
+   `textContent` on an element that is not rendered; that is not what Chromium
+   does for a closed fold. **Read with `textContent` and treat a zero as a
+   broken ruler until a control proves otherwise.**
+6. **`git -C <root> checkout -- <path>` from a subdirectory silently reverts
+   nothing**, and a mutation harness built on it stacks its mutations instead
+   of undoing them: the counts climbed 4, 7, 8, 11 failures and the working
+   tree ended up at HEAD for six files, which `git status` showed as CLEAN
+   because a mutation that restores the original value is invisible. Snapshot
+   the files to a directory and copy them back.
+7. **The fixture is part of the claim.** The card's « no skipped level » test
+   passed over `<h3>` → `<h5>` because the first fixture had `errors: []`,
+   `attack: []` and `approval: null`, so three of its headings never rendered.
+   A mutation said so; the fixture now carries every heading the card can
+   render, which is what reproduces the measured `h2 h3 h3 h4 h4 h4 h4 h3`.
+
+**Do not redo.**
+
+- **Do not promote the incident card's rule to `h1` on its own.** Measured:
+  `h1 h3 h3 h4 h4 h4 h4 h3`, a skipped level. Its four blocks are `h3` in four
+  different wrappers (`.soc-panel-head` inside `.soc-approval`, `.soc-titled`,
+  `.soc-block`, a bare `.soc-panel`) and taking them to `h2` moves their size
+  13.76px → 16px, because `.soc-panel h2` sets 1rem — on the screen where a
+  human approves a containment. ROADMAP § 7, as a design decision.
+- **Do not give the sign-in title the bare `h1` size.** Measured: 16px →
+  44.8px at 1280 (28.8px at 375 and 320), panel 278px → 304px, no overflow. It
+  would be the largest title in the product, on the screen `CLARITY.md` § 1
+  says the readability pass existed to de-billboard. `DESIGN.md`'s row and
+  ROADMAP § 7 now both say the step is unmatched; the decision is a human's.
+- **Do not write the peer claim as « every section is below level 1 ».** It
+  passes over the whole defect, because the title and the sections were both
+  `h2` and 2 is greater than 1. It has to compare against the page title's own
+  level. The first draft did it the wrong way and went green on `main`.
+- **Do not claim the fix with a bundle-size or a heading-count assertion.**
+  Neither moves: 66 of 280 headings changed TAG and nothing else changed at all.
+- **Do not trust `role="button"` on the workflow graph's SVG nodes as a
+  finding.** They have names from `<text>` and an `onKeyDown` handling Enter
+  and Space. Checked, not assumed.
+
+**Sixteen mutations, sixteen killed** — after one survivor was fixed (learning
+7). Six revert each markup change (and `SettingsPage` is caught only by the
+class sweep, which is the point of it); five attack the stylesheet (the page
+title losing its tracking, the checklist losing its line height, the login
+title losing its size, a `.soc-page-head h2` rule coming back — the silent
+regression path — and the checklist rule rewritten as a bare class); three
+inject a skipped level into the card in three different blocks; one promotes
+the card's rule alone, which the card's own claim refuses.
+
+**Two tests pass BEFORE and after, on purpose.** They are the premises, not the
+fix: `App.tsx` renders the page head only while no case is open (what makes
+« one level 1 per screen » true on Alerts), and the class sweep finds at least
+four page heads (a sweep that matches nothing proves nothing).
+
+**Found and NOT fixed.**
+
+- **The incident card scrolls sideways at 320 AND 375 px** — document 401 px at
+  both, identical before and after this change, so pre-existing. Every other
+  tab and sub-tab is clean. Two causes, each measured by patching one and
+  re-reading `scrollWidth`: `.soc-case-layout`'s one-column override is
+  `grid-template-columns: 1fr`, i.e. `minmax(auto, 1fr)`, so the track floors
+  at min-content — `minmax(0, 1fr)` takes it **401 → 371** — and the rest is
+  `.soc-verdict`, a flex row whose min-content is **330 px inside 268 px**.
+  `narrow-viewport.test.tsx` missed it because jsdom computes no layout and
+  because the sweep behind that file walked the TABS: an open case is a state
+  you click into. Now in ROADMAP § 7, and it is a good Saturday subject — it is
+  the screen a responder reads on a phone.
+- **The two `h2` → `h4` jumps remain**, and they are now located precisely:
+  `.soc-wf-subhead` on Ingestion › Sources (« Log sources ») and
+  `.vp-settings-subhead` on Settings › Engines (« Analysis speed »). Both
+  classes carry their own font, size, tracking, transform and colour, so
+  `h4` → `h3` looks free — but `.soc-wf-subhead` is used in four places and
+  `.vp-settings-subhead` in five, and the other seven sit under an `h3`, where
+  `h3` would be the skip. Per-call-site, not per-class.
+- **The `aria-selected` on seven `<tr>` of a plain `<table>`** and the **four
+  tables with no accessible name** are untouched, as is the Metrics tab
+  printing `METRICS` twice. Re-checked tonight, all still true.
+- Standing leads, unchanged: the four French strings in
+  `dashboard/server/vulnpipe.ts`, `RuleStore.active()` duplicating
+  `rules-load`'s `WHERE`, `POST /api/auth/login` with no route-level test, the
+  store contract's Postgres half never set in CI, `DISMISSING_STATUSES`
+  byte-identical to `STATUSES_NEEDING_NOTE`, `DB_PRESETS.supabase`'s port
+  disagreeing with its own hint, `pollWindow`'s uncapped `cursor.since` branch,
+  the console's missing `check.cjs` (§ 7), the `read`-node retry (§ 7),
+  `npm audit` in CI (§ 7), and the ninety-odd French strings in
+  `server/engine/`.
+
+**Verified** (Node 22.22.0, npm 10.9.4, Chromium 1194; every command run and
+its output read):
+
+| Command | Result |
+|---|---|
+| `dashboard: npm run typecheck` | 0 errors |
+| `dashboard: npm test` | **1591 passed, 1 skipped** (1570 \| 1 before: **+21**) |
+| `dashboard: npm run build` | clean; CSS 64.19 → 64.40 kB (two rules and their comments), JS unchanged |
+| computed style, 6 themes × 10 tabs + case + case@320 | **280 headings, 66 tag changes, 0 style differences, 0 geometry differences** |
+| layout, 33 views at 1280 / 375 / 320 px | panel totals, body height and `scrollWidth` **identical**; the 2 overflows are the pre-existing card, before and after |
+| CDP AX tree, 10 tabs + open case | `h1` 0 → 1 per tab; case view unchanged by design |
+| outline sweep, 26 views (tabs + sub-tabs) | **0 new skipped levels** |
+| sign-in screen, 1280 / 375 / 320 px | `H2` → `H1`, 16px / 0.96px / 20.8px and panel height **identical at all three** |
+| `VulnPipe` | untouched, suite not run |
+
+Checked **RED first**: the test file was written before any production change
+and **20 of its 22 tests failed** on unmodified `main`, the Health one reporting
+*« expected 2 to be greater than 2 »* — the defect, in one line. The two that
+passed are the premises above. (The file is 21 tests now: the two CSS claims
+about `.soc-case-title h1` went when the card was taken out of scope.) Probes
+and the mutation harness lived in the scratchpad; `git status` is clean apart
+from the diff.
+
 ## 2026-10-09 — Friday · Performance and cost
 
 **Subject**: **`App.tsx` defers the Code tab's JavaScript and `main.tsx`
