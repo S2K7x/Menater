@@ -2,20 +2,34 @@
  * Serveur MCP VulnPipe — expose l'index de code aux nodes de détection.
  *
  * ============================================================================
- * API SDK RÉELLEMENT OBSERVÉE (probe : `node scripts/probe-mcp.mjs`)
- *   @modelcontextprotocol/sdk : 1.30.0
+ * SDK API ACTUALLY OBSERVED (probe: `node scripts/probe-mcp.mjs`)
+ *   @modelcontextprotocol/sdk : 1.32.1
  *   zod                       : 4.4.3
  *
- *   - `server.tool(...)` est DÉPRÉCIÉ dans cette version → on utilise
+ *   - `server.tool(...)` is DEPRECATED → use
  *     `registerTool(name, { title, description, inputSchema }, cb)`.
- *   - `inputSchema` attend un **ZodRawShape** (objet de champs zod), PAS un
- *     `z.object({...})` déjà construit.
- *   - `client.callTool()` renvoie `{ content, structuredContent }`.
- *     `isError` vaut `undefined` en cas de succès — tester `=== true`,
- *     surtout pas la véracité d'un booléen supposé présent.
- *   - Une erreur de validation d'argument ne throw PAS côté client : elle
- *     revient en `{ isError: true, content: [{ text: "MCP error -32602: …" }] }`
- *     et le handler n'est jamais appelé.
+ *   - `inputSchema` takes a **ZodRawShape** (an object of zod fields), which is
+ *     what this file passes. A built `z.object({...})` is ALSO accepted as of
+ *     1.32.1 and is honoured identically — measured: same published JSON
+ *     schema, same refusal of a bad argument, same object handed to the
+ *     handler. It used to be refused, which is why this line read « NOT a
+ *     `z.object({...})` » until the 10-11 refresh. Either form works; the raw
+ *     shape is kept because it is what the four tools are written in.
+ *   - `client.callTool()` returns `{ content, structuredContent }`.
+ *     `isError` is `undefined` on success — test `=== true`, never the
+ *     truthiness of a boolean assumed to be present.
+ *   - An argument-validation failure does NOT throw on the client side: it
+ *     comes back as `{ isError: true, content: [{ text: "MCP error -32602: …" }] }`
+ *     and the handler is never called (measured: 0 calls, for a missing
+ *     required field and for a wrong type alike).
+ *
+ * The version above is pinned by `src/lockfile.test.ts`, which compares it to
+ * the lockfile's resolution: a dependency refresh that leaves this banner
+ * behind fails there, rather than leaving four undated claims behind. Note
+ * what the probe could NOT tell you before that refresh — its version line
+ * read `@modelcontextprotocol/sdk/package.json` through the package specifier,
+ * which the SDK's exports map resolves to a nested `{"type":"module"}` marker,
+ * so it printed `undefined` for every version it was ever run against.
  * ============================================================================
  */
 
