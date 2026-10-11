@@ -127,6 +127,75 @@ const ADVISORY_FLOORS = [
     // image with `--omit=dev`, so it never ships.
     floor: '8.10.2',
   },
+  {
+    half: 'VulnPipe',
+    root: '../',
+    path: 'node_modules/@modelcontextprotocol/sdk',
+    // GHSA-6qxp-vccf-f47h, `>=1.12.0 <1.31.0`, high: an OAuth client could
+    // send its credentials to an authorization server the MCP server chose.
+    // This half's PRODUCTION tree, and a direct dependency.
+    //
+    // NOT reachable here, measured rather than reasoned: the OAuth module is
+    // `dist/esm/client/auth.js`, and it loads 0 times on all five entry points
+    // this package imports (`server/mcp.js`, `server/stdio.js`,
+    // `client/index.js`, `client/stdio.js`, `inMemory.js`). The controls are
+    // what make that zero worth reading — `client/auth.js` and `client/sse.js`,
+    // which this package does NOT import, load it once each. VulnPipe speaks
+    // stdio and reaches no authorization server.
+    floor: '1.31.0',
+  },
+  {
+    half: 'VulnPipe',
+    root: '../',
+    path: 'node_modules/proxy-addr',
+    // GHSA-jqcg-44mw-7w3h, `>=1.1.0 <2.0.8`, critical: IP spoofing through an
+    // IPv4-mapped IPv6 trust subnet. This half's PRODUCTION tree, through
+    // @modelcontextprotocol/sdk -> express.
+    //
+    // NOT reachable here, same instrument and same controls: 0 loads on the
+    // five entry points this package imports, 1 CJS load on `server/express.js`
+    // — which it does not import. Nothing here mounts an HTTP transport, so
+    // there is no proxy header to trust in the first place.
+    floor: '2.0.8',
+  },
+  {
+    half: 'VulnPipe',
+    root: '../',
+    path: 'node_modules/source-map-js',
+    // GHSA-68fv-2mgg-jv7q, `>=1.0.0 <1.2.2`, high: event-loop denial of
+    // service through indexed source-map section offsets. Arrives through
+    // postcss, i.e. vite, i.e. the test environment. `VulnPipe/Dockerfile`
+    // installs the runtime image with `--omit=dev`, so it never ships.
+    floor: '1.2.2',
+  },
+  {
+    half: 'dashboard',
+    root: '../../dashboard/',
+    path: 'node_modules/source-map-js',
+    // The same advisory on the other half, through postcss and css-tree.
+    // `dashboard/Dockerfile` also installs with `--omit=dev`.
+    floor: '1.2.2',
+  },
+  {
+    half: 'dashboard',
+    root: '../../dashboard/',
+    path: 'node_modules/shell-quote',
+    // GHSA-pqg4-j6r4-53mv, `>=1.8.4 <1.11.0`, critical: `quote()` command
+    // injection through a line terminator in a token after a `{ comment }`
+    // token. Arrives through `concurrently`, which `npm run dev` uses to run
+    // the three processes; dev-only, so it never ships.
+    //
+    // THE ROW TO READ BEFORE TOUCHING THIS ONE. `concurrently` depends on
+    // `shell-quote` at an EXACT version, not a range — so the command that
+    // names the package the advisory names cannot close it. Measured on the
+    // vulnerable lockfile: `npm update shell-quote --package-lock-only` leaves
+    // 1.9.0 at 1.9.0 and `npm audit` still reports it, with no error and no
+    // output saying why. What moves it is `npm update concurrently`, because
+    // 10.0.6 pins 1.12.0. The floor belongs on `shell-quote` all the same —
+    // it is the package the boundary is about, and a future `concurrently`
+    // could pin back into the range — but the fix is on the DEPENDENT.
+    floor: '1.11.0',
+  },
 ] as const;
 
 /**
@@ -166,6 +235,56 @@ describe.each(ADVISORY_FLOORS)('$half — $path stays above its advisory floor',
     expect(isAtLeast(version, floor), `${path} is ${version}, inside a published advisory`).toBe(
       true,
     );
+  });
+});
+
+/**
+ * The version `mcp-server/server.ts` says it was probed against.
+ *
+ * ============================================================================
+ * WHY THIS IS A TEST AND NOT A COMMENT
+ *
+ * That file opens with « API SDK RÉELLEMENT OBSERVÉE » and four claims about
+ * how the SDK behaves, each one dated by naming the version they were measured
+ * on. That banner is the reason nobody re-probes: it reads as settled fact.
+ *
+ * It named 1.30.0 while the lockfile resolved something else, and one of its
+ * four claims had stopped being true — the SDK now accepts a built
+ * `z.object({...})` as `inputSchema`, where it used to refuse one. Nothing
+ * failed, because a comment cannot fail. This repository's traps table calls
+ * that « a stale name is the cheapest thing to carry and the most expensive
+ * thing to believe », and the answer it reaches every time is the same: a
+ * declaration that is also the query is checked in both directions.
+ *
+ * So the banner's version is read out of the file and compared to the
+ * resolution. A lockfile refresh that leaves the banner behind fails HERE,
+ * which is the moment somebody is already looking at dependencies — rather
+ * than in six months, against a measurement nobody can date.
+ * ============================================================================
+ */
+describe('the MCP server banner names the SDK version it was probed against', () => {
+  const source = readFileSync(
+    fileURLToPath(new URL('./mcp-server/server.ts', import.meta.url)),
+    'utf8',
+  );
+  const lock = readJson('../', 'package-lock.json');
+  const resolved = (
+    lock.packages as Record<string, { version?: string } | undefined>
+  )['node_modules/@modelcontextprotocol/sdk']?.version;
+
+  it('states a version at all', () => {
+    // Without this the regex below would find nothing and the comparison would
+    // pass over an absent claim — the shape this project refuses everywhere.
+    expect(source).toMatch(/@modelcontextprotocol\/sdk\s*:\s*\d+\.\d+\.\d+/);
+  });
+
+  it('states the version the lockfile resolves', () => {
+    const stated = /@modelcontextprotocol\/sdk\s*:\s*(\d+\.\d+\.\d+)/.exec(source)?.[1];
+    expect(
+      stated,
+      `server.ts says it was probed against ${stated}, the lockfile resolves ${resolved}: ` +
+        're-run the probe and update the banner, or the four claims under it are undated',
+    ).toBe(resolved);
   });
 });
 

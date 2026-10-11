@@ -4,6 +4,234 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-10-11 — Sunday · Maintenance and state of the project
+
+**Subject**: **five published advisories were sitting in the two trees under
+every green check**, two of them in VulnPipe's PRODUCTION tree and two of them
+critical. Closed by a lockfile refresh on both halves — no manifest change, all
+five fixes inside caret ranges the tree already declared. The second half of the
+night is the documentation Sunday is for: `mcp-server/server.ts` opens with four
+dated claims about the SDK's API, and the probe it credits for that date has
+never once printed a version.
+
+**Result**: PR opened on `claude/sleepy-volta-5kj14n`. Six files: two lockfiles,
+one probe (`VulnPipe/scripts/probe-mcp.mjs`), one banner
+(`VulnPipe/src/mcp-server/server.ts`), one test file
+(`VulnPipe/src/lockfile.test.ts`, **+12 tests**), plus `CLAUDE.md`,
+`ROADMAP.md` and this journal. No production code behaviour changed, no
+dependency added, no user-facing string touched, nothing skipped or weakened.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-5kj14n` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Thirty-eighth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: `main` at a4b41ed gave
+typecheck 0 and **1591 passed | 1 skipped** on the console, typecheck 0 and
+**413 passed** on VulnPipe, build clean, and `list_pull_requests --state open`
+was empty (checked, not assumed). Sunday's first reservoir is dependencies, and
+unlike 10-04 it was **not** empty — `npm audit` reported 3 on each half.
+Priority (2), a reproducible defect, not (6) a clarity pass.
+
+**The five, and what each one actually is.**
+
+| half | package | advisory | tree | reachable here |
+|---|---|---|---|---|
+| VulnPipe | `@modelcontextprotocol/sdk` 1.30.0 → **1.32.1** | GHSA-6qxp-vccf-f47h, high | **production**, direct | **no** — measured |
+| VulnPipe | `proxy-addr` 2.0.7 → **2.0.8** | GHSA-jqcg-44mw-7w3h, **critical** | **production**, via sdk → express | **no** — measured |
+| VulnPipe | `source-map-js` 1.2.1 → **1.2.2** | GHSA-68fv-2mgg-jv7q, high | dev, via postcss | n/a, `--omit=dev` |
+| console | `shell-quote` 1.9.0 → **1.12.0** | GHSA-pqg4-j6r4-53mv, **critical** | dev, via `concurrently` | n/a, `--omit=dev` |
+| console | `source-map-js` 1.2.1 → **1.2.2** | GHSA-68fv-2mgg-jv7q, high | dev, via postcss/css-tree | n/a, `--omit=dev` |
+
+`npm audit` after: **0 / 0 on both halves, production and dev.** Both
+`Dockerfile`s install the runtime image with `npm ci --omit=dev` (read, not
+assumed), so the three dev rows never ship.
+
+**Reachability, measured with controls.** The instrument records ESM resolutions
+(`module.register` hook posting through a `MessagePort`) **and** CJS `require`s
+(`require.cache`), because the 09-20 entry records an ESM-only probe reporting
+`fast-uri: 0` when the truth was 3. Loads of the OAuth module
+`dist/esm/client/auth.js` and of `proxy-addr`, per SDK entry point:
+
+| entry point | imported by VulnPipe? | `client/auth.js` | `proxy-addr` |
+|---|---|---|---|
+| `server/mcp.js` | yes | 0 | 0 |
+| `server/stdio.js` | yes | 0 | 0 |
+| `client/index.js` | yes | 0 | 0 |
+| `client/stdio.js` | yes | 0 | 0 |
+| `inMemory.js` | yes | 0 | 0 |
+| `client/auth.js` | **no — control** | **1** | 0 |
+| `client/sse.js` | **no — control** | **1** | 0 |
+| `server/express.js` | **no — control** | 0 | **1 (CJS)** |
+
+So both production advisories are **hygiene, not exposure**: VulnPipe speaks
+stdio, reaches no authorization server and mounts no HTTP transport. This
+product does not get to overstate a finding.
+
+**What I learned that is written nowhere else.**
+
+1. **The command that names the vulnerable package cannot always close it.**
+   `concurrently` depends on `shell-quote` at an **exact** version, not a range.
+   Measured on the vulnerable lockfile in a scratch copy:
+   `npm update shell-quote --package-lock-only` leaves **1.9.0 at 1.9.0** and
+   `npm audit` still reports the critical — exit 0, nothing in the output saying
+   why. What moves it is `npm update concurrently`, because 10.0.6 pins 1.12.0.
+   The floor still belongs on `shell-quote` (it is the package the boundary is
+   about, and a future `concurrently` could pin back in), but **the fix is on the
+   DEPENDENT**. The row in `lockfile.test.ts` says so in as many words.
+2. **A banner credited a probe for a number the probe never produced.**
+   `server.ts` said *« @modelcontextprotocol/sdk : 1.30.0 »* under « API
+   RÉELLEMENT OBSERVÉE ». `scripts/probe-mcp.mjs` read that version as
+   `import('@modelcontextprotocol/sdk/package.json', { with: { type: 'json' } })`,
+   and the SDK's exports map has **no `./package.json` key** and a `./*` wildcard
+   pointing at `dist/esm/*` — so the specifier resolves to the nested
+   `{"type":"module"}` marker and `.default.version` is **`undefined`**, with no
+   error. Verified on **both** versions by unpacking the 1.30.0 tarball:
+   `'./package.json' in exports` is `false` and `'./*' in exports` is `true` in
+   1.30.0 and in 1.32.1 alike. The probe has printed `undefined` for every
+   version it was ever run against.
+3. **And under that stale date, one of the four claims had stopped being true.**
+   The banner said `inputSchema` takes a ZodRawShape *« PAS un `z.object({...})`
+   déjà construit »*. On 1.32.1 a built `z.object()` is accepted **and honoured
+   identically** — measured through a linked pair: same published JSON schema
+   byte for byte, same `isError: true` / `MCP error -32602` on a bad argument,
+   same object handed to the handler, handler reached 0 times when refused. The
+   code is unchanged (the raw shape is what the tools are written in); the claim
+   is corrected and re-dated.
+4. **A comment cannot fail, so the version is a test now.** `lockfile.test.ts`
+   reads the banner's number and compares it to the lockfile's resolution. It
+   fails in **both** directions — a wrong number, and a *deleted* claim, which
+   would otherwise let the comparison pass over nothing. That second assertion is
+   the one this project has paid for repeatedly.
+5. **The probe's own last section printed the opposite of what it measured.**
+   *« !! pas d erreur — la validation ne bloque pas »*, printed because nothing
+   had **thrown** — over a refusal that travels in the RESULT. Re-measured:
+   `isError: true`, handler reached **0 times**, text
+   `MCP error -32602: Input validation error`. The banner's fourth claim was
+   right and its own instrument contradicted it; a future night re-running the
+   probe would have read « validation does not block » and believed it. It now
+   reads `isError` and counts handler calls.
+6. **My own two rulers were broken first, and both read zero.** The reachability
+   probe lived in the scratchpad, so every specifier failed to resolve and it
+   reported **0 loads everywhere, including the controls** — `esmTotal: 0`,
+   `cjsTotal: 0`, and an `error` field nobody would have read if the controls had
+   not been there. Moved inside `VulnPipe/`, the same entry point reports 360 ESM
+   + 71 CJS resolutions. And checking the exports map with Python's `dict.get()`
+   conflated **absent** with **`null`**: it printed `"./package.json" -> null`
+   for both versions and I nearly wrote « explicitly blocked » into the traps
+   table. `in` is the test; `.get()` is not.
+7. **npm 10.9.4 deleted all ten `libc` blocks again**, exactly as the 10-04
+   correction to ROADMAP § 7 predicted, on the `@rolldown` and `lightningcss`
+   optional binaries. Restored by hand, key order preserved, so the committed
+   VulnPipe diff is 13/9 lines and nothing but the three versions plus the
+   `funding` block the new `proxy-addr` tarball legitimately carries. The console
+   lockfile has no `libc` blocks and its diff is a clean 10/10.
+8. **The existing two floors are still live, which is not nothing.** The SDK
+   bump could have dropped `ip-address` out of the tree and turned the 10-04 row
+   into an assertion over an absent package; checked — `ip-address` 10.7.3
+   (VulnPipe, prod) and `undici` 8.11.2 (console, dev) are both still there.
+
+**Do not redo.**
+
+- **Do not run `npm update shell-quote`** and conclude the advisory cannot be
+  closed. See learning 1: the parent pins it exactly. `npm update concurrently`.
+- **Do not let `npm update` write either lockfile and commit the result.** It
+  deletes the ten `libc` blocks in VulnPipe's (npm 10.9.4, measured again
+  tonight). Snapshot first, restore them, diff before committing.
+- **Do not read a package's version through its own specifier.**
+  `@modelcontextprotocol/sdk/package.json` resolves to a `{"type":"module"}`
+  marker. Read the file off disk.
+- **Do not "fix" `server.ts` to pass a built `z.object()`.** Both forms work on
+  1.32.1; the raw shape is what the four tools are written in and changing it
+  buys nothing.
+- **Do not pin the SDK to 1.31.0** because that is the advisory's boundary.
+  `^1.30.0` is what the manifest declares and 1.32.1 is what any fresh install
+  resolves; pinning below the caret would drift from what everyone else gets.
+- **Do not add `npm audit` to `ci.yml`** — unchanged, and ROADMAP § 7 now carries
+  the measured rate the decision should be taken against.
+
+**Found and NOT fixed.**
+
+- **Four more probe-dated banners, and they are a different kind.**
+  `llm/ollama.ts`, `llm/openai-compatible.ts` and `llm/gemini.ts` each open with
+  « API RÉELLEMENT OBSERVÉE » over an HTTP response shape, and
+  `indexer/queries.ts` / `indexer/indexer.ts` over tree-sitter's. Checked: none
+  of them names a **package version**, so tonight's guard covers the only banner
+  a lockfile refresh can silently invalidate. The HTTP ones cannot be re-probed
+  from here (no keys, and NIGHTLY.md forbids quota-consuming calls); the
+  tree-sitter ones can, by `npm run probe`, and that is a candidate night.
+- **The suite still cannot notice the NEXT advisory**, and no offline test can.
+  ROADMAP § 7 now carries the rate: **two a week**, found only because a Sunday
+  looked. The shape that fits — a scheduled job that opens an issue instead of
+  failing a check — is named there and is a human's call.
+- **Standing leads, re-checked and unchanged**: the incident card scrolling
+  sideways at 320 and 375 px (§ 7, and the best Saturday subject on the list),
+  the four French strings in `dashboard/server/vulnpipe.ts`, `RuleStore.active()`
+  duplicating `rules-load`'s `WHERE`, `POST /api/auth/login` with no route-level
+  test, the store contract's Postgres half never set in CI,
+  `DISMISSING_STATUSES` byte-identical to `STATUSES_NEEDING_NOTE`,
+  `DB_PRESETS.supabase`'s port disagreeing with its own hint, `pollWindow`'s
+  uncapped `cursor.since` branch, the two `h2` → `h4` jumps, the seven
+  `aria-selected` `<tr>` on a plain `<table>`, the four tables with no accessible
+  name, `METRICS` printed twice, the console's missing `check.cjs` (§ 7), the
+  `read`-node retry (§ 7), and the ninety-odd French strings in `server/engine/`.
+
+**State of the week.**
+
+- **Six nights, six PRs, all merged**, #61 → #66, one per day 10-05 → 10-10;
+  none open at the start of tonight (checked, not assumed).
+- **Dependencies: the reservoir refilled in exactly one week.** 10-04 took both
+  halves to 0/0; 10-11 found five, two critical, two in a production tree. That
+  is the single most useful number this week produced, because it turns the
+  standing § 7 question from a preference into a rate.
+- **Tests: 1462 → 1591 on the console** over two weeks, **413 → 425** on
+  VulnPipe tonight. Both counts in `CLAUDE.md` were stale and are corrected.
+- **The 10-04 recommendation is DISCHARGED and it paid again.** It was
+  *« read `server/credentials.ts` next to CLAUDE.md's Two credential stores
+  paragraph »*; I did not reach that file, because the dependency reservoir
+  preempted it — but the same METHOD (read a banner, then read what it describes)
+  is what found learnings 2, 3 and 5 tonight, on the first banner I opened for an
+  unrelated reason. Two Sundays, two defects, same method.
+- **Recommendation for next week**: the method again, and now with a target the
+  night did not reach — **`server/credentials.ts` beside CLAUDE.md's
+  *Two credential stores, same rule*** (carried, still unread), and as a second
+  choice `npm run probe` in VulnPipe, which re-dates the two tree-sitter banners
+  the way tonight re-dated the MCP one. Both are the same shape: a long, careful,
+  written-once banner that nobody has re-measured.
+
+**Verified** (Node 22.22.0, npm 10.9.4; every command run and its output read):
+
+| Command | Result |
+|---|---|
+| `dashboard: npm run typecheck` | 0 errors |
+| `dashboard: npm test` | **1591 passed, 1 skipped** — unchanged, no console code touched |
+| `dashboard: npm run build` | clean, 470 ms; CSS 64.40 kB and JS 487.77 kB, both unchanged |
+| `VulnPipe: npm run typecheck` | 0 errors |
+| `VulnPipe: npm test` | **425 passed** (413 before: **+12**) |
+| `npm audit`, both halves | **0 / 0**, production and dev (3 and 3 before) |
+| `npm ci`, both halves | reconciles from the hand-edited lockfiles, 0 vulnerabilities |
+| real stdio MCP server, 1.32.1 | spawned against the fixture repo: `tools/list` → `get_context, list_routes`; `list_routes` → 3 routes; `get_context /orders/:id` → 3,519 bytes, `isError: undefined` |
+
+Checked **RED first**, each failure naming its own numbers. The five floors
+against the pre-refresh lockfiles: **5 failed | 19 passed**, e.g.
+*« node_modules/proxy-addr is 2.0.7, inside a published advisory »*. The banner
+guard against the un-re-dated banner: *« server.ts says it was probed against
+1.30.0, the lockfile resolves 1.32.1 »*. **Two mutations, two killed**: deleting
+the banner's version line fails both banner assertions (which is the half that
+must not pass over nothing), and pointing a floor at a package absent from the
+tree fails `is still in the tree` and asks for the row to be deleted.
+
+The suite's `InMemoryTransport` is **not** the production path, so the SDK bump
+was also driven over a real spawned **stdio** server — the row above. The four
+reachability and schema probes lived in `VulnPipe/scripts/` for the measurement
+and are **deleted**; `scripts/probe-mcp.mjs` is the repository's own, was
+already tracked, and is kept and fixed. No model key and no database were
+needed.
+
+---
+
 ## 2026-10-10 — Saturday · Interface, clarity, accessibility
 
 **Subject**: **the console declared three heading levels and had no level 1.**

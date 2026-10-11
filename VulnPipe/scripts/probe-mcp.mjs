@@ -4,13 +4,23 @@
  *
  * Lancer : node scripts/probe-mcp.mjs
  */
+import { readFileSync } from 'node:fs';
+
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { z } from 'zod';
 
-const sdkVersion = (await import('@modelcontextprotocol/sdk/package.json', { with: { type: 'json' } }))
-  .default.version;
+// Read off disk, NOT through the package specifier. The SDK's exports map has
+// no `./package.json` entry and a `./*` wildcard pointing at `dist/esm/*`, so
+// `import('@modelcontextprotocol/sdk/package.json')` resolves to the nested
+// `{"type":"module"}` marker — `.default.version` is `undefined`, with no error.
+// Measured on 1.30.0 and 1.32.1 alike, so this line printed `undefined` for
+// every version this probe has ever been run against, and the banner in
+// `src/mcp-server/server.ts` credited it for a number it never produced.
+const sdkVersion = JSON.parse(
+  readFileSync(new URL('../node_modules/@modelcontextprotocol/sdk/package.json', import.meta.url), 'utf8')
+).version;
 console.log('=== VERSIONS ===');
 console.log('node                     :', process.version);
 console.log('@modelcontextprotocol/sdk:', sdkVersion);
@@ -57,9 +67,19 @@ const err = await client.callTool({ name: 'boom', arguments: {} });
 console.log('isError            :', err.isError, '| text:', err.content[0].text);
 
 console.log('\n=== validation zod côté serveur (argument manquant) ===');
+// Read `isError`, not just whether the call threw. Printing "validation does
+// not block" because nothing threw says the opposite of what happens: the
+// refusal travels in the RESULT, and the handler is never reached.
+let calls = 0;
+server.registerTool('counted', { description: 'x', inputSchema: { route: z.string() } }, async (a) => {
+  calls++;
+  return { content: [{ type: 'text', text: JSON.stringify(a) }] };
+});
 try {
-  await client.callTool({ name: 'echo_ctx', arguments: {} });
-  console.log('!! pas d erreur — la validation ne bloque pas');
+  const bad = await client.callTool({ name: 'counted', arguments: {} });
+  console.log('throw côté client  : non');
+  console.log('isError            :', bad.isError, '| handler appelé :', calls, 'fois');
+  console.log('text               :', String(bad.content?.[0]?.text).slice(0, 100));
 } catch (e) {
   console.log('throw côté client  :', e.constructor.name, '|', String(e.message).slice(0, 120));
 }
