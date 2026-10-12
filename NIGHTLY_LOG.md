@@ -4,6 +4,164 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-10-12 — Monday · Feature
+
+**Subject**: **C1.1 — the screen you are on, in the address bar.** Ten tabs,
+and the URL named none of them: `window.location.hash` appeared **nowhere** in
+`src/` (checked, not assumed — `grep` for `hash|popstate|hashchange|href="#"`
+over `src/` and `server/` returns nothing outside a SHA-256 field name). A
+console is a thing two people look at together — « open Health and press Test
+connectivity » — and the only way to send somebody a screen was to describe it.
+Worse, the browser's own Back button left the console entirely, so the key
+everybody presses to undo a navigation undid the whole session.
+
+**Result**: PR opened on `claude/sleepy-volta-it6k6q`. Six files: one new module
+(`src/lib/route.ts`), `src/App.tsx`, one catalogue line
+(`src/i18n/console.ts` — one Guide point), two new test files (**+19 tests**),
+plus `CLAUDE.md`, `ROADMAP.md` and this journal. No production dependency, no
+new route, no server change, nothing persisted, **no markup and no CSS touched**
+— the diff in `App.tsx` is state and handlers only.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-it6k6q` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Thirty-ninth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: `main` at 60ec3fb gave
+typecheck 0 and **1591 passed | 1 skipped**, build clean, and
+`list_pull_requests --state open` was empty (checked, not assumed). Monday's
+reservoir is ROADMAP and J0 outranks everything, so the first job was to re-read
+what is LEFT of J0 — and the 10-05 finding holds, re-derived rather than
+inherited: J0.1/0.2/0.3 are ✅ and **every remaining piece of J0.4 is either a
+permanent refusal or needs a store**, in its own section's words (reading a scan
+report "would mean the console holding scan results of its own … a subject, not
+a slice"; per-system history the same; the other three bullets are decisions).
+So: the highest-value numbered item that fits one night and can be verified
+here. C1.1 over S1.4 (full history — a store and a pagination subject), S1.5
+(correlation — changes what the queue shows), S1.1/S1.2 (database writes),
+C1.2 (global search, bigger), and the `read`-node retry, which 10-05 left shut
+for two reasons that have not changed and which § 7 words as a **decision**.
+
+**What I learned that is written nowhere else.**
+
+1. **jsdom 27 and Chromium 1194 agree on the History API, step for step.**
+   Probed before writing a line of the feature, nine steps each, over a real
+   http origin in both: `pushState`/`replaceState` fire **no** event;
+   `location.hash = x` fires **popstate then hashchange**; the same assignment
+   twice fires nothing; Back fires `popstate` always and `hashchange` only when
+   the string differs; and `history.length` moves identically. **That agreement
+   is what licensed the test to drive the browser's real `history.back()`**
+   instead of dispatching a `popstate` by hand — which is the shape this
+   repository otherwise refuses, because *a fake cannot vouch for an option the
+   fake does not implement*. Here it implements them, and I measured that first
+   rather than discovering it afterwards.
+2. **`pushState` with the URL already in the bar still appends an entry.**
+   `history.length` 3 → 4, on both engines. So a writer that does not compare
+   makes Back move a history entry with nothing changing on screen — a button
+   the operator has to press twice, which reads as broken. Both writers compare;
+   the mutation that removes the comparison in `goTab` is red on the test that
+   clicks one tab twice.
+3. **The fragment never reaches the server, and that is a measurement.** Driving
+   six deep links at the real built console through Chromium with request
+   interception, the server saw **exactly one document request: `/`**. That is
+   the whole argument for the fragment over a path here: the purpose of the
+   feature is a link pasted into a chat message or a ticket, and a path would
+   put the screen somebody was on — later, the alert — into every access and
+   proxy log between the two of them. It is also why nothing server-side moved:
+   `requiresAuth` and `serveStatic` both see `/` whichever screen the URL names.
+4. **A `data:` URL is the wrong place to probe `location`.** The first probe ran
+   against `data:text/html,…`: `location.hash = x` silently did **nothing**
+   (opaque origin), `replaceState` threw `SecurityError`, and the Back/Forward
+   readings were nonsense. A real `http` origin on a throwaway `node:http`
+   server is three lines and gives the real answers. Same family as this
+   project's "a ruler that quietly measures something else".
+5. **The slug table can BE the type.** `Tab` is `keyof typeof TAB_SLUGS`, so a
+   tab with no slug does not compile and a slug naming no tab cannot be written
+   — no drift is possible in either direction and no test is needed for the
+   pairing. What a type cannot say is asserted instead: two tabs sharing a slug
+   type-checks perfectly and leaves one of them unreachable by link (mutation
+   M7: `trace: 'alerts'` → 4 tests red).
+6. **The Code tab was mounted by whichever button opened it**, in two places —
+   and a deep link and the Back button reach it through neither. It is now
+   mounted because the tab is OPEN, in one effect, which deletes the second
+   call site that had to remember. That half was found by the test, not by
+   reading: `#/code` on a cold load was green while Back-into-Code was red.
+
+**Found and NOT fixed.**
+
+- **The assistant is told the internal tab id.** `server/assistant/prompt.ts`
+  writes `They are on the "queue" tab.` and switches on `'rules'`/`'metrics'`/
+  `'health'` — but an operator has never seen the words `queue`, `trace`,
+  `intel` or `docs`, which are this codebase's own history. `route.ts` now holds
+  an operator-facing word per tab, so there is finally a table to read one from.
+  Not fixed tonight for the reason `CLAUDE.md` gives for leaving `decision.ts`'s
+  pretty-printed alert block alone: it changes what a model is SHOWN, and that
+  cannot be A/B'd from an environment with no key.
+- **Standing leads, re-checked and unchanged**: the incident card scrolling
+  sideways at 320 and 375 px (§ 7, still the best Saturday subject), the four
+  French strings in `dashboard/server/vulnpipe.ts`, the ninety-odd French
+  strings in `server/engine/`, `RuleStore.active()` duplicating `rules-load`'s
+  `WHERE`, the store contract's Postgres half never set in CI, the `read`-node
+  retry (§ 7), `pollWindow`'s uncapped `cursor.since` branch, and the console's
+  missing `check.cjs`.
+
+**Do not redo.**
+
+- **Do not probe `location` or `history` against a `data:` URL.** See learning
+  4. It fails silently on the one call that matters.
+- **Do not add a `hashchange` listener beside the `popstate` one.** Measured:
+  `popstate` covers Back, Forward and a fragment navigation; `hashchange`
+  covers the last of those only, and only when the string differs. Both means
+  the common case handled twice.
+- **Do not read `#/alerts/1234` down to `alerts`.** It is deliberate that a
+  fragment carrying more than this version understands is refused WHOLE: the
+  half-obeyed link opens the queue and leaves the sender believing the receiver
+  is looking at that alert. The open incident needs a state and a sentence for
+  "that alert is not in this window" — a slice, and it is written up in
+  ROADMAP C1.1.
+- **Do not take the slugs from `i18n/console.ts`.** They follow the labels on
+  purpose (`#/lookup`, not `intel`) and are frozen in `route.ts` on purpose: a
+  label is the one thing in this product that may be reworded, and a bookmark
+  must not move when somebody improves a word.
+- **Do not put the tab in the PATH.** See learning 3; and a path would also
+  need the SPA fallback to answer every screen name, which is the exact-match
+  list that already cost this project every ingestion endpoint once.
+
+**Verified** (Node 22.22.0, npm 10.9.4; every command run and its output read):
+
+| Command | Result |
+|---|---|
+| `dashboard: npm run typecheck` | 0 errors |
+| `dashboard: npm test` | **1610 passed, 1 skipped** (1591 before: **+19**) |
+| `dashboard: npm run build` | clean, 610 ms; JS 487.77 → **488.87 kB** (gzip 144.37 → 144.48), CSS **64.40 kB unchanged** |
+| `VulnPipe` | not touched, not run |
+
+Checked **RED first**: all 10 of `app-routing.test.tsx` failed against the
+unmodified `App.tsx`, each naming the tab it got instead of the one the
+fragment asked for. **Seven mutations, seven killed**: `goTab` pushing without
+comparing (1 red), the correction pushing instead of replacing (3), no effect
+mounting the Code tab (1), the URL read on `popstate` only and not on the first
+paint (4), `parseRoute` losing its `toLowerCase` (2), `parseRoute` reading a
+longer fragment down to its first segment (1), and two tabs sharing a slug (4).
+
+**Verified in a real browser**, on the built console served by the real
+`npm run serve` (Chromium 1194, no database, no model key): a plain visit lands
+on `#/alerts`; `#/settings` opens Settings; clicking Health pushes one entry and
+clicking it again pushes none; Back returns to Settings and Forward to Health;
+`#/NONSENSE` opens Alerts with the bar corrected to `#/alerts`; `#/Lookup/` is
+corrected to `#/lookup`; `#/code` mounts the lazily-loaded analysis section with
+`h1` « Code analysis » on screen; the welcome card's *Analyse code* lands on
+`#/code` and Back returns to `#/alerts`; Health's « How does it work? » lands on
+`#/guide` with two folds open and Back returns to `#/health`; and an observable
+jump off an incident card lands on `#/lookup` with the address in the field —
+**Back returning to the open card**, which is the state `selected` keeps and the
+URL does not carry. Four probes lived in `dashboard/scripts/` for the
+measurements and are **deleted**.
+
+---
+
 ## 2026-10-11 — Sunday · Maintenance and state of the project
 
 **Subject**: **five published advisories were sitting in the two trees under

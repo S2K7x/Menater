@@ -52,6 +52,7 @@ import { Icon, type IconName } from './components/Icon.tsx';
 import { SectionPanel, SectionTabs } from './components/SectionTabs.tsx';
 import { Mark } from './components/Mark.tsx';
 import { api, ApiError, AuthRequiredError } from './lib/api.ts';
+import { DEFAULT_TAB, parseRoute, routeHash, type Tab } from './lib/route.ts';
 import { consoleDictionary } from './i18n/console.ts';
 import { getCurrentLocale, useI18n } from './i18n/context.tsx';
 import type { ConsoleSnapshot } from './lib/types.ts';
@@ -64,8 +65,6 @@ const VulnPipeSection = lazy(() =>
 const VulnPipeSettings = lazy(() =>
   import('./vulnpipe/VulnPipeSection.tsx').then((m) => ({ default: m.VulnPipeSettings })),
 );
-
-type Tab = 'queue' | 'code' | 'ingestion' | 'rules' | 'trace' | 'metrics' | 'health' | 'intel' | 'docs' | 'settings';
 
 /**
  * Onglets qui lisent le snapshot du pipeline. `code` n'en fait pas partie : il
@@ -181,7 +180,14 @@ const DEFAULT_REFRESH_S = 20;
 
 export function App() {
   const { c, locale } = useI18n();
-  const [tab, setTab] = useState<Tab>('queue');
+  /**
+   * C1.1 — the tab comes from the address bar, and goes back to it.
+   *
+   * Read in the initial state rather than in an effect: a deep link that
+   * arrived through an effect would paint the queue first and swap, which is
+   * the ordering trap this project already records for the language provider.
+   */
+  const [tab, setTab] = useState<Tab>(() => parseRoute(window.location.hash) ?? DEFAULT_TAB);
   /**
    * Which view of the Alerts tab is showing (J0.4).
    *
@@ -193,7 +199,12 @@ export function App() {
   const [alertsView, setAlertsView] = useState<'queue' | 'systems'>('queue');
   // L'analyse de code n'est montée qu'à la première visite de son onglet. Une
   // fois montée, elle le reste : la démonter couperait un scan en cours.
-  const [codeMounted, setCodeMounted] = useState(false);
+  //
+  // DRIVEN BY THE TAB BEING OPEN, and not by the button that opened it: a deep
+  // link and the Back button reach this tab without going through `openTab`,
+  // and three call sites each remembering to mount it is how two of them end
+  // up not doing it.
+  const [codeMounted, setCodeMounted] = useState(tab === 'code');
   // Section du Guide a deplier quand on y arrive depuis « Comment ca marche ? ».
   const [docsSection, setDocsSection] = useState<string | null>(null);
   /**
@@ -307,6 +318,61 @@ export function App() {
     return () => clearInterval(timer);
   }, [load, refreshSeconds, authed, tab]);
 
+  /**
+   * ==========================================================================
+   * C1.1 — THE ADDRESS BAR AND THE TAB, AND WHICH ONE WRITES WHICH
+   *
+   * Two writers, one rule each, and nothing else touches the URL:
+   *
+   *   `goTab`      — the operator changed screen. PUSHES, so Back returns to
+   *                  the screen they came from.
+   *   the effect   — the URL and the screen disagree for a reason that is not
+   *                  a navigation: the first paint, a fragment nobody can
+   *                  read, a hand-typed spelling. REPLACES, because the
+   *                  console is correcting itself and an entry per correction
+   *                  would make Back a key you press without anything moving.
+   *
+   * BOTH COMPARE BEFORE WRITING, and that is the measured part. On Chromium
+   * 1194 and on jsdom 27 alike, `history.pushState` with the URL already in
+   * the bar still appends an entry — `history.length` 3 → 4 — so a writer that
+   * does not compare buys the user a second Back press per re-render.
+   *
+   * `popstate` IS THE ONLY LISTENER. Measured on the same two: it fires for
+   * Back, for Forward, and for a fragment navigation (which is what pasting a
+   * link into the bar of an open tab is). `hashchange` fires for the last of
+   * those three only, and only when the string actually differs, so listening
+   * to both handles the common case twice.
+   * ==========================================================================
+   */
+  const goTab = useCallback((id: Tab) => {
+    if (window.location.hash !== routeHash(id)) {
+      window.history.pushState(null, '', routeHash(id));
+    }
+    setTab(id);
+  }, []);
+
+  useEffect(() => {
+    const fromUrl = () => {
+      const named = parseRoute(window.location.hash);
+      const tabNow = named ?? DEFAULT_TAB;
+      // A fragment this version cannot read is corrected, not obeyed: a bar
+      // reading `#/nonsense` over the alert queue is a screen saying
+      // something untrue about itself.
+      if (window.location.hash !== routeHash(tabNow)) {
+        window.history.replaceState(null, '', routeHash(tabNow));
+      }
+      setTab(tabNow);
+    };
+    fromUrl();
+    window.addEventListener('popstate', fromUrl);
+    return () => window.removeEventListener('popstate', fromUrl);
+  }, []);
+
+  // See `codeMounted` above: the tab being open is what mounts it.
+  useEffect(() => {
+    if (tab === 'code') setCodeMounted(true);
+  }, [tab]);
+
   if (authed === false) {
     return (
       <LoginScreen
@@ -376,9 +442,8 @@ export function App() {
   ];
 
   const openTab = (id: Tab) => {
-    if (id === 'code') setCodeMounted(true);
     setDocsSection(null);
-    setTab(id);
+    goTab(id);
   };
 
   /**
@@ -391,7 +456,7 @@ export function App() {
   const lookUp = (observable: string) => {
     setIntelPrefill((prev) => ({ value: observable, n: (prev?.n ?? 0) + 1 }));
     setDocsSection(null);
-    setTab('intel');
+    goTab('intel');
   };
 
   /**
@@ -404,9 +469,8 @@ export function App() {
    */
   const analyse = (repository: string) => {
     setCodePrefill((prev) => ({ target: repository, n: (prev?.n ?? 0) + 1 }));
-    setCodeMounted(true);
     setDocsSection(null);
-    setTab('code');
+    goTab('code');
   };
 
   /**
@@ -416,7 +480,7 @@ export function App() {
    */
   const openGuide = (section: string) => {
     setDocsSection(section);
-    setTab('docs');
+    goTab('docs');
   };
 
   return (
@@ -644,7 +708,7 @@ export function App() {
                 trace={snapshot.trace}
                 onOpenCase={(id) => {
                   setSelected(id);
-                  setTab('queue');
+                  goTab('queue');
                 }}
                 onRefresh={() => void load(true)}
               />
@@ -676,7 +740,7 @@ export function App() {
                 onRefresh={() => void load(true)}
                 onOpenCase={(id) => {
                   setSelected(id);
-                  setTab('queue');
+                  goTab('queue');
                 }}
               />
             </>
