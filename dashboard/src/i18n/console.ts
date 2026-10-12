@@ -2584,6 +2584,7 @@ const EN: ConsoleDictionary = {
           { term: 'Lookup', text: 'Ask every threat-intelligence source you hold a key for about one IP address, domain, URL, file hash or email address — and check a password against the breach corpora without it leaving your browser. It reads; it writes nothing.' },
           { term: 'Guide', text: 'This page. Every feature explained without jargon, including what the application does not do.' },
           { term: 'Settings', text: 'Every setting, in sub-tabs: pipeline, access, database, display, credentials, log sources, MCP and the code-analysis engines. The checklist at the top names what is still missing.' },
+          { term: 'Sharing a screen', text: 'The address bar names the tab you are on — #/alerts, #/health, #/code — so a copied link opens on that screen, and the browser\u2019s Back button walks back through the tabs you came from. It carries the tab and nothing else: a link does not reopen the incident you had open.' },
         ],
       },
       {

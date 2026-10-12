@@ -1187,11 +1187,47 @@ refused here now.
 
 
 
+### C1.1 ✅ — The screen you are on, in the address bar
+
+*Ten tabs, and the URL named none of them. A console is a thing people look at
+together — « open Health and press Test connectivity », « the Rules tab, third
+row » — and the only way to send somebody a screen was to describe it. The
+browser's own Back button left the console entirely, so the key everybody
+presses to undo a navigation undid the whole session instead.*
+
+| Point | Detail |
+|---|---|
+| **What it is** | `src/lib/route.ts` plus two writers in `App.tsx`. The tab is read from the fragment on the first paint (`#/alerts`, `#/health`, `#/code`), written back on every tab change, and followed on Back and Forward. Measured on the built console in Chromium 1194: a plain visit lands on `#/alerts`, `#/settings` opens Settings, Back and Forward walk the tabs, and `#/code` mounts the lazily-loaded analysis section with its own `h1` on screen |
+| **The fragment, not the path** | A fragment is **never sent to the server** — measured, not assumed: driving every case above, the server saw exactly one document request, `/`. That is the whole reason this is the right form here, because the point of the feature is a link pasted into a chat message or a ticket, and a path would put the screen somebody was on into every access and proxy log between the two of them. It also needs no server change at all: `requiresAuth`'s `/^\/api(\/\|$)/` subtraction and `serveStatic` both see `/` whichever screen the URL names |
+| **The table is the type** | `Tab` is `keyof typeof TAB_SLUGS`, so a tab with no slug does not compile and a slug naming no tab cannot be written — this file's own § 7 carries two defects that were a declaration checked in one direction only. What the compiler cannot say is asserted: two tabs sharing a slug type-checks perfectly and leaves one of them unreachable by link |
+| **The slugs follow the LABELS and are frozen in code** | `#/alerts` not `#/queue`, `#/tracking` not `#/trace`, `#/lookup` not `#/intel`, `#/guide` not `#/docs`: the internal ids are this codebase's history and name nothing an operator sees. They are nevertheless written in `route.ts` rather than read from `i18n/console.ts`, because a label is the one thing in this product that is allowed to be reworded and a bookmark must not move when somebody improves a word |
+| **Two writers, one rule each** | A tab change **pushes**, so Back returns to the screen you came from. A correction — the first paint, a fragment nobody can read, a hand-typed spelling — **replaces**, because the console is correcting itself and an entry per correction makes Back a key you press with nothing moving. Both compare before writing, and that is the measured half: on Chromium 1194 and jsdom 27 alike, `pushState` with the URL already in the bar still appends an entry (`history.length` 3 → 4) |
+| **`popstate` is the only listener** | Measured on both: it fires for Back, for Forward and for a fragment navigation, which is what pasting a link into the bar of an open tab is. `hashchange` fires for the last of those three only, and only when the string differs — so listening to both handles the common case twice |
+| **A fragment it cannot read is corrected, not obeyed** | `#/nonsense` opens Alerts and the bar is rewritten to `#/alerts`: a URL claiming a screen that is not showing is a screen saying something untrue about itself. And `#/alerts/1234` — what a later version would use for an open incident — is refused WHOLE rather than read down to the half this version recognises, because half-obeying it would leave the sender believing the other person is looking at that alert |
+| **The Code tab now mounts because it is OPEN** | It was mounted by whichever button opened it, and a deep link and the Back button reach it through neither. One effect decides it, which also removes the second call site that had to remember |
+| **Tests** | `src/lib/route.test.ts` (**9**) and `src/components/app-routing.test.tsx` (**10**) — the first test in this repository to mount `App` itself. It drives the browser's real `history.back()` rather than a hand-dispatched `popstate`, which is only honest because jsdom 27 was measured against Chromium 1194 first and agreed on all nine steps. **Seven mutations, seven killed** |
+
+**What it does NOT carry, and why each is a slice of its own:**
+
+- **The open incident.** `#/alerts/1234` is the obvious next step and it needs
+  an answer this one does not have: an alert that has fallen out of the run
+  window would open the queue, and the sender would believe the receiver is
+  looking at it — the failure that shows green, in a link. That is a state and
+  a sentence, not a segment.
+- **The sub-tabs.** Settings has ten, Tracking three, Ingestion three, the
+  Ingestion graph six, and the Alerts tab has J0.4's two views. They live in
+  five components with their own state; carrying them means a second segment
+  and a per-screen table, which is this subject again one level down.
+- **The Guide section.** `openGuide` already opens the right section from a
+  « How does it work? » link; a fragment for it would be the sub-tab question
+  with one more vocabulary to freeze.
+- **Nothing is persisted and nothing is sent.** No `localStorage`, no server
+  round trip, no new route, no new dependency.
+
 ### C1 — Next
 
 | # | Feature | What it changes |
 |---|---|---|
-| C1.1 | **Tab remembered in the URL** (`#/alerts`, `#/code`) | A shared link opens the right screen; the browser Back button works |
 | C1.2 | **Global search** (`/` or `Ctrl+K`) across alerts, settings and guide | Find something without knowing which tab it lives in |
 | C1.3 | **Browser notifications** for cases awaiting approval | The 30-minute window stops expiring through inattention |
 | C1.5 | **Adjustable density** (compact / comfortable) | Forty rows on a laptop, six on a projector |
