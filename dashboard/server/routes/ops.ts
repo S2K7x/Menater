@@ -25,16 +25,34 @@ export async function opsRoutes(c: Ctx): Promise<boolean> {
      */
     if (req.method === 'POST' && path === '/api/diagnostics') {
       const body = await readBody(req);
-      // The probe dials THIS console, at the address the operator reached it
-      // on — the same rule as the ingestion snippets. A hard-coded localhost
-      // would test a loopback that says nothing about the address a source
-      // actually uses.
-      const host = String(req.headers.host ?? '');
-      const proto = String(req.headers['x-forwarded-proto'] ?? 'http').split(',')[0];
+      /**
+       * NO ADDRESS IS PASSED, AND THAT IS THE WHOLE POINT.
+       *
+       * This used to build one out of `Host` and `X-Forwarded-Proto` — "the
+       * probe dials THIS console, at the address the operator reached it on,
+       * the same rule as the ingestion snippets". The rule is right about the
+       * SNIPPETS, which are text an operator reads, and wrong here, because
+       * the probe attaches the ingestion shared secret to the request it
+       * sends. So a reflected header was not a display value: it chose where a
+       * credential was delivered.
+       *
+       * Measured over two real sockets: one `POST /api/diagnostics` carrying
+       * `Host: <decoy>` and an empty body — the probe is on unless the body
+       * says otherwise — delivered `x-soc-token: <the shared secret>` to the
+       * decoy, and the console answered 200 with a plausible diagnostic line.
+       * That secret is the only authentication on `/api/ingest/*`, the one
+       * surface the tunnel profile puts on the Internet.
+       *
+       * `runDiagnostics` therefore dials this process, and nothing a caller
+       * sends can move it. What the probe asserts — route, secret, normalizer,
+       * validator — is a property of THIS console, so loopback tests all of
+       * it; dialling a name somebody else chose tested a console that may not
+       * even be this one, with this one's credential, and reported the answer
+       * as ours.
+       */
       const diag = await runDiagnostics({
         probeWebhook: body.probeWebhook !== false,
         locale,
-        baseUrl: host ? `${proto}://${host}` : undefined,
       });
       // The diagnostic has just re-read the instance: the console's cache is
       // stale, so it is dropped for the next screen to show what was found.

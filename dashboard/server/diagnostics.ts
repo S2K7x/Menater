@@ -61,7 +61,25 @@ const REQUIRED_TABLES = [
 ];
 
 export async function runDiagnostics(
-  opts: { probeWebhook: boolean; locale: Locale; baseUrl?: string },
+  opts: {
+    probeWebhook: boolean;
+    locale: Locale;
+    /**
+     * Where THIS console answers, and never a value that arrived in a request.
+     *
+     * The entry-point probe below attaches the ingestion shared secret to what
+     * it sends, so this field decides where a credential is delivered. The
+     * route used to fill it from `Host` and `X-Forwarded-Proto`, which made one
+     * unauthenticated POST enough to have the console hand that secret to any
+     * address the caller named — see `routes/ops.ts`, which now passes nothing.
+     *
+     * It stays injectable for the tests in `diagnostics.test.ts`, which must
+     * point the probe at a listener they control: a test cannot make the real
+     * process listen on `PORT`. `diagnostics-address.test.ts` is what keeps the
+     * route from filling it again.
+     */
+    baseUrl?: string;
+  },
 ): Promise<Diagnostics> {
   const started = Date.now();
   const checks: Check[] = [];
@@ -210,6 +228,10 @@ export async function runDiagnostics(
       detail: dg.webhookNoSecret, remedy: dg.webhookSecretRemedy,
     });
   } else {
+    // This process, unless a test points it elsewhere. `localhost` and not
+    // `127.0.0.1`: `api.ts` calls `server.listen(PORT)` with no host, so Node
+    // binds every interface on both families and either spelling reaches it —
+    // and this is the spelling the fallback has always used in development.
     const base = opts.baseUrl ?? `http://localhost:${PORT}`;
     try {
       const res = await fetchWithDeadline(
