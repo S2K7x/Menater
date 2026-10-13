@@ -2237,6 +2237,7 @@ Small, known, and written down so it is not rediscovered.
 |---|---|
 | ~~No CI ran the suite~~ ✅ | ~~`.github/workflows` did not exist~~ — done. Every pull request carried green checks that were Vercel and GitGuardian, and **neither ran the tests**: "checks passed" read as "the tests ran", and they had not. Four successive nightly PRs filed this as the highest-value maintenance item left, and it was tracked in no section of this file. `ci.yml` runs typecheck, suite and build on `dashboard/` (Node 24) and typecheck and suite on `VulnPipe/` (Node 22) — each half on the Node version its own Dockerfile deploys. `automerge.yml` merges a PR once that CI is green, and re-tests rather than merging onto a `main` the run never saw |
 | ~~The redirect rule stopped at the console~~ ✅ | ~~VulnPipe's four HTTP model adapters called `fetch` with its default `redirect: 'follow'`~~ — done, and it was tracked in no section of this file. `dashboard/server/http.ts` refuses a reply that chooses where the next request goes; the other half of the product never received it, and its outbound calls carry the analysed source code and an api key. Measured on Node 22.22.2 against real sockets, all five 3xx statuses: `authorization` stripped by the specification, `x-goog-api-key` **delivered** at the second host, and on `307`/`308` the body replayed in full — the Anthropic SDK following it too, delivering `x-api-key` and **returning a verdict**. `fetchNoRedirect` in `nodes/shared/llm/types.ts` is the one call site now, narrower than the console's primitive because every call here is a write. `redirect.test.ts` drives real sockets, and a fake could not have vouched for it. The fifth adapter, `claude-subscription.ts`, is deliberately NOT covered and did not need to be: it speaks to an optional, runtime-resolved agent SDK over the person's own session, with no api key and no configurable endpoint |
+| ~~The entry-point probe dialled an address the caller named, with the ingestion secret on it~~ ✅ | ~~`routes/ops.ts` built `baseUrl` from `Host` and `X-Forwarded-Proto` and handed it to `runDiagnostics`, whose webhook probe POSTs with `x-soc-token`~~ — done, and it was tracked in no section of this file. The probe exists to prove the whole entry path works, so it HAS to send the secret; what it must not do is let a request choose where. The comment above those two lines is correct about a different route — `GET /api/ingest/sources` reflects the same header into the install snippets, text an operator reads, and never includes the secret — so this was one rule applied to the wrong use. **Measured over two real sockets on Node 22.22.0, no session cookie, empty body** (the probe is on unless the body says otherwise): `Host: 127.0.0.1:<decoy>` delivered `x-soc-token: <the shared secret>` to the decoy and the console answered **200** with a diagnostic line indistinguishable from an ordinary failure; `X-Forwarded-Proto: https` additionally dialled TLS at a plain-HTTP listener and reported `ERR_SSL_PACKET_LENGTH_TOO_LONG`, a TLS diagnosis about a host nobody configured. The secret is the only authentication on `/api/ingest/*` and `/api/webhook/soc/alert`, the surface the `tunnel` profile puts on the Internet, and `requiresAuth` returns `false` for every path while `auth.enabled` is false — the shipped default — so this needed no credential on an install that has not set a console password. `fetchWithDeadline`'s redirect rule does not reach it: that constrains the hops after the first, and the first request is the leak. The fix is three deleted lines; the route passes no address and the probe dials this process, which is where everything it asserts — route, secret, normalizer, validator — actually lives. `server/diagnostics-address.test.ts`, 4 tests over real sockets, 2 red on unmodified code and 2 green before AND after; three mutations, each red, including the one that removes the secret from the probe (which is what keeps the POSITIVE half honest: two listeners, and the test says which of them received it) |
 | Two icon sets | `src/components/Icon.tsx` (console) and `src/vulnpipe/components/Icon.tsx` (analysis) have two APIs and two class conventions. Mergeable, not urgent |
 | Dead sections in the analysis dictionary | `t.app`, `t.glossary`, `t.severity` have not been read since the landing page went away. **D4 built the rule that proves it** — `n8n-removed.test.ts` flags a catalogue key no product code mentions — and deliberately pointed it at the two console catalogues only: turning it on `src/i18n/dictionary.ts` means removing whole sections, which is a pass of its own, not a line in a documentation sweep |
 | Flaw statuses in `localStorage` | See V2.5 |
@@ -2322,6 +2323,64 @@ Whatever the phase, these rules outrank any feature:
 > of n8n **`mode: "once"` starts the sub-workflow with zero items** — 02 then 03
 > finished in `success` having executed nothing (runs 55 and 59). All the nodes
 > went back to `each`.
+
+### A caller-supplied regex can hang the process, and the comment says it cannot
+
+Found on the security night of 2026-10-13 while mapping denial of service, and
+**not fixed**, because the fix is a decision about what a team may write in a
+tuning rule rather than a three-line repair.
+
+`matchesCondition` in `engine/transforms/tuning.ts` runs `new RegExp(v, 'i')
+.test(hay)` on a pattern a rule supplies, and the comment above `MAX_PATTERN`
+(200) and `MAX_SUBJECT` (2000) states the defence: *"JavaScript cannot
+interrupt a running regex, so the only defence available here is to keep both
+the pattern and the subject small enough that even a pathological pattern
+terminates."* **That claim is false by orders of magnitude.** Measured on this
+Node (22.22.0), `(a+)+$` — six characters, well inside the cap — against
+`'a'.repeat(n) + '!'`:
+
+| n | time |
+|---|---|
+| 20 | 95.8 ms |
+| 22 | 59.8 ms |
+| 24 | 216.0 ms |
+| 26 | 1,051.7 ms |
+| 28 | 3,808.2 ms |
+
+Roughly ×4 per added character, so ~40 characters is hours and the subject cap
+allows **2000**. A regex cannot be interrupted and this API is single
+threaded, so one match that does not return ends the console, the engine and
+both ingestion doors for the life of the process — a failure that does not even
+produce a log line.
+
+Two doors reach it, and the second is the one that needs no attacker:
+
+- `POST /api/rules/test` takes **both** the rules and the alert from the body
+  (`routes/rules.ts`: caller-supplied rules are used *instead of* the stored
+  set, through `normalizeRuleInput` and deliberately not `validateRule`), so one
+  ~150-byte request is enough. It needs a database configured, which a real
+  deployment has, and no session on an install with no console password.
+- `POST /api/rules` stores a rule after `validateRule`, which checks a
+  pattern's **length and syntax** only — a nested quantifier is valid syntax —
+  and the `tuning` node then runs it on **every alert**. So a rule somebody
+  typed in good faith can stop the queue the moment a field holds forty
+  repeated characters.
+
+**Why it is not fixed here.** There is no sound, cheap answer in this
+repository's constraints. The console API has exactly one production dependency
+and an RE2-style engine would be a second; Node offers no way to time out a
+regex in-process, and doing it in a worker puts thread startup on the path of
+every alert. The remaining option is to REFUSE patterns that can backtrack
+catastrophically — but the classic star-height test is neither necessary nor
+sufficient (`(a|a)*$` has star height 1 and is exponential; `(foo|bar)+` has
+height 2 and is safe), so any check will over-refuse, under-refuse, or both,
+and shipping one that reads as a guarantee would be exactly the *"a guard
+written for a state it cannot see"* this file refuses elsewhere. **Which
+regexes a team may write is a product decision, and the honest options are: a
+conservative syntactic refusal with the over-refusal stated on screen, dropping
+`op: 'regex'` for a narrower matcher, or accepting the risk and deleting the
+comment that claims it is handled.** The one thing that must not stay is the
+comment, which tells the next reader the subject is closed.
 
 ### State verified in testing
 
