@@ -652,6 +652,23 @@ export interface ConsoleDictionary {
     testLede: string; testRun: string; testAlert: string;
     testNoMatch: string; testMatched: (name: string) => string;
     saveFailed: string; loadFailed: string;
+    /**
+     * A row's write that did not land, worded by WHAT STILL HOLDS.
+     *
+     * Three sentences rather than one, because "could not save" is reachable
+     * from three different states and says nothing about the operator's
+     * exposure. A rule they believe they have just switched off and that is
+     * still closing alerts is the dangerous one, and it is the only one of the
+     * three that can be read off the row — the pill says `Disabled`, and its
+     * absence is not a message.
+     *
+     * The rule is named for the reason `editRule` and `removeRule` are: the
+     * pair of controls repeats once per row, and the banner sits above a list.
+     * The server's own reason follows the sentence; this is the frame.
+     */
+    notDisabled: (name: string) => string;
+    notEnabled: (name: string) => string;
+    notRemoved: (name: string) => string;
     reviewTitle: string; reviewLede: string;
   };
 
@@ -1985,6 +2002,9 @@ const EN: ConsoleDictionary = {
     testMatched: (name) => `“${name}” matches.`,
     saveFailed: 'Could not save.',
     loadFailed: 'Could not load the rules.',
+    notDisabled: (name) => `“${name}” is still enabled.`,
+    notEnabled: (name) => `“${name}” is still disabled.`,
+    notRemoved: (name) => `“${name}” was not deleted.`,
     reviewTitle: 'Worth reviewing',
     reviewLede: 'An exception with no end date, or one that has never triggered, is debt: nobody remembers why it is there.',
   },

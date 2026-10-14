@@ -4,6 +4,175 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-10-14 — Wednesday · Tests and QA
+
+**Subject**: **the two writes on the Rules tab discarded every failure.** This
+console makes sixteen writes from the browser; fourteen sit in a `try` that
+puts the server's own sentence on screen. Two were written `.catch(() => {})` —
+`RulesPage.toggle()` and `RulesPage.remove()`, the two controls on every row of
+the rule list. The write that DOES report, `save()`, is the function **directly
+above them in the same component**.
+
+**Result**: PR opened on `claude/sleepy-volta-s6ijnc`. Five files: two
+production (`src/components/RulesPage.tsx`, `src/i18n/console.ts` — three
+catalogue keys), one new test file
+(`src/components/rules-write-failure.test.tsx`, **+9 tests**), plus `CLAUDE.md`,
+`ROADMAP.md` (C0.37) and this journal. No production dependency, no server
+change, no new CSS and no new class name.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-s6ijnc` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Forty-first entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: `main` at 74d2694 gave
+typecheck 0, **1614 passed | 1 skipped**, build clean (run, not assumed; the
+container needed `npm ci` first — `vitest: not found` on a fresh clone is the
+missing install, not a red suite), and `list_pull_requests --state open` was
+empty. Wednesday's reservoir is *hunt the places where a `catch` returns green*,
+so the sweep was mechanical rather than inspired: **grep every mutating method
+of `lib/api.ts` for its callers, and read what each catch does.** Sixteen
+writes, fourteen reporting, two discarding — and the two on the screen where a
+team writes the rules deciding what stops reaching a human. That survey is the
+part worth keeping; the fix is twelve lines.
+
+**What an operator actually got.** Nothing. The failure was discarded, `load()`
+re-read the set, and the row came back exactly as it had been. Press *Disable*
+on a rule that is closing alerts and it stays **enabled**, with no word
+anywhere; confirm a deletion and the rule is still in the list, after
+`window.confirm` has already taken the yes. A control you have been told works
+and that changes nothing does not read as a missing feature — it reads as a
+broken page, or worse on this screen, as a rule that is now off.
+
+**What I learned that is written nowhere else.**
+
+1. **The two states where the re-read cannot cover for the write.** Most
+   failures here are invisible-by-accident rather than silent: with no database
+   the write 503s AND `load()` 503s, so the `error` branch puts the cause on
+   screen (attributed to the page rather than to the click, but on screen). The
+   two that are genuinely silent are **a write that never left** (`fetch`
+   rejects — a restarted container, a proxy dropping one request, a dead
+   socket) and **a write the server refused while reads keep answering**. Both
+   are in the test file; the first needs no premise about the server at all,
+   which is why it leads.
+2. **A rule write against a refusing database is a 503, not a 500.** `ruleDb`
+   wraps it as `RuleDbError` and `app.ts` has a branch for exactly that, so the
+   route answers **503 `Database (rules): connect ECONNREFUSED 127.0.0.1:1`** —
+   and `call()`'s 502/503/504 branch reads the named reason rather than
+   replacing it. That is what makes the second test real rather than a fixture:
+   the sentence is composed by `describePgError`, travels through the real
+   client, and had never once reached this screen.
+3. **The plausible wrong fix is `setError`, and it is wrong for a measured
+   reason.** That state means THE SET CANNOT BE READ and its branch returns the
+   page head and a banner *instead of* the page (C0.34). Reusing it makes a
+   failed toggle delete the rules list — and because `load()` then succeeds and
+   calls `setError(null)`, the banner also flickers and vanishes. The mutation
+   is red on **7 of 9**, the structural kill being *keeps the rule list the
+   failure is ABOUT*.
+4. **The sentence has to say what STILL HOLDS, and that is three keys.**
+   « Could not save » is reachable from three states and names the operator's
+   exposure in none of them. The dangerous direction — a rule believed off and
+   still running — is also the one the ROW cannot show, because the absence of
+   a `Disabled` pill is not a message. M5 (one sentence for both directions) is
+   red on the one test that enables a disabled rule, and without that test the
+   third key would have been dead on arrival.
+5. **A banner left standing is a failure showing RED**, which this console
+   refuses for the same reason it refuses one showing green: `setWriteError(null)`
+   at the top of each write is load-bearing, and M6 proves it.
+6. **The region is a wrapper, not an attribute**, and `RulesPage` already had
+   two (the editor's refusal list, the dry run's verdict) so counting regions
+   proves nothing. The claim is containment —
+   `banner.closest('[role="status"]')` — plus the structural half jsdom cannot
+   render: `closest('details')` is `null`, because a closed `<details>` is
+   absent from the accessibility tree while jsdom still lays its body out
+   (C0.33). Note the dry run's own region IS inside a `Fold`, and that is sound
+   rather than the same defect: its button is inside the same fold, so the
+   region cannot receive a sentence while closed.
+7. **`vi.stubGlobal('confirm', …)` reaches `window.confirm` under jsdom**
+   (`globalThis === window`), so the delete path needs no seam of its own.
+
+**Found and NOT fixed.**
+
+- **A genuine 404 on either write is unreachable from here.** `PUT`/`DELETE`
+  answer 404 when the rule is gone — a second operator, a second tab, a `psql`
+  cleanup — and the Rules tab does not poll, so a stale row is ordinary. It
+  needs a WORKING store to produce, which this environment has no database for,
+  and faking it would be a fixture agreeing with itself. The 404 on a toggle is
+  the one shape that reads as MORE than success: the operator presses *Disable*
+  and the rule disappears. Worth a test the day `MENATER_TEST_PG` is set.
+- **`AuthRequiredError` does not reach the login screen from this tab.** It
+  extends `ApiError`, so `load()`'s catch files « Authentication required. »
+  as a banner instead of letting `App` show the sign-in screen. Pre-existing,
+  on every screen with its own catch, and out of tonight's subject — but it
+  means an expired session on the Rules tab reads as a broken rule store.
+- **The banner's placement is a real limit.** One region above the rows is
+  right for `role="status"`, and on a long list a sighted operator who pressed
+  a button at the bottom may not see the sentence at the top. Naming the rule
+  in it is the mitigation, not a fix; a per-row sentence is a region per row,
+  which `aria-atomic` makes worse.
+- **`.soc-banner p` is a flex item with `min-width: auto`**, so a rule name
+  with no breakable character would floor it at 320 px — the trap this table
+  already carries. It is NOT introduced here: `<b>{r.name}</b>` in
+  `.soc-rule-head` already renders the same string on the same screen, so the
+  exposure is unchanged, and `overflow-wrap` on the shared banner rule is a
+  measured interface change rather than a Wednesday one.
+- **Standing leads, re-checked and unchanged**: the `host` fencing (the next
+  security night, fully specified in the 10-13 entry), the caller-supplied
+  regex (§ 7, a decision), the incident card at 320/375 px (§ 7), the ninety
+  French strings in `server/engine/`, the four in `server/vulnpipe.ts`,
+  `MENATER_TEST_PG` still never set, and `POST /api/auth/login` still having no
+  route-level test.
+
+**Do not redo.**
+
+- **Do not route these two failures through `error`.** Learning 3 — it deletes
+  the list and the banner does not even survive the re-read.
+- **Do not collapse the three sentences into one.** Learning 4. A generic
+  « could not save » passes the first two tests and is red on the third, which
+  is the point of the third.
+- **Do not put the region inside the row that failed**, and do not count
+  regions in a test of this file: there are three on the screen now.
+- **Do not drop `load()` after a failed write.** It is what puts the TRUE state
+  of the row back under the sentence explaining it — without it the screen
+  would show a sentence about a state nothing had re-read.
+- **Do not widen this to `.soc-banner p { overflow-wrap }`** without measuring
+  the six themes and three widths: it reaches every banner in the console.
+
+**Verified** (Node 22.22.0, npm 10.9.4; every command run and its output read):
+
+| Command | Result |
+|---|---|
+| `dashboard: npm run typecheck` | 0 errors |
+| `dashboard: npm test` | **1623 passed, 1 skipped** (1614 \| 1 before: **+9**) |
+| `dashboard: npm run build` | clean; CSS **64.40 kB unchanged**, JS 488.87 → 489.37 kB (+500 B: the markup and the three sentences) |
+| `VulnPipe` | not touched, suite not run |
+
+Checked **RED first**, before the production change and with the catalogue keys
+already in place so the red would be about behaviour and not a missing symbol:
+**5 of 7 red**, all at the same line — `waitFor(() => expect(banner()).toBeTruthy())`,
+the banner never appearing. The two that passed then are the two controls, and
+they pass after as well, on purpose.
+
+Six mutations, one at a time, the pristine file restored in between:
+
+| Mutation | Result |
+|---|---|
+| the defect restored verbatim (both `.catch(() => {})`) | RED — 7 of 9 |
+| `setError` in place of `setWriteError` (the plausible wrong fix) | RED — 7 of 9, incl. *keeps the rule list* |
+| the banner without its `Announce` wrapper | RED — 1 (*announces it*) |
+| `reasonOf` returns only `t.saveFailed`, dropping the server's sentence | RED — 1 (*carries the sentence `ruleDb` wrote*) |
+| one sentence for both toggle directions | RED — 1 (*still DISABLED when enabling failed*) |
+| `setWriteError(null)` removed, so the banner never comes down | RED — 1 (*takes the sentence back down*) |
+
+No model key, no database and no network egress were needed: the refusing
+database is `127.0.0.1:1`, and the `fetch` seam answers the two reads in
+process. No probe files were created, and `git status` shows only the five
+intended files.
+
+---
+
 ## 2026-10-13 — Tuesday · Security
 
 **Subject**: **the entry-point probe sent the ingestion shared secret to an

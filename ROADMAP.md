@@ -810,6 +810,24 @@ stayed exactly where it was.*
 **What R does not do.** It adds no per-user layout preference; that is C1.5. It
 leaves the eight facts of a triage row intact: the table got shorter, not poorer.
 
+### C0.37 ✅ — Sixteen writes, fourteen of which said what went wrong
+
+*This console makes sixteen writes from the browser. Fourteen sit in a `try`
+that puts the server's own sentence on screen. Two were written
+`.catch(() => {})` — `RulesPage.toggle()` and `RulesPage.remove()`, the two
+controls on every row of the rule list, on the screen where a team writes the
+rules deciding what stops reaching a human. The write that DOES report,
+`save()`, is the function directly above them in the same component.*
+
+| Point | Detail |
+|---|---|
+| **What an operator got** | Nothing. The failure was discarded, `load()` re-read the set, and the row came back exactly as it had been. Press *Disable* on a rule that is closing alerts and it stays enabled with no word anywhere — a button that reads as broken, over a rule that is still running. Confirm a deletion and the rule is still in the list, after `window.confirm` has already taken the operator's yes |
+| **The two states where the re-read cannot cover for it** | A write that never left (`fetch` rejects: a restarted console container, a proxy dropping one request, a dead socket) and a write the server refused in words. On the second the real route answers **503 `Database (rules): connect ECONNREFUSED`** through `ruleDb` and `describePgError` — a sentence written for an operator, which had never once left the process on this path. It stands for every write-side database failure where SELECT keeps answering: a revoked UPDATE grant, a read-only replica, a full disk |
+| **Why not `error`** | That state means THE SET CANNOT BE READ, and its branch returns the page head and a banner INSTEAD of the page — C0.34. A write that failed must not take the list with it, and "the rules cannot be read" is a sentence reachable from a state it does not describe here. The plausible wrong fix is exactly that reuse, and the mutation carries it: seven of nine tests red, including the one claiming the list survives |
+| **The sentence says what STILL HOLDS** | *« "Nightly backup agent" is still enabled. »* and not *« could not save »*. Three catalogue keys rather than one, because the generic sentence is reachable from three states and names the operator's exposure in none of them — and the dangerous direction is the one the row itself cannot show, since the absence of a `Disabled` pill is not a message |
+| **One region, above the rows** | `role="status"` is atomic, so a region inside the row that failed would be one per row, each re-read on any change. The sentence names the rule for the reason `removeRule` does: the pair of controls repeats once per row and the banner sits above a list |
+| **The guard** | `components/rules-write-failure.test.tsx`, **9 tests**, driving the REAL route behind the REAL client behind the REAL screen the way `rules-refusal.test.tsx` does for the other write on this screen. Six mutations, each killed by the test written for it; two tests pass before AND after on purpose (a landed write says nothing, a cancelled confirm dials nothing) |
+
 ### C0.36 ✅ — Three visual heading levels, and no level 1
 
 *`CLARITY.md` § 2 and `DESIGN.md` § The scale both declare three levels — a

@@ -120,15 +120,69 @@ export function RulesPage() {
     }
   }
 
+  /**
+   * The reason the SERVER wrote, or the only sentence we have of our own.
+   *
+   * The same expression as the fourteen other writes in this console, and
+   * deliberately not a second spelling of it: `ApiError.message` already
+   * carries `error`, the joined `problems` list or `detail`, whichever the
+   * route named — `lib/api.ts`'s `namedReason` is the one reader for all
+   * three, and the browser must not start composing a sentence over it.
+   */
+  const reasonOf = (err: unknown): string =>
+    (err instanceof ApiError ? err.message : t.saveFailed);
+
+  /**
+   * A row's write that did not land.
+   *
+   * ==========================================================================
+   * WHY THESE TWO ARE NOT `error`, AND WHY THEY ARE NOT SILENT EITHER
+   *
+   * They were written `.catch(() => {})`, and `load()` then re-read the set
+   * and rendered the row exactly as it had been — so pressing Disable on a
+   * rule that is closing alerts left it enabled with no word anywhere, and a
+   * confirmed deletion left the rule in the list after `window.confirm` had
+   * already taken the operator's yes. Every other write in this console puts
+   * the server's own sentence on screen — `save()`, in this same component,
+   * included.
+   *
+   * They do not go through `error`: that state means THE SET CANNOT BE READ,
+   * and its branch returns the page head and a banner INSTEAD of the page. A
+   * write that failed must not take the list with it — one screen answering a
+   * failure by deleting itself was enough — and "the rules cannot be read" is
+   * a sentence reachable from a state it does not describe here.
+   *
+   * The sentence says what STILL HOLDS rather than that something went wrong:
+   * a rule the operator believes they switched off and that is still running
+   * is the exposure, and it is the one fact the row itself cannot show, since
+   * the absence of a `Disabled` pill is not a message.
+   * ==========================================================================
+   */
+  const [writeError, setWriteError] = useState<string | null>(null);
+
   async function toggle(rule: TuningRule) {
-    await api.updateRule(rule.id, { ...rule, enabled: !rule.enabled }).catch(() => {});
+    setWriteError(null);
+    try {
+      await api.updateRule(rule.id, { ...rule, enabled: !rule.enabled });
+    } catch (err) {
+      setWriteError(
+        `${rule.enabled ? t.notDisabled(rule.name) : t.notEnabled(rule.name)} ${reasonOf(err)}`,
+      );
+    }
+    // Re-read either way: after a failure it is what puts the TRUE state of
+    // the row back under the sentence explaining it.
     load();
   }
 
   async function remove(rule: TuningRule) {
     // eslint-disable-next-line no-alert
     if (!window.confirm(t.confirmRemove)) return;
-    await api.deleteRule(rule.id).catch(() => {});
+    setWriteError(null);
+    try {
+      await api.deleteRule(rule.id);
+    } catch (err) {
+      setWriteError(`${t.notRemoved(rule.name)} ${reasonOf(err)}`);
+    }
     load();
   }
 
@@ -252,6 +306,19 @@ export function RulesPage() {
       ) : null}
 
       <section className="soc-panel">
+        {/* One region for the list's one answer slot, above the rows rather
+            than inside the one that failed: `role="status"` is atomic, so a
+            region per row would re-read every row's answer on any change, and
+            the sentence names the rule for the same reason `removeRule` does. */}
+        <Announce>
+          {writeError ? (
+            <div className="soc-banner soc-banner-error">
+              <Icon name="alert" size={16} />
+              <p>{writeError}</p>
+            </div>
+          ) : null}
+        </Announce>
+
         {sorted.length === 0 ? (
           <>
             <p className="soc-empty">{t.empty}</p>
