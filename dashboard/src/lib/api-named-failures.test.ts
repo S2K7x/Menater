@@ -83,7 +83,7 @@ process.env.MENATER_CONFIG = join(SCRATCH, 'config.json');
 const { handleRequest } = await import('../../server/app.ts');
 const { saveConfig } = await import('../../server/config.ts');
 const { messages } = await import('../../server/i18n.ts');
-const { api, ApiError } = await import('./api.ts');
+const { api, ApiError, AuthRequiredError } = await import('./api.ts');
 const { consoleDictionary } = await import('../i18n/console.ts');
 /** `ApiError` is a value binding here (dynamic import), so annotating needs this. */
 type Refusal = InstanceType<typeof ApiError>;
@@ -363,5 +363,129 @@ describe('what must NOT start being surfaced', () => {
     expect(refused!.message).toBe(
       am.inventoryRefused(['inventory: Send the list as { "entries": [ … ] }.']),
     );
+  });
+});
+
+/**
+ * ============================================================================
+ * THE READER THIS FILE'S OWN HEADER QUOTES, AND THE ONE SHAPE IT LOST
+ *
+ * The header above cites `pwnedRange` as where the rule was already written:
+ * it cannot use `call()` (its route answers `text/plain` on success), so it
+ * reads its own errors, and it says that a JSON body here carries the named
+ * reason and that throwing it away would lose the only useful half.
+ *
+ * It did that for the ONE shape it was written for — a 200 whose payload
+ * reports the relay's own failure — and for nothing else, because the
+ * `!res.ok` check ran BEFORE the body was looked at. Every non-2xx therefore
+ * left as the generic sentence, and this route has exactly one:
+ *
+ *   GET /api/intel/pwned-range/ABCDE
+ *     429 {"error":"Too many checks at once. Try again in 60 s."}
+ *     → "The console server answered 429 with no explanation."
+ *
+ * Measured by driving the real handler through the real client, which is what
+ * the tests below do. Two things make it worth a test rather than a shrug.
+ *
+ * THE BUDGET IS SHARED WITH THE LOOKUPS. One bucket per caller address, 40 a
+ * minute, and behind Docker or a reverse proxy that address is ONE address for
+ * the whole console — so the allowance an analyst spends on lookups is the
+ * allowance the password check is refused for. That is why the tests below
+ * spend it on `POST /api/intel/lookup`: it is how it is really spent.
+ *
+ * AND THE SENTENCE IS THE WAIT. `server/routes/intel.ts`'s own header says the
+ * limit "SAYS how long the wait is: a refusal that does not name its own
+ * duration gets retried immediately" — i.e. the sentence that was discarded is
+ * the one that stops the budget being spent again on the spot. The neighbouring
+ * `POST /api/intel/lookup` says its wait correctly, and always did, because
+ * that one goes through `call()`.
+ * ============================================================================
+ */
+describe('the password check, refused by a budget it shares', () => {
+  /**
+   * Spends the shared allowance WITHOUT going near a provider.
+   *
+   * `lookup` classifies before it dials, and an unrecognised value matches no
+   * provider — "forcing `ipv4` on `hello` yields `unknown`, not four failed
+   * calls". So these requests increment the bucket and open no socket, which
+   * is what keeps this test offline. An IP would reach Shodan's key-free
+   * InternetDB, i.e. the real Internet, from a unit test.
+   */
+  async function spendTheBudget(): Promise<void> {
+    for (let i = 0; i < 41; i += 1) {
+      await serve('POST', '/api/intel/lookup', JSON.stringify({ value: 'not-an-observable' }));
+    }
+  }
+
+  beforeEach(async () => {
+    const { resetIntelThrottle } = await import('../../server/routes/intel.ts');
+    resetIntelThrottle();
+  });
+
+  it('tells the operator how long to wait, instead of "no explanation"', async () => {
+    await spendTheBudget();
+
+    const refusal = await api.pwnedRange('ABCDE').then(() => null, (e: unknown) => e as Refusal);
+
+    // The server's own sentence, naming the duration. Asserted on the WAIT
+    // rather than on the whole string: the number is seconds remaining in the
+    // window, so pinning it would pin the clock.
+    expect(refusal!.message).toMatch(/Too many checks at once/);
+    expect(refusal!.message).toMatch(/Try again in \d+ s/);
+    expect(refusal!.message).not.toBe(consoleDictionary('en').errors.noExplanation(429));
+  });
+
+  it('is the same sentence the lookup beside it already gave', async () => {
+    await spendTheBudget();
+
+    // The two endpoints share the bucket, so they refuse together — and they
+    // must not explain it two different ways depending on which control was
+    // pressed. This half passed before the change, and it is what says the
+    // other half was an asymmetry rather than a missing feature.
+    const lookup = await api.intelLookup('1.2.3.4').then(() => null, (e: unknown) => e as Refusal);
+    expect(lookup!.message).toMatch(/Try again in \d+ s/);
+  });
+});
+
+describe('what the password check must go on doing', () => {
+  it('still reports the relay\'s own failure out of a 200 envelope', async () => {
+    // The shape the original reader WAS written for, and the reason the route
+    // answers 200 for it: a provider's own 503 forwarded as a status code
+    // would be rewritten by this file's 5xx rule. Green before and after.
+    vi.stubGlobal('fetch', async () =>
+      new Response(JSON.stringify({ ok: false, error: 'Pwned Passwords answered 503.' }), {
+        status: 200, headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      }));
+    await expect(api.pwnedRange('ABCDE')).rejects.toThrow('Pwned Passwords answered 503.');
+  });
+
+  it('still hands back the suffix lines untouched when it worked', async () => {
+    // A success is plain text and must not be read as a reason for anything.
+    vi.stubGlobal('fetch', async () =>
+      new Response('0018A45C4D1DEF81644B54AB7F969B88D65:1\n00D4F6E8FA6EECAD2A3AA415EEC418D38EC:2\n', {
+        status: 200, headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      }));
+    const body = await api.pwnedRange('ABCDE');
+    expect(body.split('\n')[0]).toBe('0018A45C4D1DEF81644B54AB7F969B88D65:1');
+  });
+
+  it('still sends an expired session to the login screen and not to a banner', async () => {
+    // `AuthRequiredError` is what `App` reads to show the sign-in form. It is
+    // raised before the body is touched, so the reordering above cannot have
+    // moved it. Green before and after.
+    vi.stubGlobal('fetch', async () =>
+      new Response(JSON.stringify({ error: 'Authentication required.' }), {
+        status: 401, headers: { 'Content-Type': 'application/json' },
+      }));
+    const refusal = await api.pwnedRange('ABCDE').then(() => null, (e: unknown) => e as Error);
+    expect(refusal).toBeInstanceOf(AuthRequiredError);
+  });
+
+  it('keeps "no explanation" for a non-2xx whose body names nothing', async () => {
+    // The generic sentence is still right when there is genuinely nothing to
+    // say — the same boundary the 4xx tests above claim for `call()`.
+    vi.stubGlobal('fetch', async () => new Response('', { status: 503 }));
+    await expect(api.pwnedRange('ABCDE'))
+      .rejects.toThrow(consoleDictionary('en').errors.noExplanation(503));
   });
 });

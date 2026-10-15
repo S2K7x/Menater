@@ -23,12 +23,39 @@
  * the alert outright: that is the failure-that-shows-green this product exists
  * to make impossible, and it was found in this exact shape on the two injection
  * buttons (`server/injection.ts`).
+ *
+ * ============================================================================
+ * AND THE SENTENCE HAS TO ARRIVE, WHICH IS WHY THIS GOES THROUGH `lib/api.ts`
+ *
+ * This component used to call `fetch('/api/findings/promote')` itself. It was
+ * the ONLY raw `fetch` left in the browser half of the product — every other
+ * request in the console and in this section goes through one of the two
+ * clients — and the console's client is the single place that knows how to
+ * read this server's refusals. So the one control that bridges the two halves
+ * of this product was the one that could not read what the server said:
+ *
+ *   `BASE`   a hardcoded path ignores `VITE_API_URL`, so on a console served
+ *            from another origin the press goes to the page's host, not the
+ *            API's. `lib/api.ts` carries that exact defect in `pwnedRange`'s
+ *            header, already paid for once on the password panel.
+ *   the 401  `AuthRequiredError` is raised in `lib/api.ts` and nowhere else.
+ *   the body `namedReason` reads the three keys this server names a reason
+ *            under. The route is careful to answer 200 for everything IT
+ *            decides, precisely so the reason survives — but the access lock
+ *            and the 256 kB body cap answer before it runs.
+ *
+ * Measured by driving the real handler: with a console password set, the press
+ * printed *"The console could not be reached: HTTP 401. Nothing entered the
+ * queue."* over a console that had answered `{"error":"Authentication
+ * required."}` in milliseconds, and a body over the cap printed `HTTP 413`
+ * over the sentence `server/respond.ts` composes for exactly that.
  * ============================================================================
  */
 
 import { useState } from 'react';
 
 import { Explain } from '../../components/Guidance.tsx';
+import { api, ApiError } from '../../lib/api.ts';
 import { useI18n } from '../../i18n/context.tsx';
 import type { ReportFinding } from './ReportView.tsx';
 
@@ -49,7 +76,7 @@ export function PromoteFinding({
   /** What was scanned, carried onto the alert for the incident card. */
   target?: string | null;
 }) {
-  const { t } = useI18n();
+  const { t, c } = useI18n();
   const [sending, setSending] = useState(false);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
 
@@ -66,23 +93,33 @@ export function PromoteFinding({
     setOutcome(null);
     try {
       // Not through `vulnpipe/lib/api.ts`: that client talks to the analysis
-      // service through the relay, and this is the console's own route.
-      const res = await fetch('/api/findings/promote', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scan_run_id: scanRunId, target, finding }),
-      });
-      const body = await res.json().catch(() => null);
+      // service through the relay, and this is the console's own route — so it
+      // goes through the CONSOLE's client, the way this file already imports
+      // the console's `Explain`. It used to call `fetch` here directly, which
+      // is what the header above this component now explains.
+      const body = await api.promoteFinding({ scan_run_id: scanRunId, target, finding });
       setOutcome({
-        ok: body?.ok === true,
+        ok: body.ok === true,
         // The server's sentence, or the plain statement that it sent none —
-        // never a placeholder standing in for one.
-        response: typeof body?.response === 'string' && body.response !== ''
+        // never a placeholder standing in for one. Unreachable from this
+        // route, which answers `response` on every path; kept because what
+        // makes that true is a rule in another file.
+        response: typeof body.response === 'string' && body.response !== ''
           ? body.response
-          : t.report.promoteUnreachable(`HTTP ${res.status}`),
+          : c.errors.unreadable,
       });
     } catch (err) {
-      setOutcome({ ok: false, response: t.report.promoteUnreachable((err as Error).message) });
+      // `call()` names the reason the server wrote — the lock's
+      // "Authentication required.", the body cap's sentence, a tuning-rule
+      // style `problems` list — and falls back to its own transport sentence
+      // when nothing answered. So this sentence must not claim the console
+      // was out of reach — it was, in exactly one of those cases.
+      setOutcome({
+        ok: false,
+        response: t.report.promoteNotSent(
+          err instanceof ApiError ? err.message : (err as Error).message,
+        ),
+      });
     } finally {
       setSending(false);
     }

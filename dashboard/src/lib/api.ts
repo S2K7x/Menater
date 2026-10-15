@@ -185,6 +185,22 @@ export interface SimulateResult {
 }
 
 /**
+ * What `POST /api/findings/promote` answers (J0.1).
+ *
+ * `response` is the SERVER's sentence and the only thing the report prints.
+ * Every state the route decides itself leaves as a 200 — a refused alert, a
+ * duplicate, no engine — because the status code is read by this file and the
+ * reason has to survive it; see the route's own comment.
+ */
+export interface PromoteResult {
+  ok: boolean;
+  status: number;
+  response: string;
+  alert_id?: string;
+  run_id?: string | null;
+}
+
+/**
  * What `POST /api/audit/verify` answers (S1.3).
  *
  * NO `ok`, and that is the shape rather than an omission: four states, and a
@@ -392,20 +408,76 @@ export const api = {
     }
     if (res.status === 401) throw new AuthRequiredError(t().errors.authRequired);
     const body = await res.text();
-    if (!res.ok) throw new ApiError(t().errors.noExplanation(res.status));
-    // The route answers JSON when the relay itself failed, and one
-    // `SUFFIX:COUNT` per line when it did not. A JSON body here carries the
-    // named reason, and throwing it away for a generic sentence would lose the
-    // only useful half of the answer.
-    if (body.startsWith('{')) {
-      try {
-        throw new ApiError(String(JSON.parse(body).error ?? t().errors.unreadable));
-      } catch (err) {
-        throw err instanceof ApiError ? err : new ApiError(t().errors.unreadable);
-      }
+    /**
+     * The route answers one `SUFFIX:COUNT` per line when it worked, and JSON
+     * when it did not. A JSON body here carries the named reason, and throwing
+     * it away for a generic sentence would lose the only useful half of the
+     * answer.
+     *
+     * THE STATUS CHECK USED TO COME FIRST, and it discarded that body on every
+     * non-2xx — which is the one shape this route has. Measured by driving the
+     * real handler through this client: the per-address budget this endpoint
+     * SHARES with the lookups answers
+     * `429 {"error":"Too many checks at once. Try again in 60 s."}`, and the
+     * password panel printed *"The console server answered 429 with no
+     * explanation."* The route's own header says why that costs something: a
+     * refusal that does not name its own duration gets retried immediately,
+     * which spends the budget it is protecting. The neighbouring
+     * `POST /api/intel/lookup` says its wait correctly, because that one goes
+     * through `call()`.
+     *
+     * So the body is read BEFORE the status decides, through `namedReason` —
+     * the same reader `call()` uses, not a second spelling of it.
+     */
+    let said: unknown = null;
+    try {
+      said = body.startsWith('{') ? JSON.parse(body) : null;
+    } catch {
+      // Not JSON after all. Nothing named a reason, so the status is all that
+      // is left to say — which is what the fallbacks below already say.
     }
+    const named = namedReason(said);
+    if (!res.ok) throw refused(t().errors.noExplanation(res.status), named);
+    // A 200 carrying JSON is the relay's own failure, reported inside the
+    // payload so that this file's 5xx rule cannot replace it.
+    if (said !== null) throw refused(t().errors.unreadable, named);
     return body;
   },
+
+  /**
+   * J0.1 — a scan finding into the triage queue.
+   *
+   * IT IS HERE AND NOT IN THE COMPONENT, and that is the whole of the change:
+   * `vulnpipe/components/PromoteFinding.tsx` called `fetch('/api/findings/promote')`
+   * directly — the ONE raw `fetch` left in the browser half of this product,
+   * on the one control that bridges the two halves. Three things this file
+   * does, it therefore did none of:
+   *
+   * - `BASE`. A hardcoded path ignores `VITE_API_URL`, so on a console served
+   *   from another origin the button posts to the page's host instead of the
+   *   API's. `pwnedRange` above carries that defect in its own header, already
+   *   paid for once on the password panel.
+   * - The 401. Only `call()` and `pwnedRange` raise `AuthRequiredError`, so an
+   *   expired session was read as a transport failure.
+   * - `namedReason`. The route is careful to answer 200 for everything it
+   *   decides itself, but the lock and the body cap answer before it runs:
+   *   measured, `401 {"error":"Authentication required."}` reached the report
+   *   as *"The console could not be reached: HTTP 401"* and
+   *   `413 {"error":"Request body over 256 kB…"}` as the same sentence with
+   *   `HTTP 413` in it.
+   *
+   * The 200 envelope is unchanged and is still the server's: `ok` decides the
+   * tone, `response` is the sentence, and the component composes neither.
+   */
+  promoteFinding: (payload: {
+    scan_run_id: string | null;
+    target: string | null;
+    finding: unknown;
+  }) =>
+    call<PromoteResult>('/api/findings/promote', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
 
   authStatus: () => call<AuthStatus>('/api/auth/status'),
   login: (password: string) =>
