@@ -33,6 +33,7 @@ import { screen, cleanup, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 
 import { render } from '../test-utils.tsx';
+import { consoleDictionary } from '../../i18n/console.ts';
 import { PromoteFinding } from './PromoteFinding.tsx';
 import { FindingCard, type ReportFinding } from './ReportView.tsx';
 import { resetPreferences } from '../lib/preferences.ts';
@@ -63,11 +64,19 @@ const FINDING: ReportFinding = {
   code_excerpt: null,
 };
 
-/** Stubs the console route and hands back what it was called with. */
+/**
+ * Stubs the console route and hands back what it was called with.
+ *
+ * A REAL `Response`, not a `{ status, json }` object. The press goes through
+ * `lib/api.ts` now, which reads the body as TEXT and parses it itself so that a
+ * refusal's named reason survives — so a hand-rolled double would be vouching
+ * for a shape the client does not use, and the first version of this helper
+ * did exactly that (`res.text is not a function`).
+ */
 function stubRoute(body: unknown, status = 200) {
-  const fetchMock = vi.fn(async () => ({
+  const fetchMock = vi.fn(async () => new Response(JSON.stringify(body), {
     status,
-    json: async () => body,
+    headers: { 'Content-Type': 'application/json' },
   })) as unknown as typeof fetch;
   vi.stubGlobal('fetch', fetchMock);
   return fetchMock as unknown as ReturnType<typeof vi.fn>;
@@ -151,7 +160,17 @@ describe('what the button reports back', () => {
     const note = await screen.findByRole('status');
     // The cause, not a shrug — and the reassurance that matters after pressing
     // a button whose whole job is to send something somewhere.
-    expect(note.textContent).toContain('Failed to fetch');
+    //
+    // THE CAUSE IS THE CONSOLE'S SENTENCE, NOT THE BROWSER'S. This assertion
+    // used to pin the literal `Failed to fetch`, and that string is worth
+    // nothing twice over: every transport failure there is rejects with the
+    // same opaque words (the trap `describeFetchError` exists for on the
+    // server side), and the words themselves belong to whichever runtime the
+    // suite happens to run on. `lib/api.ts` answers the state with a sentence
+    // that names the remedy, and this button now gets the same one as every
+    // other screen in the console. Claimed in both directions.
+    expect(note.textContent).toContain(consoleDictionary('en').errors.apiUnreachable);
+    expect(note.textContent).not.toContain('Failed to fetch');
     expect(note.textContent).toMatch(/nothing entered the queue/i);
   });
 

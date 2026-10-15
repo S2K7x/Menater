@@ -181,7 +181,18 @@ export interface Dictionary {
     promoteHelp: string;
     promoteSending: string;
     promoteNoRun: string;
-    promoteUnreachable: (error: string) => string;
+    /**
+     * The press did not reach the queue, and WHY — the server's own sentence
+     * when it answered, this client's transport sentence when it did not.
+     *
+     * It was `promoteUnreachable`, and it asserted the console was out of
+     * reach: measured on the real handler, a console that answered
+     * `401 {"error":"Authentication required."}` in milliseconds was reported
+     * as *"The console could not be reached: HTTP 401."* A sentence must not be
+     * reachable from a state it does not describe, and the reason it carries
+     * now names the state on its own.
+     */
+    promoteNotSent: (reason: string) => string;
     copyReport: string;
     downloadReport: string;
     exportHelp: string;
@@ -700,8 +711,7 @@ const EN: Dictionary = {
     promoteNoRun:
       'This report is not attached to a scan run, so the alert would have no stable '
       + 'identity and could not be deduplicated. Run the scan again from this console.',
-    promoteUnreachable: (error) =>
-      `The console could not be reached: ${error}. Nothing entered the queue.`,
+    promoteNotSent: (reason) => `${reason} Nothing entered the queue.`,
     copyReport: 'Copy the report',
     downloadReport: 'Download',
     exportHelp:

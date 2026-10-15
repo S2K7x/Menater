@@ -4,6 +4,219 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-10-15 — Thursday · Bugs and technical debt
+
+**Subject**: **the one caller in the browser that could not read what the
+server said.** `call()` in `src/lib/api.ts` is this console's single reader of
+a refusal — it prepends `BASE`, raises `AuthRequiredError` on a 401, and reads
+the named reason under all three keys this API uses. `grep -rn 'fetch(' src/`
+returns exactly one caller outside the two clients, and it is
+`vulnpipe/components/PromoteFinding.tsx`: J0.1's *Send to the triage queue*,
+the one control that bridges the two halves of this product. The same pass
+found that `pwnedRange` — the reader both of this file's relevant comments cite
+as the authority — had lost one shape of the same thing.
+
+**Result**: PR opened on `claude/sleepy-volta-0oomqh`. Seven files: three
+production (`src/lib/api.ts`, `src/vulnpipe/components/PromoteFinding.tsx`,
+`src/i18n/dictionary.ts` — one key renamed), one new test file
+(`src/vulnpipe/components/promote-refusals.test.tsx`, **+10 tests**),
+`src/lib/api-named-failures.test.ts` (**+6**) and
+`src/vulnpipe/components/promote.test.tsx` (harness and one assertion), plus
+`CLAUDE.md`, `ROADMAP.md` (C0.38 and two § 7 rows) and this journal. No
+production dependency, no server change, no new CSS and no new class name.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-0oomqh` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Forty-second entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: the designated branch
+at 2ff1d48 (= `origin/main`) gave typecheck 0, **1623 passed | 1 skipped**,
+build clean — run, not assumed; a fresh clone needs `npm ci` first, and
+`vitest: not found` is the missing install and not a red suite — and
+`list_pull_requests --state open` was empty. Thursday's reservoir is § 7 plus
+anything a previous night noted without fixing. The 10-14 entry's *Found and
+NOT fixed* list was the starting point; what it pointed at (`AuthRequiredError`
+never reaching the sign-in screen) turned out to be product-wide and bigger
+than a night, but reading `lib/api.ts` to size it surfaced the two readers that
+do not go through `call()` at all. **The transferable half is the sweep**:
+`grep -rn 'fetch(' src/` — one hit outside the two clients, in the one file
+where it mattered most.
+
+**What an operator actually got.** `routes/findings.ts` is careful: it answers
+**200** for every state IT decides — refused, duplicate, no engine, an engine
+that threw — with the sentence in `response`, under a comment saying that a 4xx
+or a 5xx would be rewritten by `lib/api.ts`. **That half worked, which is what
+hid the rest.** The access lock and the 256 kB body cap answer before the route
+runs and neither writes `response`, so measured on the real handler:
+
+| State | The server said | The report printed |
+|---|---|---|
+| console password set | `401 {"error":"Authentication required.","auth_required":true}` | « The console could not be reached: HTTP 401. Nothing entered the queue. » |
+| body over the cap | `413 {"error":"Request body over 256 kB. …"}` | « The console could not be reached: HTTP 413. … » |
+| password check, budget spent | `429 {"error":"Too many checks at once. Try again in 60 s."}` | « The console server answered 429 with no explanation. » |
+
+Two defects in one sentence on the first two: the reason is discarded for the
+status code, and the sentence ASSERTS the console was out of reach about a
+console that answered in milliseconds and named the remedy.
+
+**What I learned that is written nowhere else.**
+
+1. **A route that defends itself against a bad client hides the client's
+   defect.** `routes/findings.ts` answers 200 for everything it decides
+   *precisely because* `lib/api.ts` mangles non-2xx codes. The consequence
+   nobody drew: that makes the component's reader look correct on every path a
+   human exercises, and wrong only on the two answers the route does not write
+   — which come from `server/auth.ts` and `server/respond.ts`, two files
+   nobody reads from the scan report.
+2. **The budget the password check is refused for is spent by the lookups.**
+   One bucket per caller address, 40 a minute, and `routes/intel.ts`'s own
+   header says that behind Docker or a proxy that is ONE address for the whole
+   console. So the sentence `pwnedRange` discarded is reachable without anyone
+   touching the password field, and it is the sentence that says *how long* —
+   which the same header calls load-bearing: *a refusal that does not name its
+   own duration gets retried immediately*. The neighbouring
+   `POST /api/intel/lookup` says its wait correctly and always did, because it
+   goes through `call()`. The asymmetry, not the absence, is the defect.
+3. **`vi.stubEnv` is a ruler that reads zero if you point it at yourself.**
+   `vi.stubEnv('VITE_API_URL', 'https://api.example.test')` does **not** show
+   on the stubbing file's own `import.meta.env` — Vite replaces that expression
+   per module at transform time — so a test asserting the variable concludes
+   the stub did nothing. It DOES reach a module imported after it. Probed on
+   vitest 4.1.11, and the sequence that works inside one test is
+   `vi.stubEnv` → `vi.resetModules()` → `await import(...)`:
+
+   ```
+   DEFAULT BASE URL  = /api/findings/promote
+   STUBBED BASE URL  = https://api.example.test/api/findings/promote
+   STUBBED PWNED URL = https://api.example.test/api/intel/pwned-range/ABCDE
+   ```
+
+   What is asserted is therefore the URL that was dialled, never the variable.
+4. **Spending the intel budget offline.** The obvious way to provoke the 429 is
+   41 calls to the pwned route, and each one dials the real
+   `api.pwnedpasswords.com` from a unit test — I did that once in a throwaway
+   probe before thinking, 42 real requests. `POST /api/intel/lookup` increments
+   the **same** bucket, and `lookup` classifies before it dials, so a value
+   that is not an observable (`'not-an-observable'` → `unknown`) matches no
+   provider and opens no socket. An IP would not do: Shodan's InternetDB needs
+   no key, so it is reachable with nothing configured.
+5. **`import.meta.url` is not a `file:` URL under jsdom**, so `readdirSync` and
+   `readFileSync` refuse it (`TypeError: The URL must be of scheme file`). The
+   source-reading sweep uses `import.meta.dirname` with `join`, which is the
+   choice `heading-outline.test.tsx` already makes.
+6. **The fix made the lazy chunk smaller, not larger.** Importing the console's
+   client from a file inside `React.lazy`'s boundary looked like it might pull
+   `lib/api.ts` into the deferred chunk; it does not, because `App.tsx` already
+   imports it into the eager one. Measured on the build: `VulnPipeSection`
+   63.61 → **63.51 kB** (the fetch plumbing left the component), `index`
+   489.37 → **489.39 kB**, CSS byte-identical.
+7. **`promoteUnreachable` could not be kept once the reason arrived.** It opens
+   with *« The console could not be reached »*, which was true of one of the
+   four states it was reachable from. `promoteNotSent` names the consequence,
+   carries the reason and claims nothing about reachability; the transport
+   sentence is still shown — `call()`'s own `apiUnreachable` — and is now
+   reachable only from the state it describes.
+
+**The one test I changed, and why it tested the wrong thing.**
+`promote.test.tsx`'s *names the failure when the console cannot be reached at
+all* asserted `toContain('Failed to fetch')`. That string is worth nothing
+twice over: every transport failure there is rejects with those same opaque
+words — the trap `describeFetchError` exists for on the server side — and the
+words belong to whichever runtime the suite happens to run on, which is the
+`persistent-cache.test.ts` lesson (*a test must provoke the failure it is
+testing, never borrow one from the machine*). It now asserts the console's own
+transport sentence AND that `Failed to fetch` is absent, i.e. both directions.
+The file's `stubRoute` helper also had to stop being a `{ status, json }`
+object: the press reads the body as TEXT now, so a hand-rolled double was
+vouching for a shape the client does not use (`res.text is not a function`). A
+real `Response`, as `api-named-failures.test.ts` already uses.
+
+**Found and NOT fixed.**
+
+- **A write's 401 still does not reach the sign-in screen.** Now § 7. `App.load()`
+  is the only place that routes `AuthRequiredError` to `setAuthed(false)` and it
+  is reached from the snapshot poll alone, so every screen with its own catch
+  files « Authentication required. » as a banner about its own data. The poll
+  usually rescues it within `refresh_seconds`, which is why it has never been
+  reported — and is also the measure of it, since the cadence goes to 3600 s and
+  the poll is suspended outright on the Code tab (`tab === 'code'`), the tab the
+  promote button lives on. Not a one-line fix: it is a decision about where the
+  hand-up lives.
+- **Seven reads still map a failure to a value that means something else.**
+  `.catch(() => setX([]))` / `(null)` on `api.scenarios`, `api.intelProviders`,
+  `api.mcpState`, `api.ruleTemplates`, `api.credentials`,
+  `api.assistantProviders` and the assistant's state. Each is a deliberate
+  isolation (a comment says so) and each loses the distinction between *read and
+  empty* and *could not read*: `api.credentials() → []` makes the Settings setup
+  checklist claim the model key is missing, and `api.intelProviders() → []`
+  makes the Lookup fold say « 0 of 7 » as « 0 of 0 ». **I dug and did not fix**:
+  all seven fail only when `api.settings()` / the snapshot poll fail too, so the
+  screen already carries a banner — the exposure is real but not silent, and the
+  honest repair is a third state per read, which is a pass of its own.
+- **`pwnedRange` has no guard on `await res.text()`.** It rejects after the
+  status line is in (`TypeError: terminated`), the shape `makeNotify` was fixed
+  for server-side. The UI's own fallback catches it as « the check could not be
+  completed », so it is not a crash — but it is the third state that family
+  always has, and it is unnamed.
+- **Standing leads, re-checked and unchanged**: the `host` fencing (the next
+  security night, fully specified in the 10-13 entry), the caller-supplied regex
+  (§ 7, a decision), the incident card at 320/375 px (§ 7), the ninety French
+  strings in `server/engine/`, the four in `server/vulnpipe.ts`,
+  `MENATER_TEST_PG` still never set, and `POST /api/auth/login` still having no
+  route-level test.
+
+**Do not redo.**
+
+- **Do not move the raw `fetch` into `lib/api.ts` and stop there.** It satisfies
+  the sweep and fixes nothing: kept as mutation M4b, red on **six** tests
+  including the `VITE_API_URL` one. The point is `call()`, not the file.
+- **Do not keep `promoteUnreachable`.** Learning 7, and M1 is red on two tests.
+- **Do not read `pwnedRange`'s reason from `error` alone.** `namedReason` is the
+  shared reader for a reason; M3 (a second spelling that reads only `error`) is
+  red.
+- **Do not burn the intel budget on the pwned route in a test.** Learning 4 —
+  it dials the real Internet, once per call.
+- **Do not assert `import.meta.env` to check `vi.stubEnv` worked.** Learning 3.
+  It prints `undefined` and the test goes green over a stub that did nothing.
+- **Do not widen this to the seven reads.** They need a third state each, and
+  three of them feed the setup checklist, which is a screen decision.
+
+**Verified** (Node 22.22.0, npm 10.9.4; every command run and its output read):
+
+| Command | Result |
+|---|---|
+| `dashboard: npm run typecheck` | 0 errors |
+| `dashboard: npm test` | **1639 passed, 1 skipped** (1623 \| 1 before: **+16**) |
+| `dashboard: npm run build` | clean; CSS **64.40 kB and 27.08 kB, byte-identical**; `VulnPipeSection` JS 63.61 → 63.51 kB, `index` JS 489.37 → 489.39 kB |
+| `VulnPipe` | not touched, suite not run |
+
+Checked **RED first**, with the renamed catalogue key already in place so the
+red would be about behaviour and not a missing symbol. With both defects
+restored verbatim: **6 red of 44**, every control green.
+
+| Mutation | Result |
+|---|---|
+| M0 — both defects restored verbatim | RED — 6 |
+| M1 — `promoteNotSent` asserts reachability again (the old sentence) | RED — 2 |
+| M2 — `pwnedRange`: the status decides before the body is read | RED — 1 |
+| M3 — `pwnedRange`: the reason read from `error` alone, not the shared reader | RED — 1 |
+| M4b — the half-fix: the raw `fetch` moved INTO `lib/api.ts`, still without `BASE` | RED — 6 |
+| M5 — the 200 envelope stops being read as the relay's failure | RED — 1 |
+| M6 — the component composes the sentence instead of the server's | RED — 4 |
+
+No model key and no database were needed: the 401 comes from `saveConfig`
+enabling the lock, the 413 from a finding carrying a 300 kB excerpt, and the
+429 from spending the shared budget on a value that is not an observable. One
+throwaway probe test file was created and deleted; `git status` shows only the
+seven intended files. **One thing to own: the first version of that probe made
+42 real requests to `api.pwnedpasswords.com`** before I noticed the route dials
+on the way in — learning 4 exists so the next night does not.
+
+---
+
 ## 2026-10-14 — Wednesday · Tests and QA
 
 **Subject**: **the two writes on the Rules tab discarded every failure.** This
