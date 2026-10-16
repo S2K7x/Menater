@@ -4,6 +4,220 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-10-16 — Friday · Performance and cost
+
+**Subject**: **the Guide's prose was in the chunk the first paint waits for.**
+Seventeen sections and a hundred-odd points — the largest body of text this
+product ships to a browser, read by ONE screen — lived in `i18n/console.ts`,
+which `i18n/context.tsx` imports, which means everything imports it. So it was
+in the chunk the browser must have before anything renders at all, whatever tab
+somebody opened. Nothing fails: it is a bill, and bills show up only if somebody
+looks.
+
+**Result**: PR opened on `claude/sleepy-volta-pu9ppg`. Nine files: four
+production (`src/i18n/guide.ts` — new, 779 lines, the block moved **verbatim**;
+`src/i18n/console.ts` — three deletions; `src/App.tsx`; `src/components/DocsPanel.tsx`),
+one new test file (`src/i18n/guide-boundary.test.ts`, **+7 tests**),
+`src/components/n8n-removed.test.ts` (**+1**, and the sweep extended),
+`src/components/app-routing.test.tsx` (**+1**, and one assertion awaited),
+`src/components/assistant-panel.test.tsx` (one import), plus `CLAUDE.md`,
+`ROADMAP.md` (C0.39 and one § 7 row) and this journal. No production
+dependency, no server change, **no CSS rule added, removed or edited**, no new
+class name, no user-facing string changed.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-pu9ppg` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Forty-third entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: `main` at cbfd811 gave
+typecheck 0, **1639 passed | 1 skipped**, build clean — run, not assumed; a
+fresh clone needs `npm ci` first, and `vitest: not found` is the missing install
+and not a red suite — and `list_pull_requests --state open` was empty. The lead
+was **left for this night by the 10-09 entry**, which measured
+`src/i18n/console.ts` at 90,051 B of a 487 kB chunk, called the Guide's sections
+most of it, and said *« worth a night with its own measurement »*. It is
+priority (5), a measured optimisation. Its own "do not redo" forbids deferring
+`i18n/dictionary.ts` the same way, and that was respected: the provider builds
+that catalogue eagerly for the whole tree, so it is genuinely in the eager
+graph.
+
+**Measured, before and after, in the same Chromium 1194 against the same
+server**, gzipped the way `server/static.ts` serves it, bytes from CDP
+`Network.loadingFinished.encodedDataLength`:
+
+| | before | after | delta |
+|---|---|---|---|
+| script before mount | **143,721 B** | **129,709 B** | **−14,012 B (−9.7 %)** |
+| render-blocking stylesheet | 12,139 B | 11,710 B | −429 B (−3.5 %) |
+| opening the Guide | 0 B | 17,569 B | the honest price, paid by whoever opens it |
+
+And at the bundler: eager JS 489.39 → 445.72 kB raw, **gzip 144.63 → 130.50 kB**;
+`index.css` 64.40 → 62.19 kB with a new `DocsPanel-*.css` of 2.21 kB, so the
+**total CSS is identical to the byte** (91.48 kB both ways).
+
+**What I learned that is written nowhere else.**
+
+1. **The two halves each save exactly zero on their own**, and that is the
+   shape worth carrying. Deferring `DocsPanel` while the sentences stay in
+   `console.ts` saves nothing — the strings live in the catalogue OBJECT, not
+   in the component that reads them. Moving the prose to a module of its own
+   saves nothing while `App.tsx` names that module's one reader with a static
+   import. Measured both ways before writing either, which is why the test
+   claims both and why a mutation of either is red.
+2. **A prediction from 10-09 came true, in the file that made it.**
+   `vulnpipe/diagrams.css` was split out with a comment saying the rules would
+   be *« off the render-blocking path by themselves the day the Guide stops
+   drawing them »*. That day is this one, and it needed no edit: the figures'
+   sheet is now the Guide chunk's. The 10-09 arrangement (a sheet imported by
+   the component, not by `main.tsx`) is the whole reason — in
+   `src/styles.css` the bundler could not have known.
+3. **Three rulers were wrong before one was right**, all on the guard against
+   the plausible wrong fix (prose pushed into `DocsPanel.tsx`). A string-literal
+   hunt whose quote class allowed `\n` matched from a quote on one line to a
+   quote thirty lines down: **nine offenders in a file with none**. The second
+   draft fixed that and added a backtick branch, where a template literal
+   legitimately spans lines: two more false matches between two unrelated
+   backticks. And both missed the form that needs no quotes at all — prose
+   written straight into JSX. What works is a rule about the TEXT and not its
+   delimiter: sixty characters of letters, spaces and sentence punctuation with
+   no bracket, dot or `$` to break them. **Probed in both directions before
+   being trusted** — it catches all three quote forms and raw JSX text, and
+   passes over the file's own comments and over ordinary statements.
+4. **The importer sweep had a hole only mutation found.** It matched
+   `from '…i18n/guide.ts'`, so it could not see `'./guide.ts'` — which is
+   exactly how the likeliest regression would be written, from a sibling module
+   in the same directory. Providing the Guide beside the other two catalogues
+   in `i18n/context.tsx` reads as consistency and undoes the whole saving in
+   one line, and the mutation that does it left the test **green**. Fixed to
+   match any specifier resolving to the file.
+5. **`vi.stubEnv`-style self-vouching, the catalogue version.** `n8n-removed.test.ts`
+   walks the catalogues BY NAME, so whatever moves out of one stops being swept
+   on the day of the move — silently, and it is the largest prose in the
+   product. Its own header was written for that exact defect one notch out
+   (`server/i18n.ts` was never in it). `guide.ts` is in its list, a test
+   asserts it is, and the `docs.` carve-out for the publish rule became a
+   CATALOGUE boundary — narrower than the frozen path it replaced, and nothing
+   else can now fall inside it.
+6. **`scrollIntoView` was called bare, with the rule written in the sibling
+   component.** `SectionTabs.tsx` optional-calls it under a comment saying it
+   does not exist under jsdom and throws when called bare; `DocsPanel.tsx`
+   called it bare, on the effect that unfolds the section a tab's
+   *« How does it work? »* link points at. **That is why the path had no test**
+   — every attempt crashed into the boundary, which is how I found it. The
+   deferral makes the symptom worse rather than creating it: the throw is now
+   CAUGHT by the `SectionBoundary` the deferral requires, and painted as
+   *« the matching piece of interface never arrived »* about a chunk that had
+   arrived perfectly. Eighteenth recurrence of *the mirror of a rule is not the
+   rule*.
+7. **Stubbing jsdom was the wrong fix and was rejected.** It would have left the
+   product with the bare call its own sibling documents as a throw risk, and
+   made the test vouch for an environment nobody runs — *a test must provoke the
+   failure it is testing, never borrow one from the machine*, pointed the other
+   way. With the one-token guard the path needs no stub at all. The split is the
+   argument: unfolding the section is the half that answers the question,
+   bringing it under the eye is the half that is nice to have.
+8. **The French doc comment on `DocGroup`/`DocSection` moved verbatim**, and
+   deliberately. Translating it inside the move would make the diff impossible
+   to verify AS a move, which is the one thing a reviewer needs to check about
+   779 lines. It joins the standing French-comment debt rather than being
+   smuggled into a performance pass.
+9. **The Guide's deep link works identically**, checked in Chromium on both
+   builds before writing the test: clicking *« How does it work? »* on Lookup
+   opens the Guide with `doc-intel` unfolded, before and after. jsdom could not
+   tell me that — see learning 6.
+
+**Do not redo.**
+
+- **Do not defer `DocsPanel` without moving the prose, or move the prose and
+  leave the static import.** Learning 1. Each alone is a no-op; M1 and M8 are
+  the mutations.
+- **Do not provide the Guide catalogue from `i18n/context.tsx`.** Learning 4.
+  It looks like consistency and costs the entire saving; M2 is red now and was
+  green before the ruler was fixed.
+- **Do not hunt string literals to find prose in a component.** Learning 3.
+  Three wrong rulers; the one that works is about the text, not the quote.
+- **Do not stub `scrollIntoView` in a test.** Learning 7.
+- **Do not read `dist/` from a test to assert this saving.** A test that
+  asserts on a build passes by being skipped on a machine that has not run one
+  — the `MENATER_TEST_PG` lesson, where a gated half of a contract never ran
+  once in its life and was red the first time it did. The claims are about the
+  source; the byte counts are in the PR, measured by hand.
+- **Do not assert the saving as a bundle-size total** (inherited from 10-09,
+  and true again here for the CSS: 91.48 kB before and after).
+
+**Found and NOT fixed.**
+
+- **The Guide's seventeen section titles are not headings.** Now § 7.
+  `querySelectorAll('h1,h2,h3,h4')` over the mounted tab returns **one**
+  element, the page title: the section titles are `<span class="soc-doc-title">`
+  inside a `<summary>` and the four group labels are `<span class="soc-kicker">`.
+  So the longest screen in the product is one undifferentiated block to anybody
+  navigating by heading. Identical before and after — this pass measured it, it
+  did not cause it. Not a one-line fix: a `<summary>` may hold a heading, but
+  `.soc-panel h2`/`h3` carry their own type scale and the summary is already a
+  flex row of four things, so it is a decision about sizes on seventeen folds —
+  the C0.36 family, and Saturday's theme rather than Friday's.
+- **`src/i18n/console.ts` is still 51,764 B of the eager chunk** after this
+  (down from 90,491), and `i18n/dictionary.ts` is 30,860 B. The second is
+  closed by 10-09's own "do not redo"; the first is now genuinely the console's
+  OWN vocabulary, read from every screen, so there is no second screen-shaped
+  block to lift out. The next honest move there would be per-tab catalogues,
+  which is a restructure and not a night.
+- **Standing leads, re-checked and unchanged**: a write's 401 still not reaching
+  the sign-in screen (§ 7), the seven reads that map a failure to a value
+  meaning something else, `pwnedRange`'s unguarded `await res.text()`, the
+  `host` fencing, the incident card at 320/375 px (§ 7), the ninety-odd French
+  strings in `server/engine/`, the four in `server/vulnpipe.ts`,
+  `MENATER_TEST_PG` still never set, `npm audit` not in CI (§ 7), and
+  `POST /api/auth/login` still having no route-level test.
+
+**Verified** (Node 22.22.0, npm 10.9.4, Chromium 1194; every command run and
+its output read):
+
+| Command | Result |
+|---|---|
+| `dashboard: npm run typecheck` | 0 errors |
+| `dashboard: npm test` | **1648 passed, 1 skipped** (1639 \| 1 before: **+9**) |
+| `dashboard: npm run build` | clean; eager JS 489.39 → 445.72 kB (gzip 144.63 → 130.50); CSS total identical to the byte |
+| real server + Chromium, before and after | the table above |
+| rendered Guide, 4 themes × 1280/375/320 px | identical: 1 heading, 3 figures, 17 folds, same computed figure styling, `scrollWidth === innerWidth` everywhere |
+| `VulnPipe` | not touched, suite not run |
+
+Checked **RED first**: with the three production files back at `HEAD` and
+`guide.ts` plus the tests kept, `guide-boundary.test.ts` is **4 failed | 3
+passed** — the four being exactly the claims the change makes. The three that
+pass either way are the premises (the Guide has prose to move, the prose is not
+in the component, the sweep covers the new catalogue).
+
+| Mutation | Result |
+|---|---|
+| M0 — the three production files back at `HEAD` | RED — 4 of 7 |
+| M1 — the static import of `DocsPanel` comes back | RED — 1 |
+| M2 — the Guide catalogue also provided by `i18n/context.tsx` | RED — 1 *(green before learning 4)* |
+| M3 — the `SectionBoundary`/`Suspense` net removed from the deferred tab | RED — 1 |
+| M4 — `n8n-removed.test.ts` forgets the third catalogue | RED — 1 |
+| M5 — prose written into `DocsPanel.tsx` instead of the catalogue | RED — 1 |
+| M6 — the Guide catalogue emptied (the vacuity guard) | RED — 10 |
+| M7 — the `await` on the deep-linked Guide content removed | RED — 1 |
+| M8 — one Guide sentence put back into the catalogue everything imports | RED — 2 |
+| M9 — `scrollIntoView` called bare again | RED — 1 |
+| M10 — the effect scrolls to the section but does not unfold it | RED — 1 |
+| M11 — the `openSection` effect dropped entirely | RED — 1 |
+
+Eleven mutations of the product, eleven killed. One mutation OF A TEST
+(deleting the `.open` assertion) went green and was replaced by M10/M11, which
+mutate the behaviour instead: deleting an assertion weakens a test, it does not
+prove one earns its place.
+
+No model key and no database were needed. Probes and measurement scripts lived
+in the scratchpad and are not in the diff; `git status` shows only the nine
+intended files.
+
+---
+
 ## 2026-10-15 — Thursday · Bugs and technical debt
 
 **Subject**: **the one caller in the browser that could not read what the

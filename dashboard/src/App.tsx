@@ -44,7 +44,6 @@ import { IngestionPanel } from './components/IngestionPanel.tsx';
 import { SettingsPage } from './components/SettingsPage.tsx';
 import { NoticeList } from './components/Notices.tsx';
 import { RulesPage } from './components/RulesPage.tsx';
-import { DocsPanel } from './components/DocsPanel.tsx';
 import { IntelPanel } from './components/IntelPanel.tsx';
 import { Assistant } from './components/Assistant.tsx';
 import { FirstRun, PageHead, SectionBoundary } from './components/Guidance.tsx';
@@ -64,6 +63,26 @@ const VulnPipeSection = lazy(() =>
 );
 const VulnPipeSettings = lazy(() =>
   import('./vulnpipe/VulnPipeSection.tsx').then((m) => ({ default: m.VulnPipeSettings })),
+);
+
+/**
+ * The Guide, on demand too — and for a reason of a different kind.
+ *
+ * The Code tab is deferred because it is heavy CODE. This one is deferred
+ * because it is heavy TEXT: `i18n/guide.ts` holds the seventeen sections and
+ * their hundred-odd points, and that prose is read by this one screen. Named
+ * here with a static `import`, the whole of it would be in the chunk the
+ * browser must have before the alert queue can paint — which is where it was,
+ * measured at 34,907 bytes of 488,613, plus the three figures it draws and
+ * their stylesheet.
+ *
+ * The two halves go together and neither does anything alone: the prose has to
+ * leave `i18n/console.ts` (imported by `i18n/context.tsx`, i.e. by
+ * everything), and this import has to stop being static. `guide-boundary.test.ts`
+ * claims both.
+ */
+const DocsPanel = lazy(() =>
+  import('./components/DocsPanel.tsx').then((m) => ({ default: m.DocsPanel })),
 );
 
 /**
@@ -762,7 +781,16 @@ export function App() {
             </>
           ) : null}
 
-          {tab === 'docs' ? <DocsPanel openSection={docsSection} /> : null}
+          {/* Its own boundary and its own fallback, like the Code tab: a chunk
+              that fails to arrive must stay inside this tab rather than
+              unmounting the console around it. */}
+          {tab === 'docs' ? (
+            <SectionBoundary>
+              <Suspense fallback={<p className="soc-empty">{c.common.loading}</p>}>
+                <DocsPanel openSection={docsSection} />
+              </Suspense>
+            </SectionBoundary>
+          ) : null}
 
           {/* Les règles ont leur propre source — la base — et ne lisent pas le
               snapshot : elles ne doivent donc pas être prises dans l'écran de

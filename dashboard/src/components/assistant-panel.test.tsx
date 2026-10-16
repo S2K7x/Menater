@@ -29,6 +29,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Assistant } from './Assistant.tsx';
 import { I18nProvider } from '../i18n/context.tsx';
 import { consoleDictionary } from '../i18n/console.ts';
+import { guideCatalogue } from '../i18n/guide.ts';
 import { api } from '../lib/api.ts';
 
 function mount(page = { tab: 'queue' }) {
@@ -179,7 +180,9 @@ describe('the link into the Guide', () => {
  */
 describe('what the operator is told the assistant can read', () => {
   const d = consoleDictionary('en');
-  const guide = d.docs.sections.find((s) => s.id === 'assistant')!;
+  // The Guide's prose is its own catalogue, so that the chunk it travels in
+  // is the Guide tab's: see `i18n/guide.ts`. The claim here is unchanged.
+  const guide = guideCatalogue('en').sections.find((s) => s.id === 'assistant')!;
 
   /** Every sentence on a screen that describes the assistant's reach. */
   const claims: Array<[string, string]> = [

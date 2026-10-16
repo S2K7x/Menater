@@ -49,7 +49,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { useI18n } from '../i18n/context.tsx';
-import type { DocGroup, DocSection } from '../i18n/console.ts';
+import { guideCatalogue, type DocGroup, type DocSection } from '../i18n/guide.ts';
 import { ArchitectureDiagram, ConfidenceZones, CostFunnel } from '../vulnpipe/components/Diagrams.tsx';
 import { Icon } from './Icon.tsx';
 
@@ -128,8 +128,18 @@ function Highlight({ text, query }: { text: string; query: string }) {
 const GROUP_ORDER: DocGroup[] = ['start', 'work', 'check', 'around'];
 
 export function DocsPanel({ openSection }: { openSection?: string | null }) {
-  const { c } = useI18n();
-  const d = c.docs;
+  const { c, locale } = useI18n();
+  /**
+   * The Guide's own catalogue, read here rather than through the context.
+   *
+   * `i18n/context.tsx` provides the two catalogues everything needs; this one
+   * is needed by this component and by nothing else, and it is a hundred-odd
+   * points of prose. Reaching it from here is what keeps it inside the chunk
+   * `App.tsx` defers — see the header of `i18n/guide.ts`. The returned object
+   * is the same constant on every render, so the memos below keep their
+   * identity.
+   */
+  const d = guideCatalogue(locale);
   const [query, setQuery] = useState('');
   const needle = query.trim().toLowerCase();
 
@@ -141,7 +151,19 @@ export function DocsPanel({ openSection }: { openSection?: string | null }) {
     const el = document.getElementById(`doc-${openSection}`);
     if (!(el instanceof HTMLDetailsElement)) return;
     el.open = true;
-    el.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    // `scrollIntoView` is optional-called for the reason `SectionTabs.tsx`
+    // already states about its own sticky bar: it does not exist under jsdom,
+    // and called bare it THROWS and takes the component with it. Unfolding the
+    // section is the half that answers the question; bringing it under the eye
+    // is the half that is nice to have, so a browser without the method must
+    // lose the second and keep the first.
+    //
+    // It costs more now than it did: the Guide is behind a `SectionBoundary`
+    // since it became a deferred chunk, so the throw was caught and painted as
+    // « the matching piece of interface never arrived » — about a chunk that
+    // had arrived perfectly. A sentence reachable from a state it does not
+    // describe.
+    el.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
   }, [openSection]);
 
   /**
