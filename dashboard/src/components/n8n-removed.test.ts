@@ -60,6 +60,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { consoleDictionary } from '../i18n/console.ts';
+import { guideCatalogue } from '../i18n/guide.ts';
 import { messages } from '../../server/i18n.ts';
 
 const healthSource = readFileSync(
@@ -102,8 +103,8 @@ describe('n8n is gone from the interface, not only from the code', () => {
     expect(consoleDictionary('en').health.engineTitle).toBe('Built-in engine');
   });
 
-  it('has no user-facing string naming n8n', () => {
-    const offenders = strings(consoleDictionary('en'))
+  it('has no user-facing string naming n8n, in any of the three catalogues', () => {
+    const offenders = everyCatalogue()
       .filter(([, value]) => /\bn8n\b/i.test(value))
       .map(([path, value]) => `${path}: ${value.slice(0, 80)}`);
     expect(offenders).toEqual([]);
@@ -139,12 +140,36 @@ function leafKeys(node: unknown, path = ''): string[] {
  * catch. A string only a test asserts on, or only a comment mourns, is a
  * string no operator will ever read.
  *
- * BOTH CATALOGUES ARE EXCLUDED for the same reason one notch in: a catalogue
+ * EVERY CATALOGUE IS EXCLUDED for the same reason one notch in: a catalogue
  * declares its own keys, so leaving its file in here makes every key vouch for
  * itself. The second draft did exactly that, and the console-catalogue rule
  * below passed on a catalogue that still held four dead entries.
+ *
+ * THERE ARE THREE OF THEM SINCE THE GUIDE GOT ITS OWN. `i18n/guide.ts` holds
+ * the seventeen sections — the largest body of prose this product ships to a
+ * browser — and it was moved out of `i18n/console.ts` to take it off the first
+ * paint. A sweep that walks the catalogues by NAME stops covering whatever
+ * moves out of one, silently and on the day of the move: that is the defect
+ * the block above this one was written for, so the third name is added here
+ * rather than discovered later.
  */
-const CATALOGUES = [join('server', 'i18n.ts'), join('src', 'i18n', 'console.ts')];
+const CATALOGUES = [
+  join('server', 'i18n.ts'),
+  join('src', 'i18n', 'console.ts'),
+  join('src', 'i18n', 'guide.ts'),
+];
+
+/**
+ * The three catalogues, each under the prefix its paths are reported with.
+ *
+ * `guide.` is a PREFIX and not a frozen path on purpose: see the carve-out
+ * below, which used to spell `docs.` and now names a whole catalogue.
+ */
+const everyCatalogue = (): Array<[string, string]> => [
+  ...strings(consoleDictionary('en')),
+  ...strings(guideCatalogue('en')).map(([path, value]): [string, string] => [`guide.${path}`, value]),
+  ...strings(messages('en')).map(([path, value]): [string, string] => [`server.${path}`, value]),
+];
 
 const sourceText = (() => {
   const files: string[] = [];
@@ -171,16 +196,15 @@ const PUBLISH_VOCABULARY = /publish|publicat/i;
 
 describe('no screen describes a publish step this product does not have', () => {
   it('has no user-facing string, on either side, claiming a workflow is published', () => {
-    const offenders = [
-      ...strings(consoleDictionary('en')),
-      ...strings(messages('en')).map(([path, value]): [string, string] => [`server.${path}`, value]),
-    ]
+    const offenders = everyCatalogue()
       // The Guide is the one place the word belongs, because it is where the
       // product explains what it no longer has. Carved out by PREFIX rather
-      // than by a frozen path: `docs.sections.7.points.1` moves the day a
-      // section is inserted above it, and a test that has to be renumbered is
-      // a test somebody eventually renumbers wrongly.
-      .filter(([path]) => !path.startsWith('docs.'))
+      // than by a frozen path: `sections.7.points.1` moves the day a section
+      // is inserted above it, and a test that has to be renumbered is a test
+      // somebody eventually renumbers wrongly. Since the Guide became a
+      // catalogue of its own the prefix IS that catalogue, which is narrower
+      // than the old `docs.` — nothing else can now fall inside it.
+      .filter(([path]) => !path.startsWith('guide.'))
       .filter(([, value]) => PUBLISH_VOCABULARY.test(value))
       .map(([path, value]) => `${path}: ${value.slice(0, 80)}`);
     expect(offenders).toEqual([]);
@@ -189,8 +213,7 @@ describe('no screen describes a publish step this product does not have', () => 
   it('keeps the Guide entry that explains the absence, so the carve-out cannot go stale', () => {
     // Without this, deleting the explanation would silently widen the rule
     // above into "the Guide may say anything".
-    const explains = strings(consoleDictionary('en'))
-      .filter(([path]) => path.startsWith('docs.'))
+    const explains = strings(guideCatalogue('en'))
       .filter(([, value]) => /no publish step/i.test(value));
     expect(explains.length).toBeGreaterThan(0);
   });
@@ -217,5 +240,9 @@ describe('neither catalogue carries a message nothing asks for', () => {
 
   it('mentions every key the console catalogue declares', () => {
     expect(orphans(consoleDictionary('en'))).toEqual([]);
+  });
+
+  it('mentions every key the Guide catalogue declares', () => {
+    expect(orphans(guideCatalogue('en'))).toEqual([]);
   });
 });

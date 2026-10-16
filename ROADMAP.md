@@ -810,6 +810,24 @@ stayed exactly where it was.*
 **What R does not do.** It adds no per-user layout preference; that is C1.5. It
 leaves the eight facts of a triage row intact: the table got shorter, not poorer.
 
+### C0.39 ✅ — A hundred points of explanation, paid before the queue appears
+
+*The Guide is seventeen sections and a hundred-odd points, read by one screen.
+It lived in `i18n/console.ts`, which `i18n/context.tsx` imports, which means
+everything imports it — so the prose was in the chunk the browser must have
+before anything can render at all, whatever tab somebody opened. Nothing
+fails; it is a bill, and bills show up only if somebody looks.*
+
+| Point | Detail |
+|---|---|
+| **Measured twice, two ways** | Sourcemap attribution over this repository's own build charges **34,907 of the eager chunk's 488,613 bytes** to the Guide's sections. In Chromium over a real socket, gzipped the way `server/static.ts` serves it: the first load carried **143,721 B of script and 12,139 B of render-blocking stylesheet**, against **129,709 B and 11,710 B** after — **−14,012 B of script (−9.7 %)** and −429 B of stylesheet. Opening the Guide now costs **17,569 B**, paid by whoever opens it |
+| **Two changes, and neither does anything alone** | The prose has to leave the catalogue everything imports, AND `App.tsx` has to stop naming its one reader with a static import. Deferring the component alone saves nothing — the strings are in the catalogue object, not in the component. Moving the prose alone saves nothing — a static import pulls the module straight back onto the eager path. `i18n/guide-boundary.test.ts` claims both, and all four of its claims are red on unmodified `main` |
+| **The typed-catalogue rule is unchanged** | Which is the reason the block moved rather than the sentences going into the component. `GuideDictionary` still describes every key, a key added on one side only still fails to compile, and no user-facing sentence lives in a `.tsx` file. The plausible wrong fix is prose in `DocsPanel.tsx` — it also takes the bytes off the eager path and throws away what `CLAUDE.md` calls the thing that keeps user-facing strings out of components. A mutation carries it |
+| **A prediction from 10-09, come true** | `vulnpipe/diagrams.css` exists because the Guide draws the three code-analysis figures, and its header said the rules would be *« off the render-blocking path by themselves the day the Guide stops drawing them »*. They are: the figures' sheet is now the Guide's chunk's. **No CSS rule was added, removed or edited** — the total is identical to the byte, and the figures compute the same `min-width` and the same colour on all six themes |
+| **The sweep had to follow the prose** | `n8n-removed.test.ts` walks the catalogues BY NAME, so whatever leaves one stops being swept on the day of the move — the exact defect its own header was written for. `guide.ts` is in its list, a test asserts it is, and its `docs.` carve-out became a catalogue boundary: narrower than the frozen path, and nothing else can now fall inside it |
+| **The rendered screen is identical** | 12 theme × width combinations in Chromium (four palettes at 1280 / 375 / 320 px): same heading, 3 figures, 17 folds, same computed figure styling, and `scrollWidth === innerWidth` at every width — no overflow introduced at the 320 px WCAG 1.4.10 width |
+| **A defect found on the way, and fixed** | `DocsPanel` called `scrollIntoView` bare on the effect that unfolds the section a tab's *« How does it work? »* link points at, while `SectionTabs.tsx` optional-calls it under a comment saying it does not exist under jsdom and throws when called bare. That path therefore had no test — every attempt crashed into the boundary — and the deferral made the symptom worse, because the throw was then caught and painted as *« the matching piece of interface never arrived »* about a chunk that had arrived. Guarded, and `app-routing.test.tsx` drives the path now |
+
 ### C0.38 ✅ — The one caller that could not read what the server said
 
 *Every request this interface makes goes through one of two clients, and
@@ -2208,6 +2226,28 @@ the whole readability pass existed to de-billboard. Either that step becomes
 the sign-in title's — a visual decision — or the step and its `DESIGN.md` row
 go. Measured, if anybody wants the number: 16px → 44.8px at 1280, 28.8px at 375
 and 320, panel 278px → 304px, and no horizontal overflow at any of the three.
+
+### The Guide's seventeen section titles are not headings
+
+Found while measuring C0.39, **not caused by it** — identical before and after.
+`Accessibility`-wise the Guide is the longest screen in the product, and
+`document.querySelectorAll('h1,h2,h3,h4')` over the mounted tab returns
+exactly **one** element: the page title. The seventeen section titles are
+`<span class="soc-doc-title">` inside a `<summary>`, and the four group labels
+are `<span class="soc-kicker">`. So somebody navigating by heading — the first
+thing a screen-reader user does on a long document — gets the whole Guide as
+one undifferentiated block, on the screen whose entire purpose is to be
+consulted rather than read through.
+
+It is the C0.36 family (*a heading level is a size AND an outline*) and it is
+**not** a one-line fix, which is why it is here. A `<summary>` may contain a
+heading, so the markup is available; what it costs is a decision about sizes,
+because `.soc-panel h2` and `.soc-panel h3` carry their own type scale and the
+fold's summary is already a three-column flex row (number, title, count,
+chevron). Promoting the title to `h2` without choosing that size changes the
+look of seventeen folds, and leaving the group labels as spans while the titles
+become `h2` makes the groups invisible to the same reader the change is for.
+Measured numbers for whoever takes it: 17 folds, 4 groups, 1 heading today.
 
 ### The incident card scrolls sideways at 320 and 375 px
 

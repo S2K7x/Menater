@@ -99,7 +99,45 @@ describe('a link opens a screen', () => {
     await waitFor(() => expect(current()).toBe('Guide'));
     // The Guide reads no API, so this is the one deep link whose CONTENT can
     // be asserted without inventing a pipeline.
-    expect(screen.getByRole('heading', { level: 1, name: 'How it works' })).toBeTruthy();
+    //
+    // AWAITED, because the Guide is now loaded on demand: its seventeen
+    // sections are prose, and prose the browser has to have before the alert
+    // queue paints is a bill (`i18n/guide.ts`). So this assertion is also the
+    // end-to-end claim that the deferred chunk still arrives and still
+    // renders — the same shape as the `#/code` test below, whose page head is
+    // outside the boundary where this heading is inside it.
+    expect(await screen.findByRole('heading', { level: 1, name: 'How it works' })).toBeTruthy();
+  });
+
+  /**
+   * The one path the Guide's deferral could break, and it had no test.
+   *
+   * Every tab's header carries a "How does it work?" link that opens the
+   * Guide ON A SECTION — `openSection` reaches `DocsPanel` as a prop and an
+   * effect unfolds that section. With the Guide eager that effect ran in the
+   * same commit as the click; deferred, it runs after a chunk has arrived, so
+   * the fold has to be AWAITED rather than read on the next line.
+   *
+   * Lookup is the tab used because it refuses no data: `mountConsole` rejects
+   * the snapshot on purpose, so a pipeline tab would be showing its loading
+   * screen and not its header. Confirmed in Chromium against this
+   * repository's own build before being written, on the built bundle and on
+   * the one before the change: both open `doc-intel`.
+   */
+  it('opens the Guide on the section a tab\'s header points at', async () => {
+    window.history.replaceState(null, '', '#/lookup');
+    mountConsole();
+    const link = await screen.findByRole('button', { name: /how does it work/i });
+    await userEvent.click(link);
+    await waitFor(() => expect(current()).toBe('Guide'));
+    // The section is open, not merely present: a Guide that arrives scrolled
+    // to the top of a hundred points has not answered the question that was
+    // asked.
+    await waitFor(() => {
+      const fold = document.getElementById('doc-intel');
+      expect(fold).toBeTruthy();
+      expect((fold as HTMLDetailsElement).open).toBe(true);
+    });
   });
 
   it('mounts the code analysis on #/code, which is loaded on demand', async () => {
