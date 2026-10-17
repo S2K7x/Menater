@@ -396,6 +396,20 @@ code, .soc-mono { font-family: var(--mono); }
 .soc-pill-info { color: var(--blue); background: var(--blue-bg); }
 .soc-pill-neutral { color: var(--grey); }
 .soc-pill-accent { color: var(--accent-fg); background: var(--accent); border-color: var(--accent); }
+/*
+ * A pill holding a PHRASE, not a state. The approval head names the action a
+ * human is being asked to authorise, out of the closed action catalogue, and
+ * those labels are sentences — « cut the host off the network (temporarily) »
+ * is 41 characters, and `nowrap` above makes a sentence as unbreakable as a
+ * hash: 329 px of min-content on the screen where a containment is approved.
+ *
+ * BOTH classes are named. `.soc-pill` is (0,1,0) and a bare `.soc-pill-phrase`
+ * would be (0,1,0) too, winning only by sitting further down this file;
+ * (0,2,0) wins by specificity, which the next edit cannot silently change.
+ * `nowrap` stays on the base class — a severity wrapping mid-word in a
+ * forty-row table is why it is there.
+ */
+.soc-pill.soc-pill-phrase { white-space: normal; }
 
 .soc-shadow-badge {
   font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.12em;
@@ -509,8 +523,6 @@ code, .soc-mono { font-family: var(--mono); }
   text-transform: none; letter-spacing: 0;
 }
 
-@media (max-width: 1080px) { .soc-case-layout { grid-template-columns: 1fr; } }
-
 .soc-case-head { border-bottom: 1px solid var(--line); padding-bottom: 16px; margin-bottom: 16px; }
 .soc-case-title { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .soc-case-meta {
@@ -606,6 +618,12 @@ code, .soc-mono { font-family: var(--mono); }
 .soc-lineage li {
   font-family: var(--mono); font-size: 0.72rem; color: var(--muted);
   background: var(--surface-2); padding: 4px 8px;
+  /* A dotted field path — `enrichment.abuseipdb.abuse_confidence_score` — has
+     no break opportunity, so it was a 314 px word flooring the grid track.
+     `anywhere` and not `break-word`: only `anywhere` and `break-all` take part
+     in min-content sizing, which is what floors a track. Same rule as
+     `.soc-kv dd` and `.soc-health-item code`, on the value next door. */
+  overflow-wrap: anywhere;
 }
 .soc-guardrail {
   border-left: 2px solid var(--orange); background: var(--orange-bg);
@@ -1120,7 +1138,14 @@ code, .soc-mono { font-family: var(--mono); }
  * ========================================================================== */
 
 @media (max-width: 1080px) {
-  .soc-case-layout { grid-template-columns: 1fr; }
+  /* `minmax(0, …)` and not `1fr`: `1fr` is `minmax(auto, 1fr)`, so the track
+     floors at the card's min-content and the PAGE scrolls instead of the card
+     reflowing — measured at 320 px, a 296 px grid box with a 389 px track. The
+     desktop value above already protects its first track the same way; this
+     override used to throw that away. Same trap as `.soc-health-grid`: a
+     one-column override chooses how many tracks there are, not how narrow one
+     may become. */
+  .soc-case-layout { grid-template-columns: minmax(0, 1fr); }
 }
 
 @media (max-width: 860px) {

@@ -128,7 +128,13 @@ function ApprovalPanel({ alertCase, onDone }: { alertCase: AlertCase; onDone: ()
         <h3>
           <Icon name="lock" size={15} /> {a.title}
         </h3>
-        <span className="soc-pill soc-pill-accent">
+        {/*
+          `soc-pill-phrase`: this pill holds a SENTENCE from the action
+          catalogue, not a one-word state, and `.soc-pill` sets
+          `white-space: nowrap`. Without it the longest label is a 329 px
+          unbreakable word and the page scrolls sideways on a phone.
+        */}
+        <span className="soc-pill soc-pill-accent soc-pill-phrase">
           {c.queue.actions[approval.requested_action] ?? approval.requested_action}
         </span>
       </div>
