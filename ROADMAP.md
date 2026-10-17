@@ -810,6 +810,29 @@ stayed exactly where it was.*
 **What R does not do.** It adds no per-user layout preference; that is C1.5. It
 leaves the eight facts of a triage row intact: the table got shorter, not poorer.
 
+### C0.40 ✅ — The card a responder reads on a phone, and it scrolled sideways
+
+*The open incident card was the last screen in this console that failed WCAG
+2.2 § 1.4.10 (Reflow, level AA). `narrow-viewport.test.tsx` closed three of
+these, and the sweep behind it walked the TABS — an open case is a state you
+click into, so the one screen somebody reads at three in the morning on a phone
+is the one it never measured. It was in § 7 as a single number, 401 px. Driven
+case by case it is worse than that number.*
+
+| Point | Detail |
+|---|---|
+| **Measured, case by case, in Chromium 1194 on this repository's own build** | At 320 px — the width WCAG 1.4.10 names, and what a 375 px phone reaches at 125 % zoom — **six of the seven sample cases overflowed**: `401 335 401 386 320 386 386`. Five of seven at 375 px. After: **320 ×7 and 375 ×7**. The grid box was 296 px and its single track **389.047 px** |
+| **Whole-console sweep, before and after** | **156 views** (ten tabs, their sub-tabs, seven cases, six themes, three widths): **24 with horizontal overflow before, 1 after** — and that one is on the Ingestion tab, pre-existing to the pixel, now § 7 |
+| **Three causes, and the first was already written one declaration up** | The one-column override was `1fr`, i.e. `minmax(auto, 1fr)`, so the track floored at min-content — while `.soc-case-layout`'s own desktop value is `minmax(0, 1.6fr) minmax(300px, 1fr)`, whose first track is protected. The override threw that protection away. Same trap as `.soc-health-grid`: a one-column override chooses how many tracks there are, not how narrow one may become |
+| **And the stylesheet held TWO copies of that override** | Byte-identical, at lines 512 and 1123, so the later one won. Measured: patching **only** the first and rebuilding gave `401 335 401 386 320 386 386` and a track of 389.047 px — not one pixel of change. The duplicate is gone, and the test is written over EVERY declaration of that property on that selector rather than over the one somebody edited |
+| **A dotted field path is a machine value** | `.soc-lineage` is the decision's data lineage, *« ce qui permet de contester un verdict au lieu de le subir »*, and its entries are paths: `enrichment.abuseipdb.abuse_confidence_score`, 43 characters of mono with no break opportunity, **min-content 314.1 px**, on five of the seven cases. Every other machine value in this sheet already breaks — `.soc-kv dd`, `.soc-hash`, `.soc-intel-value`, `.soc-health-item code`. The mirror of a rule is not the rule, one block over |
+| **The spelling is still not interchangeable** | Re-measured on this element: `overflow-wrap: anywhere` → 320 ✓, `word-break: break-all` → 320 ✓, `overflow-wrap: break-word` → **386, unchanged**. Only the first two take part in min-content sizing, which is what floors a track. A test refuses the third by name |
+| **A pill built for a word, holding a sentence** | `.soc-pill` sets `white-space: nowrap`, which is right for `CRITICAL` / `ok` / `unavailable`. The approval head puts the closed action catalogue's label in one, and those are phrases: `cut the host off the network (temporarily)` is 41 characters and **329 px of min-content**, on the screen where a human approves a containment. `.soc-pill.soc-pill-phrase` — **both classes**, because a bare modifier is (0,1,0) like the base rule and would win only by source order |
+| **The plausible wrong fix is refused by a test that passes before and after** | `.soc-pill { white-space: normal }` leaves **six of seven cases overflowing at 320 px** (`386 335 386 386 320 386 386`) — it is not even the bigger half — and buys that nothing by letting a severity wrap mid-word in a forty-row table |
+| **The desktop is untouched, measured rather than asserted** | At 1280 px: `scrollWidth`, panel-height totals and `body.scrollHeight` **identical on all 156 views**, and nothing wraps — the action pill is still 329 px on one line at 26.9 px tall, the lineage chip 314.1 px at 26.4 px. All 23 differing views are an open case at 320 or 375 px |
+| **The price, stated** | Reflow makes the card TALLER, because content that used to leave the viewport now wraps inside it: case 0's panels go **3499 → 4081 px at 320** (+16.6 %) and **3499 → 3697 at 375** (+5.7 %). A page that scrolls sideways hides its own right-hand edge; a taller page does not hide anything |
+| **Unchanged** | 0 `innerText` leaks over headings and `<th>` at all three widths, the card's heading outline `h2 h3 h3 h4 h4 h4 h4 h3` exactly as C0.36 left it (its `h2` title is the § 7 decision above, untouched), no new user-facing string, no production dependency, no colour, and CSS 62.19 → 62.20 kB |
+
 ### C0.39 ✅ — A hundred points of explanation, paid before the queue appears
 
 *The Guide is seventeen sections and a hundred-odd points, read by one screen.
@@ -2249,29 +2272,30 @@ look of seventeen folds, and leaving the group labels as spans while the titles
 become `h2` makes the groups invisible to the same reader the change is for.
 Measured numbers for whoever takes it: 17 folds, 4 groups, 1 heading today.
 
-### The incident card scrolls sideways at 320 and 375 px
+### A `Fold`'s summary is a no-wrap flex line, and it is a shared primitive
 
-Found while measuring C0.36 and **not caused by it** — identical before and
-after. At 320 px the open case's document is **401 px**, and at 375 px it is
-401 px too; every other tab and sub-tab is clean at both widths, which is what
-`narrow-viewport.test.tsx` was written for. It did not catch this one because
-jsdom computes no layout and because the browser sweep behind that file walked
-the TABS: an open case is a state you have to click into. *The first sweep
-missed it* a second time.
+Found by the sweep that closed the incident card (C0.40) — **156 views at 320 /
+375 / 1280 px, 24 with horizontal overflow before, 1 after**, and this is the
+one. Ingestion › **Sources** measures **338 px at 320 px**; it is clean at 375
+and at 1280, and it is identical before and after C0.40, which touched nothing
+on that tab.
 
-Two causes, both measured in Chromium by patching one and re-reading
-`document.documentElement.scrollWidth`:
+The cause is not the card's: `.soc-fold > summary` is `display: flex` with no
+`flex-wrap`, so the line is as wide as the sum of its items — the title, the
+`hint` that says what is inside, and the chevron. Measured by elimination,
+hiding either `.soc-fold-hint` or `.soc-fold-chevron` takes the document back
+to 320. That is the `.soc-lang-wide` trap of `narrow-viewport.test.tsx`, on a
+different primitive.
 
-- `.soc-case-layout`'s one-column override is `grid-template-columns: 1fr`,
-  which is `minmax(auto, 1fr)`, so the track floors at the card's min-content.
-  Replacing it with `minmax(0, 1fr)` takes the document **401 px → 371 px**.
-  This is exactly the trap this repository already records for
-  `.soc-health-grid`: a one-column override chooses how many tracks there are,
-  not how narrow one may become.
-- the remaining 371 px is `.soc-verdict`, a flex row whose min-content is
-  **330 px inside 268 px** of available width.
-
-Worth a Saturday of its own: it is the screen a responder reads on a phone.
+**It is a shared primitive, which is why it is here and not in that diff.**
+`Fold` lives in `components/Guidance.tsx` and is imported by ten components
+across BOTH halves of the application — `RulesPage`, `SettingsPage`,
+`SettingsSetup`, `IngestionPanel`, `IntelPanel`, `CaseView`, `HealthPanel`, and
+VulnPipe's `ReportView`, `SettingsPage` and `PipelineExplainer`. One
+`flex-wrap: wrap` plausibly fixes every one of them at once and plausibly
+re-lays out folds on ten screens, so it wants its own measured sweep rather
+than a line added to somebody else's. The `min-height: 44px` touch target on
+that summary is part of the question: a wrapped summary grows past it.
 
 ### The built-in engine writes French
 

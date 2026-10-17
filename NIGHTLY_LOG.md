@@ -4,6 +4,200 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-10-17 — Saturday · Interface, clarity, accessibility
+
+**Subject**: **the open incident card was the last screen in this console that
+scrolled sideways on a phone**, and the stylesheet held the fix twice so that
+applying it measured nothing. `ROADMAP.md` § 7 carried it as a single number,
+401 px, with a note saying it was *« worth a Saturday of its own: it is the
+screen a responder reads on a phone »*. Driven case by case it is worse than
+that number.
+
+**Result**: PR opened on `claude/sleepy-volta-kpclw1`. Six files: two
+production (`src/styles.css`, `src/components/CaseView.tsx` — 35 lines added,
+4 removed, most of it comment), one new test file
+(`src/components/case-narrow.test.tsx`, **+10 tests**), plus `CLAUDE.md`,
+`CLARITY.md`, `ROADMAP.md` (C0.40, one § 7 row closed, one opened) and this
+journal. No production dependency, no server change, no new user-facing string,
+no colour, no heading moved.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-kpclw1` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Forty-fourth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: the designated branch
+at e3b0c50 (= `origin/main`) gave typecheck 0, **1648 passed | 1 skipped**,
+build clean — run, not assumed — and `list_pull_requests --state open` was
+empty. Two § 7 entries were explicitly left for a Saturday. I took this one
+because it is a **defect** (a reproducible WCAG 2.2 § 1.4.10 level-AA failure,
+priority (2) and (3) at once) where the other — the Guide's seventeen section
+titles not being headings — is filed in § 7 precisely because it *« costs a
+decision about sizes »* on seventeen folds, i.e. a judgement nobody can answer
+tonight. A night that cannot ask a question should not spend itself on one.
+
+**Measured, in Chromium 1194 against the console serving its own `dist/`**
+(no database ⇒ `demoSnapshot`, seven sample cases), transitions killed first:
+
+| | before | after |
+|---|---|---|
+| 320 px, per case | `401 335 401 386 320 386 386` — **6 of 7 overflow** | `320 ×7` |
+| 375 px, per case | `401 375 401 386 375 386 386` — 5 of 7 | `375 ×7` |
+| grid box / track at 320 | 296 px box, **389.047 px track** | 296 / 296 |
+| whole-console sweep, 156 views | **24 with horizontal overflow** | **1** |
+| 1280 px, all 156 views | — | `scrollWidth`, panel totals and `body.scrollHeight` **identical** |
+
+The 156 views are ten tabs, their sub-tabs, seven cases and six themes at
+320 / 375 / 1280 px. All **23** differing views are an open case at 320 or
+375 px; the one surviving overflow is on the Ingestion tab, identical before
+and after, and is now § 7.
+
+**What I learned that is written nowhere else.**
+
+1. **The same rule existed twice, and the copy a `grep` finds first was the
+   dead one.** `.soc-case-layout`'s one-column override sat at `styles.css:512`
+   AND at 1123, byte-identical, so source order decided. I patched only the
+   first, rebuilt, and re-measured: `401 335 401 386 320 386 386`, track
+   389.047 px — **not one pixel of change**, and nothing anywhere to say why.
+   That is the shape to carry: a duplicated rule is worse than a wrong one,
+   because the wrong one at least answers when you edit it. It is also how this
+   § 7 entry could sit open for a week with its cause correctly diagnosed in it.
+2. **The rule was already written in the declaration the override replaces.**
+   `.soc-case-layout`'s desktop value is
+   `minmax(0, 1.6fr) minmax(300px, 1fr)` — its first track is protected — and
+   the one-column override wrote `1fr`, i.e. `minmax(auto, 1fr)`, throwing that
+   protection away 94 lines later. Nearest recurrence of *the mirror of a rule
+   is not the rule* this repository has recorded: same property, same selector,
+   same file.
+3. **`white-space: nowrap` manufactures an unbreakable word out of prose**, and
+   that is the half the existing trap row did not cover. `.soc-pill` is right
+   to carry it for `CRITICAL` / `ok`; the approval head then put the closed
+   action catalogue's label in one, and `cut the host off the network
+   (temporarily)` is 41 characters and **329 px of min-content**, on the screen
+   where a human approves a containment. The modifier names the CONTENT
+   (`soc-pill-phrase`) and not the call site, because the fact is about the
+   string, not about where it is rendered.
+4. **The spelling trap reproduces on a second element.** Re-measured on
+   `.soc-lineage li` at 320 px: `overflow-wrap: anywhere` → 320 ✓,
+   `word-break: break-all` → 320 ✓, `overflow-wrap: break-word` → **386,
+   unchanged**. Only the first two take part in min-content sizing, which is
+   what floors a grid track. A test refuses the third by name, because in a
+   diff it reads exactly like the fix.
+5. **The honest price is that the card gets TALLER.** Content that used to
+   leave the viewport now wraps inside it: case 0's panel total goes
+   **3499 → 4081 px at 320** (+16.6 %) and **3499 → 3697 at 375** (+5.7 %). I
+   state it rather than hide it — a page that scrolls sideways hides its own
+   right-hand edge, and a taller page hides nothing.
+6. **The method lesson, now in `CLARITY.md` § 7: a STATE you click into is a
+   screen too.** `narrow-viewport.test.tsx`'s sweep walked the ten tabs and
+   their sub-tabs and was right about every one of them. The open case replaces
+   the queue when you click a row, so it was in no list — and driven case by
+   case it gave six failures where § 7 had one number. Enumerate the states,
+   not only the destinations.
+7. **One query stopped being unique, and the fix narrows it.** The card prints
+   the action label TWICE — the pill, and plain text under « Proposed action »
+   in `.soc-case-meta` — so `getByText` found two. The second needs no modifier
+   and that is informative: it sits in a wrapping flex row and breaks between
+   words by itself, which is precisely what the pill's `nowrap` prevented. The
+   test scopes to `.soc-approval` and says so, rather than relaxing.
+8. **Playwright is global here, not a dependency** (`/opt/node-tools/node_modules/playwright`,
+   CommonJS so `import pw from …; const { chromium } = pw`), and the browser is
+   `/opt/pw-browsers/chromium-1194/chrome-linux/chrome` — `/opt/pw-browsers/chromium`
+   is a FILE, not the directory the env var suggests. Saves the next night ten
+   minutes.
+
+**Do not redo.**
+
+- **Do not patch `.soc-case-layout`'s override without checking how many there
+  are.** Learning 1; M1 and M2 are the mutations, and M1 re-adds the duplicate.
+- **Do not write `.soc-pill { white-space: normal }`.** Measured: it leaves
+  **six of seven cases overflowing** at 320 px (`386 335 386 386 320 386 386`)
+  — it is not even the bigger half of the remedy — and it lets every severity
+  in a forty-row table wrap mid-word. A test claims that boundary and passes
+  before AND after.
+- **Do not write the pill modifier as a bare class.** `.soc-pill` is (0,1,0)
+  and so is `.soc-pill-phrase`; it would win only by sitting further down the
+  file. M5.
+- **Do not use `overflow-wrap: break-word` for this.** Learning 4. M3.
+- **Do not promote the card's `h2` title to `h1` here.** Untouched on purpose:
+  the outline is still `h2 h3 h3 h4 h4 h4 h4 h3`, exactly as 10-10 left it, and
+  § 7 says why it is a design decision. Measured before and after at all three
+  widths to prove this change does not move it.
+- **Do not fix the `Fold` summary in a card diff.** See below.
+- **Do not use `git -C <root> checkout -- <path>` in a mutation harness** —
+  inherited from 10-10, respected: the harness snapshots both files to a
+  directory and copies them back.
+
+**Found and NOT fixed.**
+
+- **A `Fold`'s summary is a no-wrap flex line.** The one overflow left after
+  this change: Ingestion › **Sources** measures **338 px at 320 px**, clean at
+  375 and 1280, identical before and after. `.soc-fold > summary` is
+  `display: flex` with no `flex-wrap`, so the line is as wide as title + hint +
+  chevron — hiding either `.soc-fold-hint` or `.soc-fold-chevron` takes the
+  document back to 320. **It is a shared primitive**: `Fold` is imported by ten
+  components across both halves, so one `flex-wrap: wrap` plausibly fixes all
+  ten and plausibly re-lays out folds on ten screens, and the `min-height: 44px`
+  touch target on that summary is part of the question. Now § 7, and a good
+  Saturday: it is the `.soc-lang-wide` subject on a different primitive.
+- **The Guide's seventeen section titles are still not headings** (§ 7,
+  re-checked, unchanged). Still the better-defined of the two remaining
+  Saturday subjects once somebody will answer the size question.
+- **The console still has no `site/check.cjs` equivalent** (§ 7). Tonight's
+  sweep is a scratchpad script, not a committed guard, for the reason 10-16
+  recorded: a test that reads `dist/` passes by being skipped on a machine that
+  has not run a build. The 10 tests claim the SOURCE; the byte counts are in
+  the PR, measured by hand.
+- **Standing leads, re-checked and unchanged**: the two `h2` → `h4` jumps
+  (`.soc-wf-subhead`, `.vp-settings-subhead`), `aria-selected` on seven `<tr>`
+  of a plain `<table>`, the four tables with no accessible name, Metrics
+  printing `METRICS` twice, a write's 401 still not reaching the sign-in screen,
+  the ninety-odd French strings in `server/engine/`, `MENATER_TEST_PG` still
+  never set, `npm audit` not in CI, and `POST /api/auth/login` still having no
+  route-level test.
+
+**Verified** (Node 22.22.0, npm 10.9.4, Chromium 1194; every command run and
+its output read):
+
+| Command | Result |
+|---|---|
+| `dashboard: npm run typecheck` | 0 errors |
+| `dashboard: npm test` | **1658 passed, 1 skipped** (1648 \| 1 before: **+10**) |
+| `dashboard: npm run build` | clean; CSS 62.19 → 62.20 kB (one declaration and its comments), JS 445.72 → 445.74 kB |
+| real server + Chromium, 156 views × 3 widths, before and after | 24 overflows → 1; 23 differing views, all an open case at 320/375; **0 differences at 1280** |
+| `innerText` sweep over headings and `<th>`, card at 320/375/1280 | **0 leaks** at all three |
+| CDP heading outline, card at 320/375/1280 | `h2 h3 h3 h4 h4 h4 h4 h3` before and after |
+| six themes on the open card, 3 widths | geometry identical per theme before and after the change's own delta |
+| `VulnPipe` | not touched, suite not run |
+
+Checked **RED first**: the test file was written before any production change
+and is **4 failed | 6 passed** on unmodified `main` — the four being exactly
+the claims the change makes (the grid track, the lineage break, the pill rule,
+the pill markup). The six that pass either way are the premises and the two
+boundaries.
+
+| Mutation | Result |
+|---|---|
+| M0 — both production files back at `HEAD` | RED — 4 |
+| M1 — the orphan duplicate comes back, with `1fr` | RED — 1 |
+| M2 — the override that applies goes back to `1fr` | RED — 1 |
+| M3 — the lineage chip uses `overflow-wrap: break-word` | RED — 2 |
+| M4 — the lineage break dropped | RED — 1 |
+| M5 — the pill modifier written as a bare class | RED — 1 |
+| M6 — the pill rule dropped | RED — 1 |
+| M7 — every pill in the console wraps instead | RED — 2 |
+| M8 — the markup drops the modifier | RED — 1 |
+| M9 — the severity pill picks the modifier up too | RED — 1 |
+| M10 — the lineage chips leave the `.soc-lineage` list | RED — 1 |
+
+**Eleven mutations, eleven killed**, no survivors. No model key and no database
+were needed. Probes, the sweep and the mutation harness lived in the scratchpad
+and are not in the diff; `git status` shows only the six intended files.
+
+---
+
 ## 2026-10-16 — Friday · Performance and cost
 
 **Subject**: **the Guide's prose was in the chunk the first paint waits for.**
