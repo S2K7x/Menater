@@ -2170,7 +2170,7 @@ const EN: ConsoleDictionary = {
       optional: 'Optional',
       lockedTitle: 'Set by the environment',
       locked: (name) =>
-        `${name} is defined in the container's environment (shell, Docker or CI). That is a deployment decision and the console will not override it. Change it where it is defined.`,
+        `${name} is already set in this process's environment — look in .env first, then the shell, Docker or CI. That is a deployment decision and the console will not override it: change it where it is defined, or clear it there to set it here.`,
       fromStore: 'stored in the console',
       missingModel:
         'No model key: the pipeline runs, but every alert goes to a human without having been analysed.',

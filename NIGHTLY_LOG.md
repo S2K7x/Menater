@@ -4,6 +4,212 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-10-18 — Sunday · Maintenance and state of the project
+
+**Subject**: `credentials.ts`'s banner states the precedence rule of the OTHER
+half of the product. Measured, the console does the opposite of its last tier,
+in both of its launch modes — and `CLAUDE.md` carried the same ordering for
+both halves under a heading saying the two stores obey the same rule, beside a
+table naming **zero of the twelve** variables the store manages.
+
+**Result**: PR opened on `claude/sleepy-volta-uqbfrl`. Six files: two
+production (`dashboard/server/credentials.ts` — comments and one error string;
+`dashboard/src/i18n/console.ts` — one help string), one new test file
+(`dashboard/server/credentials-precedence.test.ts`, **+18 tests**), plus
+`CLAUDE.md`, `.env.example`, `ROADMAP.md` (one § 7 row opened) and this
+journal. **No behaviour changed**: the diff moves no logic, and the two
+behaviour tests pass before AND after on purpose. No dependency, no colour, no
+heading moved, nothing skipped or weakened.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-uqbfrl` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Forty-fifth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: the designated branch
+at 7712672 (= `origin/main`) gave typecheck 0, **1658 passed | 1 skipped**,
+build clean on the console, typecheck 0 and **425 passed** on VulnPipe — run,
+not assumed — and `list_pull_requests --state open` was empty. Sunday's first
+reservoir is dependencies and it was **empty**: `npm audit` is **0/0 on both
+halves, production and dev**, so unlike 10-11 there was nothing to close. That
+left Sunday's second reservoir, and the **carried recommendation from the last
+two Sundays named the target**: *read `server/credentials.ts` beside
+`CLAUDE.md`'s « Two credential stores, same rule »*. 10-04 could not reach it,
+10-11 was preempted by five advisories. Third time, and it paid.
+
+**Measured, on the real modules, with a real store file and a real `.env`**,
+launched under the exact flag `scripts/start.ts` uses:
+
+| store holds | `.env` holds | effective | `source` | `locked` | typing in Settings |
+|---|---|---|---|---|---|
+| console: `from-the-store` | `from-dot-env` | **`from-dot-env`** | `environment` | **true** | **REFUSED** |
+| console: `from-the-store` | *(absent)* | `from-the-store` | `store` | false | accepted |
+| VulnPipe: `from-the-store` | `from-dot-env` | **`from-the-store`** | **`store`** | false | **accepted** |
+
+So the banner's *« Precedence: real environment > this store > `.env` »* and its
+*« the store beats `.env` »* are both false here and both true one package over.
+`applyCredentialStore` reported applying the store to **nothing**.
+
+**What I learned that is written nowhere else.**
+
+1. **A rule copied as PROSE is invisible to every sweep this project owns.**
+   The fourteen recorded recurrences of *the mirror of a rule is not the rule*
+   were all found by grepping for a primitive, a call site or a catalogue key.
+   A sentence in a banner matches none of those. What found this one is the
+   method 10-04 and 10-11 both recommended and neither could spend: read the
+   file next to the paragraph that describes it. **That is the transferable
+   part, and it is cheap** — the defect was in the second numbered decision of
+   a 255-line file.
+2. **The console CANNOT implement the three tiers, which is why the fix is the
+   documentation.** Two independent reasons, both measured: `npm run serve`
+   hands `.env` to Node as `--env-file-if-exists=.env`, applied before any
+   module evaluates, so `snapshotRealEnv()` cannot see past it; and in Docker
+   `docker compose` substitutes `.env` into `environment:` **on the host**, so
+   the container gets ordinary variables and holds no `.env` to re-read.
+   VulnPipe earns its `dotenv` source by calling `snapshotRealEnv()` BEFORE its
+   own `loadEnv()` in a side-effect module written for that ordering. Making
+   the console agree in development only would give the store a precedence that
+   depends on how it was launched — worse than one honest rule.
+3. **The test file had been right the whole time.** `credentials.test.ts`'s own
+   header says *« precedence: real environment > store > nothing »* — the
+   two-tier rule — while the module banner and `CLAUDE.md` both said three. The
+   correct statement existed in the one place a human does not read.
+4. **The operator's two sentences named three places and not the likeliest.**
+   The 409 and the read-only field's help both said *« shell, Docker or CI »*
+   and then *« change it where it is defined »* — about a value that most often
+   came from the file `cp .env.example .env` asks them to fill. A remedy that
+   points nowhere. Both name `.env` first now.
+5. **`.env.example` carried the asymmetry twice, and only one of the two was
+   true.** Under the console's key: *« It can also be pasted in Settings →
+   Credentials »*, which stops being true the moment the line is filled. Under
+   the analysis keys, four blocks down: *« They can also be typed in Settings →
+   Code analysis, hot »*, which is true, because that half ranks `.env` below
+   its store. Same sentence shape, opposite truth, forty lines apart.
+6. **My first guard went red on the fix.** It forbade the ordering string
+   `real environment > store > `.env`` — which the corrected section quotes in
+   its VulnPipe column, where it is exactly right. The claim had to be narrowed
+   to the two words that were actually wrong, *« for both »*. A guard written
+   against the symptom fails the repair; the test says so in place.
+7. **And my first ruler read 13 node types where there are 16.** Counting
+   `NODE_EFFECTS` keys with `/^\s*([a-z_]+):/` silently dropped the three
+   QUOTED `'trigger.*'` keys, and I was one step from writing « CLAUDE.md
+   overstates the closed catalogue » into the traps table. `CLAUDE.md` is
+   right: 16. **The doc was correct and the instrument was not** — same family
+   as a contrast measured during the theme cross-fade. Verified too, and all
+   correct: **14** assistant tools, **8** prompts, **9** resources.
+
+**Do not redo.**
+
+- **Do not "fix" `credentials.ts` towards VulnPipe's three tiers.** Learning 2.
+  It is unimplementable in the normal installation mode, and M7 is the mutation.
+- **Do not forbid the ordering STRING in the doc guard.** Learning 6. It is
+  true of VulnPipe and quoted as such.
+- **Do not count a `Record` literal's keys with an unquoted-identifier regex.**
+  Learning 7.
+- **Do not scope the catalogue-name guard to the whole of `CLAUDE.md`.** The
+  traps table now discusses several of those variable names in prose, so the
+  file would vouch for itself — the lesson `n8n-removed.test.ts` paid for. It
+  is scoped to the credential section.
+- **Do not update the `889 tests` line in CLAUDE.md § QA.** It is the record of
+  one dated QA pass on the real stack, not a current count. The `npm run test`
+  line is the current one and was stale (1639 → 1676).
+
+**Found and NOT fixed.**
+
+- **A refused credential save half-happens, and is reported as a refusal.**
+  Now § 7, measured: `saveCredentials({ OPENROUTER_APIKEY: 'NEW-KEY',
+  NOT_A_CREDENTIAL: 'x' })` answers the route's **409** while
+  `process.env.OPENROUTER_APIKEY` is already `NEW-KEY` and the file still holds
+  `OLD-KEY`. It mutates `env` inside the loop and writes the store once at the
+  end. So the triage model runs on a key the operator was told had not been
+  saved, until a restart silently reverts it; with `null` the same shape deletes
+  a Slack token from a running console and calls the deletion failed. The
+  inverse of this product's defining defect — a **partial success showing
+  red**. Latent rather than UI-reachable (`CredentialsPanel` disables `locked`
+  fields and sends only non-empty managed names), so it needs a hand-made
+  authenticated request. **Left for a Thursday because the fix is a behaviour
+  change** — validate every name and lock before mutating anything — and
+  tonight's subject was the documentation. `credentials.test.ts` has no
+  multi-key-patch test at all.
+- **`CLAUDE.md`'s six other checkable counts are correct** and were verified
+  rather than trusted: 16 node types, 14 assistant tools, 8 MCP prompts, 9 MCP
+  resources, 12 managed credentials (now named), 425 VulnPipe tests.
+- **Standing leads, re-checked and unchanged**: the `Fold` summary's no-wrap
+  flex line at 320 px (§ 7, and the best remaining Saturday subject), the
+  Guide's seventeen section titles not being headings (§ 7), the incident
+  card's heading outline (§ 7), the ninety-odd French strings in
+  `server/engine/` (§ 7), `npm audit` not in CI (§ 7), a write's 401 not
+  reaching the sign-in screen (§ 7), the console's missing `check.cjs` (§ 7),
+  `MENATER_TEST_PG` still never set, `POST /api/auth/login` still having no
+  route-level test, the two `h2` → `h4` jumps, the seven `aria-selected` `<tr>`
+  on a plain `<table>`, the four tables with no accessible name, and `METRICS`
+  printed twice.
+
+**State of the week.**
+
+- **Seven nights, seven PRs, all merged**, #67 → #73, one per day 10-12 →
+  10-17; none open at the start of tonight (checked, not assumed).
+- **Dependencies held.** 10-11 closed five advisories and took both halves to
+  0/0; a week later both halves are **still 0/0**, production and dev. So the
+  *« two advisories a week »* rate the 10-11 entry established is **not** a
+  steady rate — one week it was five, this week zero. The § 7 decision about a
+  scheduled `npm audit` should be taken against a number that moves, which
+  makes the case for a scheduled job rather than a Sunday stronger, not weaker:
+  a Sunday that happens to find nothing proves nothing about the Wednesday.
+- **Tests: 1591 → 1676 on the console** over the week (+85), **425** on
+  VulnPipe, unchanged. The `npm run test` count in `CLAUDE.md` was stale at
+  1639 and is corrected.
+- **The carried recommendation is DISCHARGED, at the third attempt, and it paid
+  the same way it paid twice before**: read a long, careful, written-once
+  banner next to the thing it describes. Three Sundays, three defects, one
+  method. It is worth saying plainly that the method's yield has not dropped.
+- **Recommendation for next week**: the same method, and the queue of
+  unre-measured banners is now explicit. 10-11 left `VulnPipe`'s four
+  *« API RÉELLEMENT OBSERVÉE »* headers — `llm/ollama.ts`,
+  `llm/openai-compatible.ts`, `llm/gemini.ts` over HTTP response shapes, and
+  `indexer/queries.ts` / `indexer/indexer.ts` over tree-sitter's. The
+  **tree-sitter pair is the one a night can actually re-date** (`npm run probe`,
+  no key, no quota), and it is the better Sunday. The three HTTP ones cannot be
+  probed from here and should stay unread rather than be guessed at.
+
+**Verified** (Node 22.22.0, npm 10.9.4; every command run and its output read):
+
+| Command | Result |
+|---|---|
+| `dashboard: npm run typecheck` | 0 errors |
+| `dashboard: npm test` | **1676 passed, 1 skipped** (1658 \| 1 before: **+18**) |
+| `dashboard: npm run build` | clean, 596 ms; CSS 62.20 kB unchanged, JS 445.74 → **445.80 kB** (+0.06, the one longer help string) |
+| `VulnPipe: npm run typecheck` | 0 errors |
+| `VulnPipe: npm test` | **425 passed**, unchanged — not touched, read only |
+| `npm audit`, both halves | **0 / 0**, production and dev |
+| real module + real `.env` + real store, both halves | the table above |
+| longest unbreakable token in the changed help string | **`OPENROUTER_APIKEY` (17 chars), identical before and after** — so the span's min-content cannot move and the string adds height, not overflow. Argued from that property rather than measured in a browser: the field renders only when a credential IS locked, so no mounted sweep reaches it |
+
+Checked **RED first**: the test file was written before any change and is
+**16 failed | 2 passed** on unmodified `main`. The two that pass are the
+behaviour premises, on purpose — a test that only checked the prose would go
+green the day somebody "fixed" the code to agree with a sentence that was wrong.
+
+| Mutation | Result |
+|---|---|
+| M0 — all three files back at `HEAD` | RED — 16 |
+| M1 — only `CLAUDE.md` back at `HEAD` | RED — 14 |
+| M2 — the 409 message loses `.env` | RED — 1 |
+| M3 — the help text loses `.env` | RED — 1 |
+| M4 — a credential added and not documented | RED — 1 |
+| M5 — a documented credential removed from the catalogue | RED — 1 |
+| M6 — the console gains a `dotenv` source | RED — 1 |
+| M7 — the store is applied OVER the environment | RED — 1 |
+| M8 — `CLAUDE.md` re-flattens the two halves into one rule | RED — 1 |
+
+**Nine mutations, nine killed**, no survivors. No model key and no database
+were needed. The four probes lived in the scratchpad and are not in the diff;
+`git status` shows only the six intended files.
+
+---
+
 ## 2026-10-17 — Saturday · Interface, clarity, accessibility
 
 **Subject**: **the open incident card was the last screen in this console that

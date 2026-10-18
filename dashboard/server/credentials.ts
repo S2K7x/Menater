@@ -25,12 +25,38 @@
  *     `api.ts` reads `process.env` AT CALL TIME, so writing into `process.env`
  *     is enough — the next alert uses the new key.
  *
- *  2. THE REAL ENVIRONMENT WINS, AND WE SAY SO. A variable set by the shell,
- *     Docker or CI is a deployment decision; a file on disk does not get to
- *     overwrite it silently. When that happens the typed key is REFUSED with
- *     the reason rather than accepted and ignored. Accepting a value that will
- *     never be used is the worse of the two answers.
- *     Precedence: real environment > this store > `.env`.
+ *  2. THE PROCESS ENVIRONMENT WINS, AND WE SAY SO. A variable already set
+ *     when this process started is a deployment decision; a file on disk does
+ *     not get to overwrite it silently. When that happens the typed key is
+ *     REFUSED with the reason rather than accepted and ignored. Accepting a
+ *     value that will never be used is the worse of the two answers.
+ *
+ *     PRECEDENCE: PROCESS ENVIRONMENT > THIS STORE. TWO TIERS, NOT THREE, AND
+ *     `.env` SITS IN THE TOP ONE — which is the opposite of what this banner
+ *     claimed for its whole life, and of what VulnPipe's keystore does. The
+ *     reason is that the console never reads `.env` itself:
+ *
+ *       - `npm run serve` launches this process with Node's own
+ *         `--env-file-if-exists=.env` (`scripts/start.ts`), and Node applies
+ *         that file BEFORE any module evaluates. By the time
+ *         `snapshotRealEnv()` runs, a `.env` key is already indistinguishable
+ *         from a shell one.
+ *       - In Docker — the normal installation mode — `docker compose` reads
+ *         `.env` on the HOST and substitutes it into `environment:`. The
+ *         container receives real environment variables and holds no `.env`.
+ *
+ *     So a key written in `.env` is reported `locked`, the store is never
+ *     applied over it, and typing one in Settings is refused. The operator's
+ *     two sentences name `.env` first for that reason: it is the likeliest
+ *     source of all, being the one `cp .env.example .env` asks them to fill.
+ *
+ *     DO NOT "FIX" THIS TOWARDS VULNPIPE'S THREE TIERS. `keystore.ts` earns
+ *     its `dotenv` source by calling `snapshotRealEnv()` BEFORE its own
+ *     `loadEnv()`, in a side-effect module written for that ordering. This
+ *     half cannot: `--env-file` is applied before user code runs, and in
+ *     Docker there is no file left to re-read. Making it true in development
+ *     alone would give the store a precedence that depends on how it was
+ *     launched, which is worse than one honest rule.
  *
  *  3. A VALUE NEVER COMES BACK OUT. `describeCredentials()` returns "set" or
  *     "absent" and where it came from, never the key itself — the same
@@ -166,8 +192,9 @@ function writeStore(values: Record<string, string>): void {
 /**
  * Applies the store to `process.env`. Call once at startup.
  *
- * The store beats `.env` — a key typed in the interface is a more recent and
- * more deliberate act than a shared `.env` — but never the real environment.
+ * Never over a variable the process already had: see decision 2 above. That
+ * includes anything from `.env`, which reaches this process as an ordinary
+ * environment variable in both launch modes.
  */
 export function applyCredentialStore(env: NodeJS.ProcessEnv = process.env): string[] {
   snapshotRealEnv(env);
@@ -234,9 +261,9 @@ export function saveCredentials(
     }
     if (fromRealEnvironment(name)) {
       throw new CredentialError(
-        `${name} is set in this process's environment (shell, Docker or CI). That is a `
-        + 'deployment decision and the console will not override it: change it where it is '
-        + 'defined, or unset it there first.',
+        `${name} is already set in this process's environment — .env, the shell, `
+        + 'Docker or CI. That is a deployment decision and the console will not override '
+        + 'it: change it where it is defined, or unset it there first.',
         name,
       );
     }
