@@ -4,6 +4,222 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-10-19 — Monday · Feature
+
+**Subject**: **J0.1 shipped a door that only opens one way, and it said so
+itself.** The last line of its roadmap entry is *« the finding's status in the
+report does not change »*, filed as « wiring it in would have meant touching
+the status store ». It needed no store at all: the answer was already in the
+browser. Meanwhile `POST /api/findings/promote` has answered `alert_id` and
+`run_id` since J0.1 and `grep` for a reader returns **nothing**.
+
+**Result**: PR opened on `claude/sleepy-volta-140ett`. Sixteen files: four
+production (`src/vulnpipe/components/PromoteFinding.tsx`, `ReportView.tsx`,
+`VulnPipeSection.tsx`, `src/App.tsx`), one production refactor
+(`server/findings.ts`, −14 net lines), two new browser modules
+(`src/lib/finding-identity.ts`, `src/lib/promoted.ts`), two catalogues
+(`i18n/dictionary.ts` +2 strings, `i18n/guide.ts` +1 point), two new test files
+and one extended (**+23 tests**), plus `.gitattributes`, `CLAUDE.md`,
+`ROADMAP.md` (J0.5, J0.1's limitation struck through, one § 7 row opened) and
+this journal. **No stylesheet change** — both existing classes are reused, so
+the built CSS is byte-identical. No dependency, no colour, no heading moved,
+nothing skipped or weakened.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-140ett` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Forty-sixth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: the designated branch
+at b254b76 (= `origin/main`) gave typecheck 0, **1676 passed | 1 skipped** and
+a clean build — run, not assumed — and `list_pull_requests --state open` was
+empty. Monday's reservoir is the highest-value roadmap item and **J0 outranks
+everything**; J0.1/.2/.3 are ✅ and J0.4 ◐, whose remaining half (reading a scan
+REPORT rather than the queue) needs a store, a retention policy and a fourth
+copy of code excerpts — a subject, not a slice. The one-way door is priority
+(3), *an explicit limitation from the roadmap*, and it is the last thing J0.1
+owed.
+
+**What it is.** A finding already promoted from this scan carries one line —
+*« Already in the triage queue, from this scan — Waiting on you. »* — and a
+button that opens the case. Read out of the window the browser already holds;
+nothing stored, no route, no payload.
+
+**Measured, in Chromium 1194 against the built card** (a throwaway preview,
+deleted; transitions killed before sampling, and `innerWidth` checked to equal
+the width asked for before believing anything — the emulation trap this table
+records):
+
+| | 320 px | 375 px | 1280 px |
+|---|---|---|---|
+| document / body `scrollWidth` | 320 / 320 | 375 / 375 | 1280 / 1280 |
+| card / promote row | 274 / 242 | 329 / 297 | 1234 / 1202 |
+| the sentence | 242 × 41.28, own line | 297 × 41.28 | 1202 × 20.64 |
+| *Open the case* | 146.44 × 36 | same | same |
+
+No horizontal overflow at any width, on any of the six themes. Contrast on all
+six: the sentence **6.00–8.14:1**, the button **10.21–17.39:1**. Live regions on
+the card: **0**. Chromium's own AX tree gives the new control the accessible
+name *« Open the case »* and a tab order of *Copy a fix request → Send to the
+triage queue → (i) → Open the case*. The second card — a finding the window
+does not hold — showed no sentence and no button.
+
+**What I learned that is written nowhere else.**
+
+1. **A roadmap entry explaining why something was NOT done is a premise, and a
+   premise expires.** J0.1's reason was *« it would have meant touching the
+   status store »* — and the fix touches no store, because *« sent to the
+   queue »* is not a fourth status somebody SETS, it is an event, and the queue
+   is its record. Writing it into `localStorage` would have been a second claim
+   able to disagree with the first, i.e. exactly the defect
+   `finding-status.ts` was written to refuse (*« the tool looks at the code, not
+   at the ticked box »*), with the queue as the code. Same shape as 10-18's
+   « three successive nights deferred `pg-store.ts` because this environment has
+   no database, which was inherited rather than re-checked ».
+2. **A NUL byte in a source file costs twice, and both costs hide the rule it
+   implements.** `findingAlertId` joined its five parts on a literal NUL for its
+   whole life, under a comment explaining why. So `grep -rn FindingIdentity
+   server/` answered *« binary file matches »* and `git diff` rendered the file
+   as **`Bin 19401 -> 19288 bytes`** — the one place that rule is written is the
+   one place you cannot read it or review a change to it. `'\u0000'` is the same
+   byte, greppable, and the digest is unchanged: **`vulnpipe-f8133dc383ed7a945ef0`**,
+   reproduced independently in Python from the pre-refactor construction before
+   the refactor was trusted. `.gitattributes` now says a `.ts`/`.tsx` file is
+   never binary, whatever is inside it.
+3. **The digest was pinned by nothing.** No test anywhere held a literal alert
+   id, so any edit to the separator, the field order, the normalisation or the
+   20 characters kept would have silently re-keyed `soc_ingested_alerts` —
+   which has **no expiry** — and every flaw anybody ever promoted would have
+   become promotable again, one press re-opening a case closed months ago.
+   Pinned by value now, which is also the only guard over the key having been
+   shared with the browser.
+4. **`server/findings.ts` cannot be imported into a browser, and the preview
+   proved it rather than my reading it.** The first build of the throwaway
+   preview died on **`(0, vt.createHash) is not a function`**. That is the whole
+   argument for `src/lib/finding-identity.ts` importing **nothing**: it is read
+   by the bundle AND by a console API running its TypeScript under
+   `node --experimental-strip-types`, where a browser-only reference would break
+   at startup and nowhere else.
+5. **`crypto.subtle` is measured, not cited.** The plausible design is to
+   recompute the alert id in the browser and trust nothing. Chromium 1194, one
+   server bound to `0.0.0.0`, three origins: `http://127.0.0.1` and
+   `http://localhost` give `isSecureContext: true` and `typeof crypto.subtle ===
+   'object'`; **`http://192.0.2.2` on the same port gives `false` and
+   `undefined`**. `http://<host>:4400` is how an operator on another machine
+   reaches this console, so that design stops working on a LAN install and says
+   nothing about it. The integrity is therefore the SERVER's stamp
+   (`matched_on: 'scan_target'`, left only once `scanRepository` has recomputed
+   the id from the bag), not a second opinion formed in the browser.
+6. **A hook may not go where the other derived values are in `App.tsx`.** The
+   login screen returns early about forty lines above `const cases`, so a
+   `useMemo` placed with its neighbours rendered fewer hooks after signing in
+   and React **unmounted the whole application**. `app-routing.test.tsx` caught
+   it, and twelve of its thirteen tests go red on the mutation that puts it
+   back. The crash is only reachable on the locked-then-signed-in path.
+7. **Sharing the identity key is worth exactly one test, and that test is the
+   clipped field.** The writer stores a field trimmed and cut at 2,000
+   characters while the report holds the raw one; compared as they are, a long
+   route silently stops matching the case it opened and **nothing fails** — the
+   only thing lost is a sentence. Dropping the clip from the shared key kills
+   one test and no other, server-side included, because both halves of
+   `scanRepository` go through the same function.
+8. **M1's discriminator is not the test I expected.** Loosening the browser's
+   `matched_on === 'scan_target'` gate to « any repository » is killed by the
+   *inventory* case only — the forged-bag test stays green, because
+   `scanRepository` already refused both forgeries server-side and the case
+   arrives with `repository: null`. Worth knowing before somebody « strengthens »
+   the browser gate believing that test covers it: the integrity is upstream.
+
+**Do not redo.**
+
+- **Do not store the promotion.** Learning 1. Not `localStorage`, not a fourth
+  `FindingStatus`, not a column.
+- **Do not recompute the alert id in the browser.** Learning 5. It is dead on
+  every non-loopback HTTP origin.
+- **Do not make the report claim a finding is ABSENT from the queue.** The
+  window is bounded and the Code tab renders with no window at all (it is
+  outside the snapshot's error screen on purpose), so the negative claim has a
+  scope this screen cannot show. The authority on a second press is the dedup
+  table, which answers `duplicate, skipped`.
+- **Do not disable the promote button once a finding is promoted.** The same
+  flaw found by a LATER scan is a new identity and may legitimately be sent
+  again; only the server knows that.
+- **Do not put the sentence in a live region.** It is a standing condition,
+  re-derived on every poll; the region beside it belongs to the press.
+- **Do not spell `clip`/`FIELD_MAX` a second time.** Learning 7.
+
+**Found and NOT fixed.**
+
+- **`.vp-action` is a 36 px touch target** where `CLAUDE.md` § Mobile says 44,
+  and `.vp-promote-button` ten lines above it carries a comment saying why.
+  Measured on the built card: all three of them — *Copy a fix request*, *Open in
+  my editor*, and J0.5's *Open the case* — compute `min-height: auto` and render
+  at 36 px. Pre-existing; J0.5 reuses the class rather than inventing a fourth
+  button shape. Now § 7: growing three controls by 8 px is a look somebody has
+  to choose, and nothing measures it because the suite runs under jsdom, which
+  computes no layout.
+- **The Guide documented J0.1 nowhere at all.** Its code section had a point
+  for the J0.3 jump and none for the button that leaves the tab. One point now
+  covers both directions of the door.
+- **Standing leads, re-checked and unchanged**: the `Fold` summary's no-wrap
+  flex line at 320 px (§ 7, still the best Saturday subject), the Guide's
+  seventeen section titles not being headings, the incident card's heading
+  outline, the ninety-odd French strings in `server/engine/`, `npm audit` not in
+  CI, a write's 401 not reaching the sign-in screen, the console's missing
+  `check.cjs`, the refused credential save that half-happens (§ 7, the best
+  Thursday subject), `MENATER_TEST_PG` still never set.
+
+**Verified** (Node 22.22.0, npm 10.9.4; every command run and its output read):
+
+| Command | Result |
+|---|---|
+| `dashboard: npm run typecheck` | 0 errors |
+| `dashboard: npm test` | **1699 passed, 1 skipped** (1676 \| 1 before: **+23**) |
+| `dashboard: npm run build` | clean, 508 ms |
+| CSS | **byte-identical**: 62.20 kB eager, 27.08 kB code tab, 2.21 kB guide |
+| JS | eager 445.80 → **446.00 kB** (+0.20), code tab 63.49 → **64.79** (+1.30), guide 44.10 → **44.53** (+0.43) |
+| `VulnPipe` | **not touched**, not run — `git status` shows no file under it |
+| pre-refactor digest, reproduced in Python | `vulnpipe-f8133dc383ed7a945ef0`, identical to the new one |
+| Chromium 1194, built card, 6 themes × 3 widths | the table above |
+| Chromium 1194, `crypto.subtle` on three origins | learning 5 |
+
+**Sixteen mutations, sixteen killed.**
+
+| Mutation | Result |
+|---|---|
+| M1 — the browser gate accepts any `repository`, not `scan_target` | RED — 1 |
+| M2 — the scan run is not compared | RED — 2 |
+| M3 — the shared key drops the clip | RED — 1 |
+| M4 — the shared key drops the trim | RED — 1 |
+| M5 — the shared key joins on a space | RED — 2 |
+| M6 — `findingAlertId` reverses the two halves of its input | RED — 1 |
+| M7 — the sentence is put in a `role="status"` region | RED — 1 |
+| M8 — the sentence is claimed for every finding | RED — 3 |
+| M9 — the promote button is disabled once promoted | RED — 1 |
+| M10 — the state is printed as the raw pipeline identifier | RED — 1 |
+| M11 — `ReportView` stops passing it to `PromoteFinding` | RED — 1 |
+| M12 — the jump is handed something other than the alert id | RED — 1 |
+| M13 — the `queue` hook moves below `App`'s early return | RED — **12** |
+| M14 — `VulnPipeSection` stops passing it to `ReportView` | RED — 1 |
+| M15 — `App` stops passing the window to the Code tab | RED — 1 |
+| M16 — `ReportView` stops passing it to `FindingCard` | RED — 1 |
+
+The four wiring hops (M11, M14, M15, M16) are killed by a source-reading test
+with **comments stripped**, because each hop is explained in a comment beside
+it and a test that reads the explanation goes on vouching for a prop somebody
+removed — the lesson `n8n-removed.test.ts` and the `sweepExpiredWaits` caller
+test were both written for. Dropping any one hop makes the feature silent and
+fails no behaviour test, because every behaviour test hands the card its link
+directly.
+
+No model key and no database were needed. The preview, the four probes and the
+mutation scripts lived in the scratchpad; `git status` shows only the sixteen
+intended files.
+
+---
+
 ## 2026-10-18 — Sunday · Maintenance and state of the project
 
 **Subject**: `credentials.ts`'s banner states the precedence rule of the OTHER

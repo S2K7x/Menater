@@ -72,9 +72,55 @@ application. Until it is done, the merge is visual.
 | ~~**J0.2**~~ ✅ | ~~**An alert offers a scan**~~ — a case whose inferred technique says the way in was the application itself carries the reason on its card, beside the target J0.3 resolved and beside what the analysis can actually look for. `server/engine/code-lead.ts`; `attack.ts` gained T1190, which it did not have. It offers: no alert launches anything | Bring the incident next to the defect that made it possible, while you have it in front of you |
 | ~~**J0.3**~~ ✅ | ~~**Service ↔ repository inventory**~~ — `server/inventory.ts`, a Settings sub-tab, resolved onto every case in `snapshot.ts`. Exact matching only, ambiguity refused at the save, and the incident card names the code running on the machine it is about — with a jump that opens the Code tab on that target | Without it neither link means anything: nothing said which repository runs on `10.12.4.31` |
 | **J0.4** ◐ | **Unified "what threatens this system" view** — one screen stacking, for one asset, its alerts and its flaws. **First slice delivered**: the Alerts tab's second view groups the window by system — the alerts about a machine beside the flaws promoted out of the code the inventory says runs on it. What is NOT there is the rest of a scan report: this reads the queue, and says so | The question the user actually asks, which neither tab answers alone |
+| ~~**J0.5**~~ ✅ | ~~**The door opens both ways**~~ — a report finding that has already been promoted says so, names what the queue made of it, and carries a jump to the case. `src/lib/promoted.ts` reads it out of the window the browser already holds; `src/lib/finding-identity.ts` is the one definition of a flaw's identity, used by the server to derive the alert id and by the report to find the case. Nothing is stored | J0.1 forgot its own outcome the moment you left the report: twelve findings, three of them sent, and no way to tell which three |
 
 > **Order:** J0.3 before J0.1 and J0.2. Guessing the repository from an IP
 > address would be exactly the kind of invented default that § 8 forbids.
+
+### J0.5 ✅ — the door J0.1 opened, from the other side
+
+**What it is.** A finding on a scan report that has already been sent to the
+triage queue carries one line saying so and what became of it — *« Already in
+the triage queue, from this scan — Waiting on you. »* — and a button that opens
+the case. `src/lib/promoted.ts` answers the question out of the cases the
+browser already has; `src/lib/finding-identity.ts` holds the one definition of a
+flaw's identity, which `server/findings.ts` uses to derive the alert id and the
+report uses to find the case.
+
+**Why it was missing, and it said so itself.** The last line of J0.1's own
+« what it does NOT do » is *« the finding's status in the report does not
+change »*, filed there because wiring it looked like touching
+`finding-status.ts`. So the one control that bridges the two halves of this
+product forgot its own outcome as soon as you left the report, and
+`POST /api/findings/promote` has always answered `alert_id` and `run_id` — both
+declared on `PromoteResult` and read by **nothing**, the struct-member-with-no-
+readers shape this repository has paid for three times (`NodeDef.retry`,
+`meta.from_env`, `match_count`).
+
+**Four decisions, and three of them are refusals.**
+
+| Decision | Why the other answer was worse |
+|---|---|
+| **Nothing is stored** | "Sent to the queue" is not a fourth status an operator sets beside fixed / accepted / false alarm — it is a thing that HAPPENED, and the queue is the record of it. A copy in `localStorage` would be a second claim able to disagree with the first, which is the defect `finding-status.ts` was itself written to refuse: *« a flaw marked corrected and still detected by the next scan is flagged as such — the tool looks at the code, not at the ticked box »*. Here the queue is the code and the box would be a copy of it. It would also be a fourth copy of alert-adjacent data outside the audit chain, the reason the assistant persists no transcript |
+| **One definition of the identity, not two spellings** | The writer stores a field trimmed and cut at 2,000 characters; the report holds the raw one. Compared as they are, a long route stops matching the case it opened and NOTHING FAILS — the only thing lost is a sentence. `findingIdentityKey` is therefore shared, exactly as `humanBytes` was moved into one module, and `findingAlertId` is built on it so a change to one cannot miss the other. The module imports nothing: it is read by the browser bundle AND by a console API that runs its TypeScript under `node --experimental-strip-types`, and the preview written to measure this screen proved the point by crashing on `createHash is not a function` the moment it pulled `server/findings.ts` in |
+| **The trust is the server's, already computed** | `extensions` is an open bag, so a log source can put a `vulnpipe` key in it and choose which findings the console calls triaged. `scanRepository` already recomputes the alert id from the bag and refuses one it was not derived from; `matched_on: 'scan_target'` is the stamp it leaves. The reader gates on that stamp rather than forming a second opinion — the digest needs SHA-256, and `crypto.subtle` is undefined over plain HTTP on anything but localhost, so a browser-side check would simply stop working on a LAN install and say nothing about it |
+| **Only the positive claim is ever made** | A finding this finds is printed as being in the queue. A finding it does not find renders exactly as it did before J0.5. *« This finding is NOT in the queue »* would be a claim whose scope is the run window, on a screen that cannot show that scope — and the Code tab renders outside the snapshot's error screen on purpose, so it is also reachable with no window at all. Green is earned |
+
+**What it does NOT do, and is honest to say so:**
+
+- **It does not say that a finding is absent from the queue.** See above. An
+  operator who sees the line on two findings of three may still infer it about
+  the third; what bounds that is that the authority on a second press is the
+  dedup table, which answers `duplicate, skipped` and says so.
+- **The button is not disabled once a finding is promoted.** The same flaw
+  found by a LATER scan is a new identity and may legitimately be promoted
+  again — only the server knows that — and a disabled control would be the
+  console pre-empting the dedup table's answer.
+- **It does not change the queue.** No route, no payload, no write: a pure
+  function over the window, the same argument J0.4's first slice made for
+  grouping by system in the browser.
+- **The assistant and the MCP catalogue do not read it.** Same line J0.2, J0.3
+  and J0.4 drew.
 
 ### J0.4 ◐ — one system, and everything that threatens it (first slice)
 
@@ -206,10 +252,13 @@ the payload, the way `/api/simulate` already sends it.
 - **Nothing is promoted in bulk.** One finding, one press. A *send all criticals*
   button is a reasonable next step and a different decision — it would open
   cases faster than anyone reads them.
-- **The finding's status in the report does not change.** `finding-status.ts`
-  lives in the browser and tracks fixed / accepted / false alarm; "sent to the
-  queue" is a fourth thing, and wiring it in would have meant touching the
-  status store in a pass that already spans server, report and contract.
+- ~~**The finding's status in the report does not change.**~~ ✅ Delivered by
+  J0.5, and NOT by touching the status store — which is what made it look
+  bigger than it was. "Sent to the queue" is not a fourth status somebody sets;
+  it is an event, the queue is its record, and every case is already in the
+  browser. So the answer is a pure function over the window, gated on the
+  `scan_target` stamp `scanRepository` leaves when it has already recomputed
+  the alert id from the bag.
 
 ### J0.2 ✅ — an alert offers the code, and says what the offer can answer
 
@@ -2340,6 +2389,7 @@ Small, known, and written down so it is not rediscovered.
 | ~~No CI ran the suite~~ ✅ | ~~`.github/workflows` did not exist~~ — done. Every pull request carried green checks that were Vercel and GitGuardian, and **neither ran the tests**: "checks passed" read as "the tests ran", and they had not. Four successive nightly PRs filed this as the highest-value maintenance item left, and it was tracked in no section of this file. `ci.yml` runs typecheck, suite and build on `dashboard/` (Node 24) and typecheck and suite on `VulnPipe/` (Node 22) — each half on the Node version its own Dockerfile deploys. `automerge.yml` merges a PR once that CI is green, and re-tests rather than merging onto a `main` the run never saw |
 | ~~The redirect rule stopped at the console~~ ✅ | ~~VulnPipe's four HTTP model adapters called `fetch` with its default `redirect: 'follow'`~~ — done, and it was tracked in no section of this file. `dashboard/server/http.ts` refuses a reply that chooses where the next request goes; the other half of the product never received it, and its outbound calls carry the analysed source code and an api key. Measured on Node 22.22.2 against real sockets, all five 3xx statuses: `authorization` stripped by the specification, `x-goog-api-key` **delivered** at the second host, and on `307`/`308` the body replayed in full — the Anthropic SDK following it too, delivering `x-api-key` and **returning a verdict**. `fetchNoRedirect` in `nodes/shared/llm/types.ts` is the one call site now, narrower than the console's primitive because every call here is a write. `redirect.test.ts` drives real sockets, and a fake could not have vouched for it. The fifth adapter, `claude-subscription.ts`, is deliberately NOT covered and did not need to be: it speaks to an optional, runtime-resolved agent SDK over the person's own session, with no api key and no configurable endpoint |
 | ~~The entry-point probe dialled an address the caller named, with the ingestion secret on it~~ ✅ | ~~`routes/ops.ts` built `baseUrl` from `Host` and `X-Forwarded-Proto` and handed it to `runDiagnostics`, whose webhook probe POSTs with `x-soc-token`~~ — done, and it was tracked in no section of this file. The probe exists to prove the whole entry path works, so it HAS to send the secret; what it must not do is let a request choose where. The comment above those two lines is correct about a different route — `GET /api/ingest/sources` reflects the same header into the install snippets, text an operator reads, and never includes the secret — so this was one rule applied to the wrong use. **Measured over two real sockets on Node 22.22.0, no session cookie, empty body** (the probe is on unless the body says otherwise): `Host: 127.0.0.1:<decoy>` delivered `x-soc-token: <the shared secret>` to the decoy and the console answered **200** with a diagnostic line indistinguishable from an ordinary failure; `X-Forwarded-Proto: https` additionally dialled TLS at a plain-HTTP listener and reported `ERR_SSL_PACKET_LENGTH_TOO_LONG`, a TLS diagnosis about a host nobody configured. The secret is the only authentication on `/api/ingest/*` and `/api/webhook/soc/alert`, the surface the `tunnel` profile puts on the Internet, and `requiresAuth` returns `false` for every path while `auth.enabled` is false — the shipped default — so this needed no credential on an install that has not set a console password. `fetchWithDeadline`'s redirect rule does not reach it: that constrains the hops after the first, and the first request is the leak. The fix is three deleted lines; the route passes no address and the probe dials this process, which is where everything it asserts — route, secret, normalizer, validator — actually lives. `server/diagnostics-address.test.ts`, 4 tests over real sockets, 2 red on unmodified code and 2 green before AND after; three mutations, each red, including the one that removes the secret from the probe (which is what keeps the POSITIVE half honest: two listeners, and the test says which of them received it) |
+| **`.vp-action` is a 36 px touch target** | `CLAUDE.md` § Mobile states 44 px, and `.vp-promote-button` ten lines above it carries a comment saying why. Measured in Chromium on the built card: the three `.vp-action` controls — *Copy a fix request*, *Open in my editor* and J0.5's *Open the case* — compute `min-height: auto` and render at **36 px**, on the screen somebody reads on a phone. Pre-existing to J0.5, which reuses the class rather than inventing a fourth button shape; found while measuring that card and deliberately not fixed there, because growing three controls by 8 px is a look somebody has to choose. Nothing measures it: the suite runs under jsdom, which computes no layout |
 | Two icon sets | `src/components/Icon.tsx` (console) and `src/vulnpipe/components/Icon.tsx` (analysis) have two APIs and two class conventions. Mergeable, not urgent |
 | Dead sections in the analysis dictionary | `t.app`, `t.glossary`, `t.severity` have not been read since the landing page went away. **D4 built the rule that proves it** — `n8n-removed.test.ts` flags a catalogue key no product code mentions — and deliberately pointed it at the two console catalogues only: turning it on `src/i18n/dictionary.ts` means removing whole sections, which is a pass of its own, not a line in a documentation sweep |
 | Flaw statuses in `localStorage` | See V2.5 |

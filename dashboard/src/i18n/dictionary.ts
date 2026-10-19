@@ -193,6 +193,19 @@ export interface Dictionary {
      * now names the state on its own.
      */
     promoteNotSent: (reason: string) => string;
+    /**
+     * J0.5 — this finding is already a case, and what became of it.
+     *
+     * « from this scan » is not padding: the alert's identity includes the scan
+     * run, so the same flaw found by a LATER scan is a fresh finding and shows
+     * no line at all. Without those three words the absence of the sentence on
+     * a re-scan reads as a defect.
+     *
+     * The state comes from `queue.states` — the queue's own vocabulary, never a
+     * pipeline identifier shown raw, and never a second wording of it.
+     */
+    promotedAlready: (state: string) => string;
+    promotedOpen: string;
     copyReport: string;
     downloadReport: string;
     exportHelp: string;
@@ -712,6 +725,8 @@ const EN: Dictionary = {
       'This report is not attached to a scan run, so the alert would have no stable '
       + 'identity and could not be deduplicated. Run the scan again from this console.',
     promoteNotSent: (reason) => `${reason} Nothing entered the queue.`,
+    promotedAlready: (state) => `Already in the triage queue, from this scan — ${state}.`,
+    promotedOpen: 'Open the case',
     copyReport: 'Copy the report',
     downloadReport: 'Download',
     exportHelp:

@@ -49,6 +49,30 @@
  * queue."* over a console that had answered `{"error":"Authentication
  * required."}` in milliseconds, and a body over the cap printed `HTTP 413`
  * over the sentence `server/respond.ts` composes for exactly that.
+ *
+ * ============================================================================
+ * J0.5 — AND THE DOOR NOW OPENS BOTH WAYS
+ *
+ * The press used to leave no trace: its sentence lived in this component's
+ * state, so leaving the report — a tab change, a re-render, a reload — took it
+ * with it. Twelve findings, three of them sent, and nothing on screen saying
+ * which three; the route has always answered `alert_id` and `run_id`, and both
+ * were read by nothing.
+ *
+ * Nothing is stored to fix that. `promoted` answers out of the cases the
+ * console already holds, because "sent to the queue" is not a fourth status an
+ * operator sets — it is a thing that happened, and the queue is the record of
+ * it. See `src/lib/promoted.ts` for why a copy in `localStorage` would be the
+ * ticked box that `finding-status.ts` already refuses to believe over the code.
+ *
+ * TWO THINGS THE RENDERING HAS TO GET RIGHT. The sentence is a STANDING
+ * condition — re-derived on every snapshot poll — so it is NOT in a live
+ * region: `CLAUDE.md` records that a permanent announcement is the permanent
+ * alarm the `diagnostic_probe` row refuses, and the region below it belongs to
+ * the press, which is an answer to something somebody just did. And the button
+ * stays ENABLED: the server is the authority on a second press and answers
+ * `duplicate, skipped`, where a disabled control would be this console
+ * guessing the dedup table's answer.
  * ============================================================================
  */
 
@@ -57,6 +81,8 @@ import { useState } from 'react';
 import { Explain } from '../../components/Guidance.tsx';
 import { api, ApiError } from '../../lib/api.ts';
 import { useI18n } from '../../i18n/context.tsx';
+import type { PromotedLink } from '../../lib/promoted.ts';
+import { Icon } from './Icon.tsx';
 import type { ReportFinding } from './ReportView.tsx';
 
 /** What the server answered, verbatim. `ok` decides the tone, never the text. */
@@ -69,16 +95,30 @@ export function PromoteFinding({
   finding,
   scanRunId = null,
   target = null,
+  promoted = null,
 }: {
   finding: ReportFinding;
   /** The scan this report came from. Part of the alert's identity. */
   scanRunId?: string | null;
   /** What was scanned, carried onto the alert for the incident card. */
   target?: string | null;
+  /**
+   * J0.5 — the queue, as this report can reach it. `null` when it cannot: the
+   * Code tab renders outside the snapshot's error screen on purpose, so a
+   * console that could not load its window shows this report exactly as it did
+   * before J0.5 rather than claiming anything about the queue.
+   */
+  promoted?: PromotedLink | null;
 }) {
   const { t, c } = useI18n();
   const [sending, setSending] = useState(false);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
+
+  // Only the POSITIVE claim. A finding this does not find prints no sentence:
+  // the window is bounded, so "not in the queue" would be a claim whose scope
+  // this screen cannot show — the reassurance over a hole that `clean` refuses
+  // on the Lookup tab.
+  const already = promoted?.find(finding) ?? null;
 
   /**
    * With no run id the alert would have no stable identity, so two presses
@@ -127,6 +167,15 @@ export function PromoteFinding({
 
   return (
     <div className="vp-promote">
+      {/* Above the button, because it is what you need BEFORE pressing it —
+          and not in a live region: a standing state, re-derived on every poll,
+          is not the answer to anything just done. */}
+      {already && (
+        <p className="vp-promote-note">
+          {t.report.promotedAlready(c.queue.states[already.state])}
+        </p>
+      )}
+
       <button
         type="button"
         className="vp-promote-button"
@@ -136,6 +185,21 @@ export function PromoteFinding({
         {sending ? t.report.promoteSending : t.report.promote}
       </button>
       <Explain label={t.report.promote}>{t.report.promoteHelp}</Explain>
+
+      {/* The way back J0.1 never had. It opens the incident card, exactly as
+          the Tracking and Health tabs' own jumps do — and the case is in the
+          window by construction, because that window is where it was just
+          found, so this link cannot dangle. */}
+      {already && promoted && (
+        <button
+          type="button"
+          className="vp-action"
+          onClick={() => promoted.open(already.alert_id)}
+        >
+          <Icon name="inbox" />
+          {t.report.promotedOpen}
+        </button>
+      )}
 
       {noRun && <p className="vp-promote-note">{t.report.promoteNoRun}</p>}
 
