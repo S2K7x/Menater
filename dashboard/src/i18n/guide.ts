@@ -633,6 +633,14 @@ const EN: GuideDictionary = {
           text: 'Every finding is explained in plain language: what can happen, and which direction to fix it. The technical detail stays available, folded away.',
         },
         {
+          term: 'A finding can enter the triage queue',
+          text: 'Each finding carries a button that opens it as an alert in the Alerts tab, '
+            + 'where it is enriched, decided under the same guardrails as any other alert, and '
+            + 'written into the audit chain. You press it: nothing sends itself, and sending it '
+            + 'fixes nothing. A finding you have already sent from this scan says so, says what '
+            + 'the queue has made of it, and carries a link to the case.',
+        },
+        {
           term: 'An alert can fill the target in for you',
           text: 'If the service inventory in Settings says which repository runs on the machine an alert is about, the incident card carries a link here with the target already filled in. It only fills the box: nothing is estimated and nothing is scanned until you launch it.',
         },

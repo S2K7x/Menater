@@ -19,6 +19,7 @@ import { FindingStatusControl, StaleStatusNotice, useStatuses } from './FindingS
 import { findingKey, statusStats } from '../lib/finding-status.ts';
 import { Fold } from '../../components/Guidance.tsx';
 import { PromoteFinding } from './PromoteFinding.tsx';
+import type { PromotedLink } from '../../lib/promoted.ts';
 import { Icon } from './Icon.tsx';
 
 export interface ReportFinding {
@@ -236,6 +237,7 @@ export function FindingCard({
   sourceRoot = null,
   scanRunId = null,
   scanTarget = null,
+  promoted = null,
 }: {
   finding: ReportFinding;
   sourceRoot?: string | null;
@@ -249,6 +251,8 @@ export function FindingCard({
    * `ScanState.launchedTarget`.
    */
   scanTarget?: string | null;
+  /** J0.5 — the queue, as this report can reach it. `null` when it cannot. */
+  promoted?: PromotedLink | null;
 }) {
   const { locale, t } = useI18n();
   const { preferences } = usePreferences();
@@ -296,7 +300,12 @@ export function FindingCard({
       {/* J0.1 — the only control here that leaves the Code tab. Below the
           read-and-fix actions, because it is a different kind of act: those
           three help you deal with the flaw, this one hands it to the queue. */}
-      <PromoteFinding finding={finding} scanRunId={scanRunId} target={scanTarget} />
+      <PromoteFinding
+        finding={finding}
+        scanRunId={scanRunId}
+        target={scanTarget}
+        promoted={promoted}
+      />
 
       <FindingStatusControl finding={finding} />
 
@@ -593,6 +602,7 @@ export function ReportView({
   coverage = null,
   scanRunId = null,
   scanTarget = null,
+  promoted = null,
 }: {
   report: SecurityReport;
   /** Cible analysée, pour l'en-tête du rapport exporté. */
@@ -616,6 +626,12 @@ export function ReportView({
    * that could not be deduplicated.
    */
   scanRunId?: string | null;
+  /**
+   * J0.5 — the way back into the triage queue, for the findings of this scan
+   * that have already been through it. `null` means the report cannot reach
+   * the queue, and then it claims nothing about it.
+   */
+  promoted?: PromotedLink | null;
 }) {
   const { t } = useI18n();
   const { scan_summary: summary, findings } = report;
@@ -665,6 +681,7 @@ export function ReportView({
             sourceRoot={report.source_root}
             scanRunId={scanRunId}
             scanTarget={scanTarget}
+            promoted={promoted}
           />
         ))
       )}

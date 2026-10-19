@@ -1,0 +1,7 @@
+# A NUL byte in a source file made `git diff` treat it as binary and `grep`
+# skip the file: `server/findings.ts` carried one as a hash separator for its
+# whole life, so the rule it implemented was unreadable in the one place it was
+# written, and a diff of it was unreviewable. The byte is gone (it is an escape
+# now), and this says a source file is never binary whatever is inside it.
+*.ts  diff
+*.tsx diff

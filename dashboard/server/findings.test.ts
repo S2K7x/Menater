@@ -221,6 +221,28 @@ describe('the identity of a promoted finding', () => {
       .not.toBe(alertOf(promote({}, 'scan-001')).alert_id);
   });
 
+  /**
+   * THE DIGEST ITSELF, PINNED.
+   *
+   * `soc_ingested_alerts` is keyed on `alert_id` with NO EXPIRY, so this string
+   * is a promise made to every install's dedup table. A change to the key — the
+   * separator, the field order, the normalisation, the `vulnpipe-` prefix, the
+   * 20 characters kept — would silently re-key all of it: every flaw anybody
+   * ever promoted becomes promotable again, one press re-opens a case closed
+   * months ago, and J0.5's back-reference stops recognising history. Nothing
+   * fails, which is why it is pinned by value and not by a property.
+   *
+   * `findingIdentityKey` lives in `src/lib/finding-identity.ts` because the
+   * report screen builds the same key; this is the one test that would notice
+   * a change made for the browser's convenience.
+   */
+  it('is the exact string it has always been', () => {
+    expect(findingAlertId('scan-001', {
+      vulnerability: 'IDOR', http_method: 'GET',
+      route: '/orders/:id', file: 'src/routes/orders.ts',
+    })).toBe('vulnpipe-f8133dc383ed7a945ef0');
+  });
+
   it('cannot be collided by moving a delimiter into one of its parts', () => {
     const a = findingAlertId('s', { vulnerability: 'A B', http_method: 'G', route: '/r', file: 'f' });
     const b = findingAlertId('s', { vulnerability: 'A', http_method: 'B G', route: '/r', file: 'f' });

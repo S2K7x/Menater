@@ -32,7 +32,7 @@
  * ============================================================================
  */
 
-import { Fragment, Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { AlertQueue } from './components/AlertQueue.tsx';
 import { SystemPanel } from './components/SystemPanel.tsx';
@@ -392,6 +392,31 @@ export function App() {
     if (tab === 'code') setCodeMounted(true);
   }, [tab]);
 
+  /**
+   * J0.5 — the queue, handed to the Code tab so a report can find the cases
+   * its own button opened.
+   *
+   * ABOVE THE LOGIN SCREEN'S EARLY RETURN, because it is a hook: placed with
+   * the other derived values below it, signing in rendered fewer hooks than
+   * the previous pass and React unmounted the whole application.
+   * `app-routing.test.tsx` caught it on the locked-then-signed-in path.
+   *
+   * Memoised because the Code tab memoises its index on this object's `cases`,
+   * and a fresh literal every render would make that memo miss every time — a
+   * per-request nonce in a cached prefix, rebuilt in a dependency list.
+   * `openCase` is the two lines the Tracking and Health tabs already use.
+   */
+  const queue = useMemo(
+    () => ({
+      cases: snapshot?.cases ?? [],
+      openCase: (id: string) => {
+        setSelected(id);
+        goTab('queue');
+      },
+    }),
+    [snapshot, goTab],
+  );
+
   if (authed === false) {
     return (
       <LoginScreen
@@ -403,7 +428,8 @@ export function App() {
     );
   }
 
-  const cases = snapshot?.cases ?? [];
+  // One spelling: the Code tab reads the very array the queue does.
+  const cases = queue.cases;
   const selectedCase = selected ? (cases.find((x) => x.alert_id === selected) ?? null) : null;
   const blocked = cases.filter((x) => x.state === 'awaiting_approval').length;
   const failing = snapshot ? snapshot.health.blocking_findings.length : 0;
@@ -610,7 +636,7 @@ export function App() {
           />
           <SectionBoundary>
             <Suspense fallback={<p className="soc-empty">{c.common.loading}</p>}>
-              <VulnPipeSection prefill={codePrefill} />
+              <VulnPipeSection prefill={codePrefill} queue={queue} />
             </Suspense>
           </SectionBoundary>
         </main>

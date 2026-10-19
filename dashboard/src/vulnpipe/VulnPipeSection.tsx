@@ -33,7 +33,7 @@
  * ============================================================================
  */
 
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 
 // THE SECTION OWNS ITS STYLESHEET, and that is what keeps it off the first
 // paint. `App.tsx` reaches this module through `React.lazy` because the
@@ -56,6 +56,8 @@ import { Icon } from './components/Icon.tsx';
 import { useI18n } from '../i18n/context.tsx';
 import { Announce } from '../components/Guidance.tsx';
 import { stepTranslations, STEP_ORDER, type StepName } from './lib/step_translations.ts';
+import { promotedIndex, promotedLink, type PromotedLink } from '../lib/promoted.ts';
+import type { AlertCase } from '../lib/types.ts';
 
 /**
  * Rail des étapes de la pipeline.
@@ -103,7 +105,28 @@ export interface ScanPrefill {
   n: number;
 }
 
-export function VulnPipeSection({ prefill = null }: { prefill?: ScanPrefill | null }) {
+/**
+ * J0.5 — the triage queue, as this tab may read it.
+ *
+ * THIS TAB DOES NOT DEPEND ON THE ALERT PIPELINE, and the prop is shaped to
+ * keep that true: `App.tsx` renders the Code tab BESIDE the snapshot's error
+ * screen rather than inside it, precisely so a console that cannot reach its
+ * database still runs a scan. So the whole thing is optional, and a `null`
+ * leaves the report exactly as it was before J0.5.
+ */
+export interface QueueLink {
+  /** The run window the console already holds. Not re-fetched, not re-sent. */
+  cases: AlertCase[];
+  openCase: (alertId: string) => void;
+}
+
+export function VulnPipeSection({
+  prefill = null,
+  queue = null,
+}: {
+  prefill?: ScanPrefill | null;
+  queue?: QueueLink | null;
+}) {
   const { state, estimate, confirm, cancelEstimate, reset } = useScan();
   const { t, c } = useI18n();
   const { preferences, update } = usePreferences();
@@ -128,6 +151,23 @@ export function VulnPipeSection({ prefill = null }: { prefill?: ScanPrefill | nu
     if (high === undefined || high === null) return;
     if (high < ceiling) void confirm();
   }, [state.phase, state.estimate, preferences.autoConfirmUnderUsd, confirm]);
+
+  /**
+   * J0.5 — which findings of THIS scan are already cases.
+   *
+   * Memoised on the window's identity and the run id: the snapshot is replaced
+   * on every poll, so without it the walk would be redone on every render of a
+   * tab that is kept mounted. The index itself only looks at cases the SERVER
+   * stamped `scan_target`, so an install that has promoted nothing walks the
+   * window once and stops.
+   */
+  const index = useMemo(
+    () => (queue === null ? null : promotedIndex(queue.cases, state.runId)),
+    [queue?.cases, state.runId],
+  );
+  const promoted: PromotedLink | null = index === null || queue === null
+    ? null
+    : promotedLink(index, queue.openCase);
 
   const running = state.phase === 'running';
   const busy = running || state.phase === 'estimating';
@@ -249,6 +289,12 @@ export function VulnPipeSection({ prefill = null }: { prefill?: ScanPrefill | nu
             working directory, which can be a different directory that exists.
           */
           scanTarget={state.launchedTarget}
+          /*
+            J0.5 — the findings of this scan that are already in the queue, and
+            the way to open the case. Built from the window the console already
+            holds; nothing is fetched and nothing is stored.
+          */
+          promoted={promoted}
           /*
             La couverture vient du snapshot, pas du rapport : c'est le moteur
             qui sait combien d'adresses il a lues et combien lui ont echappe.
