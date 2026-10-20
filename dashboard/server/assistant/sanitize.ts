@@ -128,6 +128,13 @@ export function fenceFields<T extends Record<string, unknown>>(
  * `reasoning` is on it for a different reason: it is the triage model's own
  * prose, produced from the raw log. Text derived from untrusted text is
  * untrusted text.
+ *
+ * `host` was MISSING from this list for its whole life, and it is the one
+ * observable that is neither validated nor fenced: `ingestion.ts` checks
+ * `source_ip` and `dest_ip` against an IPv4/IPv6 literal, so present-and-
+ * nonsense is refused there, and it leaves `host` as free text with no cap
+ * because a machine name legitimately is free text. See
+ * `untrusted-host.test.ts` for the two channels it reached a model through.
  */
 export const UNTRUSTED_ALERT_FIELDS = [
   'raw_log',
@@ -136,8 +143,32 @@ export const UNTRUSTED_ALERT_FIELDS = [
   'file_path',
   'url',
   'user',
+  'host',
   'extensions',
   'reasoning',
+] as const;
+
+/**
+ * The three sentences an approval request is MADE of, and why they are a class.
+ *
+ * `actionCatalog` composes them out of alert data: `intent` and `blast_radius`
+ * interpolate `isolationTarget()`, which is `dest_ip ?? host`, and all three
+ * interpolate `alert_id`. So they are our own prose with somebody else's text
+ * inside it — the shape there is no way to fence HALF of, and the reason the
+ * whole sentence travels marked rather than the value within it.
+ *
+ * They are named as a CLASS rather than by which one interpolates a host
+ * today: the catalogue is free to word a fourth action's rollback plan around
+ * the target tomorrow, and that edit must not silently open a channel. What is
+ * NOT here is `triggers` — composed from an action name, a confidence number,
+ * a verdict and a decision source, all of them ours and closed — and the
+ * approver's own `human_reasoning`, which is a person of ours answering our
+ * own form, not text the alert carried.
+ */
+export const UNTRUSTED_APPROVAL_FIELDS = [
+  'intent',
+  'blast_radius',
+  'rollback_plan',
 ] as const;
 
 /**
