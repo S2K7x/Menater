@@ -42,7 +42,10 @@ import { getRuleStore, ruleDb } from '../runtime.ts';
 import { snapshot } from '../snapshot.ts';
 import type { Locale } from '../i18n.ts';
 import type { AlertCase } from '../../src/lib/types.ts';
-import { UNTRUSTED_ALERT_FIELDS, fenceEnrichment, fenceFields, fenced, type Fence } from './sanitize.ts';
+import {
+  UNTRUSTED_ALERT_FIELDS, UNTRUSTED_APPROVAL_FIELDS,
+  fenceEnrichment, fenceFields, fenced, type Fence,
+} from './sanitize.ts';
 import type { ToolSpec } from './providers.ts';
 import { GLOSSARY, lookupTerm } from './glossary.ts';
 import { evaluateRules } from '../engine/transforms/tuning.ts';
@@ -107,7 +110,12 @@ function alertRow(c: AlertCase, fence: Fence) {
     shadow_mode: c.shadow_mode,
     executed: c.executed,
     awaiting_approval: c.approval?.outcome === 'pending',
-    host: c.host,
+    // Fenced for the reason `rule_name` above it is, and it is the field that
+    // had been missed: a machine name is free text the ingestion contract
+    // deliberately does not validate, so it is somebody else's prose. The
+    // addresses beside it are not fenced because `ingestion.ts` refuses any
+    // `source_ip` or `dest_ip` that is present and not an address literal.
+    host: fenced(fence, 'host', c.host),
     source_ip: c.source_ip || null,
     dwell_ms: c.dwell_ms,
     error_count: c.errors.length,
@@ -162,7 +170,20 @@ function alertDetail(c: AlertCase, fence: Fence, sections: string[] | null = nul
     ...(want('enrichment')
       ? { enrichment: fenceEnrichment(fence, c.enrichment), enrichment_meta: c.enrichment_meta }
       : {}),
-    ...(want('approval') ? { approval: c.approval } : {}),
+    /**
+     * The approval record is OURS except for the three sentences it is made
+     * of. `actionCatalog` composes those out of the alert — `intent` and
+     * `blast_radius` interpolate `dest_ip ?? host` — so a crafted machine name
+     * arrived inside a sentence this console wrote, which is the one shape no
+     * fence can be put around half of. The rest of the record (the outcome,
+     * the triggers, the approver, the deadline) stays in the clear: a model
+     * that cannot read `outcome` cannot say what is waiting.
+     */
+    ...(want('approval')
+      ? { approval: c.approval
+        ? fenceFields(fence, c.approval as unknown as Record<string, unknown>, UNTRUSTED_APPROVAL_FIELDS)
+        : null }
+      : {}),
     ...(want('audit') ? { audit: c.audit } : {}),
     attack: c.attack,
     ...(want('stages') ? { stages: c.stages.map((s) => ({
@@ -536,7 +557,14 @@ export const TOOLS: AssistantTool[] = [
         .sort((a, b) => b.shared.length - a.shared.length);
 
       return {
-        seed: { alert_id: seed.alert_id, host: seed.host, source_ip: seed.source_ip || null },
+        // The seed is hand-built rather than an `alertRow`, so it needs the
+        // fence of its own: the row's own `host` being marked says nothing
+        // about this one.
+        seed: {
+          alert_id: seed.alert_id,
+          host: fenced(ctx.fence, 'host', seed.host),
+          source_ip: seed.source_ip || null,
+        },
         matched: scored.length,
         // Said explicitly: an empty result on a bounded window means "none in
         // view", not "none exist", and the two lead to different decisions.
