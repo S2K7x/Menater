@@ -297,7 +297,30 @@ export function makeNotify(deps: IoDeps): NodeHandler {
       );
 
       if (!res.ok) {
-        const detail = (await res.text().catch(() => '')).slice(0, 300);
+        // A BODY THAT COULD NOT BE READ IS NOT AN EMPTY BODY, and this branch
+        // said it was: `res.text().catch(() => '')` collapsed the two into
+        // `''`, and both sentences below then asserted something about bytes
+        // nobody ever saw. `res.text()` rejects AFTER the status line is in —
+        // a truncated `content-length`, a connection the other end drops
+        // mid-answer — so the two faults arrived in identical words. Measured
+        // on the fixture in `io-failures.test.ts`: a 500 cut mid-body and a
+        // genuinely empty 500 both read `Discord refused: HTTP 500`, and a cut
+        // 429 read `retry later`, which claims Discord suggested no wait when
+        // `retry_after` is precisely what was not read.
+        //
+        // This is the guard the two Slack branches below already carry, in the
+        // third transport its first pass did not reach — the neighbour, not the
+        // caller. The status stays in the sentence, so a rate limit is still
+        // told from an outage; what goes is the claim about the body.
+        let detail: string;
+        try {
+          detail = (await res.text()).slice(0, 300);
+        } catch (err) {
+          throw new Error(
+            `Discord answered HTTP ${res.status}, but its answer could not be read: `
+            + describeFetchError(err),
+          );
+        }
         if (res.status === 429) {
           // Discord's `retry_after` is SECONDS as a float, in the JSON body as
           // well as the header. Naming the wait is what lets an operator tell a
