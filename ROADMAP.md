@@ -2277,6 +2277,31 @@ holds the door on irreversible actions.
 
 ## 7. Known technical debt
 
+### Two body reads that say less than they could, measured and left alone
+
+Found by the sweep that fixed `notify`'s `discord-webhook` branch (CLAUDE.md,
+*« the third transport »*), re-measured here, and deliberately not carried into
+that diff: both are the same `res.text().catch(() => '')` / `res.json().catch(…)`
+shape, and neither makes a FALSE claim, which is what separates them from the
+one that was fixed.
+
+**`server/assistant/chat.ts`** reads a refused upstream's body as
+`await res.text().catch(() => '')` and hands it to `describeUpstream`. That
+function keys its sentence on the STATUS for 401/403, 402, 429 and 404, and
+appends the body only in the fallback — so a body the provider cut mid-answer
+costs the operator the trailing explanation on an *unnamed* status and nothing
+else. `The model provider answered 500. ` is thin; it does not assert the
+provider sent nothing. Worth a guard the day somebody is in that file, not
+worth widening a `notify` fix for.
+
+**`server/diagnostics.ts`**'s webhook probe reads `await res.json().catch(() => ({}))`
+and uses `body.reason` only in the `webhookUnexpected` branch; the verdict
+itself is decided by the status (`400` is the pass). So an unread body degrades
+a detail string and cannot turn a failure green. The two states it conflates —
+a body that is not JSON and a body that could not be read — are the pair
+`respond.ts` separates on the INBOUND side with `MalformedBody`, which is the
+shape a fix here would take.
+
 ### The incident card's heading outline, and the `h1` size step
 
 Two leftovers of C0.36, both measured, both design decisions rather than

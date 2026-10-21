@@ -4,6 +4,205 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-10-21 — Wednesday · Tests and QA
+
+**Subject**: **`makeNotify` has three transports, and the body-read guard
+reached the two somebody was looking at.** CLAUDE.md's row *« a body that could
+not be READ, reported as an empty body »* ends with its own next step —
+*« grep for the NEIGHBOURS of the line you are fixing, not only for its
+callers »* — and the neighbour it names is `slack-webhook`, which it fixed.
+`discord-webhook`, forty lines up in the same function, kept the shape verbatim:
+`(await res.text().catch(() => '')).slice(0, 300)`.
+
+**Result**: PR opened on `claude/sleepy-volta-44kgjh`. Four files: one
+production (`server/engine/nodes/io.ts`, +8 effective lines), one test file
+extended (`server/engine/nodes/io-failures.test.ts`, **+8 tests**), plus
+`CLAUDE.md` (one traps row), `ROADMAP.md` (one § 7 entry) and this journal.
+**No interface change** — nothing under `src/` is touched, so the built bundles
+are byte-identical. No dependency, no colour, no CSS class, no catalogue key,
+nothing skipped or weakened. VulnPipe not touched.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-44kgjh` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Forty-eighth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: the designated branch
+at 8d3f64a (= `origin/main`) gave typecheck 0, **1705 passed | 1 skipped** and
+a clean build — run, not assumed, and the container needed `npm ci` first
+(`vitest: not found` on a fresh clone is the missing install, not a red suite)
+— and `list_pull_requests --state open` was empty. Wednesday's reservoir is
+*hunt the places where a `catch` returns green*, so the sweep was mechanical
+rather than inspired: `grep` every `catch` in `dashboard/server/` that maps a
+failure to a success-shaped value. Eleven hits, nine of them sound. This is
+priority (2), *a real, reproducible bug*, and the fixture that demonstrates it
+was **already in the repository** — written for the Slack half of the same
+guard.
+
+**What an operator actually read**, measured by driving the real handler with
+the `cutOffMidBody` fixture `io-failures.test.ts` already ships (Node 22.22.0,
+no network, no key):
+
+| state | before | after |
+|---|---|---|
+| 500, body cut mid-answer | `Discord refused: HTTP 500` | `Discord answered HTTP 500, but its answer could not be read: other side closed` |
+| 500, genuinely empty | `Discord refused: HTTP 500` | *unchanged* |
+| 429, body cut mid-answer | `Discord rate-limited the webhook (429): retry later` | `Discord answered HTTP 429, but its answer could not be read: other side closed` |
+| 429, genuinely empty | `Discord rate-limited the webhook (429): retry later` | *unchanged* |
+| 429, real body | `… (429): {"retry_after":4.5}` | *unchanged* |
+| 403, real body | `Discord refused: {"message":"Unknown Webhook","code":10015}` | *unchanged* |
+| 204 / 200, accepted | resolves | *unchanged* |
+
+The first and second rows were **byte-identical**, for two faults with
+different fixes. The 429 is the sharper one: `retry_after` travels in the BODY
+on Discord, so `retry later` asserts the service suggested no wait — a claim
+about precisely the bytes that were not read. And this is the step that posts
+the approval request, so the cost is a run waiting on a question nobody can
+tell was asked. The three Slack sentences for the same states are unchanged and
+were captured in the same probe, which is what shows the new wording is theirs
+word for word rather than a third dialect.
+
+**What I learned that is written nowhere else.**
+
+1. **A trap row's own "next step" is a lead, and it expires like any other
+   premise.** The Slack row names `grep for the neighbours` as its lesson and
+   then names one neighbour. It is the *other* neighbour — same function, same
+   `if`-chain, one transport over — that kept the defect. Reading a trap row as
+   a finished story is how this one survived; reading its closing sentence as a
+   TODO is what found it.
+2. **A needle per branch cannot make this claim, so the test iterates the
+   SET.** The honest assertion is *the unread sentence differs from the empty
+   one*, and that is a property of every transport, not of Discord. Written per
+   branch it is three tests that go stale on the fourth transport — which is
+   the defect itself, rebuilt in the guard. Driven over the set, `teams-webhook`
+   is covered the day it lands (M6).
+3. **And the set has to be read off `io.ts` with COMMENTS STRIPPED.** Both
+   files' prose names all three transports, so a search over raw text is
+   satisfied by an explanation rather than by a branch — the lesson
+   `n8n-removed.test.ts` and the `OUTPUT_NOT_READ` guard already paid for.
+   `slack-bot` is the fall-through and appears only as `?? 'slack-bot'`, never
+   as an equality test, so both patterns are read or the set is short by one and
+   the sweep silently covers two branches of three. That is the same arithmetic
+   as the bug.
+4. **The status had to stay in the new sentence, and that is what makes the 429
+   safe to drop.** The 429 branch exists so that *« telling a 429 from a 500 is
+   what stops somebody debugging a network that is fine »*. The unread sentence
+   names `HTTP 429`, so nothing an operator needs is lost; only the suggested
+   delay goes, and it genuinely was not read. One sentence per state rather than
+   two sentences for one state.
+5. **`new Response('', { status: 204 })` THROWS**, which cost me a wrong
+   reading first. The constructor refuses a body argument with a null-body
+   status: `Could not reach Discord: Response constructor: Invalid response
+   status code 204`, which looks exactly like a product failure in a probe's
+   output table. `new Response(null, { status: 204 })` is the fixture. My first
+   probe therefore reported the success path as broken; the product was fine and
+   the ruler was not. Same family as a contrast measured during the theme
+   cross-fade.
+6. **Vitest's `include` is `src/**` and `server/**` only**, so a probe written
+   under `scripts/` — where `NIGHTLY.md` § 3 says to put one — is reported as
+   *No test files found*, not as a failure. A throwaway probe has to live beside
+   the suite and be deleted, which is what I did (`git status` shows four
+   files).
+
+**Found and NOT fixed.**
+
+- **`server/assistant/chat.ts` has the same `res.text().catch(() => '')`**, and
+  it is a LESSER instance rather than the same bug: `describeUpstream` keys its
+  sentence on the STATUS for 401/403, 402, 429 and 404, and appends the body
+  only in the fallback — so an unread body makes the sentence say *less*, never
+  something false. Now § 7 with that measurement, because the distinction is
+  the whole reason the diff is one branch and not three.
+- **`server/diagnostics.ts`'s webhook probe reads `res.json().catch(() => ({}))`**
+  and uses the body only for a detail string; the verdict is the status, so it
+  cannot turn a failure green. Also § 7.
+- **`Discord refused:` on an intermediary's 502 is arguably wrong** and I left
+  it. The Slack-bot branch's own rule is that *« `Slack refused` describes an
+  `ok: false` envelope and nothing else »* — but Discord publishes no envelope,
+  so a non-2xx IS its answer and there is nothing to tell a gateway's 502 from
+  Discord's own. Changing that wording is a judgment about a sentence, not a
+  defect, and widening tonight's diff for it would have made the guard harder
+  to review than the bug.
+- **Standing leads, re-checked and unchanged**: `POST /api/auth/login` still
+  has no route-level test of its THROTTLE (its malformed-body and oversized-body
+  paths *are* driven, in `malformed-body.test.ts` and `body-limit.test.ts` —
+  earlier entries calling the route untested are too broad; what is untested is
+  the 429 and the cookie round trip, and `app.test.ts`'s `call` helper still
+  hardcodes `remoteAddress: '127.0.0.1'` so the per-address property cannot be
+  expressed there as it stands). `MENATER_TEST_PG` still never set. The
+  caller-supplied regex ReDoS (§ 7, a decision). The `read`-node retry (§ 7, a
+  decision). `npm audit` not in CI. The ninety-odd French strings in
+  `server/engine/` — and note `io.ts` is one of the files that holds them; the
+  sentences I touched are English and I did not translate the rest, which is
+  its own pass.
+
+**Do not redo.**
+
+- **Do not write the unread-body claim per transport.** Learning 2 — three
+  needles go stale on the fourth transport, which is this bug's own shape.
+- **Do not hand-list the transports in the test.** Learning 3. And do not read
+  `io.ts` without stripping comments: both files' prose names all three, so the
+  sweep passes over its own explanation.
+- **Do not drop `slack-bot`'s `?? '…'` pattern from the extraction.** It is the
+  fall-through and has no equality test; without it the guard covers two of
+  three and reports success, which is the bug.
+- **Do not reach for `VAR_CHOICES` in `src/components/WorkflowPanel.tsx`** as
+  the transport catalogue. It is the only declared list, and it is a browser
+  module: importing it into an engine test pulls a React component tree into a
+  server-side suite.
+- **Do not swallow the failed read into `''` inside the new `try`.** That is
+  M2, the plausible half-fix, and it is red — it restores the defect with a
+  guard's shape around it.
+- **Do not route the unread 429 through the `rate-limited` wording.** Two
+  sentences for one state; the status already carries the only thing the 429
+  branch exists to say (learning 4).
+- **Do not use `new Response('', { status: 204 })`** in a fixture. Learning 5.
+
+**Verified** (Node 22.22.0, npm 10.9.4; every command run and its output read):
+
+| Command | Result |
+|---|---|
+| `dashboard: npm run typecheck` | 0 errors |
+| `dashboard: npm test` | **1713 passed, 1 skipped** (1705 \| 1 before: **+8**) |
+| `dashboard: npm run build` | clean, 509 ms |
+| bundles | `index-C8RT0kPt.js` 446.00 kB, `index-oqkisPp5.css` 62.20 kB — **unchanged**; nothing under `src/` is touched |
+| `VulnPipe` | **not touched**, not run — `git status` shows no file under it |
+
+Checked **RED first**, with the production file untouched: **2 of the 8 new
+tests red**, and the assertion message *is* the finding —
+`expected 'Discord refused: HTTP 500' not to be 'Discord refused: HTTP 500'`.
+The two `slack-*` iterations of the class claim pass before AND after, on
+purpose: they are the branches the first pass fixed, and they are what shows
+the claim is about the shape rather than about Discord. The three boundary tests
+and the structural guard also pass before and after.
+
+**Eight mutations, eight killed**, one at a time, pristine files restored
+between each:
+
+| Mutation | Result |
+|---|---|
+| M1 — the defect restored verbatim (`res.text().catch(() => '')`) | RED — 2 |
+| M2 — the new `catch` swallows into `''` (the plausible half-fix) | RED — 2 |
+| M3 — forwards `(err as Error).message` instead of `describeFetchError` | RED — 2 |
+| M4 — the unread sentence drops the status | RED — 2 |
+| M5 — the read is left unguarded, so the raw `TypeError` escapes | RED — 2 |
+| M6 — a `teams-webhook` branch lands in `io.ts` with no coverage | RED — 1, and it NAMES it |
+| M7 — the test's transport list goes stale (`slack-bot` dropped) | RED — 1 |
+| M8 — a genuinely empty body is reported as unread too | RED — 1 |
+
+M6 and M7 are the two that matter: they are the only ones that fail for the
+*fourth* transport rather than for this one, which is the half of the guard
+written against the next recurrence instead of against tonight's.
+
+No model key, no database and no network egress were needed: the transports are
+synthetic `Response` objects and the cut body is a `ReadableStream` that errors
+with the pair `http.test.ts` measured against a real socket. The probe was a
+temporary `server/zz-probe-discord.test.ts`, run and **removed**; `git status`
+shows only the four intended files.
+
+---
+
 ## 2026-10-20 — Tuesday · Security
 
 **Subject**: **`host` is the one observable that is neither validated nor

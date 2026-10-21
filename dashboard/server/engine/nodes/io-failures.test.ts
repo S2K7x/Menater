@@ -43,6 +43,7 @@
  * ============================================================================
  */
 
+import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 
 import { Engine } from '../engine.ts';
@@ -332,6 +333,144 @@ describe('notify — when the answer cannot be READ at all', () => {
     // A webhook URL IS the credential, and a new sentence must not be the one
     // that finally carries it into the run journal.
     expect(said).not.toContain('s3cr3t');
+  });
+
+  /**
+   * The same two states, driven over EVERY transport this node can take.
+   *
+   * The guard above reached `slack-bot` and `slack-webhook`, and the third
+   * branch kept the shape they were fixed for — `res.text().catch(() => '')`,
+   * which hands an unread body to a sentence that then says the endpoint sent
+   * nothing. Measured before the fix, on the fixture above:
+   *
+   *   discord, cut off mid-answer, 500  ->  Discord refused: HTTP 500
+   *   discord, genuinely empty,     500  ->  Discord refused: HTTP 500
+   *
+   * Byte-identical, for two faults with different fixes — which is the defect
+   * this whole describe block exists to remove, in the one transport its first
+   * pass did not reach. So the claim is made over the SET rather than per
+   * branch: the day a fourth transport is added, it is covered here before
+   * anybody remembers to extend a list.
+   */
+  const SECRET = 'https://hook.test/webhooks/1/s3cr3t';
+
+  /** Every transport needs its own credential name; one answer serves all three. */
+  function transportHandlers(transport: string, fetchImpl: typeof globalThis.fetch) {
+    return ioHandlers(deps({
+      fetch: fetchImpl,
+      vars: () => new Map([['notify.transport', transport]]),
+      secret: () => SECRET,
+    }));
+  }
+
+  function emptyBody(status: number) {
+    return vi.fn(
+      async () => new Response('', { status }),
+    ) as unknown as typeof globalThis.fetch;
+  }
+
+  /**
+   * The transports `makeNotify` really branches on, read off the module.
+   *
+   * A list written here would go stale in silence the day a fourth transport
+   * lands — the exact way the first pass at this guard covered two branches of
+   * three. COMMENTS ARE STRIPPED first: this file's own prose names the
+   * transports, and so does `io.ts`'s, so a search over the raw text would be
+   * satisfied by an explanation rather than by a branch.
+   */
+  function transportsOf(): string[] {
+    const raw = readFileSync(new URL('./io.ts', import.meta.url), 'utf8');
+    const code = raw.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    const branches = [...code.matchAll(/transport === '([a-z-]+)'/g)].map((m) => m[1]);
+    // `slack-bot` is the fall-through, so it appears as the default and never
+    // as an equality test. Both halves or the set is short by one.
+    const fallthrough = [...code.matchAll(/get\('notify\.transport'\) \?\? '([a-z-]+)'/g)]
+      .map((m) => m[1]);
+    return [...new Set([...branches, ...fallthrough])].sort();
+  }
+
+  const TRANSPORTS = ['discord-webhook', 'slack-bot', 'slack-webhook'];
+
+  it('covers every transport the node can take, and knows when one is added', () => {
+    // The list above is load-bearing: it is what the claim below iterates. This
+    // fails in BOTH directions — a transport with no coverage, and a name whose
+    // branch has gone, which would otherwise let the sweep pass over nothing.
+    expect(transportsOf()).toEqual(TRANSPORTS);
+  });
+
+  for (const transport of TRANSPORTS) {
+    it(`${transport} does not report an unread body in the same words as an empty one`, async () => {
+      const unread = await messageOf(
+        transportHandlers(transport, cutOffMidBody(500)).notify(ctx('notify', params)),
+      );
+      const empty = await messageOf(
+        transportHandlers(transport, emptyBody(500)).notify(ctx('notify', params)),
+      );
+
+      // THE CLAIM. An empty body sends somebody looking for the intermediary
+      // that answered nothing; a cut connection is the network. One sentence
+      // for both is a sentence reachable from a state it does not describe.
+      expect(unread).not.toBe(empty);
+
+      // And it has to name the cause rather than merely differ from the other
+      // sentence: `describeFetchError` is what turns Node's bare rejection into
+      // something an operator can act on.
+      expect(unread).toContain('other side closed');
+      expect(unread).toContain('500');
+      expect(unread).not.toMatch(/empty body/i);
+      expect(unread).not.toMatch(/^TypeError/);
+      expect(unread).toMatch(/Slack|Discord/);
+      // A webhook URL IS the credential, and a new sentence must not be the one
+      // that finally carries it into the run journal.
+      expect(unread).not.toContain('s3cr3t');
+    });
+  }
+
+  it('discord does not claim Discord suggested no delay, over a 429 nobody read', async () => {
+    // `retry_after` is in the BODY on Discord, so `retry later` asserts the
+    // service named no wait. Over a body that was never read that is a claim
+    // about bytes nobody saw — and the status is what tells a rate limit from
+    // an outage, so nothing an operator needs is lost by saying so.
+    const said = await messageOf(
+      transportHandlers('discord-webhook', cutOffMidBody(429)).notify(ctx('notify', params)),
+    );
+    expect(said).not.toMatch(/retry later/);
+    expect(said).toContain('429');
+    expect(said).toContain('other side closed');
+  });
+
+  it('discord still quotes an answer that DID arrive', async () => {
+    // Passes before and after, on purpose: the fix must not cost the sentence
+    // the 429 branch exists for. Discord's suggested wait is in the body.
+    const rateLimited = vi.fn(
+      async () => new Response('{"retry_after":4.5}', { status: 429 }),
+    ) as unknown as typeof globalThis.fetch;
+    const said = await messageOf(
+      transportHandlers('discord-webhook', rateLimited).notify(ctx('notify', params)),
+    );
+    expect(said).toMatch(/rate-limited/i);
+    expect(said).toContain('4.5');
+  });
+
+  it('discord still reports a genuinely empty body as the status it came with', async () => {
+    // The other side of the same rule: the sentence stays for the state it
+    // DOES describe. Removing it would trade one vagueness for another.
+    const said = await messageOf(
+      transportHandlers('discord-webhook', emptyBody(500)).notify(ctx('notify', params)),
+    );
+    expect(said).toBe('Discord refused: HTTP 500');
+  });
+
+  it('discord still posts when the webhook accepts it', async () => {
+    // A guard that broke the success path would be worse than the defect — the
+    // rule this file already states for the bot branch. Discord answers 204
+    // with no body, so there is nothing to read and nothing to thread later.
+    const accepted = vi.fn(
+      async () => new Response(null, { status: 204 }),
+    ) as unknown as typeof globalThis.fetch;
+    await expect(
+      transportHandlers('discord-webhook', accepted).notify(ctx('notify', params)),
+    ).resolves.toEqual({ output: { ts: null, transport: 'discord-webhook' } });
   });
 });
 
