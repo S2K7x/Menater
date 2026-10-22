@@ -247,15 +247,28 @@ export class CredentialError extends Error {
  * Empty means KEEP, matching the rest of the console: a secret field always
  * comes back empty on screen, so reading that as "erase" would delete the key
  * of anyone who saves Settings without touching it. `null` erases.
+ *
+ * A PATCH IS ALL-OR-NOTHING, AND THAT IS WHY THE TWO PASSES ARE SEPARATE.
+ * Validating and applying in one loop left an entry accepted before a later
+ * one was refused: `env` is the LIVE process (decision 1 — `secretFor()` reads
+ * it at call time) while `writeStore` runs once at the end and never ran at
+ * all, so the route answered 409 over a pipeline already using the new key,
+ * absent from the file and reverted by the next restart. With `null` the same
+ * shape took a Slack token off a running console and called the deletion
+ * failed. A partial success showing red is the inverse of the failure showing
+ * green this product exists to make impossible, and a half-applied credential
+ * set is the state nobody can reason about.
+ *
+ * The refusal is unchanged: same message, same `key`, the first offending
+ * entry in insertion order. Only what is left behind changes.
  */
 export function saveCredentials(
   updates: Record<string, string | null | undefined>,
   env: NodeJS.ProcessEnv = process.env,
 ): CredentialStatus[] {
   snapshotRealEnv(env);
-  const stored = readStore();
 
-  for (const [name, value] of Object.entries(updates)) {
+  for (const name of Object.keys(updates)) {
     if (!isManagedCredential(name)) {
       throw new CredentialError(`"${name}" is not a credential this console manages.`, name);
     }
@@ -267,6 +280,10 @@ export function saveCredentials(
         name,
       );
     }
+  }
+
+  const stored = readStore();
+  for (const [name, value] of Object.entries(updates)) {
     if (value === null) {
       delete stored[name];
       delete env[name];

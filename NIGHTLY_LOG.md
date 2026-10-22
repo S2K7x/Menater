@@ -4,6 +4,164 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-10-22 — Thursday · Bugs and technical debt
+
+**Subject**: **A refused credential patch half-happened, and the route reported
+it as a refusal.** `saveCredentials` validated and applied in the same pass, so
+an entry accepted before a later one was refused stayed in the live
+`process.env` and never reached the 0600 file — the route answers 409 over a
+pipeline already running on the new key. § 7 had named this *"a Thursday's,
+with a test per shape"*; this is that Thursday.
+
+**Result**: PR opened on `claude/sleepy-volta-m6tem4`. Five files: one
+production (`dashboard/server/credentials.ts`, **8 effective lines** — one loop
+split in two, plus the banner paragraph), one test file extended
+(`server/credentials.test.ts`, +5 tests), one new
+(`server/credentials-patch-route.test.ts`, +3 tests), plus `CLAUDE.md` (one
+traps row, one paragraph under *Settings page*, the suite count 1699 → 1721)
+and `ROADMAP.md` (§ 7 row struck), and this journal. **No interface change** —
+nothing under `src/` is touched. No dependency, no colour, no CSS class, no
+catalogue key, no user-facing string: the 409's sentence is byte-identical.
+VulnPipe not touched.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-m6tem4` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Forty-ninth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: `main` at 3339659 gave
+typecheck 0, **1713 passed | 1 skipped** and a clean build — run, not assumed,
+after `npm ci` (a fresh clone has no `node_modules`, and `vitest: not found` is
+the missing install, not a red suite) — and `list_pull_requests --state open`
+was empty. § 7 holds four open rows, and the 10-18 journal had already ranked
+this one as *"the best Thursday subject"*: it is priority (2), a real
+reproducible bug, with the measurement already written down by the night that
+found it. The other three are not Thursday's: the store contract's Postgres
+half needs a database this environment does not have, `engine.resume()` is
+deliberately open because wiring it would look fixed and would not be, and
+`npm audit` in CI is a decision for a human.
+
+**What the route actually answered**, measured by driving the real handler
+(Node 22.22.0, no network, no key), store holding `OLD-KEY`:
+
+| request | before | after |
+|---|---|---|
+| `{OPENROUTER_APIKEY:'NEW-KEY', NOT_A_CREDENTIAL:'x'}` | **409**, `process.env` = `NEW-KEY`, file = `OLD-KEY` | 409, `process.env` = `OLD-KEY`, file = `OLD-KEY` |
+| `{SLACK_BOTTOKEN:null, NOT_A_CREDENTIAL:'x'}` | 409, token **deleted** from the running process | 409, token intact |
+| `{OPENROUTER_APIKEY:'NEW', SLACK_BOTTOKEN:'typed'}` (second one locked) | 409, first one **applied** | 409, nothing applied, no file created |
+| `{OPENROUTER_APIKEY:'sk-a', SHODAN_APIKEY:'sh-b'}` | 200, both applied | *unchanged* |
+
+**What I learned that is written nowhere else.**
+
+1. **The defect is not "no transaction" — it is TWO SINKS WITH TWO COMMIT
+   POINTS, and that asymmetry is deliberate.** `env` is written per entry
+   because decision 1 of `credentials.ts` is that a key takes effect with no
+   restart (`secretFor()` reads `process.env` at call time); the file is
+   committed once, at the end, which is right for a file. Neither choice is
+   wrong. A throw between them leaves the two **disagreeing**, which is worse
+   than either outcome on its own — and nothing in the function's header said
+   the two had different commit moments. When one function writes to a sink
+   that commits immediately and one that commits at the end, the error path is
+   the only place that difference shows.
+2. **Moving the checks earlier cannot change which entry throws, and that is
+   the whole safety argument.** The old loop already validated each entry
+   *before* applying it, so the first offending entry in insertion order is the
+   same either way: same message, same `key`, byte-identical 409. That is what
+   makes all-or-nothing a bug fix rather than a behaviour change — and it is
+   worth stating in the PR, because "validate before you mutate" usually *does*
+   move the error. A test pins it (`names the FIRST offending entry, as it
+   always did`).
+3. **The tests that existed could not have seen it, for exactly the reason they
+   are right.** `credentials.test.ts` drives an INJECTED `env = {}`, which is
+   what keeps `snapshotRealEnv`'s one-shot freeze honest and what makes the
+   precedence tests mean anything. The cost is that not one of them exercises
+   the production call — `saveCredentials(body ?? {})` against the live
+   `process.env` — which is the entire cost of this bug. Hence a second file
+   driving the real route. **And the older hole was simpler**: the file had no
+   multi-key patch test at all, so every assertion was about a one-entry patch,
+   i.e. the one shape that cannot show this.
+4. **`snapshotRealEnv` freezing on first call makes a route test's premise a
+   property of the MACHINE.** If the runner exports `OPENROUTER_APIKEY`, the
+   name is `locked` and the patch is refused for a reason that is not under
+   test — green or red by accident. The three managed names are therefore
+   deleted from `process.env` **before the first import**, since the import is
+   what takes the snapshot. Same lesson as `persistent-cache.test.ts` (*a test
+   must provoke the failure it is testing, never borrow one from the machine*),
+   pointed at an environment variable rather than at a filesystem.
+5. **Three mutations, each red** — the validation pass losing its
+   `fromRealEnvironment` check (2 red), the pass stopping after the first entry
+   (5 red), and the original apply-while-validating shape rebuilt (4 red). The
+   one mutation I tried that is NOT red, and deliberately so: moving
+   `readStore()` back above the validation loop. It is a read with no
+   observable effect on a refused patch, so no test can fail on it, and
+   demanding one would be *two guards where one suffices*.
+6. **Three tests claim the boundary and pass before AND after**: a wholly valid
+   multi-key patch still applies every entry, at the module and at the route,
+   and the refusal still names the first offending entry. All-or-nothing
+   becoming none-at-all would be a different bug, and it is the plausible wrong
+   fix here.
+
+**Found and NOT fixed.**
+
+- **`CredentialsPanel` is still what keeps this latent, and that has not
+  changed.** It disables a `locked` field and sends only non-empty managed
+  names, so reaching the refused-patch path takes a hand-made authenticated
+  request or a browser whose `locked` flags went stale across a restart. The
+  fix is in the store rather than the form on purpose — `/api/credentials` is a
+  documented endpoint and the form is not its only caller — but nobody should
+  read this as the interface having been wrong.
+- **`SettingsPage.tsx:465` sends a single-key patch** (`{ [key_env]: draft }`)
+  and `SettingsSetup.tsx:161` sends `patch`, built from the setup fields. Both
+  are read and both are one-or-more valid managed names; neither needed a
+  change. Noted so the next night does not re-grep it.
+- **Standing leads, re-checked and unchanged**: the `Fold` summary's no-wrap
+  flex line at 320 px (§ 7, still the best Saturday subject), the Guide's
+  seventeen section titles not being headings, the incident card's heading
+  outline, the ninety-odd French strings in `server/engine/`, `npm audit` not in
+  CI, a write's 401 not reaching the sign-in screen, the console's missing
+  `check.cjs`, `.vp-action`'s 36 px touch target, `MENATER_TEST_PG` still never
+  set. **Counted rather than guessed**: § 7's table now holds **36 struck rows
+  and 15 open ones**, nine of them bold, i.e. the ones a night actually ranks
+  from — and three of those nine say in their own text why a night must not
+  take them (the Postgres half needs a database, `engine.resume()` would look
+  fixed and would not be, the retry policy is an architecture decision).
+
+**Do not redo**:
+
+- **Do not wrap this in a try/rollback.** Restoring `env` and the file after a
+  throw means remembering the previous value of every entry, including the
+  difference between *absent* and *empty string*, and it would leave the
+  mutation path able to fail halfway. Validating first makes the failure
+  unreachable instead of recoverable, which is strictly less code and strictly
+  fewer states.
+- **Do not make the refusal describe the whole patch** (*"3 names refused"*).
+  It would change the `key` field the route sends, which `CredentialsPanel`
+  reads to point at a field, and the sentence an operator already gets names
+  the one thing to fix.
+- **Do not move the validation into the route.** `saveCredentials` is the
+  module that owns the closed list and the environment snapshot; a check in
+  `routes/settings.ts` would be a second copy of both, and the two would
+  disagree on the first edit.
+
+**Verified** (Node 22.22.0, npm 10.9.4; every command run and its output read):
+
+| Command | Result |
+|---|---|
+| `npm ci` (dashboard) | clean |
+| `npm run typecheck` | **0 errors**, before and after |
+| `npm test` on `main` (3339659) | **1713 passed \| 1 skipped**, 108 files |
+| `npx vitest run server/credentials.test.ts` with the new tests, fix NOT applied | **3 failed \| 15 passed** — `expected 'NEW-KEY' to be 'OLD-KEY'`, `expected undefined to be 'xoxb-live'`, `expected 'NEW-KEY' to be undefined` |
+| `npx vitest run server/credentials-patch-route.test.ts`, fix NOT applied | **1 failed \| 2 passed** — `expected 'NEW-KEY' to be 'OLD-KEY'` through the real handler |
+| same two files, fix applied | **21 passed** |
+| mutation: validation pass loses the `locked` check | **2 failed** |
+| mutation: validation pass stops after the first entry | **5 failed** |
+| mutation: apply inside the validation pass (the original shape) | **4 failed** |
+| `npm test` with the fix | **1721 passed \| 1 skipped**, 109 files, 34.6 s |
+| `npm run build` | ✓ built in 625 ms, `index-C8RT0kPt.js` 446.00 kB / gzip 130.61 kB |
+| VulnPipe | **not touched**, suite not run |
+
 ## 2026-10-21 — Wednesday · Tests and QA
 
 **Subject**: **`makeNotify` has three transports, and the body-read guard
