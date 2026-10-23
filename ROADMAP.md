@@ -859,6 +859,28 @@ stayed exactly where it was.*
 **What R does not do.** It adds no per-user layout preference; that is C1.5. It
 leaves the eight facts of a triage row intact: the table got shorter, not poorer.
 
+### C0.41 ✅ — The first paint waited for somebody else's CDN
+
+*`index.html` asked `fonts.googleapis.com` for the display face with a plain
+`<link rel="stylesheet">`, and a stylesheet in `<head>` is render-blocking: the
+browser paints nothing until it has been fetched, and a pending stylesheet
+blocks the scripts after it too, so the module that mounts React never ran
+either. This product deploys with Docker onto operations networks whose egress
+is filtered — and a filter DROPS rather than refuses. Nothing fails loudly: the
+console is simply not there.*
+
+| Point | Detail |
+|---|---|
+| **Measured in Chromium 1194 against this repository's own `dist/`**, served by `server/static.ts`, five runs per condition | Host reachable (40 ms): first contentful paint **100 ms**. A proxy answering in three seconds: **3,068 ms** — the console's paint tracking the CDN exactly. Host REFUSING with an RST: **80 ms**, because a fast failure costs nothing. Host DROPPING silently: **no paint within twenty seconds, `#root` empty, 0 of 5 runs painted.** |
+| **After, same harness** | 100 → **92 ms** reachable, 3,068 → **80 ms** on the slow link, 80 → **84 ms** refused, and the silent-drop case **84 ms with 112 nodes rendered** where it had rendered nothing at all. |
+| **The file contradicted itself twice, which is why nobody looked** | `display=swap` in that URL means *paint the fallback face now, swap when the webfont lands*, and the comment above the link promised it *« falls back to system faces when the network is absent — a console on an isolated network must not lose its hierarchy because a CDN is unreachable »*. Both describe a graceful degradation the blocking `<link>` between them makes impossible. The promises were about the FACE; the defect was in the TIMING. |
+| **It is a deferral, not a deletion, and that is verified** | `media="print"` alone is *a fix that looks applied and is not*: the sheet is fetched and never applies, so the display face silently stops loading everywhere. Measured on a link answering after three seconds: painted at **100 ms** with `media=print`, then at **+4.6 s** `media=all` with the sheet applied. |
+| **The handler is an attribute, and that is correctness** | It is set while `<head>` is parsed, before the request can possibly have finished. A listener attached from the bootstrap script in `<body>` can arrive after `load` has already fired on a warm cache — and then the fonts never apply, on exactly the machines where nobody would notice. |
+| **The guard is a subtraction over both doors** | Not *« do not block on Google »* but *nothing outside this origin may delay the first paint*: a CSS `@import` of an absolute URL is render-blocking too, and worse (it is discovered only after the importing sheet is parsed, so it serialises two round trips), and it would be invisible to a rule that reads only `index.html`. `src/first-paint-boundary.test.ts`, four claims, six mutations killed. |
+| **And the rule must not forbid its own better repair** | Serving the faces from this origin removes the third party instead of deferring it. A claim written as *« there is a cross-origin stylesheet and it carries `display=swap` »* goes red on that change, so it counts a shipped `@font-face` with `font-display: swap` as the same promise — the mutation that self-hosts stays green. |
+| **The price, stated** | A comment in `index.html` is bytes on every navigation and that file is `no-store`: the explanation costs **+1,154 B raw, +548 B gzipped per navigation** (2,945 → 4,099 B raw, 1,445 → 1,993 B gzipped), which is why the measurement lives in the test and not in the shell. No JavaScript, CSS or chunk hash changed — `index-C8RT0kPt.js` is byte-identical. |
+| **What it does not do** | The faces are still fetched from a third party when one is reachable; only the WAIT is gone. Self-hosting them, and stripping HTML comments at build time, are both in § 7. |
+
 ### C0.40 ✅ — The card a responder reads on a phone, and it scrolled sideways
 
 *The open incident card was the last screen in this console that failed WCAG
@@ -2407,6 +2429,67 @@ catalogue of its own. Which of the two owns a relay's answer is a decision,
 not a translation.
 
 
+
+### The analysis dictionary is 7 % of the eager chunk, and both its readers are now lazy
+
+Measured by sourcemap attribution over this repository's own build:
+`src/i18n/dictionary.ts` is **30,962 of the eager chunk's 444,473 attributed
+bytes (7.0 %)**, second only to `src/i18n/console.ts` among our own modules and
+behind nothing but `react-dom`. It is the CODE-ANALYSIS vocabulary.
+
+**The ruling that closed this lead has expired, and that is the point of
+writing it down.** The 10-09 journal refused it in these words: *« `I18nProvider`
+builds BOTH catalogues eagerly (`t: dictionary(locale)`) because `DocsPanel`
+reads `t.landing` for the diagram labels, so the analysis catalogue is
+genuinely in the eager graph »*. That premise was true when it was written and
+**C0.39 falsified it the following week** by putting `DocsPanel` behind
+`React.lazy`. Re-checked tonight: every non-test reader of `t` is now inside a
+lazy boundary — thirteen files under `src/vulnpipe/` (the Code tab) and
+`DocsPanel` (the Guide) — and `src/lib/api.ts` imports only the `Locale` TYPE,
+which is erased. Nothing eager reads it; `i18n/context.tsx` imports it anyway.
+
+**It is still not a night, and the reason is the shape rather than the
+premise.** `useI18n()` hands `t` to the whole tree, and `t` is destructured at
+**28 call sites in 13 files**. Every correct way to stop the provider importing
+the catalogue touches all of them, or buys a throwing accessor on the context
+value so they need not change — which is cleverness, in the hook every screen
+calls. A mass one-line rename across thirteen files would drown its own
+measurement, which is what `NIGHTLY.md` means by depth over breadth. What it
+needs is a deliberate decision about where the analysis vocabulary is provided,
+not a Friday.
+
+Worth knowing before anybody starts: `Diagrams.tsx` is the one file under
+`src/vulnpipe/` that console code imports, and it is in the Guide's chunk and
+not the Code tab's — so the catalogue would become a third shared chunk rather
+than being duplicated. And the **dead entries are a separate, smaller subject**:
+`n8n-removed.test.ts`'s orphan rule, run against `dictionary('en')` with that
+catalogue excluded from its own corpus, reports **48 orphan leaf keys of 529** —
+26 of `landing`'s 130, 8 of `app`'s 9, 7 of `settings`', 6 of `glossary`'s, and
+`localeName`. The rule under-reports by construction, so that is a floor. § 7
+already carries that row; the measurement is here so the next pass does not
+re-derive it.
+
+### The console's faces still come from a third party, and its shell ships its comments
+
+Both fell out of C0.41 and neither is a defect.
+
+**Self-hosting the two faces** would remove the third-party request instead of
+deferring it, which is the better answer for a product whose normal deployment
+is a filtered network: Inter and Archivo Black are both OFL, `server/static.ts`
+already contemplates serving woff2 (its compression list excludes them by name,
+*« a woff2 is a compressed container »*), and the files would then arrive from
+the origin that already answers for the bundle, under the same lock. It is not
+a night's unilateral change: it commits font binaries to the repository and
+makes a licensing call, so it is a decision for a human. C0.41's guard is
+written so that making it does **not** turn the suite red.
+
+**`index.html` ships its comments**, and that file is `no-store`, so they are
+bytes on every navigation: 4,099 B raw and 1,993 B gzipped, of which roughly
+two thirds is prose. Stripping HTML comments at build time is a Vite option and
+would cost nothing an operator can see — but this repository's comments are its
+most valuable prose and the shell is the one place they are also a bill, so
+whether to strip them there is a judgement about the house style rather than a
+performance fix.
 
 Small, known, and written down so it is not rediscovered.
 

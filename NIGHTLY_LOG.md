@@ -4,6 +4,203 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-10-23 — Friday · Performance and cost
+
+**Subject**: **the console's first paint waited for `fonts.googleapis.com`.**
+`index.html` asked for the display face with a plain `<link rel="stylesheet">`,
+and a stylesheet in `<head>` is render-blocking — so on a network whose egress
+filter DROPS rather than refuses, which is the ordinary shape of one and the
+normal deployment of this product, the console painted **nothing**, and did not
+even mount React, while every byte of the interface had already arrived from
+our own origin.
+
+**Result**: PR opened on `claude/sleepy-volta-azft46`. Four files: one
+production (`dashboard/index.html` — **two attributes**, plus the comment), one
+new test (`dashboard/src/first-paint-boundary.test.ts`, **+4 tests**), plus
+`CLAUDE.md` (one traps row, suite count 1721 → 1725) and `ROADMAP.md` (C0.41
+and two § 7 entries), and this journal. **No JavaScript, no CSS, no CSS class,
+no catalogue key, no user-facing string**: every built chunk is byte-identical,
+`index-C8RT0kPt.js` included. No dependency. VulnPipe not touched.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-azft46` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Fiftieth entry saying so**; it is a line in the
+routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: the designated branch
+at 6562ca7 (= `origin/main`) gave typecheck 0, **1721 passed | 1 skipped** and
+a clean build — run after `npm ci`, not assumed — and `list_pull_requests
+--state open` was empty. Friday's reservoir is performance and cost, and the
+lead came from measuring rather than from a list: a sourcemap attribution over
+the eager chunk, then reading `index.html` next to its own comment. It is
+priority (2) as much as (5) — a real, reproducible defect, not only a bill.
+
+**Measured in Chromium 1194 against this repository's own `dist/`**, served by
+`server/static.ts` over a real socket, the font host intercepted, five runs per
+condition, median first contentful paint:
+
+| font host | before | after |
+|---|---|---|
+| reachable (40 ms) | 100 ms | **92 ms** |
+| a proxy answering in 3 s | **3,068 ms** | **80 ms** |
+| refusing with an RST | 80 ms | 84 ms |
+| dropping silently | **no paint in 20 s, `#root` empty, 0/5 painted** | **84 ms, 112 nodes** |
+
+**What I learned that is written nowhere else.**
+
+1. **A pending stylesheet does not merely delay the paint — it stops the
+   application starting.** In the dropped case `#root` held **0** nodes and
+   `document.body.innerText` was **0** characters after twenty seconds: a
+   pending stylesheet blocks the execution of the scripts that follow it, so
+   React never mounted. I expected "unstyled console"; what the harness showed
+   was "no console". Worth knowing because it changes the symptom somebody
+   reports — not *« the fonts look wrong »* but *« the page is blank »*, which
+   nobody would connect to a font.
+2. **The file contradicted itself twice, and that is why nobody looked.**
+   `display=swap` says *paint the fallback now, swap later*; the comment above
+   the link said it *« falls back to system faces when the network is absent »*.
+   Both are true **of the face** and say nothing **about the timing**, and the
+   blocking `<link>` sat between them. Two accurate sentences can make a defect
+   invisible by describing the half that works.
+3. **A fast failure costs nothing and a slow one costs everything** — 80 ms on
+   an RST against 3,068 ms behind a three-second proxy. So the taxonomy
+   matters when judging the risk: no DNS resolver fails fast and is harmless;
+   DNS that resolves onto a dropped route, or a proxy that accepts the socket
+   and never answers, is the whole cost. Do not describe this as "when the CDN
+   is down" — a CDN that is *down* is the cheap case.
+4. **`media="print"` alone is a fix that looks applied and is not.** The sheet
+   is fetched and never applies, so the display face silently stops loading on
+   every screen, and on a developer machine with the font cached you cannot see
+   it. The `onload` promotion is the half that makes it a deferral, and I
+   verified it rather than assuming: on a link answering after three seconds,
+   painted at **100 ms** with `media=print`, and at **+4.6 s** `media=all` with
+   the sheet applied.
+5. **The handler has to be an ATTRIBUTE, and that is correctness, not
+   brevity.** I first considered promoting the link from the existing bootstrap
+   `<script>`, which would be friendlier to a future CSP. It is wrong: that
+   script runs from `<body>`, so on a warm cache `load` can already have fired
+   before the listener is attached, and then the fonts never apply — on exactly
+   the machines where nobody would notice. The attribute is set while `<head>`
+   is parsed, before the request can possibly have finished. (There is **no CSP
+   on this origin** — checked, nothing sets one anywhere — and if one is ever
+   added, this handler is what needs `unsafe-hashes`.)
+6. **A guard against the better repair is a guard that blocks its own fix.**
+   My first version of the fourth claim read *« there is a cross-origin
+   stylesheet and it carries `display=swap` »*. Self-hosting the faces — which
+   is what I recommend in § 7, because it removes the third party instead of
+   deferring it — deletes that link, so the test would have gone **red on the
+   repair it exists to protect**. It counts a shipped `@font-face` with
+   `font-display: swap` as the same promise now, and **M7 is the mutation that
+   proves it**: self-hosted, the suite stays green.
+7. **The comment is a bill, in this one file.** `index.html` is served
+   `no-store`, so its comments are bytes on every navigation. My first draft of
+   the explanation cost **+2 kB raw**; moving the measurement into the test file
+   — which is never shipped — brought it to **+1,154 B raw / +548 B gzipped**.
+   That is the honest price of this change and it is in the PR. Everywhere else
+   in this repository a long comment is free; here it is not.
+
+**Found and NOT fixed.**
+
+- **`src/i18n/dictionary.ts` is 7.0 % of the eager chunk and both its readers
+  are now lazy.** Now § 7, with the measurement. The important part is *why it
+  was closed and why that ruling expired*: 10-09 refused it because
+  *« `DocsPanel` reads `t.landing`, so the analysis catalogue is genuinely in
+  the eager graph »* — true then, and **C0.39 falsified it the following week**
+  by deferring `DocsPanel`. Re-checked tonight: every non-test reader of `t` is
+  inside a lazy boundary. It is still not a night, but for a different reason
+  than the one on record — `t` is destructured at **28 call sites in 13 files**,
+  so every correct shape is either a thirteen-file rename or a throwing
+  accessor on the hook every screen calls. *A premise expires; re-check the
+  reason, not the verdict.*
+- **48 orphan leaf keys of 529 in that dictionary**, measured by running
+  `n8n-removed.test.ts`'s own orphan rule against `dictionary('en')` with that
+  catalogue excluded from its own corpus (26 of `landing`'s 130, 8 of `app`'s 9,
+  7 of `settings`', 6 of `glossary`'s, `localeName`). The rule under-reports by
+  construction, so that is a floor. § 7 already had the row; it now has the
+  number. Note § 7's claim that **`t.severity` is dead is unverified** — its
+  leaves are `label` and `explanation`, words that collide with everything, so
+  the rule cannot see it either way.
+- **The marketing site does not have this defect** — `grep` for
+  `fonts.googleapis` over `site/` returns nothing, so the console was the only
+  instance and the fix needed no second door there.
+- **The server read path is in good order**, measured rather than assumed, by
+  driving 100 alerts through the real six workflows into a `MemoryRunStore`:
+  at the 500-run ceiling `buildCases` **5.24 ms**, `computeMetrics` 0.05 ms,
+  `JSON.stringify` 3.29 ms, `gzipSync` 3.32 ms, 724,374 B raw / 49,379 B gzip
+  (14.7:1) — and the encoding is already memoised per body identity, so it is
+  paid once per rebuild. I looked for a hot spot there and did not find one.
+- **A snapshot ETag/304 is the remaining egress saving, and I did not take
+  it.** `json()` proves the bytes are often identical — the same object is
+  answered to every caller for up to the 15 s TTL — so with the ten tabs this
+  code's own comment calls *« the normal state at a triage desk »*, roughly
+  (N−1)/N of polls re-send ~49 kB that the client already has. With ONE tab the
+  saving is **zero**, because `checked_at` makes every rebuild a new body.
+  Deliberately not done: it needs a branch in `call()`, the central reader
+  C0.38 has just hardened, and a bug in it leaves a triage queue showing a
+  stale state — the one failure this product exists to prevent. Not the
+  conservative option.
+- **Standing leads, re-checked and unchanged**: the `Fold` summary's no-wrap
+  flex line at 320 px, the Guide's seventeen section titles not being headings,
+  the incident card's heading outline, the ninety-odd French strings in
+  `server/engine/`, `npm audit` not in CI, a write's 401 not reaching the
+  sign-in screen, `.vp-action`'s 36 px touch target, `MENATER_TEST_PG` still
+  never set.
+
+**Do not redo**:
+
+- **Do not promote the link from the bootstrap script instead of the
+  attribute.** Learning 5 — it loses the fonts on a warm cache, silently.
+- **Do not use `media="print"` without the `onload`**, and do not "simplify" the
+  handler. M1, M2 and M3 are each red.
+- **Do not write the font rule as a list naming Google.** The claim is
+  *nothing outside this origin may delay the first paint*, over both doors, or
+  a CSS `@import` of an absolute URL walks straight past it (M4).
+- **Do not assert the first-paint numbers from the suite.** It runs under
+  jsdom, which paints nothing, and a test that drove a browser over `dist/`
+  would pass by being skipped on a machine that has not built one — the
+  `MENATER_TEST_PG` lesson. The structural property is pinned; the milliseconds
+  are in the PR.
+- **Do not defer `src/i18n/dictionary.ts` by moving the file.** 10-09 was right
+  about the mechanism even though its premise has expired: the provider is what
+  holds it in the eager graph, and the provider is read by 28 call sites.
+- **Do not self-host the fonts on a night's own initiative.** It commits
+  binaries and makes a licensing call. It is the better fix and it is a human's
+  to take; C0.41's guard is written so that taking it does not turn the suite
+  red.
+
+**Verified** (Node 22.22.0, npm 10.9.4, Chromium 1194; every command run and
+its output read):
+
+| Command | Result |
+|---|---|
+| `npm ci` (dashboard) | clean — a fresh clone has none, and `vitest: not found` is the missing install, not a red suite |
+| `npm run typecheck` | **0 errors**, before and after |
+| `npm test` on the designated branch at 6562ca7 | **1721 passed \| 1 skipped**, 109 files |
+| `npx vitest run src/first-paint-boundary.test.ts`, fix NOT applied | **2 failed \| 2 passed** — exactly the two claims the change makes; the other two are boundary claims that pass either way |
+| same file, fix applied | **4 passed** |
+| `npm test` with the fix | **1725 passed \| 1 skipped**, 110 files |
+| `npm run build` | clean; every JS and CSS chunk byte-identical, `index.html` 2,945 → 4,099 B raw / 1,445 → 1,993 B gzipped |
+| Chromium, real socket, 4 conditions × 5 runs, before and after | the table above |
+| swap verification on a 3 s link | painted at 100 ms with `media=print`; at +4.6 s `media=all`, sheet applied |
+| VulnPipe | **not touched**, suite not run |
+
+| Mutation | Result |
+|---|---|
+| M1 — `media="print"` removed | RED — 1 |
+| M2 — `onload` removed | RED — 1 |
+| M3 — `onload` promotes to `'print'` | RED — 1 |
+| M4 — a remote `@import` added to a shipped sheet | RED — 1 |
+| M5 — `display=swap` dropped from the URL | RED — 1 |
+| M6 — the font request deleted entirely (vacuity guard) | RED — 1 |
+| M7 — self-hosted `@font-face` instead (the recommended repair) | **GREEN, on purpose** |
+
+No model key and no database were needed. The four probes (`probe-firstpaint`,
+`probe-swap`, `probe-readpath`, `probe-dict-orphans`) lived in
+`dashboard/scripts/` while I iterated and are deleted; `git status` shows only
+the four intended files.
+
 ## 2026-10-22 — Thursday · Bugs and technical debt
 
 **Subject**: **A refused credential patch half-happened, and the route reported
