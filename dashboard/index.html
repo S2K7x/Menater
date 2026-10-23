@@ -21,6 +21,24 @@
       a console on an isolated network must not lose its hierarchy because a
       CDN is unreachable, which is why the display fallback stack is condensed
       and heavy rather than a default sans.
+
+      AND THE REQUEST FOR IT CANNOT DELAY THE CONSOLE APPEARING. The sentence
+      above was true of the FACE and false of the TIMING: a plain
+      `<link rel="stylesheet">` in `<head>` is render-blocking, so this console
+      painted nothing — and ran no module script — until a third party answered.
+      `media="print"` takes it off that path and `onload` promotes it when it
+      lands; the promotion is not optional, or the fonts are fetched and never
+      applied. It is an ATTRIBUTE rather than a line in the bootstrap script
+      below because it must be set before the request can finish, which a
+      listener attached from `<body>` cannot promise on a warm cache.
+
+      `display=swap` stays in the URL for the other half of the same promise:
+      paint the text in the fallback face immediately, swap when the face lands.
+
+      The measurement, the reasoning and the rules that hold all of it in place
+      are in `src/first-paint-boundary.test.ts` — there and not here, because a
+      comment in this file is bytes on every navigation, and this one is
+      `no-store`.
     -->
     <!--
       The slate mark, shown between the first paint and React mounting. From
@@ -34,6 +52,8 @@
     <link
       href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;700&display=swap"
       rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
     />
   </head>
   <body>
