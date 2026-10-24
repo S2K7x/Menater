@@ -4,6 +4,192 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-10-24 — Saturday · Interface, clarity, accessibility
+
+**Subject**: **a fold title that SHOUTED a filesystem path.** Settings →
+Ingestion → Sources generates the Wazuh setup block so that nobody retypes a
+path out of a README, and titles its configuration fold
+`Paste into ${configFile}`. `.soc-fold > summary` carries
+`text-transform: uppercase`, because a fold title is a heading — so what
+rendered was `PASTE INTO /VAR/OSSEC/ETC/OSSEC.CONF`, and paths are
+case-sensitive everywhere Wazuh runs. **The console was naming a file that does
+not exist, on the one screen whose job is to say which file to edit.** The same
+twenty-five unbreakable characters were also the last horizontal overflow in
+this console.
+
+**Result**: PR opened on `claude/sleepy-volta-vrysrv`. Seven files: three
+production (`src/styles.css` +29 lines of which 24 are comment,
+`src/components/SettingsSetup.tsx`, `src/i18n/console.ts`), one new test file
+(`src/components/fold-machine-value.test.tsx`, **+8 tests**), plus `CLAUDE.md`
+(one traps row, suite count 1725 → 1733), `CLARITY.md` (one § 8 row),
+`ROADMAP.md` (C0.42, and the § 7 `Fold` entry rewritten rather than deleted)
+and this journal. No production dependency, no server change, no colour, no
+token, no heading level moved, no VulnPipe change.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-vrysrv` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Fifty-first entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: the designated branch
+at ed14507 (= `origin/main`) gave typecheck 0, **1725 passed | 1 skipped** and
+a clean build — run after `npm ci`, not assumed — and `list_pull_requests
+--state open` was empty. Saturday's reservoir is interface and accessibility,
+and § 7 carried exactly one measured defect left for it: the `Fold` summary's
+no-wrap flex line, the single horizontal overflow C0.40's sweep left standing.
+I took it, found that § 7's proposed fix is wrong, and found the register
+defect underneath while measuring the cause.
+
+**Measured in Chromium 1243 against this repository's own `dist/`**, served by
+`server/static.ts` over a real socket, transitions killed first:
+
+| | before | after |
+|---|---|---|
+| overflow, 183 views (10 tabs + sub-tabs × 320/375/1280) | **1** — Ingestion › Sources, `scrollWidth` 338 at 320 px | **0** |
+| 549 views (the same × grayed/dark/acme) | 3 overflows | 0, and **9 views differ, all nine this one screen** |
+| 1280 px | — | geometry **identical to the pixel**; only the path's spelling changes |
+| 375 px | fold 64 px | 65 px (mono's line box), panel +1 px |
+| 320 px | fold 64, panel 880.6, page 2622 | fold 88, panel **947.1**, page 2689 |
+| re-cased text nodes that are machine VALUES | **1** of 506 | **0** of 506 |
+
+**What I learned that is written nowhere else.**
+
+1. **§ 7's proposed fix was wrong, and only driving it said so.** The entry
+   asked for `flex-wrap: wrap` on `.soc-fold > summary`, reasoning by analogy
+   with `.soc-lang-wide`. It takes the overflow to zero and **changes 18 of the
+   183 views**, two of them regressions on screens with no defect: **the
+   chevron is a flex ITEM**, so once the line wraps it is orphaned on a line of
+   its own above the title it points at, and Settings → Ingestion's tunnel fold
+   goes **64 → 107.5 px at 375 px** for a title that fitted. I screenshotted it
+   before deciding, which is the only reason I saw the chevron. *An analogy is
+   a hypothesis; the previous element's fix is not this element's fix.*
+2. **`overflow-wrap: anywhere` one level up is worse, and it is quiet.** It
+   changes the min-content of every item on the line, so the flex SHRINK
+   distribution moves even where nothing needs breaking: the Code tab's
+   « 3 CONNECTING THE DOTS » breaks as `CONNECTI / NG` (75.3 → 92.2 px) and the
+   hint becomes « 10 / line / s », because the property inherits. Scoping it to
+   the hint (`overflow-wrap: normal`) fixes the hint and leaves the title
+   defect. I tried six candidates and measured each.
+3. **The primitive was never broken, and that is the transferable half.** A
+   fold title and a fold hint are prose, and prose wraps at its spaces. What
+   cannot wrap is a machine value — and this stylesheet already says so for
+   every other one it prints (`.soc-health-item code`, `.soc-hash`,
+   `.soc-kv dd`, `.soc-intel-value`). *The mirror of a rule is not the rule*,
+   one element over, and the fix belongs on the VALUE.
+4. **It reached assistive technology, not only the eye.** Probed with CDP
+   `Accessibility.getFullAXTree`: the disclosure triangle's accessible name was
+   `"PASTE INTO /VAR/OSSEC/ETC/OSSEC.CONF 10 lines"`, because Chromium computes
+   a name from RENDERED text. Verified in both directions on one page — putting
+   `text-transform: uppercase` back on the span alone flips the name back. So
+   `text-transform` is not cosmetic when what it transforms is a value.
+5. **A `<summary>` is a flex container, so a sentence split in two becomes two
+   COLUMNS.** My first version put `.soc-fold-value` directly in the summary;
+   at 320 px « PASTE / INTO » stacked in a column of its own beside the path.
+   The wrapper (`.soc-fold-title`, styleless) is what keeps the content inline,
+   and it is **invisible in a diff** — hence a test that claims the structure.
+6. **A bare class is correct here and it is not a counter-example to
+   `.soc-field span`.** That trap has cost four fixes. It does not apply:
+   specificity decides between rules that MATCH, and `text-transform` reaches
+   this span only by INHERITANCE, which any matching declaration beats. Naming
+   the element would be a guard against a state that cannot occur. I checked
+   this by mutation rather than by reading the spec (M1).
+7. **The spelling trap reproduces on a third element.** `anywhere` → 320 ✓,
+   `break-all` → 320 ✓, `break-word` → **338, unchanged**. After
+   `.soc-health-item code` and `.soc-lineage li`.
+8. **`innerText` over a `hidden` sub-tab panel is a broken ruler.** My sweep
+   reported a `<th>` leaking a 300-character glossary bubble; it is an artifact
+   — sub-tabs are hidden, not unmounted (deliberately), and `innerText` on a
+   non-rendered subtree falls back to the raw text. Re-measured on the visible
+   panel: no leak. Read `innerText` only off what is rendered.
+9. **Playwright and Chromium moved.** `/opt/pw-browsers/chromium` is now a
+   SYMLINK to `chromium-1243/chrome-linux64/chrome` — 10-17's note said it was
+   a file, and the hard-coded `chromium-1194/chrome-linux/chrome` path from
+   that night no longer exists. Launch with `executablePath:
+   '/opt/pw-browsers/chromium'` and it keeps working across versions.
+
+**Do not redo.**
+
+- **Do not write `flex-wrap: wrap` on `.soc-fold > summary`.** Learning 1, with
+  the numbers. The § 7 entry is rewritten rather than deleted so the wrong
+  reasoning stays on the record next to what it cost.
+- **Do not write `overflow-wrap` or `word-break` on `.soc-fold > summary`**, and
+  do not put either on `.soc-fold-hint`. Learning 2; M3 and M5 are red.
+- **Do not use `overflow-wrap: break-word` for this.** Learning 7. M2.
+- **Do not drop `text-transform: uppercase` from the fold summary** to remove
+  the symptom. It takes the heading register off twenty folds. M4, and a test
+  claims that boundary before AND after.
+- **Do not remove the `.soc-fold-title` wrapper** because it carries no CSS.
+  Learning 5. M6.
+- **Do not name the element in `.soc-fold-value`.** It would be a guard against
+  a state that cannot occur; learning 6.
+- **Do not promote the Guide's seventeen section titles tonight.** Unchanged in
+  § 7, and still blocked on the same size decision nobody can answer at night.
+
+**Found and NOT fixed.**
+
+- **The 44 px touch target on a wrapped `Fold` summary is unmeasured.** The § 7
+  entry raised it and C0.42 did not need to answer it: `min-height: 44px` is a
+  floor and a wrapped summary grows past it, but nothing checks that the ten
+  screens using `Fold` still meet it. Kept in § 7, narrowed to that question.
+- **The widest thing left on Ingestion › Sources is the mapping table, and it
+  is legitimate.** Re-measured after the change: `.soc-table.soc-table-compact`
+  has **276.7 px of min-content inside a 270 px box** at 320 px, and the
+  document stays at 320 because `.soc-table-wrap` is `overflow-x: auto`. WCAG
+  2.2 § 1.4.10 allows a two-dimensional scroll for content that requires one,
+  and a data table is the named example — so this is the pattern working, not
+  the next defect. Written down because the measurement looks like a finding.
+- **The console still has no `site/check.cjs` equivalent** (§ 7, re-checked).
+  Tonight's sweep is a scratchpad script for the reason 10-16 recorded: a test
+  that reads `dist/` passes by being skipped on a machine with no build. The 8
+  tests claim the SOURCE; the numbers above are measured by hand.
+- **Standing leads, re-checked and unchanged**: the Guide's seventeen section
+  titles not being headings, the incident card's heading outline and the unused
+  `h1` size step, the two `h2` → `h4` jumps (`.soc-wf-subhead`,
+  `.vp-settings-subhead`), `aria-selected` on seven `<tr>` of a plain
+  `<table>`, the four tables with no accessible name, `.vp-action`'s 36 px
+  touch target, the ninety-odd French strings in `server/engine/`,
+  `MENATER_TEST_PG` still never set, `npm audit` not in CI, a write's 401 still
+  not reaching the sign-in screen.
+
+**Verified** (Node 22.22.0, npm 10.9.4, Chromium 1243; every command run and
+its output read):
+
+| Command | Result |
+|---|---|
+| `npm ci` (dashboard) | clean — a fresh clone has none |
+| `npm run typecheck` | **0 errors**, before and after |
+| `npm test` on the designated branch at ed14507 | **1725 passed \| 1 skipped**, 110 files |
+| `npx vitest run src/components/fold-machine-value.test.tsx`, fix NOT applied | **4 failed \| 4 passed** — exactly the four claims the change makes; the other four are the two boundaries and the two coupling halves |
+| same file, fix applied | **8 passed** |
+| `npm test` with the fix | **1733 passed \| 1 skipped**, 111 files |
+| `npm run build` | clean; CSS 62.20 → 62.30 kB, JS 446.00 → 446.12 kB |
+| real server + Chromium, 183 views × 3 widths | 1 overflow → **0** |
+| 549 views (3 themes × 3 widths), before and after | overflow 3 → 0; **9 differing views, all Ingestion › Sources**; 0 differences at 1280 px beyond the spelling |
+| CDP `Accessibility.getFullAXTree`, both directions | `"PASTE INTO /VAR/OSSEC/ETC/OSSEC.CONF 10 lines"` → `"PASTE INTO /var/ossec/etc/ossec.conf 10 lines"` |
+| re-cased-value sweep over ten tabs and their sub-tabs | 506 re-cased text nodes, machine values **1 → 0** |
+| `VulnPipe` | **not touched**, suite not run |
+
+| Mutation | Result |
+|---|---|
+| M0 — all three production files back at `HEAD` | RED — 4 |
+| M1 — `.soc-fold-value` drops `text-transform: none` | RED — 1 |
+| M2 — `.soc-fold-value` uses `overflow-wrap: break-word` | RED — 1 |
+| M3 — the break put on `.soc-fold > summary` instead | RED — 1 |
+| M4 — `.soc-fold > summary` drops `text-transform: uppercase` | RED — 1 |
+| M5 — `.soc-fold-hint` gains `overflow-wrap: anywhere` | RED — 1 |
+| M6 — the one-flex-item wrapper removed | RED — 1 |
+| M7 — the path interpolated back into the title string | RED — 2 |
+| M8 — an absent path still prints an empty mark | RED — 1 |
+
+**Nine mutations, nine killed**, no survivors. No model key and no database
+were needed. The sweeps, probes, screenshots and the mutation harness lived in
+the scratchpad and are not in the diff; `git status` shows only the seven
+intended files.
+
+---
+
 ## 2026-10-23 — Friday · Performance and cost
 
 **Subject**: **the console's first paint waited for `fonts.googleapis.com`.**

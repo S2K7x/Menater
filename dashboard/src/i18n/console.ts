@@ -820,7 +820,15 @@ export interface ConsoleDictionary {
       pick: string;
       endpoint: string;
       install: string;
-      config: (file: string) => string;
+      /**
+       * « Paste into », and the file NAME is not in it.
+       *
+       * It used to be `(file) => `Paste into ${file}``, which put a
+       * case-sensitive path inside a heading the stylesheet re-cases. The
+       * value is composed in the component now, inside `.soc-fold-value`,
+       * so this catalogue holds the sentence and nothing the machine wrote.
+       */
+      configInto: string;
       configNoFile: string;
       verify: string;
       mapping: string;
@@ -2185,7 +2193,7 @@ const EN: ConsoleDictionary = {
       pick: 'Source',
       endpoint: 'Endpoint',
       install: 'Run on the source machine',
-      config: (file) => `Paste into ${file}`,
+      configInto: 'Paste into',
       configNoFile: 'Request to send',
       verify: 'Check it works',
       mapping: 'Field mapping',

@@ -2498,6 +2498,35 @@ h3 { font-size: 0.86rem; letter-spacing: 0.06em; }
   margin-left: auto; font-family: var(--mono); font-size: 0.72rem;
   letter-spacing: 0.04em; color: var(--faint); text-transform: none;
 }
+
+/*
+ * A machine value NAMED by a fold title — today the file an operator is told
+ * to paste a configuration into, tomorrow whatever a second log source calls
+ * its own.
+ *
+ * A fold title is a heading, so the rule above puts it in display capitals,
+ * and that is right for the words. It is wrong for the value: paths are
+ * case-sensitive everywhere Wazuh runs, so `/var/ossec/etc/ossec.conf` was
+ * rendered as a file that does not exist, on the one screen whose job is to
+ * say which file to edit. A name may take the display register; a value keeps
+ * its spelling, and `DESIGN.md` says what it then looks like — mono, because
+ * mono means « this string came from the machine, and it is exact ».
+ *
+ * `overflow-wrap` is the other half, and it is the same fact. Twenty-five
+ * characters with nowhere to break, inside a `display: flex` summary that
+ * does not wrap, made the line's min-content 312.8 px in 270 px of room and
+ * the document 338 px at a 320 px viewport. `anywhere` and not `break-word`:
+ * only the first takes part in min-content sizing, which is what floors the
+ * line — the third element on which this project has measured that.
+ *
+ * The break belongs HERE and not on the summary: applied one level up it
+ * moves the min-content of every item on the line, and the Code tab's
+ * « 3 CONNECTING THE DOTS » broke as `CONNECTI / NG` on a fold that fitted.
+ */
+.soc-fold-value {
+  font-family: var(--mono); text-transform: none; letter-spacing: 0;
+  overflow-wrap: anywhere;
+}
 .soc-fold-body { padding: 0 0 14px; }
 
 /* --- A section with nothing to say ---------------------------------------

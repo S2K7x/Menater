@@ -859,6 +859,35 @@ stayed exactly where it was.*
 **What R does not do.** It adds no per-user layout preference; that is C1.5. It
 leaves the eight facts of a triage row intact: the table got shorter, not poorer.
 
+### C0.42 ✅ — A fold title that SHOUTED a filesystem path
+
+*Settings → Ingestion → Sources generates the Wazuh setup block so that nobody
+retypes a path out of a README, and titles its configuration fold
+`Paste into ${configFile}`. `.soc-fold > summary` carries
+`text-transform: uppercase`, because a fold title is a heading — so what
+rendered was* `PASTE INTO /VAR/OSSEC/ETC/OSSEC.CONF`, *and paths are
+case-sensitive everywhere Wazuh runs. The console was naming a file that does
+not exist, on the one screen whose job is to say which file to edit. The same
+twenty-five characters, unbreakable, were also the last horizontal overflow in
+this console.*
+
+| Point | Detail |
+|---|---|
+| **Two defects, one cause** | A machine value was put in a heading without being marked as one. The register half rewrites it; the reflow half floors the line. Marking it answers both, and nothing else in the product moves |
+| **It reached assistive technology, not only the eye** | Probed with CDP `Accessibility.getFullAXTree`: the disclosure triangle's accessible name was `"PASTE INTO /VAR/OSSEC/ETC/OSSEC.CONF 10 lines"`, because Chromium computes a name from RENDERED text. Verified both ways on one page — re-casing the span alone flips the name back |
+| **The reflow number** | `display: flex` with no `flex-wrap`, so the summary's min-content is the SUM of chevron, title and hint: **312.8 px in 270 px of room**, `document.documentElement.scrollWidth` **338** at a 320 px viewport. WCAG 2.2 § 1.4.10 (Reflow, AA), and **1 view of 183** — the entry § 7 opened when C0.40 closed the incident card |
+| **§ 7 proposed the wrong fix, and the measurement is what said so** | It asked for `flex-wrap: wrap` on the summary, reasoning from `.soc-lang-wide`. Driven over all 183 views that takes the overflow to zero and **changes 18 of them**, two as regressions on screens with no defect: the chevron is a flex ITEM, so once the line wraps it is orphaned on a line of its own above the title it points at, and the tunnel fold goes **64 → 107.5 px at 375 px** for a title that fitted. Screenshotted before deciding |
+| **And `overflow-wrap` on the summary is worse, more quietly** | It moves the min-content of every item, so the flex shrink distribution moves with it: the Code tab's « 3 CONNECTING THE DOTS » breaks as `CONNECTI / NG` (**75.3 → 92.2 px**) on a fold that fitted, and the hint becomes « 10 / line / s » because the property inherits |
+| **The primitive is not broken** | A fold title and a fold hint are prose, and prose wraps at its spaces. What cannot wrap is a machine value, and this stylesheet already says so for every other one it prints — `.soc-health-item code`, `.soc-hash`, `.soc-kv dd`, `.soc-intel-value`. *The mirror of a rule is not the rule*, one element over |
+| **`.soc-fold-value`** | Mono, because `DESIGN.md` reserves it for *« this string came from the machine, and it is exact »*; `text-transform: none`; `overflow-wrap: anywhere`. **Third element on which this project has measured the spelling**: `anywhere` → 320 ✓, `break-all` → 320 ✓, `break-word` → **338, unchanged** |
+| **A bare class, and why that is not a counter-example** | `.soc-field span` has cost this project four fixes written as bare modifiers. It does not apply here: specificity decides between rules that MATCH, and `text-transform` reaches this span only by INHERITANCE, which any matching declaration beats. Naming the element would be a guard against a state that cannot occur |
+| **The wrapper is the half a diff cannot show** | A `<summary>` is a flex container, so the sentence and the value as siblings are two COLUMNS: measured, « PASTE / INTO » stacked in a column of its own beside the path. They share one styleless `.soc-fold-title` item, and `fold-machine-value.test.tsx` claims the structure |
+| **The catalogue holds the sentence and nothing the machine wrote** | `config: (file) => \`Paste into ${file}\`` became `configInto: 'Paste into'`. The old key has no other caller and is removed rather than left orphaned |
+| **Measured over 549 views** | 3 themes (grayed / dark / acme) × 3 widths (320 / 375 / 1280) × 61 views. Horizontal overflow **3 → 0** (the same screen, once per theme). **9 views differ, and all nine are this one screen**: at 1280 px the geometry is identical to the pixel and only the spelling changes; at 375 px the fold grows **64 → 65 px**; at 320 px `scrollWidth` **338 → 320**, the fold **64 → 88 px** and its panel **880.6 → 947.1 px** |
+| **The price, stated** | +66.5 px of panel at 320 px, because content that used to leave the viewport now wraps inside it. A page that scrolls sideways hides its own right-hand edge; a taller page hides nothing |
+| **The general question, answered by a sweep rather than by this instance** | Of **506 re-cased text nodes** across the ten tabs and their sub-tabs, the number that look like a machine value is **0**. It was 1 |
+| **Unchanged** | No colour, no token, no heading level, no production dependency, no new catalogue key beyond the one that replaces another, and the Guide, Code and VulnPipe chunks are untouched. Nine mutations, nine killed |
+
 ### C0.41 ✅ — The first paint waited for somebody else's CDN
 
 *`index.html` asked `fonts.googleapis.com` for the display face with a plain
@@ -2369,30 +2398,32 @@ look of seventeen folds, and leaving the group labels as spans while the titles
 become `h2` makes the groups invisible to the same reader the change is for.
 Measured numbers for whoever takes it: 17 folds, 4 groups, 1 heading today.
 
-### A `Fold`'s summary is a no-wrap flex line, and it is a shared primitive
+### A `Fold`'s summary is a no-wrap flex line — closed by C0.42, and NOT the way this entry proposed
 
-Found by the sweep that closed the incident card (C0.40) — **156 views at 320 /
-375 / 1280 px, 24 with horizontal overflow before, 1 after**, and this is the
-one. Ingestion › **Sources** measures **338 px at 320 px**; it is clean at 375
-and at 1280, and it is identical before and after C0.40, which touched nothing
-on that tab.
+Kept rather than deleted, because the reasoning in it was wrong in a way worth
+remembering. It read: `.soc-fold > summary` is `display: flex` with no
+`flex-wrap`, so its min-content is the sum of its items; `Fold` is imported by
+ten components across both halves; one `flex-wrap: wrap` plausibly fixes all
+ten — *« the `.soc-lang-wide` subject on a different primitive »*.
 
-The cause is not the card's: `.soc-fold > summary` is `display: flex` with no
-`flex-wrap`, so the line is as wide as the sum of its items — the title, the
-`hint` that says what is inside, and the chevron. Measured by elimination,
-hiding either `.soc-fold-hint` or `.soc-fold-chevron` takes the document back
-to 320. That is the `.soc-lang-wide` trap of `narrow-viewport.test.tsx`, on a
-different primitive.
+**Measured, that fix changes 18 of the 183 views and two of the changes are
+regressions on screens that had no defect.** The chevron is a flex ITEM, so
+once the line wraps it is orphaned on a line of its own above the title it
+points at; and Settings → Ingestion's tunnel fold goes 64 → 107.5 px at 375 px
+for a title that fitted. `overflow-wrap: anywhere` on the summary is worse
+quietly: it moves every item's min-content, so the Code tab's « 3 CONNECTING
+THE DOTS » breaks as `CONNECTI / NG` and the hint becomes « 10 / line / s ».
 
-**It is a shared primitive, which is why it is here and not in that diff.**
-`Fold` lives in `components/Guidance.tsx` and is imported by ten components
-across BOTH halves of the application — `RulesPage`, `SettingsPage`,
-`SettingsSetup`, `IngestionPanel`, `IntelPanel`, `CaseView`, `HealthPanel`, and
-VulnPipe's `ReportView`, `SettingsPage` and `PipelineExplainer`. One
-`flex-wrap: wrap` plausibly fixes every one of them at once and plausibly
-re-lays out folds on ten screens, so it wants its own measured sweep rather
-than a line added to somebody else's. The `min-height: 44px` touch target on
-that summary is part of the question: a wrapped summary grows past it.
+The primitive was never the defect. A fold title and a fold hint are prose and
+wrap at their spaces; the one thing that cannot wrap is a machine value, and
+C0.42 marks the value instead — 183 views, 1 overflow before and 0 after, with
+nine of 549 theme × width views differing and all nine on that one screen.
+
+**What stays open is the 44 px touch target**, which this entry raised and
+C0.42 did not need to answer: `.soc-fold > summary` sets `min-height: 44px`,
+and nothing checks that the ten screens using `Fold` still meet it once a
+summary wraps to two or three lines. Growing past 44 px is harmless; the
+question nobody has measured is whether any of them falls BELOW it.
 
 ### The built-in engine writes French
 

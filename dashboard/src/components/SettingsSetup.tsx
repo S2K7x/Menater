@@ -333,7 +333,35 @@ export function SourcesPanel() {
 
       {source.setup ? (
         <Fold
-          title={source.setup.configFile ? t.config(source.setup.configFile) : t.configNoFile}
+          /*
+            THE FILE NAME LEAVES THE SENTENCE.
+
+            A fold title is a heading, so `.soc-fold > summary` puts it in
+            display capitals — right for the words, wrong for the value: a
+            path is case-sensitive on the machine this sentence gives an
+            order to, so the screen was naming a file that does not exist.
+            `.soc-fold-value` keeps the spelling, and lets the value break:
+            twenty-five characters with nowhere to break, in a flex line that
+            does not wrap, scrolled the page sideways at 320 px.
+
+            THE WRAPPER IS THE HALF THAT IS NOT OBVIOUS. The summary is a flex
+            container, so two sibling nodes in it are two COLUMNS, not a
+            sentence — the value as a direct child put « PASTE / INTO » in a
+            stacked column of its own beside the path. Inside one element the
+            content is inline text again and breaks where a sentence breaks.
+            `.soc-fold-title` carries no style of its own on purpose: it
+            exists to BE that one flex item, and `fold-machine-value.test.tsx`
+            claims the structure, because removing it is invisible in a diff.
+          */
+          title={
+            source.setup.configFile ? (
+              <span className="soc-fold-title">
+                {t.configInto} <span className="soc-fold-value">{source.setup.configFile}</span>
+              </span>
+            ) : (
+              t.configNoFile
+            )
+          }
           hint={t.lines(source.setup.config.split('\n').length)}
         >
           <CopyLine text={source.setup.config} />
