@@ -4,7 +4,7 @@
  * ============================================================================
  * SDK API ACTUALLY OBSERVED (probe: `node scripts/probe-mcp.mjs`)
  *   @modelcontextprotocol/sdk : 1.32.1
- *   zod                       : 4.4.3
+ *   zod                       : 4.6.7
  *
  *   - `server.tool(...)` is DEPRECATED → use
  *     `registerTool(name, { title, description, inputSchema }, cb)`.
@@ -23,9 +23,15 @@
  *     and the handler is never called (measured: 0 calls, for a missing
  *     required field and for a wrong type alike).
  *
- * The version above is pinned by `src/lockfile.test.ts`, which compares it to
- * the lockfile's resolution: a dependency refresh that leaves this banner
- * behind fails there, rather than leaving four undated claims behind. Note
+ * BOTH versions above are pinned by `src/lockfile.test.ts`, which compares
+ * them to the lockfile's resolutions: a dependency refresh that leaves this
+ * banner behind fails there, rather than leaving four undated claims behind.
+ * The zod line was NOT pinned until the 10-25 refresh moved it two minors to
+ * close GHSA-mrhx-c7xc-m3w5 — and the fourth claim below is zod's refusal
+ * travelling through the SDK, so it is dated by that number as much as by the
+ * SDK's. Re-probed on the pair above, all four hold: the two inputSchema forms
+ * publish a byte-identical JSON schema, hand the handler the same object, and
+ * refuse a missing argument the same way. Note
  * what the probe could NOT tell you before that refresh — its version line
  * read `@modelcontextprotocol/sdk/package.json` through the package specifier,
  * which the SDK's exports map resolves to a nested `{"type":"module"}` marker,

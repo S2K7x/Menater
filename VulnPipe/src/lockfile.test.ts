@@ -111,21 +111,40 @@ const ADVISORY_FLOORS = [
     half: 'VulnPipe',
     root: '../',
     path: 'node_modules/ip-address',
-    // `<= 10.7.0`: GHSA-rpw4-54j3-4h4q and GHSA-2vr4-cq9g-pvrc (SSRF and
-    // trust-boundary bypass, fe80::/64 for fe80::/10 and the NAT64 range),
-    // GHSA-j6r3-76f7-8jcv (cross-family subnet comparison admits an address
-    // outside an allowlist), GHSA-h3mg-xc3c-68pw (unbounded parse diagnostic).
+    // `<= 10.7.3`: GHSA-rxp7-6hxx-x8q5 (Address6 matches a zone identifier in
+    // quadratic time ahead of its length limit, so one long string stalls the
+    // process), on top of the four this row was opened for at `<= 10.7.0` —
+    // GHSA-rpw4-54j3-4h4q and GHSA-2vr4-cq9g-pvrc (SSRF and trust-boundary
+    // bypass, fe80::/64 for fe80::/10 and the NAT64 range), GHSA-j6r3-76f7-8jcv
+    // (cross-family subnet comparison admits an address outside an allowlist),
+    // GHSA-h3mg-xc3c-68pw (unbounded parse diagnostic).
+    //
+    // THIS ROW IS THE LIMITATION ABOVE COMING TRUE, and it is worth the line.
+    // The 10.7.1 floor held perfectly — the tree never slid back — and the
+    // package was vulnerable again anyway, at 10.7.3, because the next
+    // advisory was published ABOVE the boundary. A floor stops a regression;
+    // nothing offline notices a new finding, which is why the § 7 decision
+    // about running `npm audit` on a schedule is still open.
+    //
     // Arrives through @modelcontextprotocol/sdk -> express-rate-limit.
-    floor: '10.7.1',
+    // NOT reachable here, measured rather than reasoned: 0 loads on all five
+    // entry points this package imports, against 29 on `server/auth/router.js`
+    // — the control — which it does not import.
+    floor: '10.7.4',
   },
   {
     half: 'dashboard',
     root: '../../dashboard/',
     path: 'node_modules/undici',
-    // `8.0.0 - 8.10.1`: eleven advisories, high. Arrives through jsdom, i.e.
-    // the vitest environment, and `dashboard/Dockerfile` installs the runtime
-    // image with `--omit=dev`, so it never ships.
-    floor: '8.10.2',
+    // `>= 8.0.0 < 8.12.2`: GHSA-xjj6-f33q-929c (unhandled error on excessive
+    // content-encodings, high), GHSA-4qv8-2p9j-2685 (unbounded memory in the
+    // EventSource parser) and GHSA-f72v-6w45-q472 (subresource-integrity
+    // bypass through a non-lowercase algorithm token) — published above the
+    // 8.10.2 floor this row was opened at, the same way `ip-address` was.
+    // Arrives through jsdom, i.e. the vitest environment, and
+    // `dashboard/Dockerfile` installs the runtime image with `--omit=dev`, so
+    // it never ships.
+    floor: '8.12.2',
   },
   {
     half: 'VulnPipe',
@@ -196,6 +215,82 @@ const ADVISORY_FLOORS = [
     // could pin back into the range — but the fix is on the DEPENDENT.
     floor: '1.11.0',
   },
+  {
+    half: 'VulnPipe',
+    root: '../',
+    path: 'node_modules/zod',
+    // GHSA-mrhx-c7xc-m3w5, `< 4.6.6`, high: `$ZodArray` accumulates one issue
+    // per failing element with no cap. A DIRECT dependency of this half's
+    // PRODUCTION tree, and the only advisory in this list the product's own
+    // source imports by name.
+    //
+    // READ THE TRAPS TABLE ROW BEFORE TRUSTING THE ADVISORY'S OWN WORDS. Its
+    // description says the attack is « a large array to an application using
+    // an array schema WITHOUT a length constraint »; measured on both versions
+    // with a 1,000,000-element array of numbers, that is backwards. The
+    // unconstrained schema is NOT fixed — 1,000,000 issues and ~450 MB of heap
+    // on 4.6.7, where 4.4.3 took ~690 MB — and what the patch adds is a
+    // short-circuit on an UPPER-BOUND length check: `.max(100)` goes from
+    // 1,000,001 issues / 4,730 ms / +695 MB to 1 issue / 1 ms / +0 MB. So the
+    // title (« constrained collections ») is the accurate half, and upgrading
+    // buys nothing for a bare `z.array`.
+    //
+    // NOT reachable here, measured through the real server over
+    // InMemoryTransport — the transport the detection nodes use: this package
+    // declares no `z.array` at all, so a 1,000,000-element array sent where
+    // `get_context` expects a string is refused in 3 ms with the heap
+    // unmoved (one issue, not a million), and the same array under an
+    // undeclared key is stripped by the tool's own `z.object`. The SDK's only
+    // upper-bound-constrained array is `CompleteResultSchema.completion.values`
+    // (`.max(100)`), parsed by a client that calls `completion/complete`;
+    // `McpContextProvider` calls `callTool` and nothing else.
+    floor: '4.6.6',
+  },
+  {
+    half: 'VulnPipe',
+    root: '../',
+    path: 'node_modules/body-parser',
+    // GHSA-27r3-jxmh-p828, `>= 2.0.0 < 2.4.0`, high: denial of service through
+    // trailing bytes after a compressed request body. This half's PRODUCTION
+    // tree, through @modelcontextprotocol/sdk -> express.
+    //
+    // NOT reachable here, same instrument and same controls as the two rows
+    // above: 0 loads on all five entry points this package imports, 22 on
+    // `server/express.js`, which it does not import. Nothing here mounts an
+    // HTTP transport, so no request body reaches a parser.
+    floor: '2.4.0',
+  },
+  {
+    half: 'VulnPipe',
+    root: '../',
+    path: 'node_modules/fast-uri',
+    // GHSA-w74x-v6f9-j3xg (URI scheme spoofing through a percent-encoded
+    // scheme), GHSA-wjr9-j795-jxcr (host confusion through unchecked WHATWG
+    // canonicalisation), GHSA-xhq7-xmqj-769h, GHSA-333x-w4r6-6crp —
+    // `>= 3.0.0 < 3.1.9`. This half's PRODUCTION tree.
+    //
+    // This one IS loaded, unlike every other transitive row here: 8 loads on
+    // `server/mcp.js` and on `client/index.js`, through `ajv`, which the SDK
+    // uses to validate tool schemas. What it resolves URIs for is the `$id` /
+    // `$ref` of those schemas — which this package writes itself, from the two
+    // raw shapes in `mcp-server/server.ts` — so there is no caller-supplied
+    // URI to spoof. Loaded is not the same question as reachable, and both
+    // answers belong in the row.
+    floor: '3.1.9',
+  },
+  {
+    half: 'VulnPipe',
+    root: '../',
+    path: 'node_modules/hono',
+    // GHSA-5r4p-p66f-jhc7, `>= 4.12.4 < 4.13.11`: `serveStatic` decodes the
+    // request path twice, so middleware on a static path can be bypassed.
+    // This half's PRODUCTION tree, through the SDK's HTTP transport.
+    //
+    // NOT reachable here: 0 loads on all five entry points this package
+    // imports, 1 on `server/streamableHttp.js` — the control — which it does
+    // not import. This package speaks stdio and serves no static file.
+    floor: '4.13.11',
+  },
 ] as const;
 
 /**
@@ -239,13 +334,13 @@ describe.each(ADVISORY_FLOORS)('$half — $path stays above its advisory floor',
 });
 
 /**
- * The version `mcp-server/server.ts` says it was probed against.
+ * The versions `mcp-server/server.ts` says it was probed against.
  *
  * ============================================================================
  * WHY THIS IS A TEST AND NOT A COMMENT
  *
- * That file opens with « API SDK RÉELLEMENT OBSERVÉE » and four claims about
- * how the SDK behaves, each one dated by naming the version they were measured
+ * That file opens with « SDK API ACTUALLY OBSERVED » and four claims about how
+ * the SDK behaves, each one dated by naming the versions they were measured
  * on. That banner is the reason nobody re-probes: it reads as settled fact.
  *
  * It named 1.30.0 while the lockfile resolved something else, and one of its
@@ -256,37 +351,62 @@ describe.each(ADVISORY_FLOORS)('$half — $path stays above its advisory floor',
  * thing to believe », and the answer it reaches every time is the same: a
  * declaration that is also the query is checked in both directions.
  *
- * So the banner's version is read out of the file and compared to the
- * resolution. A lockfile refresh that leaves the banner behind fails HERE,
+ * So each version the banner states is read out of the file and compared to
+ * the resolution. A lockfile refresh that leaves the banner behind fails HERE,
  * which is the moment somebody is already looking at dependencies — rather
  * than in six months, against a measurement nobody can date.
+ *
+ * BOTH names in that banner are claimed, not only the one that was wrong.
+ * The guard was written for `@modelcontextprotocol/sdk` and the line under it
+ * — `zod : 4.4.3` — was left unchecked, so the advisory refresh that moved zod
+ * two minors would have dated four claims with a version that had gone. The
+ * mirror of a rule is not the rule, one LINE over this time; and zod is not
+ * incidental to what the banner asserts, because the fourth claim is about how
+ * an argument-validation failure comes back (`MCP error -32602`, handler
+ * never called), which is zod's refusal travelling through the SDK.
  * ============================================================================
  */
-describe('the MCP server banner names the SDK version it was probed against', () => {
-  const source = readFileSync(
-    fileURLToPath(new URL('./mcp-server/server.ts', import.meta.url)),
-    'utf8',
-  );
-  const lock = readJson('../', 'package-lock.json');
-  const resolved = (
-    lock.packages as Record<string, { version?: string } | undefined>
-  )['node_modules/@modelcontextprotocol/sdk']?.version;
+const BANNER_VERSIONS = ['@modelcontextprotocol/sdk', 'zod'] as const;
 
-  it('states a version at all', () => {
-    // Without this the regex below would find nothing and the comparison would
-    // pass over an absent claim — the shape this project refuses everywhere.
-    expect(source).toMatch(/@modelcontextprotocol\/sdk\s*:\s*\d+\.\d+\.\d+/);
-  });
+describe.each(BANNER_VERSIONS)(
+  'the MCP server banner names the %s version it was probed against',
+  (pkg) => {
+    const source = readFileSync(
+      fileURLToPath(new URL('./mcp-server/server.ts', import.meta.url)),
+      'utf8',
+    );
+    const lock = readJson('../', 'package-lock.json');
+    const resolved = (lock.packages as Record<string, { version?: string } | undefined>)[
+      `node_modules/${pkg}`
+    ]?.version;
+    // The banner aligns its two names with spaces, so the separator is
+    // `\s*:\s*` and not `: `.
+    const stated = new RegExp(`${pkg.replace('/', '\\/')}\\s*:\\s*(\\d+\\.\\d+\\.\\d+)`).exec(
+      source,
+    )?.[1];
 
-  it('states the version the lockfile resolves', () => {
-    const stated = /@modelcontextprotocol\/sdk\s*:\s*(\d+\.\d+\.\d+)/.exec(source)?.[1];
-    expect(
-      stated,
-      `server.ts says it was probed against ${stated}, the lockfile resolves ${resolved}: ` +
-        're-run the probe and update the banner, or the four claims under it are undated',
-    ).toBe(resolved);
-  });
-});
+    it('is a package the lockfile resolves', () => {
+      // A banner naming something that has left the tree would make the
+      // comparison below pass over two absent values.
+      expect(resolved, `${pkg} is not in this lockfile`).toBeDefined();
+    });
+
+    it('states a version at all', () => {
+      // Without this the comparison would pass over an absent claim — the
+      // shape this project refuses everywhere.
+      expect(stated, `the banner states no ${pkg} version`).toBeDefined();
+    });
+
+    it('states the version the lockfile resolves', () => {
+      expect(
+        stated,
+        `server.ts says it was probed against ${pkg} ${stated}, the lockfile resolves ` +
+          `${resolved}: re-run the probe and update the banner, or the four claims under it ` +
+          'are undated',
+      ).toBe(resolved);
+    });
+  },
+);
 
 /**
  * The comparator, on both sides of a floor.

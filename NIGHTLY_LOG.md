@@ -4,6 +4,265 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-10-25 — Sunday · Maintenance and state of the project
+
+**Subject**: **twelve published advisories had accumulated in the two trees in
+the week since 10-18 found `npm audit` at 0/0** — five of them in VulnPipe's
+PRODUCTION tree, one of those (`zod`, high) a DIRECT dependency the product's
+own source imports by name. Nine are closed. Measuring the zod one before and
+after found that **the advisory's own description says the opposite of what its
+patch does**, and the banner guard that would have dated the refresh covered
+one of the two versions it reads.
+
+**Result**: PR opened on `claude/sleepy-volta-e7n2z6`. Seven files: two lockfiles
+(`VulnPipe/package-lock.json` 21 lines, `dashboard/package-lock.json` 3 lines),
+one test file (`VulnPipe/src/lockfile.test.ts`, **+12 tests**), one production
+comment (`VulnPipe/src/mcp-server/server.ts` — the banner's zod version and the
+sentence saying it is now pinned), plus `CLAUDE.md` (one traps row, VulnPipe
+suite count 425 → 437), `ROADMAP.md` (§ 7: the `npm audit` row extended with
+this week's numbers, one new row) and this journal. **No behaviour changed**: no
+product logic, no string an operator reads, no dependency added, no colour, no
+heading, no screen.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-e7n2z6` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Fifty-second entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: the designated branch
+at ebdc2e3 (= `origin/main`) gave typecheck 0, **1733 passed | 1 skipped** and
+a clean build on the console, typecheck 0 and **425 passed** on VulnPipe — run
+after `npm ci`, not assumed — and `list_pull_requests --state open` was empty.
+Sunday's first reservoir is dependencies and it was **not** empty, unlike last
+week: `npm audit` reported 8 on VulnPipe and 4 on the console, including a high
+on a direct production dependency. That outranks Sunday's second reservoir and
+the carried recommendation, both of which stay carried (see below).
+
+**What `npm audit` found, and what came of it.**
+
+| Package | Half / tree | Advisory | Moved | Loaded here? |
+|---|---|---|---|---|
+| `zod` | VulnPipe, **production, direct** | GHSA-mrhx-c7xc-m3w5, high | 4.4.3 → **4.6.7** | yes (277 loads on `server/mcp.js`) — but no `z.array` is declared anywhere |
+| `body-parser` | VulnPipe, **production** | GHSA-27r3-jxmh-p828, high | 2.3.0 → **2.4.0** | **0** on all five entry points; 22 on the `server/express.js` control |
+| `fast-uri` | VulnPipe, **production** | 4 advisories, `< 3.1.9` | 3.1.8 → **3.1.9** | **yes, 8 loads** via `ajv` — the only transitive one that is |
+| `hono` | VulnPipe, **production** | GHSA-5r4p-p66f-jhc7 | 4.13.8 → **4.13.13** | **0**; 1 on the `server/streamableHttp.js` control |
+| `ip-address` | VulnPipe, **production** | GHSA-rxp7-6hxx-x8q5 | 10.7.3 → **10.7.5** | **0**; 29 on the `server/auth/router.js` control |
+| `undici` | console, dev | 3 advisories incl. one high | 8.11.2 → **8.12.3** | dev only; `--omit=dev` in the image |
+| `vitest` + `@vitest/mocker` | both, dev | 2 moderate, `< 4.1.12` | **not moved** | npm crashes — § 7 |
+| `vite` | both, dev | 6 incl. one high | **not moved** | npm crashes — § 7 |
+
+`npm audit` after: **production 0/0 on both halves**, dev 3 on each (the same
+three). `qs` 6.16.0 → 6.16.1 came along inside `body-parser`'s own range.
+
+**The zod measurement, which is the night's real finding.** The advisory's
+description says the attack is *« submitting a large array to an application
+using an array schema **without** a length constraint »*. Driven on both
+versions with a 1,000,000-element array of numbers, that is backwards — the
+TITLE (*« oversized **constrained** collections »*) is the accurate half:
+
+| schema | zod 4.4.3 | zod 4.6.7 |
+|---|---|---|
+| `z.array(z.string())` | 1,000,000 issues, 3,361 ms, heap 14 → **690 MB** | 1,000,000 issues, 1,006 ms, heap 14 → **453 MB** |
+| `.max(100)` | 1,000,001 issues, 4,730 ms, **+695 MB** | **1 issue, 1 ms, +0 MB** |
+| `.min(1)` | 1,000,000 issues, 3,571 ms | 1,000,000 issues, 988 ms |
+| `.length(100)` | 1,000,001 issues, 3,012 ms | **1 issue, 1 ms, +0 MB** |
+
+So the patch short-circuits on an UPPER bound and leaves a bare `z.array`
+exactly as unbounded as it was. **Reading the advisory and upgrading would have
+left somebody believing a bare `z.array` was now safe.**
+
+**And it is not reachable here, measured through the real transport.** `grep`
+says this package declares no `z.array` at all, which is suggestive and not an
+answer, because the SDK's protocol schemas carry nineteen. Driven through the
+real server over `InMemoryTransport` — the transport the detection nodes use:
+
+| sent to `get_context` | result |
+|---|---|
+| 1,000,000-element array where `route` declares a string | `isError: true`, **3 ms**, heap 23 → 23 MB — one issue, not a million |
+| the same array under an **undeclared** key | accepted, **1 ms**, +1 MB — stripped by the tool's own `z.object`, handler answers `ok` |
+| the same array handed **directly** to `z.array(z.string())` (the control) | 1,000,000 issues, 1,145 ms, heap 24 → **471 MB** |
+
+The SDK's one upper-bound-constrained array — the one the patch helps — is
+`CompleteResultSchema.completion.values` (`.max(100)`), parsed by a client that
+calls `completion/complete`; `McpContextProvider` calls `callTool` and nothing
+else (grep: two call sites, no `complete`, no `readResource`, no `getPrompt`).
+**Closed because a published high on a direct production dependency is worth
+closing; hygiene rather than a live hole, and this product does not get to
+overstate that.**
+
+**What I learned that is written nowhere else.**
+
+1. **An advisory's prose is a claim about a patch, not a property of it.** The
+   zod table above. Same family as *a stale name is the cheapest thing to carry
+   and the most expensive thing to believe*, pointed at an upstream document
+   instead of at our own comments — and the only reason I know is that I ran
+   the before and the after on the schema shapes we actually declare, rather
+   than on the one the description names.
+2. **The banner guard covered one of the two versions it reads.** 10-11 built
+   `lockfile.test.ts`'s banner check for `@modelcontextprotocol/sdk` because
+   that was the number that had gone stale. The line directly underneath —
+   `zod : 4.4.3` — was never claimed, so tonight's refresh would have left four
+   dated claims dated by a version that no longer existed. *The mirror of a
+   rule is not the rule*, **one LINE over**: shorter than `RulesPage.save()` and
+   its two neighbours, which was the previous record. And zod is not incidental
+   to what that banner asserts — its fourth claim is how an argument-validation
+   failure comes back (`MCP error -32602`, handler never called), which is
+   zod's refusal travelling through the SDK. Both are pinned now, and I re-ran
+   the probe rather than editing the number: all four claims hold on
+   1.32.1 + 4.6.7 (identical published JSON schema for the raw-shape and the
+   built-`z.object` forms, identical handler argument, identical refusal).
+3. **The floor list's documented limit came true twice this week, with
+   numbers.** `lockfile.test.ts` says in its own header that it *« cannot
+   notice the NEXT advisory, and no offline test can »*. `ip-address` was
+   floored at 10.7.1 on 10-04 and `undici` at 8.10.2; both floors held
+   perfectly — neither tree ever slid back — and **both packages were
+   vulnerable again anyway**, at 10.7.3 and 8.11.2, because the next advisories
+   were published ABOVE the boundary somebody had closed. A floor refuses a
+   regression and cannot refuse a discovery. That is the § 7 argument for a
+   scheduled `npm audit`, and it is now evidence rather than reasoning.
+4. **The rate this project was reasoning with was an average of one sample.**
+   10-11 recorded *« two advisories a week »*; 10-18 found zero; tonight found
+   twelve. Five, zero, twelve. What a Sunday cannot promise is that the number
+   is small.
+5. **`npm update <pkg>` is not the remedy, in a third distinct way.** 10-11
+   recorded that `shell-quote` could not be moved by naming it (`concurrently`
+   pins it exactly) and that npm 10.9.7 crashed on `vitest@4.1.11` in VulnPipe
+   while the console resolved it. Tonight, on npm **10.9.4** / Node 22.22.0,
+   the crash is on **both halves** and in four shapes: `npm update vitest
+   --package-lock-only`, `npm install vitest@4.1.12 --package-lock-only`,
+   `npm update vite` (vite is in vitest's peer set), and a plain
+   `npm install --package-lock-only` once the manifest range is raised so that
+   something has to be re-resolved. All four die as `TypeError: Cannot read
+   properties of null (reading 'edgesOut')` in arborist's `#loadPeerSet`
+   (`build-ideal-tree.js:1289`), while fetching vitest 4's OPTIONAL peers
+   (`@vitest/browser`, `@vitest/ui`, `happy-dom`, `jsdom`, `canvas`). Both
+   halves failing identically is what says it is npm and not one tree.
+6. **The `libc` trap reproduced, in both of the two commands that work.**
+   `npm update zod …` and a plain `npm install --package-lock-only` each delete
+   all ten `libc` blocks from the `@rolldown` / `lightningcss` optional
+   binaries — 30 lines — on npm 10.9.4, as 10-04 and 10-11 measured on 10.9.4
+   and 10.9.7. Restored by hand; the committed VulnPipe diff is **21 insertions
+   / 21 deletions and nothing else**, verified by counting the changed lines
+   that mention `libc` (zero).
+7. **A per-entry-point load tally needs BOTH module systems and it needs its
+   controls.** The instrument patches `Module._load` for CJS and registers a
+   `module.registerHooks` resolve hook for ESM; 10-09's ESM-only version read
+   `fast-uri: 0`, the exact opposite of the truth. The controls are what make a
+   zero worth reading, and all four fired: `server/express.js` → `body-parser`
+   22, `server/auth/router.js` → `ip-address` 29, `server/streamableHttp.js` →
+   `hono` 1, `client/auth.js` / `client/sse.js` → zod 228 each. VulnPipe
+   imports none of those five.
+
+**Do not redo.**
+
+- **Do not try to move `vitest` or `vite` with this npm.** Learning 5, four
+  shapes, both halves. It is a crash, not a resolution failure, and the open
+  decision is which npm major writes these lockfiles (§ 7) — which is not a
+  night's to take, because npm 12 writes fields npm 10 then strips.
+- **Do not add a floor row for `vitest` or `vite`.** A floor above a resolution
+  nobody can reach is a red test; a floor inside the vulnerable range is a lie.
+- **Do not trust GHSA-mrhx-c7xc-m3w5's description.** Learning 1. If a bare
+  `z.array` ever appears in this half on untrusted input, the upgrade does not
+  cover it — add a `.max()`, which is what the patch rewards.
+- **Do not conclude from `grep z.array` that a zod advisory is unreachable.**
+  The SDK declares nineteen array schemas this package never writes. The answer
+  came from driving the real server over `InMemoryTransport`.
+- **Do not use an ESM-only loader hook to tally dependency loads.** Learning 7,
+  already recorded on 10-09 and re-confirmed: it cannot see `require()`.
+
+**Found and NOT fixed.**
+
+- **Three dev advisories, both halves** — now § 7 with the measurement. Dev
+  only, both Dockerfiles install with `--omit=dev`, fixes inside the declared
+  caret ranges, blocked purely by the arborist crash.
+- **The carried recommendation is STILL carried, deliberately.** 10-18
+  recommended re-dating VulnPipe's two tree-sitter *« API RÉELLEMENT
+  OBSERVÉE »* banners (`indexer/queries.ts`, `indexer/indexer.ts`) with
+  `npm run probe`. I did not: **tree-sitter did not move tonight**
+  (`tree-sitter` and `tree-sitter-typescript` are untouched by this refresh),
+  so those two banners are still dated by versions that are still resolved —
+  which is exactly the property the new guard enforces for the MCP banner. The
+  honest version of that recommendation is therefore not *« re-run the probe »*
+  but *« extend `lockfile.test.ts`'s banner guard to the two tree-sitter
+  banners too »*, which would make the re-dating happen on the night tree-sitter
+  actually moves instead of on the night somebody remembers. That is a small,
+  self-contained Sunday and it is the recommendation now.
+- **Standing leads, re-checked and unchanged**: `npm audit` not in CI (§ 7, and
+  this night is the strongest evidence yet for it), the Guide's seventeen
+  section titles not being headings (§ 7), the incident card's heading outline
+  (§ 7), the ninety-odd French strings in `server/engine/` (§ 7), the two body
+  reads that say less than they could (§ 7), a write's 401 not reaching the
+  sign-in screen (§ 7), the console's missing `check.cjs`, `MENATER_TEST_PG`
+  still never set, `POST /api/auth/login` still having no route-level test.
+
+**State of the week.**
+
+- **Seven nights, seven PRs, all merged**, #74 → #80, one per day 10-18 →
+  10-24; none open at the start of tonight (checked, not assumed).
+- **Tests: 1676 → 1733 on the console** over the week (+57), and **425 → 437**
+  on VulnPipe tonight (+12) — the first VulnPipe suite growth since 10-11.
+- **Dependencies did NOT hold, and that is this week's headline.** 10-18 closed
+  on 0/0 both halves; seven days later there were twelve, five in a production
+  tree. Nine closed tonight, production back to 0/0 on both halves, three dev
+  ones blocked by npm itself. The sequence of the three Sundays that have
+  looked is **five, zero, twelve**.
+- **The documentation realignment found nothing new**, and the reason is worth
+  recording: the six checkable counts 10-18 verified by hand are now each
+  behind a test (`credentials-precedence.test.ts` pins the twelve credential
+  names in both directions, `assistant.test.ts` pins the fourteen tool names,
+  `n8n-removed.test.ts` walks both catalogues), so the Sunday sweep that used
+  to find drift has been replaced by guards. The one count still hand-written
+  was the VulnPipe suite total, which was stale by twelve as of tonight and is
+  corrected; it is hand-written because it is a number about the tests, which
+  no test can assert without asserting itself.
+- **Recommendation for next week**: the banner-guard extension named above —
+  `lockfile.test.ts` now claims two versions in one banner, and the same file
+  can claim the two tree-sitter banners for ~15 lines, which closes the
+  *« re-date the banners »* recommendation structurally instead of asking a
+  future Sunday to remember it. Second, and this is the one for a human rather
+  than a night: the § 7 `npm audit` decision has three data points now and the
+  blocked-dev-advisory row says the npm-major question has to be answered
+  before any refresh is routine. Both are in § 7.
+
+**Verified** (Node 22.22.0, npm 10.9.4; every command run and its output read):
+
+| Command | Result |
+|---|---|
+| `dashboard: npm run typecheck` | 0 errors |
+| `dashboard: npm test` | **1733 passed, 1 skipped** — unchanged, nothing in that half's source was touched |
+| `dashboard: npm run build` | clean, 519 ms; `index-B4KkyvuH.js` **446.12 kB** and `index-*.css` 62.30 kB, byte-identical to the pre-change build |
+| `VulnPipe: npm run typecheck` | 0 errors |
+| `VulnPipe: npm test` | **437 passed** (425 before: **+12**) |
+| `npm ci`, both halves | clean against the refreshed lockfiles |
+| `npm audit --omit=dev`, both halves | **0 / 0** |
+| `npm audit`, both halves | 3 each — the same `vitest` / `@vitest/mocker` / `vite`, § 7 |
+| `node scripts/probe-mcp.mjs` | re-run on 1.32.1 + 4.6.7; all four banner claims hold |
+| zod before/after, 1,000,000-element array | the table above, on throwaway installs of 4.4.3 and 4.6.7 |
+| real `InMemoryTransport` server, oversized array | the table above |
+| per-entry-point load tally, 10 entry points | the table above, controls fired on all four |
+| changed lines in `VulnPipe/package-lock.json` mentioning `libc` | **0** of 42 |
+
+Checked **RED first** — the floors and the banner guard were written before the
+lockfiles were staged, and the file is red on the unmodified trees:
+
+| Mutation | Result |
+|---|---|
+| M0 — both lockfiles back at `HEAD` | RED — **7 failed** (5 VulnPipe floors, `undici`, the zod banner) |
+| M1 — `VulnPipe/package-lock.json` back at `HEAD` | RED — 6 |
+| M2 — `dashboard/package-lock.json` back at `HEAD` | RED — 1 (`undici`) |
+| M3 — the banner's zod line back to `4.4.3` | RED — 1, naming both versions |
+| M4 — `isAtLeast` compares strings instead of numbers | RED — 1, on the comparator tests 10-04 wrote for exactly this |
+
+**7 of 7 new assertions red before, 36 of 36 green after.** No model key and no
+database were needed. The probes lived in the scratchpad and in two throwaway
+`npm init` directories outside the repository; one had to run from
+`VulnPipe/scripts/` to resolve that half's `node_modules` and was deleted —
+`git status` shows only the seven intended files.
+
+---
+
 ## 2026-10-24 — Saturday · Interface, clarity, accessibility
 
 **Subject**: **a fold title that SHOUTED a filesystem path.** Settings →
@@ -1368,7 +1627,7 @@ green the day somebody "fixed" the code to agree with a sentence that was wrong.
 
 **Nine mutations, nine killed**, no survivors. No model key and no database
 were needed. The four probes lived in the scratchpad and are not in the diff;
-`git status` shows only the six intended files.
+`git status` shows only the seven intended files.
 
 ---
 
@@ -1562,7 +1821,7 @@ boundaries.
 
 **Eleven mutations, eleven killed**, no survivors. No model key and no database
 were needed. Probes, the sweep and the mutation harness lived in the scratchpad
-and are not in the diff; `git status` shows only the six intended files.
+and are not in the diff; `git status` shows only the seven intended files.
 
 ---
 
