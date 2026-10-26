@@ -89,6 +89,38 @@ const num = (v: unknown, fallback: number, max: number): number => {
   return Number.isFinite(n) ? Math.min(max, Math.max(1, Math.floor(n))) : fallback;
 };
 
+/** The console's DISPLAY value for an address a detection did not record. */
+const DISPLAY_ABSENT = '—';
+
+/**
+ * One of the two addresses, as the detection recorded it — or `null`.
+ *
+ * `buildCases` mints `source_ip` and `dest_ip` as `'—'` when the alert carried
+ * none, which is right for `AlertCase`: it is the shape the browser renders,
+ * and `applyAlertFields`'s own comment says a display dash must never travel
+ * as data. Rule 2 at the top of THIS file says the same thing about this
+ * surface, and the four readers below had never asked the question — so the
+ * dash reached a model as an address value, `absent_observables` denied an
+ * absence that was real, `find_similar` related any two alerts that recorded
+ * nothing, and `test_rule` inverted `exists`, `not_exists` and `not_equals`
+ * against the pipeline. See `display-dash.test.ts`.
+ *
+ * The same guard exists twice already, with its reason: `observable()` in
+ * `server/inventory.ts` and `machineOf()` in `src/lib/systems.ts`. What stops
+ * a fifth reader missing it is not a shared import — the three spellings are
+ * each correct and a shared one would not have made this file ask — it is
+ * that `display-dash.test.ts` claims the catalogue as a subtraction.
+ *
+ * `host` is deliberately NOT read through this. `cases.ts` never writes a dash
+ * there, so a `host` of `'—'` came out of a log and is a string somebody
+ * chose; reading it as absent would be this console discarding an observable,
+ * which is the opposite mistake.
+ */
+const recorded = (value: string | null | undefined): string | null => {
+  const v = (value ?? '').trim();
+  return v === '' || v === DISPLAY_ABSENT ? null : v;
+};
+
 /**
  * One alert, as a row in a list.
  *
@@ -116,7 +148,7 @@ function alertRow(c: AlertCase, fence: Fence) {
     // addresses beside it are not fenced because `ingestion.ts` refuses any
     // `source_ip` or `dest_ip` that is present and not an address literal.
     host: fenced(fence, 'host', c.host),
-    source_ip: c.source_ip || null,
+    source_ip: recorded(c.source_ip),
     dwell_ms: c.dwell_ms,
     error_count: c.errors.length,
   };
@@ -146,7 +178,7 @@ function alertDetail(c: AlertCase, fence: Fence, sections: string[] | null = nul
 
   return {
     ...alertRow(c, fence),
-    dest_ip: c.dest_ip || null,
+    dest_ip: recorded(c.dest_ip),
     ...(sections === null
       ? {}
       : {
@@ -201,7 +233,11 @@ function alertDetail(c: AlertCase, fence: Fence, sections: string[] | null = nul
      * `dest_ip` key cannot tell "the detection named none" from "the console
      * did not send it", and it will pick whichever reads better.
      */
-    absent_observables: (['dest_ip', 'host', 'source_ip'] as const).filter((k) => !c[k]),
+    absent_observables: ([
+      ['dest_ip', recorded(c.dest_ip)],
+      ['host', c.host || null],
+      ['source_ip', recorded(c.source_ip)],
+    ] as const).filter(([, value]) => value === null).map(([name]) => name),
   };
 }
 
@@ -541,16 +577,31 @@ export const TOOLS: AssistantTool[] = [
       const seed = snap.cases.find((c) => c.alert_id === id);
       if (!seed) return { error: `No alert "${id}" in the current execution window.` };
 
+      /**
+       * The seed's own observables, read ONCE and through `recorded`.
+       *
+       * This is where the display dash cost the most: `seed.dest_ip` is `'—'`
+       * on an alert that recorded no destination — which the contract says is
+       * most of them — so `c.dest_ip === seed.dest_ip` was `'—' === '—'` and
+       * every other address-less alert "shared" it. `shared.length` is the
+       * SORT KEY, so two alerts that recorded nothing outranked a pair that
+       * shares a real host, on the tool offered as the answer to *is this a
+       * one-off or a campaign?*
+       */
+      const seedHost = seed.host || null;
+      const seedSource = recorded(seed.source_ip);
+      const seedDest = recorded(seed.dest_ip);
+
       // Scored rather than filtered: a shared host AND a shared rule is a much
       // stronger signal than either alone, and a flat filter cannot say so.
       const scored = snap.cases
         .filter((c) => c.alert_id !== id)
         .map((c) => {
           const shared: string[] = [];
-          if (seed.host && c.host === seed.host) shared.push('host');
-          if (seed.source_ip && c.source_ip === seed.source_ip) shared.push('source_ip');
+          if (seedHost && c.host === seedHost) shared.push('host');
+          if (seedSource && recorded(c.source_ip) === seedSource) shared.push('source_ip');
           if (seed.rule_name && c.rule_name === seed.rule_name) shared.push('rule_name');
-          if (seed.dest_ip && c.dest_ip === seed.dest_ip) shared.push('dest_ip');
+          if (seedDest && recorded(c.dest_ip) === seedDest) shared.push('dest_ip');
           return { c, shared };
         })
         .filter((x) => x.shared.length > 0)
@@ -563,7 +614,7 @@ export const TOOLS: AssistantTool[] = [
         seed: {
           alert_id: seed.alert_id,
           host: fenced(ctx.fence, 'host', seed.host),
-          source_ip: seed.source_ip || null,
+          source_ip: seedSource,
         },
         matched: scored.length,
         // Said explicitly: an empty result on a bounded window means "none in
@@ -740,8 +791,13 @@ export const TOOLS: AssistantTool[] = [
         alert_id: c.alert_id,
         rule_name: c.rule_name,
         severity: c.severity,
-        source_ip: c.source_ip || null,
-        dest_ip: c.dest_ip || null,
+        // The two addresses as the PIPELINE saw them. A display dash here
+        // makes the dry run answer the opposite of what the engine will do on
+        // `exists`, `not_exists` and `not_equals`: `matchesCondition`'s own
+        // rule is that an absent field never matches, and `'—'` is neither
+        // `null` nor `''`, so it walks straight past that guard.
+        source_ip: recorded(c.source_ip),
+        dest_ip: recorded(c.dest_ip),
         host: c.host,
         raw_log: c.raw_log,
       };

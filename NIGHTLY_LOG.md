@@ -4,6 +4,167 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-10-26 — Monday · Feature
+
+**Subject**: the only remaining J0 item (J0.4 ◐) led me into the assistant's
+fourteen getters, and what I found there was a **bug**, which Step 2 ranks
+above a roadmap limitation: `buildCases` mints the two addresses as the display
+character `'—'` when a detection recorded none, and `server/assistant/tools.ts`
+read it as DATA at four call sites. The rule was written at the top of the file
+that broke it.
+
+**Result**: PR opened on `claude/sleepy-volta-jk14ln`. Four files:
+`dashboard/server/assistant/tools.ts` (the fix), a new
+`dashboard/server/assistant/display-dash.test.ts` (**+10 tests**), plus
+`CLAUDE.md` (one traps row, suite count 1733 → 1743) and `ROADMAP.md`
+(§ 3 bis, X16). **No screen changed, no string an operator reads changed, no
+dependency, no colour, no heading.** The only behaviour that changed is what
+four of the fourteen tools hand a model.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-jk14ln` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Fifty-third entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: the designated branch
+at a243acf (= `origin/main`) gave typecheck 0, **1733 passed | 1 skipped** and
+a clean build, run after `npm ci` rather than assumed, and
+`list_pull_requests --state open` was empty. Monday's reservoir is the highest-
+value ROADMAP item and J0 outranks everything; J0.4 is the only `◐` left. Its
+own "what it does NOT do" list has five entries and four of them need a store
+or are deliberate refusals — the fifth is *« the assistant and the MCP catalogue
+do not read it »*, a line J0.2, J0.3, J0.4 and J0.5 each drew. So I went to
+look at what the assistant can see of J0, and measured something worse on the
+way: a real, reproducible defect, which Step 2 puts at priority 2, above the
+limitation at priority 3.
+
+**What the defect is.** `applyAlertFields` in `server/engine/cases.ts` writes
+`source_ip`/`dest_ip` as `'—'` when the alert carried none, and says why: *« a
+DISPLAY value […] a display dash must never travel as data »*. That is right
+where it is — `AlertCase` is what the browser renders. `tools.ts` read it with
+`c.source_ip || null`, i.e. truthy, so the dash was data. **The contract says
+most real detections carry no destination address, so this is the ordinary
+alert, not a corner.** Measured through the real engine, real workflows, real
+`buildCases`, real snapshot, real `TOOLS`:
+
+| # | Consequence | Measured |
+|---|---|---|
+| 1 | **`test_rule` inverts the absence operators** against the engine | `exists` **true** / pipeline false; `not_exists` **false** / pipeline true; `not_equals` **true** / pipeline false. `equals` agrees |
+| 2 | **`find_similar` manufactures relations**, and `shared.length` is the SORT KEY | seeded on a scheduled-task alert, **3 of 3** other cases "similar", **0 of 3 relations real**; two top-ranked on `['source_ip','dest_ip']`, strongest "match" a promoted scan finding naming no machine |
+| 3 | **`absent_observables` denies a real absence** | `[]` on an alert with no destination; `['host']` on a promoted finding whose three observables are all absent |
+| 4 | the literal `'—'` leaves as an address VALUE | 8 paths: `list_alerts` ×2, `get_alert` (`source_ip`, `dest_ip`), `search_alerts` ×2, `find_similar.seed`, `find_similar.similar[]` |
+
+(1) is the one that changes what a team ships. `test_rule` answers *would my
+rule catch this* and *why was this closed without a decision*; it hands its
+dry-run alert to the real `evaluateRules`, whose own comment is *« ABSENT NEVER
+MATCHES […] reading a missing `source_ip` as "empty, therefore equal to empty"
+[is a way] of inventing data »* — and that guard tests `null` and `''`, neither
+of which a dash is. So a team dry-ran a rule, was told the opposite of what the
+engine would do, and shipped it.
+
+**What I learned that is written nowhere else.**
+
+1. **Three documents asserted the behaviour and none of them was a test.**
+   `tools.ts`'s own header rule 2 names the em dash and the exact consequence;
+   `cases.ts`'s `applyAlertFields` states the rule; `ROADMAP` § 3 bis has a row
+   *« It never invents a field »*. The rule written at the top of the file that
+   breaks it is a shape this table already carried (`.soc-case-title`'s comment
+   about level 1, on an `h2`) and it is the cheapest kind of hole to keep:
+   prose cannot fail.
+2. **The guard existed twice, correctly, and that did not help.**
+   `observable()` in `server/inventory.ts` and `machineOf()` in
+   `src/lib/systems.ts` each strip the dash and each explain why. I considered
+   and rejected hoisting one shared predicate: the three spellings are each
+   right, and a fourth import would not have made `tools.ts` *ask the
+   question*. What guards the fifth reader is the subtraction test, not code
+   sharing. Worth re-deciding if a fifth call site appears.
+3. **My first vacuity-guard mutation passed, and the guard was not weak — my
+   ruler was.** `cases.ts` mints the dash in **two** places that converge:
+   `blankCase`'s `source_ip: '—'` default and `applyAlertFields`'s
+   `c.source_ip === '' ? '—' : c.source_ip` ternary. Changing one leaves the
+   other producing it, so the mutation altered no behaviour. Falsifying the
+   premise at BOTH sites turns the guard red, as it should. **A premise has to
+   be falsified at every site that establishes it before a vacuity guard can be
+   believed** — otherwise you conclude the guard is vacuous when the mutation
+   was.
+4. **The traps table's "mirror of a rule" ordinals have drifted.** `Fifteenth`
+   is claimed twice and the highest claimed is `Nineteenth`. I did not pick the
+   next number: counting recurrences needs a judgement nobody has audited, so
+   the new row says so and stays un-numbered. A future night that wants the
+   numbering back has to do the audit, and it is not a one-liner.
+5. **`findingToAlert`'s `target` is a STRING, not the report's target object.**
+   Cost me a probe iteration: `scanRepository` reads `str(body.target)`, and
+   passing `{ kind, raw, label }` makes it `null`, so the case silently gets
+   `repository: null` and the J0.1 back-reference disappears with nothing
+   failing. `PromoteFinding.tsx` sends `target?: string | null`. Also
+   `findingToAlert` reads `finding.severity`, not `reported_severity`.
+
+**Do not redo.**
+
+- **Do not "fix" this in `cases.ts` by writing `null` instead of `'—'`.** The
+  dash is the browser's display value and the two existing guards
+  (`inventory.ts`, `systems.ts`) are built on it being there; changing it moves
+  a rendering decision into the data model and makes three readers' comments
+  false. The defect was the reader, not the writer.
+- **Do not apply the predicate to `host`.** `cases.ts` never writes a dash
+  there, so a `host` of `'—'` came out of a log and is a string somebody chose.
+  Reading it as absent is the console discarding an observable — the opposite
+  mistake, on the field that decides whether an isolation has a target. There
+  is a test for this boundary, green before and after, and the mutation is red.
+- **Do not change `search_alerts`' haystack.** It `join(' ')`s the two
+  addresses into a substring corpus; the dash there is inert for any realistic
+  query and `searched_fields` is accurate either way. Measured, no defect,
+  deliberately untouched — changing it alters search behaviour for no gain.
+- **Do not load four rules at once to test `test_rule` per operator.** First
+  match wins, so three quarters of the claim goes vacuous. One rule at a time,
+  via a swappable `getRuleStore()`.
+
+**Found and NOT fixed.**
+
+- **The assistant and the MCP endpoint are blind to ALL of J0**, which is the
+  limitation I went looking for and did not ship. Measured: `get_alert`'s reply
+  carries neither `repository` nor `code_lead` (`has_repository: false`,
+  `has_code_lead: false`), on a case whose `repository` is
+  `{service: 'Billing API', repository: 'acme/billing', matched_on: 'host'}`
+  and whose `code_lead` is `{T1190, Exploit Public-Facing Application}`. So a
+  promoted finding (J0.1) is **indistinguishable from a detection** to the
+  model: no host, an `IDOR in GET /orders/:id` rule name, and nothing saying it
+  came from a code scan rather than a SIEM. It is **not a one-liner and there
+  is a trap in it**: `repository.matched_value` for `matched_on: 'host'` IS the
+  host, i.e. the exact field X2.2 fenced, so adding the block unfenced reopens
+  that hole under a new key. That needs a fencing decision per field, and it is
+  a subject.
+- **Standing leads, re-checked and unchanged**: `npm audit` not in CI (§ 7),
+  the Guide's seventeen section titles not being headings (§ 7), the incident
+  card's heading outline (§ 7), the ninety-odd French strings in
+  `server/engine/` (§ 7), the two body reads that say less than they could
+  (§ 7), a write's 401 not reaching the sign-in screen (§ 7), the console's
+  missing `check.cjs`, `MENATER_TEST_PG` still never set,
+  `POST /api/auth/login` still having no route-level test, the three dev
+  advisories blocked by the arborist crash (§ 7), and last Sunday's carried
+  recommendation (extend `lockfile.test.ts`'s banner guard to the two
+  tree-sitter banners).
+
+**Verified.** On `claude/sleepy-volta-jk14ln`, after `npm ci`:
+
+- `cd dashboard && npm run typecheck` → **0 errors**.
+- `npm test` → **1743 passed | 1 skipped (1744)**, 112 files, 37.03 s. Baseline
+  on the same tree before the change: 1733 passed | 1 skipped, 111 files.
+- `npm run build` → **✓ built in 424ms**.
+- The new file alone, before the fix: **6 failed | 2 passed**; after: **10
+  passed**. The 2 that passed before are the vacuity guards, on purpose.
+- **Mutation**: six reverts (one per fix site) each red, caught by the
+  assertion that should catch it — `alertRow.source_ip` → subtraction +
+  boundary; `alertDetail.dest_ip` → subtraction; `absent_observables` →
+  the absence test; `find_similar` dest → both relation tests;
+  `find_similar` source → the relation test; `test_rule` → the dry-run test.
+- **Mutation, the plausible wrong fixes**: the predicate applied to `host` →
+  red (1); the predicate stopping at `''` → red (7); `absent_observables`
+  naming all three whenever any is absent → red (2).
+- VulnPipe not touched, so its suite was not run.
+
 ## 2026-10-25 — Sunday · Maintenance and state of the project
 
 **Subject**: **twelve published advisories had accumulated in the two trees in
