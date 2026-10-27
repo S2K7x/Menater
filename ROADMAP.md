@@ -2354,6 +2354,90 @@ a body that is not JSON and a body that could not be read — are the pair
 `respond.ts` separates on the INBOUND side with `MalformedBody`, which is the
 shape a fix here would take.
 
+**Both now go through `readCapped`** (the outbound-cap pass of 2026-10-27), so
+neither can buffer an unbounded body any more. That changed the SIZE and
+deliberately not the SENTENCE: the `.catch` is still there in both, because
+what this entry is about — an unread body degrading a detail string — is the
+half that is not a false claim, and separating "not JSON" from "could not be
+read" here is still the `MalformedBody` shape and still unwritten.
+
+### `PUT /api/settings` writes the ingestion policy around its own validator
+
+Found while mapping authz on the security night of 2026-10-27, **not fixed**,
+because it is one line in a function whose other sections I did not audit and
+the night's subject was elsewhere.
+
+`saveConfig` clamps `console`, `database.port`, the four `pipeline` numbers and
+`assistant.maxSteps`, and it runs `sanitizeInventory` — under a comment that
+states exactly the rule this row is about: *« This is the second lock:
+`saveConfig` is exported, and a caller that skipped the route must not be able
+to write a shape the resolver cannot read. »* **The `ingestion` section gets
+none of it**, four lines away in the same function. So `normalizePolicyInput`,
+the Ingestion tab's own door, is bypassed entirely by `PUT /api/settings`,
+which writes whatever arrives — and `merge` is one level deep, so a patch
+carrying `ingestion.pull` replaces the whole `pull` object, `sources` included.
+
+What that door refuses and this one would accept, in its own words: *« The push
+lane cannot be emptied under hybrid — checked inline AND last, so it cannot be
+slipped past by sending `delivery` and `fastLane` in the convenient order. An
+empty list sends `critical` down the slow lane and looks valid on the way in. »*
+Also the 15 s interval floor, the `http(s)://` check on a source's address, and
+every type coercion — the *« the API trusted the shape of its body »* trap, on
+the section that decides which transport carries a `critical` alert.
+
+**Two things keep it off tonight's diff rather than in it.** No product path
+sends an `ingestion` patch to that route: the Settings screen's "ingestion"
+sub-tab edits `webhook` and `tunnel`, and the policy lives behind
+`/api/ingestion/policy`. And it needs a console session, which on this product
+is one shared password — the threat model this project already files under *an
+attacker who has the console itself*. So it is latent, and it is exactly the
+state the `sanitizeInventory` line was added for. **Not verified against a live
+process**: read off `merge`/`saveConfig`/the route, not driven.
+
+### The MCP batch bounds its calls and not its reply
+
+Found in the same mapping pass, **not fixed**, same reason.
+
+`rateLimited` was taught to count `resources/read` as well as `tools/call`
+because *« `resources/read` is the same work under another method name »* —
+and the fix measured a 179 kB batch of 2,000 `resources/read` as the reason. It
+counts CALLS. What is not bounded is **how many calls arrive in one body**:
+`dispatch` is mapped with `Promise.all` over the array, and the only check is
+that it is not empty.
+
+The amplification is in the REPLY, and it lands on the methods the rate limit
+deliberately does not count — *« the catalogue listings, which are constants »*,
+true per call and multiplied by however many fit in the 256 kB body.
+`{"jsonrpc":"2.0","id":1,"method":"tools/list"}` is about 46 bytes, so a few
+thousand fit, and each answer carries the whole fourteen-tool catalogue, which
+`respond.ts` then serialises in one `JSON.stringify` and, for a client that
+asked for it, one synchronous `gzipSync`. `completion/complete` is worse per
+element: it is uncounted by design (one call per keystroke) and arms a timer
+each time.
+
+It needs the bearer token and the endpoint is off by default — but a read-only
+token taking the console down is precisely what `rateLimited`'s own comment
+exists to prevent, and *« an agent in a loop »* is its stated threat. The
+honest fix is a cap on the array's length, which is a policy number somebody
+should choose rather than a number a night should invent. **Numbers above are
+arithmetic from the source, not a measurement**: I did not drive the endpoint.
+
+### The analysis relay has no deadline on either hop
+
+Found in the same pass, **not fixed** — it is a missing deadline rather than a
+missing cap, so it was not this night's subject.
+
+`proxyToVulnPipe` relays `/api/vulnpipe/*` with `req.pipe` and
+`upstreamRes.pipe`, deliberately streamed in both directions because a scan's
+answer is an SSE timeline. Streaming is why neither direction needs a byte
+cap — nothing accumulates here, and the request body is the one path in this
+server that legitimately bypasses `readBody`'s 256 kB. What it has no
+equivalent of is `fetchWithDeadline`: there is no `setTimeout` on the forwarded
+request, no `AbortController`, and the only teardown is the client closing
+(`res.on('close')`). An analysis service that accepts a request and never
+answers holds both sockets for as long as the client waits, and `api.ts` sets
+no `requestTimeout` or `headersTimeout`, so only Node's defaults apply.
+
 ### The incident card's heading outline, and the `h1` size step
 
 Two leftovers of C0.36, both measured, both design decisions rather than

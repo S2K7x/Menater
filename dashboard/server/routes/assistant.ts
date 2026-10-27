@@ -32,7 +32,7 @@ import { TOOLS } from '../assistant/tools.ts';
 import { describeProviders, providerFor } from '../assistant/providers.ts';
 import { mcpCatalogue } from '../assistant/mcp.ts';
 import { saveConfig } from '../config.ts';
-import { describeFetchError, fetchWithDeadline } from '../http.ts';
+import { describeFetchError, fetchWithDeadline, readCapped } from '../http.ts';
 import { PORT } from '../env.ts';
 import { randomBytes } from 'node:crypto';
 import type { Ctx } from './context.ts';
@@ -209,7 +209,9 @@ export async function assistantRoutes(c: Ctx): Promise<boolean> {
         },
         { timeoutMs: 5_000 },
       );
-      const body = (await probe.json()) as any;
+      // Capped for the same reason as the diagnostic probe: one rule, and no
+      // exception per destination, even when the destination is us.
+      const body = JSON.parse(await readCapped(probe)) as any;
       if (!probe.ok || body?.error) {
         return json(res, 200, {
           ok: false,

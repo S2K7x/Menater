@@ -27,7 +27,9 @@
  * ============================================================================
  */
 
-import { describeFetchError, fetchWithDeadline } from '../../http.ts';
+import {
+  ResponseTooLarge, describeFetchError, fetchWithDeadline, readCapped,
+} from '../../http.ts';
 import type { NodeHandler } from '../engine.ts';
 import { resolve, type ValueRef } from '../values.ts';
 import type { PureDeps } from './pure.ts';
@@ -157,7 +159,26 @@ export function makeHttp(deps: IoDeps): NodeHandler {
       { method, headers, body },
       { timeoutMs: p.timeoutMs ?? 10_000, fetchImpl: doFetch },
     );
-    const text = await res.text();
+    // CAPPED. `endpoint.isolation` is a pipeline variable — an address an
+    // operator typed, the same provenance `readCapped` was written for on the
+    // polled sources — and the three enrichment nodes dial a third party about
+    // a value an attacker chose. What made this the worst of the twelve
+    // uncapped reads is the next six lines: the parsed body becomes the node's
+    // OUTPUT, so an unbounded answer is not merely held for a moment, it is
+    // written into `soc_run_step`. Measured before the cap: 128 MB arriving
+    // cost 3,270 ms of blocked event loop — the thread that also answers the
+    // ingestion webhook — and a 128 MB journal row.
+    let text: string;
+    try {
+      text = await readCapped(res);
+    } catch (err) {
+      if (!(err instanceof ResponseTooLarge)) throw err;
+      // REFUSED BY US is not the same fact as a read that FAILED, and this
+      // file already pays for conflating two states in one sentence twice
+      // over. The host alone, never the URL: a configured endpoint can carry
+      // a token in its path or its query.
+      throw new Error(`Could not read the answer from ${hostOf(url)}: ${err.message}.`);
+    }
     let parsed: unknown = text;
     try {
       parsed = text ? JSON.parse(text) : null;
@@ -314,8 +335,14 @@ export function makeNotify(deps: IoDeps): NodeHandler {
         // told from an outage; what goes is the claim about the body.
         let detail: string;
         try {
-          detail = (await res.text()).slice(0, 300);
+          detail = (await readCapped(res)).slice(0, 300);
         } catch (err) {
+          // A THIRD state, and it keeps its own sentence for the reason the
+          // other two do: an answer we refused to read is not an answer that
+          // could not be read, and not an empty one.
+          if (err instanceof ResponseTooLarge) {
+            throw new Error(`Discord answered HTTP ${res.status}, and ${err.message}.`);
+          }
           throw new Error(
             `Discord answered HTTP ${res.status}, but its answer could not be read: `
             + describeFetchError(err),
@@ -370,8 +397,11 @@ export function makeNotify(deps: IoDeps): NodeHandler {
       // was fixed for, one line past where `reach` stops looking.
       let answer: string;
       try {
-        answer = (await res.text()).trim();
+        answer = (await readCapped(res)).trim();
       } catch (err) {
+        if (err instanceof ResponseTooLarge) {
+          throw new Error(`Slack answered HTTP ${res.status}, and ${err.message}.`);
+        }
         throw new Error(
           `Slack answered HTTP ${res.status}, but its answer could not be read: `
           + describeFetchError(err),
@@ -428,8 +458,11 @@ export function makeNotify(deps: IoDeps): NodeHandler {
     let raw: string | null = null;
     let unread = '';
     try {
-      raw = (await res.text()).trim();
+      raw = (await readCapped(res)).trim();
     } catch (err) {
+      if (err instanceof ResponseTooLarge) {
+        throw new Error(`Slack answered HTTP ${res.status}, and ${err.message}.`);
+      }
       unread = describeFetchError(err);
     }
     if (raw === null) {
@@ -517,17 +550,39 @@ export function makeLlm(deps: IoDeps): NodeHandler {
     // actions. The body is the provider's own prose, so it is clipped like
     // Discord's above, and never assumed to have a shape.
     if (!res.ok) {
-      const detail = (await res.text().catch(() => '')).trim().slice(0, 300);
+      // The `.catch` stays: a body this provider cut mid-answer costs the
+      // trailing explanation and nothing else, which ROADMAP § 7 measured and
+      // left alone. What is new is that a refusal must not be able to cost
+      // MORE than an accepted answer — the body was read whole and then sliced
+      // to 300 characters.
+      let detail = '';
+      try {
+        detail = (await readCapped(res)).trim().slice(0, 300);
+      } catch (err) {
+        if (err instanceof ResponseTooLarge) {
+          throw new Error(
+            `The model provider refused the request (HTTP ${res.status}), and ${err.message}.`,
+          );
+        }
+      }
       throw new Error(
         `The model provider refused the request (HTTP ${res.status})`
         + (detail ? `: ${detail}` : '.'),
       );
     }
 
-    const body = (await res.json()) as {
+    type Completion = {
       choices?: Array<{ message?: { content?: string } }>;
       usage?: { prompt_tokens?: number; completion_tokens?: number };
     };
+    let body: Completion;
+    try {
+      body = JSON.parse(await readCapped(res)) as Completion;
+    } catch (err) {
+      if (!(err instanceof ResponseTooLarge)) throw err; // a 200 that is not
+      // JSON keeps the parser's own message, exactly as `res.json()` gave it.
+      throw new Error(`The model provider answered more than this console will read: ${err.message}.`);
+    }
     const raw = body.choices?.[0]?.message?.content;
     if (typeof raw !== 'string') throw new Error('The model answered with no content.');
 

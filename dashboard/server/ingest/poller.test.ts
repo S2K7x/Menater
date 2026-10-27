@@ -24,7 +24,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { defaultPolicy, type PullSource } from './policy.ts';
 import {
-  Poller, backoffFor, extractItems, newestTimestamp, pollSource, pollUrl, pollWindow, readCapped,
+  Poller, backoffFor, extractItems, newestTimestamp, pollSource, pollUrl, pollWindow,
 } from './poller.ts';
 import { recordPoll, resetCursorCache } from './cursors.ts';
 
@@ -410,29 +410,44 @@ describe('pollSource', () => {
  * ========================================================================== */
 
 describe('the response body is capped', () => {
-  it('refuses a body over the cap instead of buffering it', async () => {
-    const big = new Response('x'.repeat(2000));
-    // And the limit is readable: `max / 1024 / 1024` printed "over
-    // 0.00048828125 MB" here, which is a limit nobody can act on.
-    await expect(readCapped(big, 500)).rejects.toThrow(/over 500 bytes/);
-  });
-
-  it('refuses early on an announced size, without reading anything', async () => {
-    const res = new Response('{}', { headers: { 'content-length': String(50 * 1024 * 1024) } });
-    await expect(readCapped(res, 1024)).rejects.toThrow(/announced 50 MB, over the 1 kB/);
-  });
-
-  it('reads a normal body unchanged', async () => {
-    expect(await readCapped(new Response('{"a":1}'), 1024)).toBe('{"a":1}');
-  });
-
-  it('reports an oversized response as a poll failure, not a crash', async () => {
+  /**
+   * The READER itself moved to `http.ts` — it was the only capped reader in
+   * the server, and twelve other outbound calls buffered whatever the far end
+   * sent. Its three unit tests moved with it, into `outbound-cap.test.ts`,
+   * which also claims the rule as a subtraction over every outbound read.
+   *
+   * What belongs here is what is THIS transport's own: the cap it chooses, and
+   * the sentence an operator reads on the Ingestion tab — which the shared
+   * reader deliberately does not compose, because "lower the batch size" is
+   * advice a containment receipt has no use for.
+   */
+  it('reports an oversized response as a poll failure, naming the batch', async () => {
     const impl = (async () => new Response('y'.repeat(50_000_000))) as unknown as typeof globalThis.fetch;
     const out = await pollSource(SOURCE, defaultPolicy(), { deliver: vi.fn(), fetchImpl: impl });
-    expect(out.error).toMatch(/MB/);
+    // The WHOLE sentence, not just the unit: this is the row on the Ingestion
+    // tab and the cursor file's `lastError`, and it is the transport's to
+    // compose now that the reader is shared. `/MB/` alone passed over any
+    // wording at all.
+    expect(out.error).toBe(
+      'the response is over 16 MB. Narrow the query, or lower the batch size.',
+    );
     // And it does not move the cursor: an answer we refused to read is not an
     // answer about what happened.
     expect(out.since).toBeNull();
+  });
+
+  it('names a size the SOURCE announced differently from one we hit', async () => {
+    // Two states the old wording could not tell apart once the reader stopped
+    // composing the sentence. `content-length` is a claim by the other end; the
+    // streaming cap is ours.
+    const impl = (async () => new Response('{}', {
+      headers: { 'content-length': String(50 * 1024 * 1024) },
+    })) as unknown as typeof globalThis.fetch;
+    const out = await pollSource(SOURCE, defaultPolicy(), { deliver: vi.fn(), fetchImpl: impl });
+    expect(out.error).toBe(
+      'the source announced 50 MB, over the 16 MB this console will read. '
+      + 'Narrow the query, or lower the batch size.',
+    );
   });
 });
 
