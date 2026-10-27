@@ -45,7 +45,9 @@
  * ============================================================================
  */
 
-import { describeFetchError, fetchWithDeadline } from '../http.ts';
+import {
+  ResponseTooLarge, describeFetchError, fetchWithDeadline, readCapped,
+} from '../http.ts';
 import { mapLimit } from '../limit.ts';
 import { humanBytes } from '../respond.ts';
 import { isManagedCredential } from '../credentials.ts';
@@ -196,65 +198,28 @@ async function drain(res: Response): Promise<void> {
   }
 }
 
-export class ResponseTooLarge extends Error {}
-
 /**
- * The response body, as text, refusing anything past `max` bytes.
+ * The reader itself lives in `http.ts`, beside the deadline and the redirect
+ * rule, because it was the only capped reader in the server while it lived
+ * here: twelve other outbound reads buffered whatever the far end sent. The
+ * cap this transport passes stays here, because it is this transport's own
+ * number — see `MAX_RESPONSE_BYTES` above.
  *
- * STREAMED AND COUNTED rather than buffered then measured: checking the length
- * after `res.text()` is checking whether the heap survived, which is not a
- * check. The stream is cancelled the moment the cap is passed, so an endless
- * response costs `max` bytes and one cancel, not a process.
- *
- * `Content-Length` is consulted first only as a courtesy — it is a claim by the
- * other end, so it can refuse early but is never trusted to let anything
- * through.
+ * AND THE SENTENCE STAYS HERE TOO. "Narrow the query, or lower the batch size"
+ * is advice about a PAGE OF ALERTS; sent from the shared reader it would reach
+ * a containment receipt and a reputation record, which have no query and no
+ * batch — a sentence reachable from a state it does not describe. So the error
+ * carries the facts and each caller words them, which is the shape
+ * `BodyTooLarge` already has on the inbound side.
  */
-export async function readCapped(res: Response, max: number): Promise<string> {
-  const claimed = Number(res.headers?.get?.('content-length') ?? '');
-  if (Number.isFinite(claimed) && claimed > max) {
-    await drain(res);
-    throw new ResponseTooLarge(
-      `the source announced ${humanBytes(claimed)}, over the ${humanBytes(max)} `
-      + 'this console will read. Narrow the query, or lower the batch size.',
-    );
-  }
-
-  const body = res.body;
-  // No stream (an older runtime, or a test's plain Response): fall back to the
-  // whole text and check it. The cap is then a diagnosis rather than a guard,
-  // which is still better than no cap.
-  if (!body) {
-    const text = await res.text();
-    if (text.length > max) throw new ResponseTooLarge(`the response exceeds ${humanBytes(max)}.`);
-    return text;
-  }
-
-  const reader = body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      total += value.byteLength;
-      if (total > max) {
-        // DISCARD WHAT IS ALREADY HELD before refusing, rather than finishing
-        // the accumulation politely — the exact wording of the request-body
-        // trap, applied in the other direction.
-        chunks.length = 0;
-        throw new ResponseTooLarge(
-          `the response is over ${humanBytes(max)}. Narrow the query, or lower the batch size.`,
-        );
-      }
-      chunks.push(value);
-    }
-  } finally {
-    // Releases the socket back to the pool whether we finished or refused.
-    try { await reader.cancel(); } catch { /* already done */ }
-  }
-
-  return Buffer.concat(chunks).toString('utf8');
+function tooLarge(err: ResponseTooLarge): string {
+  // Two states, two sentences: a size the SOURCE claimed in its header, and a
+  // cap WE hit while reading. Wording them the same would assert which one
+  // happened.
+  return err.announced !== null
+    ? `the source announced ${humanBytes(err.announced)}, over the ${humanBytes(err.limit)} `
+      + 'this console will read. Narrow the query, or lower the batch size.'
+    : `the response is over ${humanBytes(err.limit)}. Narrow the query, or lower the batch size.`;
 }
 
 /**
@@ -469,7 +434,7 @@ export async function pollSource(
   } catch (err) {
     return fail(
       err instanceof ResponseTooLarge
-        ? err.message
+        ? tooLarge(err)
         : `the response is not JSON (${(err as Error).message}).`,
     );
   }

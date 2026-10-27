@@ -33,7 +33,7 @@
  * ============================================================================
  */
 
-import { fetchWithDeadline } from '../http.ts';
+import { ResponseTooLarge, fetchWithDeadline, readCapped } from '../http.ts';
 import { newFence } from './sanitize.ts';
 import { runTool, toolSpecs } from './tools.ts';
 import { stableSystemPrompt, volatileSystemPrompt, type PageContext } from './prompt.ts';
@@ -175,11 +175,36 @@ export async function chat(opts: ChatOptions): Promise<ChatResult> {
     });
 
     if (!res.ok) {
-      const detail = await res.text().catch(() => '');
+      // CAPPED, like the accepted answer below. The `.catch` stays — a body
+      // the provider cut mid-answer costs the trailing explanation and nothing
+      // else, which ROADMAP § 7 measured and left alone — but a REFUSAL must
+      // not be able to cost more memory than a completion.
+      let detail = '';
+      try {
+        detail = await readCapped(res);
+      } catch (err) {
+        if (err instanceof ResponseTooLarge) {
+          throw new AssistantError(
+            `The model provider answered more than this console will read: ${err.message}.`,
+            409,
+          );
+        }
+      }
       throw new AssistantError(describeUpstream(res.status, detail), statusFor(res.status));
     }
 
-    const answer = provider.parse(await res.json());
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(await readCapped(res));
+    } catch (err) {
+      // A 200 that is not JSON keeps the parser's own message, exactly as
+      // `res.json()` gave it.
+      if (!(err instanceof ResponseTooLarge)) throw err;
+      throw new AssistantError(
+        `The model provider answered more than this console will read: ${err.message}.`, 409,
+      );
+    }
+    const answer = provider.parse(parsed);
     // 409, not 502, for the same reason as above: the client replaces a 502
     // body with a generic sentence, and this one carries the provider's own
     // explanation — the most useful thing we have. Some providers answer 200

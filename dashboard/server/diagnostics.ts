@@ -39,7 +39,7 @@
  * ============================================================================
  */
 
-import { describeFetchError, fetchWithDeadline } from './http.ts';
+import { describeFetchError, fetchWithDeadline, readCapped } from './http.ts';
 import { messages, type Locale } from './i18n.ts';
 import { getConfig } from './config.ts';
 import { getEngineStore } from './runtime.ts';
@@ -246,7 +246,12 @@ export async function runDiagnostics(
         },
         { timeoutMs: 15_000 },
       );
-      const body = await res.json().catch(() => ({}));
+      // CAPPED like every other outbound read, although this one dials THIS
+      // process over the loopback: the rule is that nothing this console reads
+      // is unbounded, and an exception per destination is the list that goes
+      // stale. The `.catch` stays — an unread body costs a detail string here
+      // and cannot turn the verdict green, because the STATUS decides it.
+      const body = await readCapped(res).then(JSON.parse).catch(() => ({}));
       // 400 IS THE PASS. The probe is invalid on purpose, so a rejection means
       // the whole path — route, secret, normalizer, validator — works.
       add({

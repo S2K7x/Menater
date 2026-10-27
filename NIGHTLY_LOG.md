@@ -4,6 +4,240 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-10-27 — Tuesday · Security
+
+**Subject**: **`readCapped` was the only capped outbound reader in the server.**
+Tuesday's list ends with denial of service — *body sizes, concurrency, quotas* —
+and the inbound half of that has been closed for weeks (`readBody`'s 256 kB,
+`MAX_PAYLOAD_DEPTH`). Pointing outward, `ingest/poller.ts` caps a polled
+source's answer at 16 MB under a comment that states the rule in full, and
+**twelve other outbound reads buffered whatever the far end sent** — three of
+them from an address an operator typed, including the containment call.
+
+**Result**: PR opened on `claude/sleepy-volta-gkz5ll`. Eleven files: seven
+production (`server/http.ts` — the reader moves here and gains the answer cap;
+`server/engine/nodes/io.ts` ×6 sites; `server/intel/lookup.ts` ×2;
+`server/assistant/chat.ts` ×2; `server/diagnostics.ts`;
+`server/routes/assistant.ts`; `server/ingest/poller.ts` — the primitive leaves,
+its wording stays), one new test file (`server/outbound-cap.test.ts`, **+22
+tests**), one existing test file (`server/ingest/poller.test.ts` — three unit
+tests of the primitive move out with it, and the transport's own two sentences
+are asserted through `pollSource` for the first time), plus `CLAUDE.md` (one
+traps row, suite count 1743 → 1763), `ROADMAP.md` (§ 7: one row updated, three
+added) and this journal. **No interface change** — nothing under `src/` is
+touched, and the built bundle hash is identical (`index-B4KkyvuH.js`, 446.12
+kB). No dependency, no colour, no CSS class, no user-facing string on a screen.
+VulnPipe not touched, so its suite was not run.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-gkz5ll` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Fifty-fourth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: the designated branch
+at 0b387a3 (= `origin/main`) gave typecheck 0, **1743 passed | 1 skipped** and
+a clean build, run after `npm ci` rather than assumed, and
+`list_pull_requests --state open` was empty. I swept Tuesday's six areas in
+order and the first five came back clean against the current tree (details
+below, so a future night does not re-walk them); the sixth, *body sizes*, gave
+a real and measurable defect, which is Step 2's priority (2).
+
+**What it costs, measured over a real socket against a chunked answer** (the
+engine's `http` node, before the fix). The lag column is the event loop
+unavailable — the thread that also answers the ingestion webhook — and
+`JSON.parse`/`JSON.stringify` do not yield:
+
+| MB arriving | text() | parse | stringify | worst loop block | heapUsed | journal row |
+|---|---|---|---|---|---|---|
+| 16 | 87 ms | 26 ms | 75 ms | **117 ms** | 48.9 MB | 16.1 MB |
+| 32 | 138 ms | 49 ms | 146 ms | 241 ms | 96.4 MB | 32.1 MB |
+| 64 | 316 ms | 86 ms | 308 ms | 489 ms | 192.4 MB | 64.1 MB |
+| 128 | 1 024 ms | 452 ms | 2 107 ms | **3 270 ms** | 382.3 MB | 128.1 MB |
+
+Against the same server, `readCapped` refuses at 16 MB in **67 ms with the heap
+unmoved**. The `http` node is the worst of the twelve and not because of the
+heap: its parsed body becomes the node's OUTPUT, so the answer is **persisted
+into `soc_run_step`** — the 128 MB column is a journal row.
+
+**What I learned that is written nowhere else.**
+
+1. **A HEAP SAMPLE CANNOT ASSERT A STREAMING CAP, and a mutation is what said
+   so.** My first property test read 64 MB over a real socket and asserted
+   `heapUsed` had not grown by it. The mutation that buffers the whole body and
+   compares the total only AFTER the loop — the *measure-then-compare* shape
+   this project's `normalize` row is about — **survived all 21 tests**. Two
+   reasons, and both are general: by the time the rejection is observed the
+   refusal has already dropped the buffer, and a `Uint8Array`'s backing store
+   is external memory rather than heap. A timing assertion would have been the
+   flaky kind this project removed once. What kills it is **counting the work**:
+   a body stream that records how many bytes were pulled out of it, which is
+   exact and deterministic. Same family as the inventory index test counting
+   identifier reads instead of milliseconds.
+2. **A lag meter must be given one tick after the blocking work and before it
+   is read.** Mine reported **8 ms for a 3 270 ms block**, because `stop()` ran
+   in the same macrotask as the `JSON.stringify` that blocked: the late
+   `setInterval` callback had not fired yet, so `worst` still held the previous
+   gap. A control that blocks for a known 50/300/800 ms reported 50/300/800 —
+   so the meter was right and my USE of it was wrong, which is not the same
+   finding and took a control to tell apart.
+3. **A mutation harness that cannot parse its own result must report an ERROR,
+   never a survival.** My first run reported **14 of 14 mutations GREEN**. The
+   cause was `--reporter=basic`, which this vitest does not have: every run
+   crashed before a single test, no `Tests` line was printed, and my regex
+   defaulted the failure count to zero. A ruler that reads "survived"
+   everywhere is the finding it invents. The harness now runs an unmutated
+   CONTROL first and asserts the expected pass count before it believes
+   anything.
+4. **`new Response(string)` carries no `content-length`** (measured on Node
+   22.22.0), so it takes `readCapped`'s streaming path, not its header path.
+   That is what makes a synthetic `Response` a legitimate instrument for this
+   cap — the fake implements the option under test — and it is also why the
+   three poller tests that moved were exercising the streaming guard and never
+   the early refusal.
+5. **The refusal sentence had to split from the reader, and that is a design
+   decision, not tidying.** The poller's message ends *« Narrow the query, or
+   lower the batch size »*, which reaches a containment receipt and a
+   reputation record as advice about a query and a batch neither of them has —
+   a sentence reachable from a state it does not describe. So
+   `ResponseTooLarge` carries `limit` and `announced` and each caller words
+   them, which is the `BodyTooLarge` shape already used on the inbound side.
+   The poller's two strings are byte-identical to before.
+6. **Four of the twelve sites are caught by the subtraction and by no
+   behavioural test** — `slack-bot` and the assistant's refusal body got one
+   written for them during the mutation pass, which leaves `diagnostics.ts`'s
+   loopback probe and the MCP self-test red on the structural test alone (M11,
+   M12, 1 failure each). Both read THIS process's own replies, so a behavioural
+   test would have to make our own `json()` answer 2 MB; the subtraction is the
+   guard that matters there anyway, because it is what catches site thirteen.
+7. **The two loopback reads are capped deliberately, not by oversight.** They
+   dial this process, so a cap there is close to a guard for a state it cannot
+   see — which this repository refuses elsewhere. It is in because the rule is
+   *nothing this console reads is unbounded*, and an exemption per destination
+   is the list that goes stale. Agent-mapped note worth keeping: `/api/mcp` CAN
+   be made to answer tens of MB (see § 7), so the MCP self-test's read is not
+   as impossible as it looks.
+
+**Do not redo.**
+
+- **Do not collapse the two caps into one number.** The poller's 16 MB bounds a
+  PAGE OF ALERTS; `MAX_ANSWER_BYTES` (2 MB) bounds ONE record. A test claims
+  the poller still reads a batch larger than the answer cap, green before and
+  after, and collapsing them breaks the transport the reader was written for.
+- **Do not assert this with a heap sample or a stopwatch.** Learning 1. The
+  mutation that defers the check is red on exactly one test, the one that
+  counts bytes pulled.
+- **Do not replace the `.catch(() => '')` in `chat.ts` or `diagnostics.ts`.**
+  Both are ROADMAP § 7's own entry, deliberately left: an unread body there
+  degrades a detail string and cannot turn a verdict green. I capped the SIZE
+  and left the SENTENCE, and said so in that row.
+- **Do not word the `llm` envelope's parse failure.** `res.json()` became
+  `JSON.parse(await readCapped(res))`, and the non-`ResponseTooLarge` error is
+  **rethrown unchanged** so a 200 that is not JSON keeps the parser's own
+  message. Giving it a sentence would have made `'The model did not answer in
+  JSON.'` — which the INNER parse already owns — reachable from two states.
+- **Do not add a cap to `vulnpipe.ts`.** Both directions are streamed on
+  purpose (SSE), so nothing accumulates. What it lacks is a DEADLINE, which is
+  now § 7.
+
+**Found and NOT fixed** (all three are now ROADMAP § 7, with their limits
+stated; none is verified against a live process):
+
+- **`PUT /api/settings` writes the `ingestion` policy around
+  `normalizePolicyInput`.** `saveConfig` runs `sanitizeInventory` under a
+  comment stating the rule — *« a caller that skipped the route must not be
+  able to write a shape the resolver cannot read »* — and `ingestion` gets
+  nothing, four lines away in the same function. That door refuses an empty
+  `fastLane` under `hybrid` (*« sends `critical` down the slow lane and looks
+  valid on the way in »*), the 15 s interval floor and the `http(s)://` check;
+  this one accepts all of it, and `merge` being one level deep means a patch
+  carrying `ingestion.pull` replaces `sources` whole. Latent: no product path
+  sends such a patch, and it needs a console session.
+- **The MCP JSON-RPC batch bounds its calls and not its reply.** `rateLimited`
+  counts `tools/call` and `resources/read`; nothing bounds how many calls one
+  256 kB body carries, and the methods that amplify hardest are the catalogue
+  listings, uncounted by design because each is a constant. The fix is a cap on
+  the array length, which is a policy number for a person.
+- **`proxyToVulnPipe` has no deadline on either hop.** No `setTimeout`, no
+  `AbortController`, teardown only on the client closing, and `api.ts` sets no
+  `requestTimeout`/`headersTimeout`.
+
+**A lead for a human, and it is a threat-model question rather than a defect.**
+`config.ts` rule 1 is *« a secret never comes back out — the browser can WRITE
+an API key, it can never READ it back, not even the legitimate user »*, and
+that is what makes a tab left open harmless. `ingest/poller.ts` gates WHICH
+credential a pull source may name (`isManagedCredential`, the closed list of
+twelve) and places **no restriction on the host it is sent to** — `src.url` is
+checked for an `http(s)://` prefix at save time and nothing else. So a console
+session can set `authCredential: "VIRUSTOTAL_APIKEY"` on a source pointed
+anywhere and press *Poll now*, which reads any of the twelve back out in
+cleartext. CLAUDE.md states the posture deliberately — *« the outbound
+credential is a NAME from the closed catalogue, and the address stays the one
+that was typed »* — and an attacker holding the console is a model this project
+files as out of scope elsewhere. I did not touch it, for two reasons: the fix
+is a decision about what a pull source may be configured with (none of the
+twelve names belongs to a log source, which is its own smell), and NIGHTLY.md
+says not to reopen a stated decision alone. Worth § 7 if the person agrees it
+is in scope.
+
+**The five areas that came back clean**, re-walked against this tree so a
+future night can skip them: the fencing and its nonce (`UNTRUSTED_ALERT_FIELDS`
+now carries `host`, `fenceEnrichment` inverts the rule, the nonce is
+per-request); `PUBLIC_ROUTES` / `requiresAuth` (`app.ts` computes `path` ONCE
+and hands the same string to the lock and to the router, so there is no
+normalisation mismatch; the VulnPipe relay is inside `/^\/api(\/|$)/` and sits
+after the lock; no route that writes or spends is reachable without a
+credential of its own); secret egress (`publicView` masks all five,
+`connectionString(false)` has no caller, `tunnel.token` is read nowhere in
+`server/`, the cursor file's `lastError` carries host-only sentences, and
+`pg-store` persists only `output`/`port`/`error` — never node params or
+headers); SSRF (`fetchWithDeadline` owns the redirect rule for all eight
+callers, `intel/providers.ts` encodes every interpolated value, the only
+unencoded ones are a validated hex hash and a base64url id); and the audit
+chain, which needs a database this environment does not have. Two re-checked
+non-findings worth recording: `secretFor` resolves ANY name to an environment
+variable, and its only caller path is `authHeader.secret` in a workflow
+definition, which is a source constant with no write route; and the MCP
+endpoint's `originAllowed` compares `Origin` against `Host`, which does not
+actually stop the DNS rebinding its comment names (both headers are the
+attacker's domain) — unreachable today because the bearer token is the access
+control, and the fix is an allowlist, i.e. a product decision about an address
+the console deliberately does not know.
+
+**Verified** (Node 22.22.0, npm 10.9.4; every command run and its output read):
+
+| Command | Result |
+|---|---|
+| `dashboard: npm run typecheck` | **0 errors** |
+| `dashboard: npm test` | **1763 passed, 1 skipped** (1743 \| 1 before: **+20**) |
+| `dashboard: npm run build` | clean, 605 ms |
+| bundle | `index-B4KkyvuH.js` 446.12 kB — **identical hash** to the baseline; nothing under `src/` is touched |
+| `VulnPipe` | **not touched**, not run — `git status` shows no file under it |
+
+Checked **RED first**, and the shape is the finding: on the tree with the
+primitive moved but no call site converted, `outbound-cap.test.ts` was **9
+failed | 10 passed**, and the structural assertion's message IS the list of
+twelve uncapped reads. The ten that passed are the primitive's own tests and
+the boundaries that must not move.
+
+**Fifteen mutations, fifteen killed**, one at a time, pristine files restored
+between each, with an unmutated control run first (learning 3):
+
+| Mutation | Result |
+|---|---|
+| M1–M12 — each of the twelve sites back to `res.text()` / `res.json()` | RED (2 each, except M11/M12 at 1 — learning 6) |
+| M13 — the cap never fires | RED — 15 |
+| M14 — the structural sweep stops stripping comments | RED — 1 |
+| M15 — `readCapped` measures AFTER buffering it all | RED — 1 (and GREEN until the ruler was fixed — learning 1) |
+
+No model key, no database and no network egress were needed: the real sockets
+are loopback servers this file starts, the provider transports are injected,
+and the run store is never reached. The probes (`probe-cap.mjs`,
+`probe-lag.mjs`, `probe-meter-control.mjs`, `probe-response.mjs`,
+`mutate.py`) lived in the scratchpad and are **deleted** — `git status` shows
+only the eleven intended files.
+
 ## 2026-10-26 — Monday · Feature
 
 **Subject**: the only remaining J0 item (J0.4 ◐) led me into the assistant's

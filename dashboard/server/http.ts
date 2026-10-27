@@ -30,6 +30,8 @@
  * spoke to the host the caller named.
  */
 
+import { humanBytes } from './respond.ts';
+
 /** The shape both the engine and the webhook relay inject in their tests. */
 export type FetchLike = typeof globalThis.fetch;
 
@@ -247,6 +249,154 @@ export async function fetchWithDeadline(
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * ============================================================================
+ * NOTHING WE DIAL MAY HAND THIS PROCESS AN UNBOUNDED ANSWER
+ *
+ * This reader was written for the ingestion poller, where the rule is stated
+ * in full: "`await res.json()` buffers whatever arrives, and the address is
+ * one somebody typed into a form: a source that answers a gigabyte, by malice
+ * or by a forgotten pagination parameter, grows the heap until the console
+ * dies." It lived in `ingest/poller.ts`, and it was the ONLY capped reader in
+ * the server — twelve other outbound reads buffered whatever the far end sent,
+ * three of them from an address an operator typed (the engine's `http` node,
+ * which is the containment call, and the two chat webhooks whose URL is itself
+ * the credential).
+ *
+ * That is the same sentence this file already makes about the deadline and
+ * about the redirect: a primitive that has to be re-typed by hand is a
+ * primitive that will eventually be forgotten. So it lives here now, beside
+ * them, and `outbound-cap.test.ts` claims the rule as a SUBTRACTION — no
+ * response body is read in `server/` except through this function — because a
+ * test naming the call sites goes stale on the day a thirteenth is written,
+ * which is how this one lasted.
+ *
+ * MEASURED, over a real socket against a chunked answer, before the cap
+ * reached the engine's nodes:
+ *
+ *      MB  | worst blocked loop | heapUsed | the row written to soc_run_step
+ *      16  |             117 ms |  48.9 MB | 16.1 MB
+ *      64  |             489 ms | 192.4 MB | 64.1 MB
+ *     128  |           3 270 ms | 382.3 MB | 128.1 MB
+ *
+ * `JSON.parse` and `JSON.stringify` do not yield, and this is the thread that
+ * also answers the ingestion webhook. In the `http` node the parsed body
+ * becomes the node's OUTPUT, so an unbounded answer is not merely held for a
+ * moment — it is persisted into the run journal.
+ * ============================================================================
+ */
+export class ResponseTooLarge extends Error {
+  /** The cap that was enforced. */
+  limit: number;
+  /**
+   * What `content-length` claimed, when that is why this was refused.
+   *
+   * `null` means the cap was passed while the body was being read — a claim we
+   * made ourselves, rather than one the other end made. The two call for
+   * different words, and a caller that worded them the same would be asserting
+   * which of them happened.
+   */
+  announced: number | null;
+
+  constructor(message: string, limit: number, announced: number | null) {
+    super(message);
+    // Declared then assigned: a TypeScript parameter property compiles under
+    // vitest and is REFUSED by `node --experimental-strip-types`, which is
+    // what runs this file in production. See CLAUDE.md.
+    this.limit = limit;
+    this.announced = announced;
+  }
+}
+
+/**
+ * The largest single ANSWER this console will read.
+ *
+ * A POLICY NUMBER chosen against real data, not a measured maximum. The
+ * biggest honest answer any of these callers gets is a reputation record: a
+ * Shodan host with a banner per open port, or a VirusTotal file report with
+ * every engine's verdict — hundreds of kilobytes at the top end. A model
+ * completion for the triage decision is under ten, a containment receipt and a
+ * chat transport's acknowledgement under one.
+ *
+ * So this is roughly seven times the largest answer anyone here expects, and
+ * on the measurement above it bounds the blocked event loop at about 40 ms
+ * instead of 3.3 s.
+ *
+ * It is deliberately NOT the poller's number. That one bounds a PAGE OF
+ * ALERTS, which is a different fact and legitimately much larger; collapsing
+ * the two would break the transport this reader was written for. Two bounds
+ * measuring two things, each with its own justification, is the shape this
+ * project already keeps for the three ingestion bounds.
+ */
+export const MAX_ANSWER_BYTES = 2 * 1024 * 1024;
+
+/**
+ * The response body, as text, refusing anything past `max` bytes.
+ *
+ * STREAMED AND COUNTED rather than buffered then measured: checking the length
+ * after `res.text()` is checking whether the heap survived, which is not a
+ * check. The stream is cancelled the moment the cap is passed, so an endless
+ * response costs `max` bytes and one cancel, not a process.
+ *
+ * `Content-Length` is consulted first only as a courtesy — it is a claim by the
+ * other end, so it can refuse early but is never trusted to let anything
+ * through.
+ */
+export async function readCapped(res: Response, max: number = MAX_ANSWER_BYTES): Promise<string> {
+  const claimed = Number(res.headers?.get?.('content-length') ?? '');
+  if (Number.isFinite(claimed) && claimed > max) {
+    await release(res);
+    throw new ResponseTooLarge(
+      `it announced ${humanBytes(claimed)}, over the ${humanBytes(max)} this console will read`,
+      max,
+      claimed,
+    );
+  }
+
+  const body = res.body;
+  // No stream (an older runtime, or a test's plain Response): fall back to the
+  // whole text and check it. The cap is then a diagnosis rather than a guard,
+  // which is still better than no cap.
+  if (!body) {
+    const text = await res.text();
+    if (text.length > max) {
+      throw new ResponseTooLarge(
+        `it is over the ${humanBytes(max)} this console will read`, max, null,
+      );
+    }
+    return text;
+  }
+
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > max) {
+        // DISCARD WHAT IS ALREADY HELD before refusing, rather than finishing
+        // the accumulation politely — the exact wording of the request-body
+        // trap, applied in the other direction.
+        chunks.length = 0;
+        throw new ResponseTooLarge(
+          `it is over the ${humanBytes(max)} this console will read`, max, null,
+        );
+      }
+      chunks.push(value);
+    }
+  } finally {
+    // Releases the socket back to the pool whether we finished or refused.
+    try {
+      await reader.cancel();
+    } catch {
+      /* already closed */
+    }
+  }
+  return Buffer.concat(chunks).toString('utf8');
 }
 
 /**
