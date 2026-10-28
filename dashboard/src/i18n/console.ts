@@ -508,17 +508,34 @@ export interface ConsoleDictionary {
     auditNote: string;
     injectTitle: string;
     injectLede: string;
-    inject: string;
     injectOk: (id: string) => string;
     injectKo: (body: string) => string;
     injectFailed: string;
     scenario: string;
     scenarioHelp: string;
+    /**
+     * The scenario catalogue could not be read.
+     *
+     * It is fetched from the server so the buttons cannot drift from the list
+     * that actually builds the alerts — which means a read that fails leaves
+     * this block with no control at all. An empty row is a claim ("there is
+     * nothing to inject"); this says what really happened.
+     */
+    scenariosUnread: (reason: string | null) => string;
     /** Suivi de l'alerte injectee, jusqu'a ce qu'elle apparaisse ou non. */
     followWaiting: (id: string) => string;
     followSeen: (id: string, step: string) => string;
     followDone: (id: string) => string;
     followLost: (id: string, seconds: number) => string;
+    /**
+     * The follow-up ended without the console answering its last read.
+     *
+     * Separate from `followLost` because the two are not the same kind of
+     * claim: that one is a verdict about the PIPELINE, and it rests on the
+     * alert being absent from a reading that happened. `reason` is the
+     * server's own sentence when there is one — a blank one is not a reason.
+     */
+    followUnread: (id: string, reason: string | null) => string;
     followOpen: string;
     workflowsTitle: string;
     workflowsEmpty: string;
@@ -1731,7 +1748,6 @@ const EN: ConsoleDictionary = {
     injectTitle: 'Inject a test alert',
     injectLede:
       'Sends a realistic alert into the pipeline, as if a security appliance had just produced it. Unlike the connectivity probe, this one creates a real case in the list.',
-    inject: 'Inject',
     injectOk: (id) => `Alert ${id} sent. The pipeline is handling it; the list updates in a few seconds.`,
     // THE SERVER'S SENTENCE, SHOWN AS IT IS. It already names the status and
     // the pipeline's own reason, so a frame around it repeated the status —
@@ -1743,11 +1759,18 @@ const EN: ConsoleDictionary = {
     scenario: 'Alert type',
     scenarioHelp:
       'Each scenario takes a DIFFERENT path: no destination, with a hash, malformed, duplicate… A single test alert only ever proved the wiring.',
+    scenariosUnread: (reason) =>
+      'The list of test alerts could not be read, so there is nothing to press here yet.'
+      + (reason ? ` ${reason}` : ''),
     followWaiting: (id) => `${id} sent. Waiting for its first step…`,
     followSeen: (id, step) => `${id} went through ${step}. More to come.`,
     followDone: (id) => `${id} went through the full chain, all the way to the audit.`,
     followLost: (id, seconds) =>
       `${id} produced no step in ${seconds} s. It arrived nowhere: see the Tracking tab.`,
+    followUnread: (id, reason) =>
+      `${id} was sent, and then the console stopped answering: where it went is unknown, `
+      + 'not nowhere.'
+      + (reason ? ` ${reason}` : ''),
     followOpen: 'Open in the alert queue',
     chainKicker: 'Tamper evidence',
     chainTitle: 'Verify the audit chain',

@@ -4,6 +4,203 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-10-28 — Wednesday · Tests and QA
+
+**Subject**: **the Health tab's injection follow-up had no test at all, and two
+of its reads were counted as answers.** Wednesday's rule is *a failure must
+never look like a success* and *hunt the places where a `catch` returns green*.
+`follow()` — the loop behind *Inject a test alert* — re-reads the snapshot
+fifteen times over forty-five seconds, `continue`d past any read that failed,
+and then ended in `followLost`: *« produced no step in 45 s. **It arrived
+nowhere**: see the Tracking tab. »* That is a verdict about the PIPELINE
+reached from a window in which the console learned nothing, on the tab whose
+whole job is to say what is wrong.
+
+**Result**: PR opened on `claude/sleepy-volta-es01zl`. Three code files —
+`src/components/HealthPanel.tsx` (both fixes), `src/i18n/console.ts` (two keys
+added, one orphan removed), `src/components/health-follow.test.tsx` (**new, +9
+tests**) — plus `CLAUDE.md` (one traps row, suite count 1763 → 1772),
+`ROADMAP.md` (§ 3 C0.43, § 7 two rows) and this journal. **No CSS rule added,
+removed or edited**: the built stylesheet is byte-identical
+(`index-Bs5sfyph.css`). No dependency, no colour, no token, no heading level,
+no class name. VulnPipe not touched, so its suite was not run.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-es01zl` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Fifty-fifth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: the designated branch
+at bff48b1 (= `origin/main`) gave typecheck **0 errors**, **1763 passed | 1
+skipped** and a clean build, run after `npm ci` rather than assumed. I swept
+Wednesday's three angles. *Slow or flaky tests*: nothing — the slowest file is
+`inventory-settings.test.tsx` at 3.54 s, the slowest single test
+`assistant.test.ts`'s 1.22 s (a real backoff that is already injected), and the
+three remaining real `setTimeout` sleeps in the suite are 5 ms, 40 ms and a
+500 ms race ceiling. *`catch` returning green in `server/`*: `grep -rn 'catch(() =>'`
+gives eight matches outside the tests, of which **six are code** and the other
+two are comments explaining the shape — every one of the six is already
+reasoned about where it sits, and two of them (`chat.ts`, `diagnostics.ts`) are
+ROADMAP § 7's own entries, deliberately left. *The browser half*:
+`grep -rn 'catch {' src/` gives **28** sites outside the tests, almost all of
+them `localStorage` or a clipboard refusal; the only polling loop among them is
+this one, and `App.tsx`'s own `load()` already reports its failures.
+
+**What the defect costs, and why it is not theoretical.** Every way
+`api.snapshot(true)` can fail is a console fault, and `call()` had already
+composed the sentence naming it:
+
+| How the read fails | What `call()` says | What the operator was told |
+|---|---|---|
+| Console container restarted mid-follow | `Authentication required.` (sessions live in memory) | *it arrived nowhere* |
+| Vite/proxy dropping the forced rebuild | `The console server is not answering.` | *it arrived nowhere* |
+| Configured database starts refusing | `Database (SELECT): connect ECONNREFUSED …` | *it arrived nowhere* |
+
+**What I learned that is written nowhere else.**
+
+1. **The guard belongs on the LAST read, not on « any read », and the argument
+   is that the state is PERSISTED.** My first instinct was a counter of
+   successful reads — the direct analogue of *`clean` requires a source that
+   ANSWERED*. It is wrong here: a chain lives in `soc_run` / `soc_run_step`, so
+   what the loop watches only grows, which means the final reading carries the
+   whole evidence for a negative claim and a read that failed in the middle
+   costs nothing. A counter would have printed *« no step in 45 s »* over a
+   window whose last answer came at six seconds. The mutation that stops
+   un-observing after a failure (`observed` set once and never reset) is red on
+   exactly the test written for that shape — and it is the mutation a counter
+   would have survived.
+2. **Only the NEGATIVE claim needs full coverage.** `followSeen`'s *« went
+   through 01-Ingestion. More to come. »* is true of the read that observed it,
+   and *more to come* is already the open-ended form — so a console that goes
+   quiet after step 01 makes it less useful and never false. The plausible
+   over-fix is to let *« nobody read it »* win over a step that was seen, which
+   throws away a real observation; it is mutation M5 and it is red.
+3. **`vi.advanceTimersByTimeAsync` drives a React async loop cleanly, and this
+   is the first `.tsx` test here to use it.** The pattern that works: fake
+   timers AFTER the spies, `await act(async () => {})` once to flush the
+   mount effect, `fireEvent.click` (not `userEvent`, whose own delays need the
+   timers), another empty `act` so the awaited `simulate()` settles, then
+   `await act(async () => { await vi.advanceTimersByTimeAsync(BUDGET + EVERY) })`.
+   `useRealTimers()` goes in `afterEach` beside `cleanup()`.
+4. **The number of reads one budget buys has to be DERIVED, or the test about
+   the last read goes quietly vacuous.** The loop sleeps first and checks the
+   clock before sleeping, so 45 000 / 3 000 is **15** reads, not 14 or 16 — I
+   had it hand-written as fifteen entries first. If either constant moves, a
+   hand-counted list stops putting the failure on the LAST read and the test
+   passes over the thing it exists to claim. It is `Math.floor(BUDGET/EVERY)`
+   now, and the first test pins the observed count against it.
+5. **`health.inject` was an orphan catalogue key, and that is why nobody saw
+   the second defect.** The injection block used to have one *Inject* button;
+   it now has one button per scenario, fetched from the server. So when that
+   fetch failed, `.catch(() => setScenarios([]))` left the block with its
+   title, its label, no control and no reason — and there was no fallback
+   button to notice was missing. `n8n-removed.test.ts`'s orphan rule
+   *« under-reports on names that collide with ordinary words »*, and `inject`
+   is exactly that: it is referenced all over this repository, never as that
+   key.
+6. **A `<span class="soc-warn-note">` inside a `.soc-field` is the sixth
+   recurrence of that selector, measured.** I went to pick an element for the
+   catalogue note and checked the class first. In real Chromium against the
+   built sheet, with transitions killed: that span renders
+   `rgb(117,127,140)` (`--faint`), `uppercase`, `letter-spacing: 1.61px`,
+   `ui-monospace`, **11.52 px**; the same class on a `<p>` is
+   `rgb(255,176,32)` (`--orange`), no transform, Inter, **12.48 px**.
+   `.soc-field span` is (0,1,1) and sits **123 lines later** in the sheet than
+   `.soc-warn-note` (0,1,0), so it wins on specificity AND on source order.
+   One live call site pays for it — see below.
+7. **`readdirSync(...).find(f => f.endsWith('.css'))` picked the wrong
+   stylesheet and the ruler read zero.** `dist/assets` holds three CSS files
+   and `DocsPanel-*.css` sorts first, so my first probe measured a sheet with
+   no tokens in it: every colour came back `rgb(0,0,0)`, every font
+   `Times New Roman`, and `--orange` / `--faint` were empty strings. The tell
+   is the EMPTY token, and the lesson is this project's own: a ruler that
+   reads nothing everywhere is a bug in the ruler. Match `index-*.css`.
+
+**Found and NOT fixed** (now ROADMAP § 7, measured, with its one call site
+enumerated):
+
+- **`SettingsPage.tsx:865`** writes the *« a refresh interval above 120 s is
+  half the diagnosis of my alert is not arriving »* warning as a `<span>`
+  inside a `.soc-field`, so it renders in `--faint` monospace capitals at
+  11.52 px — the token this product reserves for *what you may skip*, on a
+  sentence that exists to be read. Learning 6 has the numbers. It is **one**
+  call site: of the five `soc-warn-note` uses in `src/`, four are `<p>` and
+  this is the only `<span>`; `SettingsPage.tsx:1040` carries
+  `style={{ textTransform: 'none', letterSpacing: 0 }}` inline, which is
+  somebody having noticed the symptom and patched it per-element. The repair is
+  `.soc-field span.soc-warn-note` in the sheet — a bare modifier loses, which
+  the traps table says five times — and that is a visual change on a Settings
+  field, i.e. a measured pass over six themes and three widths rather than a
+  line inside a diff about failed reads. **Saturday's subject, ready-made.**
+
+**Do not redo.**
+
+- **Do not count successful reads.** Learning 1. The counter is the plausible
+  wrong fix and it survives the mutation that matters.
+- **Do not let the unread verdict win over a step that was seen.** Learning 2,
+  mutation M5, red.
+- **Do not put the catalogue note in a live region.** It is a STANDING
+  condition — nobody pressed anything to get it, and the console re-renders on
+  every poll, so announcing it is the permanent alarm the `diagnostic_probe`
+  row refuses. M10 adds `role="status"` to it and is red.
+- **Do not write that note as a `<span>`.** Learning 6. The register would be
+  wrong in the same breath as the sentence being right.
+- **Do not reach for `userEvent` in this file.** Its own timer handling fights
+  `useFakeTimers`; `fireEvent.click` has no delays and the two empty `act`
+  scopes around it are what make the loop advance.
+- **Do not fix the `followSeen` ending.** When the console goes quiet after a
+  step, the final message is *« went through 01-Ingestion. More to come. »*
+  with `ok: false`. It is less useful than it could be and it asserts nothing
+  false, so it was left alone deliberately; two tests claim that boundary and
+  pass before AND after.
+
+**Verified** (Node 22.22.0, npm 10.9.4; every command run and its output read):
+
+| Command | Result |
+|---|---|
+| `dashboard: npm run typecheck` | **0 errors** |
+| `dashboard: npm test` | **1772 passed, 1 skipped** (1763 \| 1 before: **+9**) |
+| `dashboard: npm run build` | clean, 432 ms |
+| bundle | `index-DoZumK3j.js` 446.57 kB (446.12 before, **+0.45 kB**: two catalogue sentences and the two fixes). **CSS byte-identical**, `index-Bs5sfyph.css` 62.30 kB. The two lazy chunks keep their byte sizes and change hash only because they reference the renamed shared chunk |
+| screen, Chromium 1194 | both new sentences on the component's own markup against the built sheet, transitions killed: **no horizontal overflow at 320 / 375 / 1280 px on all six themes**; note-on-panel contrast **5.13 – 7.86:1** (floor 4.5); note `text-transform: none`, `--orange` on all six |
+| `VulnPipe` | **not touched**, not run — `git status` shows no file under it |
+
+Checked **RED first**, in two stages, and the staging is itself the evidence:
+with only the test file added, `health-follow.test.tsx` was **3 failed | 3
+passed** — the three new claims red, the three boundary claims (an answered
+window still gets `followLost`, a completed chain still gets `followDone`, a
+step seen is still reported) green before and after on purpose. The second
+defect went the same way: with the catalogue key added and the component
+untouched, **1 failed | 8 passed**.
+
+**Eleven mutations, eleven killed**, one at a time, pristine files restored
+between each, with an unmutated control run first and its pass count asserted
+(the 10-27 lesson: a harness that cannot parse its own result must report an
+ERROR, never a survival):
+
+| Mutation | Result |
+|---|---|
+| M1 — the negative verdict unconditional again (the defect) | RED — 4 |
+| M2 — a failed read counts as an observation | RED — 4 |
+| M3 — `observed` set once and never reset (the counter's shape) | RED — 1 |
+| M4 — the verdict's reason thrown away | RED — 2 |
+| M5 — « nobody read it » wins over a step that was seen | RED — 1 |
+| M6 — the two sentences become one | RED — 4 |
+| M7 — `.catch(() => setScenarios([]))` restored (the second defect) | RED — 1 |
+| M8 — the catalogue note shown even when the read answered | RED — 1 |
+| M9 — the catalogue note loses its reason | RED — 1 |
+| M10 — the catalogue note put in a live region | RED — 1 |
+| M11 — the completed chain stops being reported | RED — 1 |
+
+No model key, no database and no network egress were needed: the two `api`
+methods are spied, the clock is faked, and the browser probes read this
+repository's own `dist/`. The probes (`probe-warn-note.mjs`,
+`probe-screen.mjs`, `mutate.py`) and the throwaway preview test that dumped the
+component's markup for Chromium lived in the scratchpad and are **deleted** —
+`git status` shows only the six intended files.
+
 ## 2026-10-27 — Tuesday · Security
 
 **Subject**: **`readCapped` was the only capped outbound reader in the server.**
