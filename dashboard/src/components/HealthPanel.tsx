@@ -132,11 +132,23 @@ export function HealthPanel({
   const h = useI18n().c.health;
   const [busy, setBusy] = useState(false);
   const [scenarios, setScenarios] = useState<Array<{ id: string; title: string; purpose: string }>>([]);
+  /**
+   * Why the catalogue is not on screen, when it is not.
+   *
+   * `.catch(() => setScenarios([]))` made a read that did not answer
+   * indistinguishable from a server offering no scenario — and since this list
+   * is the only way to press anything here, the block then rendered its title,
+   * its label, and no control and no reason. An empty row is a claim; the same
+   * rule as the verdict `follow()` refuses to reach below.
+   */
+  const [scenariosUnread, setScenariosUnread] = useState<string | null>(null);
 
   useEffect(() => {
     // From the server, so the buttons cannot drift from the catalogue that
     // actually builds the alerts.
-    api.scenarios().then((r) => setScenarios(r.scenarios)).catch(() => setScenarios([]));
+    api.scenarios()
+      .then((r) => setScenarios(r.scenarios))
+      .catch((err) => setScenariosUnread(err instanceof ApiError ? err.message : null));
   }, []);
 
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
@@ -209,6 +221,24 @@ export function HealthPanel({
    * On interroge donc jusqu'a ce que la chaine se termine, ou jusqu'a la fin
    * du budget. ET SI ELLE N'ARRIVE PAS, ON LE DIT : « aucune etape en 45 s »
    * est une reponse, « rien ne s'affiche » n'en est pas une.
+   *
+   * ========================================================================
+   * AND THAT ANSWER NEEDS A READ THAT ANSWERED
+   *
+   * `followLost` is a claim about the PIPELINE — "it arrived nowhere, see the
+   * Tracking tab" — and it rests on the chain being ABSENT from a reading. A
+   * failed read used to `continue` and be forgotten, so a console restarted
+   * mid-follow, a session gone with it, or a proxy dropping the most
+   * expensive read this console does ended in that sentence: an operator sent
+   * to hunt a pipeline fault on the strength of a console fault. Same rule as
+   * `clean` requiring a source that ANSWERED on the Lookup tab.
+   *
+   * The check is on the LAST read and not on "any read", because a chain is
+   * persisted: the state this loop watches only grows, so the final reading
+   * carries the whole evidence and a read that failed in the middle costs
+   * nothing. And it guards only the NEGATIVE verdict — `followSeen` and
+   * `followDone` are positive observations, true of the read that made them,
+   * and "more to come" is already the open-ended form.
    * ========================================================================
    */
   const FOLLOW_BUDGET_MS = 45_000;
@@ -217,14 +247,23 @@ export function HealthPanel({
   async function follow(alertId: string) {
     const deadline = Date.now() + FOLLOW_BUDGET_MS;
     let lastStep: string | null = null;
+    /** Did the MOST RECENT read answer? `false` until one does. */
+    let observed = false;
+    /** Why it did not, for the sentence below. */
+    let unreadReason: string | null = null;
     while (Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, FOLLOW_EVERY_MS));
       let snap;
       try {
         snap = await api.snapshot(true);
-      } catch {
-        continue; // une lecture ratee n'annule pas le suivi
+      } catch (err) {
+        // A failed read does not cancel the follow-up — and it is no longer
+        // forgotten either: see the header.
+        observed = false;
+        unreadReason = err instanceof ApiError ? err.message : null;
+        continue;
       }
+      observed = true;
       onRefresh();
       const chain = snap.trace.chains.find((c) => c.alert_id === alertId);
       const done = chain?.steps.filter((s) => s.status !== 'missing') ?? [];
@@ -245,7 +284,9 @@ export function HealthPanel({
       ok: false,
       text: lastStep
         ? h.followSeen(alertId, lastStep)
-        : h.followLost(alertId, Math.round(FOLLOW_BUDGET_MS / 1000)),
+        : observed
+          ? h.followLost(alertId, Math.round(FOLLOW_BUDGET_MS / 1000))
+          : h.followUnread(alertId, unreadReason),
     });
     setLastInjected(alertId);
   }
@@ -392,6 +433,13 @@ export function HealthPanel({
                   </button>
                 ))}
               </div>
+              {/* A `<p>`, not a `<span>`: `.soc-field span` is (0,1,1) and sits
+                  later in the sheet than `.soc-warn-note` (0,1,0), so a span
+                  here would take the capitals, the mono and `--faint` — the
+                  register for what you may skip. See the traps table. */}
+              {scenariosUnread !== null ? (
+                <p className="soc-warn-note">{h.scenariosUnread(scenariosUnread)}</p>
+              ) : null}
             </div>
             {/* TWO REGIONS, NOT ONE. The verdict settles once; the follow-up
                 line advances every few seconds for up to forty-five. Sharing a
