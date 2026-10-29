@@ -2386,38 +2386,75 @@ what this entry is about — an unread body degrading a detail string — is the
 half that is not a false claim, and separating "not JSON" from "could not be
 read" here is still the `MalformedBody` shape and still unwritten.
 
-### `PUT /api/settings` writes the ingestion policy around its own validator
+### ~~`PUT /api/settings` writes the ingestion policy around its own validator~~ — closed 2026-10-29
 
-Found while mapping authz on the security night of 2026-10-27, **not fixed**,
-because it is one line in a function whose other sections I did not audit and
-the night's subject was elsewhere.
+Raised on the security night of 2026-10-27 as read off `merge`/`saveConfig`/the
+route and **explicitly not driven**. Driven against the real handlers it is
+worse than this entry said, and the extra half is the one worth keeping: the
+written shape **bricks the door that would have refused it**.
 
 `saveConfig` clamps `console`, `database.port`, the four `pipeline` numbers and
-`assistant.maxSteps`, and it runs `sanitizeInventory` — under a comment that
-states exactly the rule this row is about: *« This is the second lock:
-`saveConfig` is exported, and a caller that skipped the route must not be able
-to write a shape the resolver cannot read. »* **The `ingestion` section gets
-none of it**, four lines away in the same function. So `normalizePolicyInput`,
-the Ingestion tab's own door, is bypassed entirely by `PUT /api/settings`,
-which writes whatever arrives — and `merge` is one level deep, so a patch
-carrying `ingestion.pull` replaces the whole `pull` object, `sources` included.
+`assistant.maxSteps`, and runs `sanitizeInventory` under a comment stating the
+rule — *« This is the second lock: `saveConfig` is exported, and a caller that
+skipped the route must not be able to write a shape the resolver cannot
+read. »* The `ingestion` section got none of it, four lines away in the same
+function.
 
-What that door refuses and this one would accept, in its own words: *« The push
-lane cannot be emptied under hybrid — checked inline AND last, so it cannot be
-slipped past by sending `delivery` and `fastLane` in the convenient order. An
-empty list sends `critical` down the slow lane and looks valid on the way in. »*
-Also the 15 s interval floor, the `http(s)://` check on a source's address, and
-every type coercion — the *« the API trusted the shape of its body »* trap, on
-the section that decides which transport carries a `critical` alert.
+**Measured on a config holding one configured pull source:**
 
-**Two things keep it off tonight's diff rather than in it.** No product path
-sends an `ingestion` patch to that route: the Settings screen's "ingestion"
-sub-tab edits `webhook` and `tunnel`, and the policy lives behind
-`/api/ingestion/policy`. And it needs a console session, which on this product
-is one shared password — the threat model this project already files under *an
-attacker who has the console itself*. So it is latent, and it is exactly the
-state the `sanitizeInventory` line was added for. **Not verified against a live
-process**: read off `merge`/`saveConfig`/the route, not driven.
+```
+1. the configured source table           [{"source":"wazuh", … }]
+2. PUT /api/settings {pull:{interval:1}}  200
+3. the source table now                   undefined
+4. PUT /api/ingestion/policy              500 {"error":"Cannot read properties
+                                              of undefined (reading 'map')"}
+5. GET /api/ingestion/policy              200 (the screen still renders)
+```
+
+Step 3 is `merge` being one level deep, as this entry predicted. Step 4 is the
+half it did not: `normalizePolicyInput` reads `current.pull.sources.map` off
+the policy it is handed, so once a `pull` block with no `sources` is stored,
+the Ingestion tab's own save button answers 500 for ever — the operator sees
+the damage on a screen that cannot repair it, and the only way back is editing
+`config.json` by hand, which the *« lock that locked the operator out »* row
+says is not a way back. And two shapes are latent until the next RESTART, the
+worst form of all: `pull: null` makes `syncPoller()` throw at `api.ts:107` and
+a string `fastLane` makes the startup log's `.join` throw at `api.ts:119`,
+neither with a catch above it — the save answers 200, the running console is
+fine, and the container that restarts tomorrow does not come back.
+
+**The shapes that are merely accepted are not harmless either**, measured on
+`laneFor`: `fastLane: []` gives `critical=paced`, the one configuration
+`policy.ts` says it exists to prevent; `fastLane: 'critical'` gives
+`critical=fast high=paced` through `String.prototype.includes`;
+`fastLane: 'low'` inverts the policy; and `delivery: 'firehose'` leaves the
+lanes as hybrid while making `onExpectedTransport` answer `true` for
+everything, so the *« arrived off its lane »* observation this file offers
+INSTEAD of dropping an alert is silently off.
+
+**Closed by two changes, and the second was free.** The route runs the policy's
+own door and answers 400 with its sentence verbatim (`api.ingestionRefused`
+adds the consequence, not a second wording); and because that door returns a
+COMPLETE policy, putting it back on the patch is what makes one level of
+`merge` lossless — the source table survives. `sanitizePolicy` in `config.ts`
+is the second lock, called where `sanitizeInventory` is called, in `getConfig`
+AND in `saveConfig`, coercing and never throwing for the reason `readInventory`
+does not either.
+
+**The one trade-off, stated rather than hidden**: a stored policy that cannot
+be read at all falls back to `defaultPolicy()` WHOLE and not field by field,
+so a refused hand-edit loses a stored source list. `normalizePolicyInput` is
+the only spelling of these rules and a partial recovery would be a second thing
+that can disagree with it; the fallback polls nobody, so it cannot dial an
+address nobody chose, and it is logged with the reason. A reviewer who wants
+per-field recovery is choosing a second normalizer, which is the call this
+entry leaves to a human.
+
+**What stays open**: nothing about this door. `normalizePolicyInput` is itself
+still happy to read `current.pull.sources.map` off a malformed `current`, and
+that is now unreachable — every production caller passes `getConfig().ingestion`,
+which is sanitized — so hardening it would be a guard written for a state it
+cannot see.
 
 ### The MCP batch bounds its calls and not its reply
 

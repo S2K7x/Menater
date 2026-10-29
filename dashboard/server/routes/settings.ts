@@ -12,6 +12,7 @@ import {
 import {
   connectionString, getConfig, hashPassword,
   publicView, saveConfig } from '../config.ts';
+import { normalizePolicyInput } from '../ingest/policy.ts';
 import { normalizeInventory } from '../inventory.ts';
 import { tcpProbe } from '../probes.ts';
 import type { Ctx } from './context.ts';
@@ -65,6 +66,28 @@ export async function settingsRoutes(c: Ctx): Promise<boolean> {
             error: am.inventoryRefused(problems.map((p) => `${p.field}: ${p.detail}`)),
             problems });
         }
+      }
+
+      /**
+       * N5 — the ingestion policy is checked by the door that OWNS it, before
+       * it is stored.
+       *
+       * `saveConfig`'s second lock coerces a shape it cannot read; this is
+       * where a human gets the reason instead of a coercion they did not ask
+       * for. And the normalized policy REPLACES the patch, which is what
+       * closes the other half: `merge` is one level deep, so a patch carrying
+       * only `ingestion.pull` used to replace the whole `pull` object and
+       * delete a configured source table — a save that reports success and
+       * loses the setting next door. A complete section is the shape that one
+       * level of merge can carry without losing anything.
+       */
+      if (body?.ingestion !== undefined) {
+        const { policy, error } = normalizePolicyInput(body.ingestion, getConfig().ingestion);
+        if (error) {
+          return json(res, 400, {
+            error: am.ingestionRefused(error) });
+        }
+        body.ingestion = policy;
       }
 
       saveConfig(body);
