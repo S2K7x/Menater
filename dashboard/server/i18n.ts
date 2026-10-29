@@ -158,6 +158,8 @@ export interface ServerMessages {
     passwordFirst: string;
     /** Says WHAT is wrong with the inventory, never just "invalid". */
     inventoryRefused: (problems: string[]) => string;
+    /** Says WHY the policy was refused, in the policy door's own words. */
+    ingestionRefused: (reason: string) => string;
     hostMissing: string;
     /**
      * Refuses the REQUEST, and says nothing about the network: the value named
@@ -423,6 +425,10 @@ const EN: ServerMessages = {
     // The whole list, not the first problem: fixing a pasted inventory one
     // round trip per line is how somebody gives up on the screen.
     inventoryRefused: (problems) => `Service inventory not saved. ${problems.join(' ')}`,
+    // The REASON is `normalizePolicyInput`'s, verbatim — `PUT /api/ingestion/policy`
+    // answers that same sentence, and a second wording here is how the two
+    // start disagreeing. What this adds is the consequence: nothing was saved.
+    ingestionRefused: (reason) => `Ingestion policy not saved. ${reason}`,
     hostMissing: 'Host missing.',
     // "nothing was dialled" is the half this sentence exists for: the old
     // answer was "nothing is listening on this port", which sent somebody to

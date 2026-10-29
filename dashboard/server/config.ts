@@ -39,7 +39,7 @@ import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { defaultPolicy, type IngestionPolicy } from './ingest/policy.ts';
+import { defaultPolicy, normalizePolicyInput, type IngestionPolicy } from './ingest/policy.ts';
 import { readInventory } from './inventory.ts';
 import type { InventoryEntry } from '../src/lib/types.ts';
 
@@ -337,6 +337,46 @@ function sanitizeInventory(c: AppConfig): AppConfig {
   return c;
 }
 
+/**
+ * The stored ingestion policy, re-read through its own validation.
+ *
+ * SAME RULE AS `sanitizeInventory` ABOVE, and it was missing four lines from
+ * it. `normalizePolicyInput` is the Ingestion tab's own door; `saveConfig` is
+ * exported, and a hand-edited `config.json` reaches `getConfig` through no
+ * door at all — so a shape the resolver cannot read could be stored. The cost
+ * is not only a wrong policy; measured against the real handlers:
+ *
+ *   - `pull: null` makes `syncPoller()` throw at `api.ts:107`, which has no
+ *     catch above it. The console does not start, and the only way back is
+ *     editing the file by hand.
+ *   - a string `fastLane` makes the startup log line's `.join` throw at
+ *     `api.ts:119`.
+ *   - a `pull` block with no `sources` makes `normalizePolicyInput` ITSELF
+ *     throw, on `current.pull.sources.map`, so `PUT /api/ingestion/policy`
+ *     then answers 500 for ever: the screen renders the damage and the
+ *     operator cannot repair it from the console.
+ *
+ * IT COERCES AND NEVER THROWS, for the reason `readInventory` does not
+ * either: a stored value must not be able to stop the console from starting.
+ * A policy it cannot read at all falls back to `defaultPolicy()` WHOLE rather
+ * than field by field — `normalizePolicyInput` is the only spelling of these
+ * rules, and a second, partial recovery would be a second thing that can
+ * disagree with it. That loses a stored source list on a refused hand-edit,
+ * which is why the fallback is said out loud: the default polls nobody, so it
+ * cannot dial an address nobody chose.
+ */
+function sanitizePolicy(c: AppConfig): AppConfig {
+  const { policy, error } = normalizePolicyInput(c.ingestion, defaultPolicy());
+  if (error) {
+    console.error(
+      `[menater] ingestion policy unusable as stored (${error}) — falling back `
+        + 'to the recommended default: hybrid, push for critical and high, polling off.',
+    );
+  }
+  c.ingestion = policy;
+  return c;
+}
+
 let cached: AppConfig | null = null;
 
 export function getConfig(): AppConfig {
@@ -352,7 +392,9 @@ export function getConfig(): AppConfig {
       stored = {};
     }
   }
-  cached = sanitizeInventory(applyEnvOverrides(migrateVariables(merge(defaults(), stored))));
+  cached = sanitizePolicy(
+    sanitizeInventory(applyEnvOverrides(migrateVariables(merge(defaults(), stored)))),
+  );
   return cached;
 }
 
@@ -489,6 +531,9 @@ export function saveConfig(patch: any): AppConfig {
   // exported, and a caller that skipped the route must not be able to write a
   // shape the resolver cannot read.
   sanitizeInventory(next);
+  // N5 — the same second lock, on the section that decides which transport
+  // carries a `critical` alert. See `sanitizePolicy`.
+  sanitizePolicy(next);
 
   /**
    * THE ENVIRONMENT WINS HERE TOO, AND BEFORE THE WRITE.

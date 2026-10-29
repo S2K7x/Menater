@@ -4,6 +4,167 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-10-29 — Thursday · Bugs and technical debt
+
+**Subject**: **`PUT /api/settings` wrote the ingestion policy around
+`normalizePolicyInput`, and the shape it wrote bricked that door.** ROADMAP § 7
+raised this on 2026-10-27 as read off `merge`/`saveConfig`/the route and
+explicitly **not driven**. Driven tonight against the real handlers it is worse
+than the entry said, and the extra half is the headline.
+
+**Result**: PR opened on `claude/sleepy-volta-bnaqgg`. Three code files —
+`server/config.ts` (`sanitizePolicy`, called where `sanitizeInventory` is
+called, in `getConfig` AND `saveConfig`), `server/routes/settings.ts` (the
+policy's own door, before the store), `server/i18n.ts` (one catalogue key) —
+plus `server/ingestion-policy-lock.test.ts` (**new, +17 tests**), `ROADMAP.md`
+(§ 7 entry closed, kept with what it got wrong) and `CLAUDE.md` (one traps row,
+suite count 1772 → 1789). **76 insertions across the three code files.** No CSS
+rule added, removed or edited: the built stylesheet is byte-identical
+(`index-Bs5sfyph.css`, 62.30 kB). No dependency, no colour, no token, no
+heading level, no class name. VulnPipe not touched, so its suite was not run.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-bnaqgg` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Fifty-sixth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: the designated branch
+at c7648c7 (= `origin/main`) gave typecheck **0 errors**, **1772 passed |
+1 skipped** and a clean build, run after `npm ci` rather than assumed. No PR was
+open. § 7 holds ten entries; this one was the only one that is a *reachable
+wrong behaviour on a write path* rather than a thin sentence, a missing
+deadline, a heading level or a measured bill — and it came with its own
+admission that nobody had driven it, which is Thursday's reservoir exactly.
+
+**What the defect actually is**, measured on a config holding one configured
+pull source, through the real `handleRequest`:
+
+```
+1. the configured source table            [{"source":"wazuh", … }]
+2. PUT /api/settings {pull:{interval:1}}   200
+3. the source table now                   undefined
+4. PUT /api/ingestion/policy              500 {"error":"Cannot read properties
+                                               of undefined (reading 'map')"}
+5. GET /api/ingestion/policy              200 (the screen still renders)
+```
+
+Step 3 is `merge` being one level deep — § 7 predicted it. **Step 4 is the half
+it did not**: `normalizePolicyInput` reads `current.pull.sources.map` off the
+policy it is handed, so once a `pull` block with no `sources` is stored, the
+Ingestion tab's own save button answers **500 for ever**. The operator sees the
+damage on a screen that cannot repair it, and the way back is hand-editing
+`config.json`.
+
+**What I learned that is written nowhere else.**
+
+1. **A validator is not a door until every writer goes through it, and the tell
+   is not "who calls the route".** It is *which fields of a shared write
+   function are clamped and which are not*. `saveConfig` clamps six things and
+   runs `sanitizeInventory`; `ingestion` sat four lines away with nothing, under
+   a comment explaining why that gap must not exist. Grepping for callers of
+   `normalizePolicyInput` finds the honest door and tells you nothing about the
+   dishonest one — what finds it is reading the write function's clamp list
+   against the config's section list.
+2. **A normalizer that reads its own `current` is only as sound as whatever
+   stored it.** The 500 is `normalizePolicyInput` poisoned by a policy it had
+   itself refused: the guard broken by exactly the input it exists to reject.
+   I deliberately did NOT harden it — after the fix every production caller
+   passes `getConfig().ingestion`, which is sanitized, so a guard there would be
+   written for a state it can no longer see.
+3. **Returning the door's COMPLETE policy onto the patch is what makes one
+   level of `merge` lossless.** The obvious fix for the data loss is a deeper
+   merge for this section; that is a second merge semantics to keep in step with
+   `merge`. `normalizePolicyInput` already overlays onto `current` and returns a
+   whole policy, so assigning it back to `body.ingestion` fixes the loss with no
+   new merge rule — one line, and it is mutation M4.
+4. **Two of the shapes are latent until the next RESTART, which is the worst
+   form.** `pull: null` → `syncPoller()` throws at `api.ts:107`; a string
+   `fastLane` → the startup log's `.join` throws at `api.ts:119`. Neither has a
+   catch above it. The save answers 200, the running console is fine, and the
+   container that restarts tomorrow does not come back. Worth remembering that
+   `api.ts`'s boot sequence reads config fields **bare** — it is not a place
+   where a malformed value degrades, it is a place where it terminates.
+5. **The accepted-but-wrong shapes are not cosmetic.** On `laneFor`:
+   `fastLane: []` → `critical=paced`, the one configuration `policy.ts` says in
+   its own words it exists to prevent; `fastLane: 'critical'` →
+   `critical=fast high=paced` via `String.prototype.includes`; `fastLane: 'low'`
+   inverts the policy; `delivery: 'firehose'` keeps hybrid lanes but makes
+   `onExpectedTransport` answer `true` for everything, so the *« arrived off its
+   lane »* observation this file offers INSTEAD of dropping an alert is off.
+6. **`vi.resetModules()`, not a cache-busting query, when a test needs a module
+   to see a module it imports.** My first probe measured five stored shapes by
+   importing `config.ts?bust=N` — and `runtime.ts`'s own
+   `import { getConfig } from '../config.ts'` kept resolving to the registry's
+   cached instance, so **every shape after the first was measured against the
+   first shape's configuration**, and `pull: null` was reported as not throwing
+   when it does. A ruler quietly measuring something else, the family this
+   project already carries for a contrast sampled during a theme cross-fade. The
+   sound forms are one process per shape (what I used to confirm the boot
+   throws) or `vi.resetModules()` (what the test uses).
+7. **The mutation pass corrected the diff, not just the tests.** The
+   `saveConfig` half of the second lock **SURVIVED** M2 at first, because the
+   route check already covered every reachable path — i.e. it was *two guards
+   where one suffices, a line no test can fail on*. The resolution was not to
+   delete it: `inventory.test.ts` already claims the analogous thing about its
+   own half (*« drops an unusable entry on the way in rather than storing it »*)
+   by driving the exported `saveConfig` directly, which IS the "caller that
+   skipped the route" the comment names. One test, and M2 dies.
+
+**Do not redo.**
+
+- **Do not harden `normalizePolicyInput` against a malformed `current`.** See
+  learning 2: unreachable after this change, so it is a guard for a state it
+  cannot see.
+- **Do not give the `ingestion` section a deeper `merge`.** See learning 3: a
+  second merge semantics, where assigning the complete policy costs one line.
+- **Do not make `sanitizePolicy` recover field by field.** It falls back to
+  `defaultPolicy()` WHOLE, which loses a stored source list on a refused
+  hand-edit — stated in the code, in § 7 and in the PR rather than hidden.
+  `normalizePolicyInput` is the only spelling of these rules and a partial
+  recovery is a second thing that can disagree with it; the fallback polls
+  nobody (`pull.enabled: false`), so it cannot dial an address nobody chose. If
+  a reviewer wants per-field recovery, that is them choosing a second
+  normalizer, and it is flagged as the decision for a human.
+- **Do not word the refusal a second time.** `api.ingestionRefused` prefixes
+  the consequence (*« Ingestion policy not saved. »*) onto
+  `normalizePolicyInput`'s own sentence; `PUT /api/ingestion/policy` answers
+  that same sentence bare. Two wordings of one reason is how the two start
+  disagreeing — mutation M7.
+- **The Settings screen does not send `ingestion`** (`SettingsPage.tsx:428`
+  sends console/assistant/auth/database/pipeline/webhook/tunnel/inventory), and
+  `/api/ingestion/policy` is where the policy is edited. So the route check is
+  inert on every product path today — which is *why* this was latent — and the
+  `getConfig`/`saveConfig` lock is what protects a live install. Do not conclude
+  from a green UI that the route half is untested; it is tested through the real
+  handler.
+
+**Verified** (commands run, output read, not assumed):
+
+- `npm ci` then `npm run typecheck` → **0 errors**; `npm test` → **1789 passed |
+  1 skipped (1790)**, 115 files, 34.42 s. Baseline on the same branch before any
+  change: **1772 passed | 1 skipped**.
+- `npm run build` → clean, `dist/assets/index-Bs5sfyph.css` **62.30 kB**, the
+  same hash the 10-28 entry recorded, which is what says no CSS moved.
+- The new file alone, **before** the fix: **12 failed | 4 passed**. The 4 are the
+  boundary claims that pass before AND after on purpose (a save mentioning no
+  `ingestion` leaves the policy identical, a healthy stored policy is read back
+  unchanged, a valid patch still applies, `normalizePolicyInput` is identity on
+  a healthy policy). After the fix: **17 passed**.
+- **Mutation, 7 mutations, control first, 7 killed**: second lock removed from
+  `getConfig` (3 red), from `saveConfig` (1 red — the test added for it),
+  the route check removed (7 red), the route refusing but not carrying the
+  complete policy (1 red), the lock normalising against itself instead of the
+  default (4 red), the fallback made silent (1 red), the settings door wording
+  the reason a second time (1 red). The harness reports **ERROR** on output it
+  cannot parse rather than a survival, and the control run is what proved it
+  parses — the lesson this project already paid for with `--reporter=basic`.
+- The chain re-measured after the fix: source table **survives**, step 4 is
+  **200**, and the two boot shapes log *« ingestion policy unusable as stored
+  (pull must be an object.) — falling back to the recommended default … »* and
+  do not throw.
+
 ## 2026-10-28 — Wednesday · Tests and QA
 
 **Subject**: **the Health tab's injection follow-up had no test at all, and two
