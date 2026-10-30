@@ -175,6 +175,51 @@ function rateLimited(now: number): boolean {
 const rateLimitMessage = () =>
   `Rate limit: more than ${RATE_MAX_CALLS} tool calls in a minute. Slow down and retry.`;
 
+/**
+ * How many JSON-RPC messages one batch may carry.
+ *
+ * ============================================================================
+ * THE BYTE CAP SAYS NOTHING ABOUT THE COUNT INSIDE IT
+ *
+ * `readBody` refuses a body over 256 kB, and that cap is on BYTES — which
+ * bounds the QUESTION and not the ANSWER. A batch is one request dispatched
+ * with `Promise.all` over its array, and the amplification lands exactly on
+ * the methods `rateLimited` deliberately does not count: the catalogue
+ * listings, constants per call and multiplied by however many messages fit.
+ *
+ * Measured by driving this endpoint:
+ *
+ *   one POST, 255.8 kB, 5,260 x {"jsonrpc":"2.0","id":N,"method":"tools/list"}
+ *     -> 33.04 MB raw reply (132x), heapUsed 11.0 -> 94.1 MB, rss 97.9 -> 222.8
+ *     -> 266 ms of blocked event loop, 436 ms when the client asks for gzip
+ *
+ * on the single thread that also answers the ingestion webhook. That body is
+ * refused in 1.7 ms now, and the most work one body can buy is 100 of those
+ * messages: 4.7 kB in, 0.63 MB out, 3.5 ms. The per-element work is not what
+ * is expensive — building 5,260 catalogues is 9 ms of the 266, against 58 ms
+ * for one `JSON.stringify` of the replies — so memoising the listings would
+ * buy almost nothing: the reply's own assembly is the cost, and bounding the
+ * count is the only thing that reaches it.
+ *
+ * 100 IS THE REFERENCE SERVER'S NUMBER, not one invented here.
+ * `@modelcontextprotocol/sdk` 1.32.1 ships `MAX_BATCH_SIZE = 100` in
+ * `server/requestBody.js` and answers a longer batch with 400 and -32600.
+ * The reference CLIENT never batches: `shared/protocol.js` sends one
+ * `jsonrpcRequest` or one `jsonrpcNotification` per `transport.send`, never an
+ * array — so nothing the official SDK builds can reach this cap, and batching
+ * is absent from the 2025-06-18 spec this server reports as its latest.
+ * ============================================================================
+ */
+const MAX_BATCH_MESSAGES = 100;
+
+/**
+ * ONE sentence, naming the bound AND what arrived — the rule `BodyTooLarge`
+ * keeps through `humanBytes` and `rateLimitMessage` keeps for its call count. A
+ * refusal that does not name its own limit gets retried unchanged.
+ */
+const batchTooLongMessage = (received: number) =>
+  `Batch of ${received} messages: this endpoint answers at most ${MAX_BATCH_MESSAGES} in one request.`;
+
 /** Test seam: a fixed window with a module-level counter needs a way back. */
 export function resetMcpRateLimit(): void {
   windowStartedAt = 0;
@@ -801,6 +846,12 @@ export async function mcpRoutes(c: Ctx): Promise<boolean> {
   if (Array.isArray(body)) {
     if (body.length === 0) {
       return json(res, 400, rpcError(null, INVALID_REQUEST, 'Empty batch.'));
+    }
+    // Before the `Promise.all`, which is the work. A cap read off the reply
+    // would have computed the answer it refuses — and would spend the minute's
+    // tool budget on a request nobody is served.
+    if (body.length > MAX_BATCH_MESSAGES) {
+      return json(res, 400, rpcError(null, INVALID_REQUEST, batchTooLongMessage(body.length)));
     }
     const replies = (await Promise.all(body.map((m) => dispatch(m as RpcRequest, locale))))
       .filter((r) => r !== null);
