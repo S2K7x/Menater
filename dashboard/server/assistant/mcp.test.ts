@@ -636,10 +636,25 @@ describe('the MCP endpoint — one budget for every door to the same work', () =
   /**
    * The sharp one. A batch is ONE request, so a per-call cap that a loop
    * respects is worth nothing if a single body can carry four hundred of them.
+   *
+   * THE VEHICLE CHANGED AND THE CLAIMS DID NOT. This was written with one body
+   * of four hundred `resources/read`, because that was a legal request; the
+   * message cap added below refuses it outright, and the describe block at the
+   * end of this file claims that refusal. What is asserted here is what was
+   * always being asserted — that the counter is consulted per ELEMENT inside a
+   * batch, that the budget it spends outlives the body, and that a later batch
+   * is refused whole — and it is asserted on batches the endpoint still
+   * answers. Four hundred in one body can no longer outrun a budget of 120 by
+   * construction, which is the cap doing its job rather than this test losing
+   * its subject.
    */
-  it('does not let one batched request outrun the cap', async () => {
-    const batch = Array.from({ length: 400 }, (_, i) => readTimeline(i));
-    const r = await call({ body: batch });
+  it('does not let a batched request outrun the cap', async () => {
+    // 100 is the batch cap and 120 the minute's budget, so the first body is
+    // served whole and the second one straddles the limit.
+    const first = await call({ body: Array.from({ length: 100 }, (_, i) => readTimeline(i)) });
+    expect(first.json.filter((x: any) => /rate limit/i.test(x?.error?.message ?? '')).length).toBe(0);
+
+    const r = await call({ body: Array.from({ length: 100 }, (_, i) => readTimeline(100 + i)) });
     const refused = r.json.filter((x: any) => /rate limit/i.test(x?.error?.message ?? '')).length;
     expect(refused).toBeGreaterThan(0);
     // And the budget it spent is gone for the next caller, not reset per body.
@@ -648,12 +663,12 @@ describe('the MCP endpoint — one budget for every door to the same work', () =
 
     // THE WINDOW IS A MINUTE, NOT A REQUEST. Refusing part of each batch while
     // handing every new body a fresh budget bounds nothing at all: the caller
-    // just sends another batch. A second one must be refused OUTRIGHT.
-    const second = await call({ body: Array.from({ length: 400 }, (_, i) => readTimeline(i)) });
-    const servedInSecond = second.json.filter(
+    // just sends another batch. A later one must be refused OUTRIGHT.
+    const third = await call({ body: Array.from({ length: 100 }, (_, i) => readTimeline(200 + i)) });
+    const servedInThird = third.json.filter(
       (x: any) => !/rate limit/i.test(x?.error?.message ?? ''),
     ).length;
-    expect(servedInSecond).toBe(0);
+    expect(servedInThird).toBe(0);
   });
 
   /* --- The boundary, claimed on purpose: these pass BEFORE and AFTER ----- */
@@ -683,5 +698,152 @@ describe('the MCP endpoint — one budget for every door to the same work', () =
       const { refused } = await spend(50, (i) => ({ jsonrpc: '2.0', id: i, method }));
       expect(refused, method).toBe(0);
     }
+  });
+});
+
+/* ------------------------------------------------------------------------
+ * The byte cap says nothing about the COUNT inside it
+ *
+ * `readBody` has refused a request body over 256 kB since the request-body
+ * trap was written down, and that cap is on BYTES. A JSON-RPC batch is one
+ * request dispatched with `Promise.all` over its array, so what the byte cap
+ * bounds is the QUESTION and not the ANSWER — and the amplification lands on
+ * the methods the rate limit deliberately does not count, the catalogue
+ * listings, which are constants per call and multiplied by however many fit.
+ *
+ * Measured by driving this endpoint, not by arithmetic over the source
+ * (ROADMAP § 7 said in its own words that nobody had driven it):
+ *
+ *   one POST, 255.8 kB, 5,260 × {"jsonrpc":"2.0","id":N,"method":"tools/list"}
+ *     -> 33.04 MB raw reply          (132x amplification)
+ *     -> heapUsed 11.0 -> 94.1 MB, rss 97.9 -> 222.8 MB
+ *     -> 266 ms of blocked event loop, 436 ms when the client asks for gzip
+ *
+ * On the single thread that also answers the ingestion webhook. `tools/call`
+ * is unaffected because `rateLimited` counts it; the listings are uncounted on
+ * purpose and the boundary tests above keep them that way, so the only axis
+ * left is how many messages ONE body may carry.
+ *
+ * 100 IS NOT A NUMBER THIS SUITE INVENTED. It is what the reference server
+ * enforces: `@modelcontextprotocol/sdk` 1.32.1 ships
+ * `MAX_BATCH_SIZE = 100` in `server/requestBody.js` and answers a longer
+ * batch with 400 and -32600. And the reference CLIENT never batches at all —
+ * `shared/protocol.js` calls `transport.send` with one `jsonrpcRequest` or one
+ * `jsonrpcNotification`, never an array — so no client the official SDK can
+ * build reaches this cap, and batching is gone from the 2025-06-18 spec that
+ * this server reports as its latest version.
+ *
+ * It is NOT asserted against the SDK here: the console API has one production
+ * dependency and importing another package's `node_modules` to pin a constant
+ * would be a second thing to keep in step. The provenance is this comment and
+ * the pull request.
+ * ---------------------------------------------------------------------- */
+
+describe('the MCP endpoint — one body, bounded in messages as well as bytes', () => {
+  beforeEach(async () => {
+    resetMcpRateLimit();
+    await configure({});
+  });
+
+  const listTools = (i: number) => ({ jsonrpc: '2.0', id: i, method: 'tools/list' });
+  const batchOf = (n: number, msg: (i: number) => unknown = listTools) =>
+    Array.from({ length: n }, (_, i) => msg(i + 1));
+
+  it('refuses a batch carrying more messages than it answers', async () => {
+    const r = await call({ body: batchOf(101) });
+    expect(r.status).toBe(400);
+    // A valid JSON document making an invalid request: -32600, the code the
+    // empty batch beside it already uses, and the one the reference server
+    // answers for this.
+    expect(r.json.error.code).toBe(-32600);
+  });
+
+  /**
+   * A refusal that does not name its own bound gets retried unchanged. The
+   * rule this endpoint's neighbours already keep: `BodyTooLarge` names the cap
+   * through `humanBytes`, and `rateLimitMessage` names the number of calls.
+   */
+  it('names the cap and what arrived, so the caller can fix it', async () => {
+    const r = await call({ body: batchOf(250) });
+    expect(r.json.error.message).toMatch(/250/);
+    expect(r.json.error.message).toMatch(/100/);
+  });
+
+  /**
+   * THE HALF THAT MATTERS: refused BEFORE the work, not after it.
+   *
+   * A cap checked after `Promise.all` would bound the REPLY and leave the
+   * answer already computed — and worse, it would spend the minute's tool
+   * budget on a request nobody is served. So an over-long batch of real tool
+   * calls must leave the budget untouched: a legal batch sent straight
+   * afterwards is served in full.
+   */
+  it('spends no tool budget on a batch it refused', async () => {
+    const callTool = (i: number) => ({
+      jsonrpc: '2.0', id: i, method: 'tools/call',
+      params: { name: 'get_setup_state', arguments: {} },
+    });
+    const refused = await call({ body: batchOf(200, callTool) });
+    expect(refused.status).toBe(400);
+
+    const legal = await call({ body: batchOf(100, callTool) });
+    expect(Array.isArray(legal.json)).toBe(true);
+    const served = legal.json.filter(
+      (x: any) => !/rate limit/i.test(x?.error?.message ?? ''),
+    ).length;
+    // 120 a minute is the budget; nothing was drawn before this body.
+    expect(served).toBe(100);
+  });
+
+  /**
+   * The vehicle the rate-limit test above used before this cap existed: a
+   * single body of four hundred `resources/read`. It proved a real property
+   * and the property is still proved there, on legal batches; what this claims
+   * is that the shape itself is now refused.
+   */
+  it('refuses the 400-message body that used to be served whole', async () => {
+    const r = await call({
+      body: batchOf(400, (i) => ({
+        jsonrpc: '2.0', id: i, method: 'resources/read',
+        params: { uri: 'menater://timeline' },
+      })),
+    });
+    expect(r.status).toBe(400);
+    expect(r.json.error.message).toMatch(/400/);
+  });
+
+  /* --- The boundary, claimed on purpose: these pass BEFORE and AFTER ----- */
+
+  /**
+   * An off-by-one here is the whole feature: a cap that refuses the length it
+   * advertises as allowed is a cap nobody can write a client against.
+   */
+  it('still answers a batch of exactly the cap', async () => {
+    const r = await call({ body: batchOf(100) });
+    expect(r.status).toBe(200);
+    expect(Array.isArray(r.json)).toBe(true);
+    expect(r.json).toHaveLength(100);
+  });
+
+  it('still answers an ordinary batch, and a lone request is not an array', async () => {
+    const small = await call({ body: batchOf(3) });
+    expect(small.status).toBe(200);
+    expect(small.json).toHaveLength(3);
+
+    const one = await call({ body: listTools(1) });
+    expect(one.status).toBe(200);
+    expect(Array.isArray(one.json)).toBe(false);
+    expect(one.json.result.tools.length).toBe(TOOLS.length);
+  });
+
+  /**
+   * The other end of the same array check, and it must keep its own sentence:
+   * "too many" and "none at all" are two different things for a client to fix.
+   */
+  it('still refuses an empty batch, in its own words', async () => {
+    const r = await call({ body: [] });
+    expect(r.status).toBe(400);
+    expect(r.json.error.message).toMatch(/empty batch/i);
+    expect(r.json.error.message).not.toMatch(/100/);
   });
 });

@@ -2456,33 +2456,68 @@ that is now unreachable — every production caller passes `getConfig().ingestio
 which is sanitized — so hardening it would be a guard written for a state it
 cannot see.
 
-### The MCP batch bounds its calls and not its reply
+### ~~The MCP batch bounds its calls and not its reply~~ — closed 2026-10-30
 
-Found in the same mapping pass, **not fixed**, same reason.
+Raised on 2026-10-27 with its own admission that **nobody had driven the
+endpoint**: *« Numbers above are arithmetic from the source, not a
+measurement. »* Driven now, and the arithmetic understated it in one direction
+and overstated it in another — both worth keeping, because the overstatement is
+what decided the fix.
 
-`rateLimited` was taught to count `resources/read` as well as `tools/call`
-because *« `resources/read` is the same work under another method name »* —
-and the fix measured a 179 kB batch of 2,000 `resources/read` as the reason. It
-counts CALLS. What is not bounded is **how many calls arrive in one body**:
-`dispatch` is mapped with `Promise.all` over the array, and the only check is
-that it is not empty.
+**What the entry had right.** `readBody` caps the body at 256 kB and that cap is
+on BYTES, so it bounds the QUESTION and not the ANSWER. `dispatch` is mapped
+with `Promise.all` over the array and the only check was that it is not empty,
+so the amplification lands exactly on the methods `rateLimited` deliberately
+does not count: the catalogue listings, constants per call, multiplied by
+however many messages fit. Measured per method, one 255.8 kB POST at the
+inbound cap:
 
-The amplification is in the REPLY, and it lands on the methods the rate limit
-deliberately does not count — *« the catalogue listings, which are constants »*,
-true per call and multiplied by however many fit in the 256 kB body.
-`{"jsonrpc":"2.0","id":1,"method":"tools/list"}` is about 46 bytes, so a few
-thousand fit, and each answer carries the whole fourteen-tool catalogue, which
-`respond.ts` then serialises in one `JSON.stringify` and, for a client that
-asked for it, one synchronous `gzipSync`. `completion/complete` is worse per
-element: it is uncounted by design (one call per keystroke) and arms a timer
-each time.
+| method | messages | raw reply | amplification | loop blocked |
+|---|---|---|---|---|
+| `tools/list` | 5,260 | **33.04 MB** | **132x** | **266 ms** (436 ms with gzip) |
+| `prompts/list` | 5,040 | 9.15 MB | 37x | 50 ms |
+| `resources/list` | 4,843 | 7.40 MB | 30x | 32 ms |
+| `initialize` | 2,859 | 5.33 MB | 21x | 46 ms |
+| `tools/call get_health` | 2,736 | 0.64 MB | 3x | 6 ms |
 
-It needs the bearer token and the endpoint is off by default — but a read-only
-token taking the console down is precisely what `rateLimited`'s own comment
-exists to prevent, and *« an agent in a loop »* is its stated threat. The
-honest fix is a cap on the array's length, which is a policy number somebody
-should choose rather than a number a night should invent. **Numbers above are
-arithmetic from the source, not a measurement**: I did not drive the endpoint.
+and `heapUsed 11.0 → 94.1 MB`, `rss 97.9 → 222.8 MB` on the worst one, on the
+single thread that also answers the ingestion webhook. `tools/call` is the flat
+row because `rateLimited` already counts it — the existing cap works, it was
+simply attached to the wrong axis for this shape.
+
+**What the entry got wrong, and it is the useful half.** It called
+`completion/complete` *« worse per element »*. It is the best row in the table:
+amplification **1x**, lag **0 ms**, an 88-byte reply. Its uncleared race timer
+is real — the loser of `Promise.race` is never cleared, so 1,586 of them fit in
+one body — and it is not what costs anything measurable. A guess about which
+element is expensive is a guess; the amplifier was the method whose reply is
+biggest, not the one that arms a timer.
+
+**The number is not one this project invented**, which is what the entry was
+hesitating over. `@modelcontextprotocol/sdk` 1.32.1 — the dependency this API
+deliberately does not take, whose protocol it implements — ships
+`MAX_BATCH_SIZE = 100` in `server/requestBody.js` and answers a longer batch
+with 400 and -32600, the same status and code the `Empty batch.` refusal beside
+it already uses. And its CLIENT never batches at all: `shared/protocol.js`
+calls `transport.send` with one `jsonrpcRequest` or one `jsonrpcNotification`,
+never an array, so nothing the official SDK builds can reach the cap — and
+batching is absent from the 2025-06-18 spec this server reports as its latest
+version. 100 is therefore the reference server's policy number, not a night's.
+
+**After**: the same 255.8 kB body answers **400 in 1.7 ms**, 137 bytes, heap
++1.1 MB. The most work one body can now buy is 100 × `tools/list` — 0.63 MB
+raw, 7,328 B gzipped, **3.5 ms**. Checked BEFORE the `Promise.all`, because a
+cap read off the reply would have computed the answer it refuses and would
+spend the minute's tool budget on a request nobody is served; that is the one
+mutation worth naming (M2).
+
+**What stays open, measured and deliberately not done.** Memoising the
+listings buys almost nothing: building 5,260 catalogues is **9 ms** of the
+266 ms, and one `JSON.stringify` of the replies is 58 ms — the reply's own
+assembly is the cost, so bounding the count is the only thing that reaches it.
+The listings also stay unmetered on purpose, which is a stated decision claimed
+by tests that pass before and after. And `completion/complete`'s uncleared
+timer is now bounded by the cap at 100 per body rather than fixed.
 
 ### The analysis relay has no deadline on either hop
 

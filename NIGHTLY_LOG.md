@@ -4,6 +4,201 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-10-30 — Friday · Performance and cost
+
+**Subject**: **the MCP endpoint's 256 kB body cap is on BYTES, and a JSON-RPC
+batch is bounded in bytes only.** ROADMAP § 7 raised this on 2026-10-27 and
+closed its own entry with *« Numbers above are arithmetic from the source, not a
+measurement: I did not drive the endpoint. »* Driven tonight: one 255.8 kB
+authenticated POST buys **33.04 MB of reply and 266 ms of blocked event loop**
+on the thread that also answers the ingestion webhook.
+
+**Result**: PR opened on `claude/sleepy-volta-bm5lb5`. One code file —
+`server/assistant/mcp.ts` (`MAX_BATCH_MESSAGES`, `batchTooLongMessage`, a
+three-line check before the `Promise.all`) — plus
+`server/assistant/mcp.test.ts` (**+7 tests**, and one pre-existing test
+re-driven), `ROADMAP.md` (the § 7 entry closed, kept with what it got wrong),
+`CLAUDE.md` (one traps row, the MCP architecture bullet, suite count
+1789 → 1796) and this journal. **No CSS, no catalogue key, no dependency, no
+colour, no token, no heading level, no class name**: the built stylesheet is
+byte-identical (`index-Bs5sfyph.css`, 62.30 kB) and nothing here reaches the
+browser bundle. VulnPipe not touched, so its suite was not run — its
+`node_modules` were installed only to READ the reference SDK.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-bm5lb5` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Fifty-seventh entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: the designated branch
+at 05398f3 (= `origin/main`) gave typecheck **0 errors**, **1789 passed |
+1 skipped** and a clean build, run after `npm ci` rather than assumed, and
+`list_pull_requests --state open` was empty. Of § 7's nine entries, two are
+Friday-shaped; this one is both a measured bill and a reproducible wrong
+behaviour, and it came with its own admission that nobody had driven it, which
+is Friday's *measure first* exactly. The other — *the analysis relay has no
+deadline on either hop* — is a missing deadline rather than a measured cost, so
+it stays open.
+
+**What the measurement says**, one POST at the inbound 256 kB cap, through the
+real `mcpRoutes`:
+
+| method | messages | raw reply | amplification | loop blocked |
+|---|---|---|---|---|
+| `tools/list` | 5,260 | **33.04 MB** | **132x** | **266 ms** (436 ms w/ gzip) |
+| `prompts/list` | 5,040 | 9.15 MB | 37x | 50 ms |
+| `resources/list` | 4,843 | 7.40 MB | 30x | 32 ms |
+| `initialize` | 2,859 | 5.33 MB | 21x | 46 ms |
+| `prompts/get` | 3,036 | 1.56 MB | 6x | 11 ms |
+| `tools/call get_health` | 2,736 | 0.64 MB | 3x | 6 ms |
+| `completion/complete` | 1,586 | 0.14 MB | 1x | 0 ms |
+| `ping` | 5,962 | 0.23 MB | 1x | 0 ms |
+
+plus `heapUsed 11.0 → 94.1 MB` and `rss 97.9 → 222.8 MB` on the worst row.
+After the cap the same body answers **400 in 1.7 ms**, 137 bytes, heap +1.1 MB;
+the most work one body can now buy is 100 × `tools/list` → 0.63 MB raw /
+7,328 B gzipped / **3.5 ms**.
+
+**What I learned that is written nowhere else.**
+
+1. **The number to choose against data was already enforced by the reference
+   implementation of the protocol we implement.** § 7 hesitated for a good
+   reason — *« a policy number somebody should choose rather than a number a
+   night should invent »* — and the answer was one directory away, in a package
+   this repository installs but the console deliberately does not depend on:
+   `@modelcontextprotocol/sdk` 1.32.1 ships `MAX_BATCH_SIZE = 100` in
+   `server/requestBody.js` and answers a longer batch with **400 and −32600**,
+   which is the same status and code the `Empty batch.` refusal beside ours
+   already uses. The generalisable move: before inventing a policy number for a
+   protocol, read what the reference server enforces for it.
+2. **And the reference CLIENT never batches at all**, which is what makes 100
+   safe rather than merely defensible. `shared/protocol.js` calls
+   `transport.send` with one `jsonrpcRequest` or one `jsonrpcNotification` —
+   never an array — so nothing the official SDK builds (which is what
+   `mcp-remote`, Claude Desktop, Claude Code, Cursor and VS Code all are) can
+   reach the cap; and batching was **removed from the 2025-06-18 spec** this
+   server reports as `LATEST_VERSION`. Verified by reading the installed
+   package, not from memory.
+3. **The first ruler understated the defect by 80× — and understating is the
+   dangerous direction.** My response double recorded its body as
+   `p.toString()`. `json()` hands `end()` a `Buffer`, and when the client
+   accepts gzip that Buffer is compressed bytes, so a 33 MB reply was measured
+   as **0.41 MB** and the amplification as **2×** — a number nobody would cross
+   the room for. I nearly filed "§ 7 overstated it, not worth a night". A test
+   double that stringifies bytes measures something else; the fix is to record
+   `Buffer.isBuffer(p) ? p.length : Buffer.byteLength(p)` and to re-run without
+   `accept-encoding` when you want the RAW size. Same family as a contrast
+   sampled during the theme cross-fade, and worse, because it argued for
+   inaction.
+4. **§ 7's own prose named the wrong element as the expensive one.** It called
+   `completion/complete` *« worse per element: uncounted by design and arms a
+   timer each time »*. Measured, it is the **cheapest row in the table** —
+   1× amplification, 0 ms lag, an 88-byte reply. Its uncleared race timer is
+   real (the loser of `Promise.race` is never cleared, so 1,586 of them fit in
+   one body) and it costs nothing measurable. The amplifier was simply the
+   method whose REPLY is biggest. A guess about which element is expensive is a
+   guess, even when the mechanism it names is true.
+5. **Memoising the listings would have been the wrong fix, and the split says
+   why.** Building 5,260 tool catalogues is **9 ms**; one `JSON.stringify` of
+   the replies is **58 ms**; the whole request is 266 ms. The per-element work
+   is not the cost — the reply's own assembly is — so a memo on `tools/list`
+   buys ~3 % and bounding the COUNT is the only thing that reaches it. Measured
+   before deciding, not after.
+6. **A pre-existing test's VEHICLE became illegal while its claim did not, and
+   mutation is what proved the adaptation was honest.** `does not let one
+   batched request outrun the cap` sent one body of 400 `resources/read` — legal
+   when written, refused now — so `r.json.filter` met an object and threw. It is
+   re-driven on two batches of 100 straddling the 120-a-minute budget: every
+   assertion kept, and the old vehicle preserved as a NEW claim (that shape is
+   refused). Four hundred in one body can no longer outrun a budget of 120 **by
+   construction**, which is the cap working rather than the test losing its
+   subject. What says this is not a weakened test is **M8**: unmeter
+   `resources/read` and that test goes red, exactly as it did before.
+7. **The cap had to refuse before the `Promise.all`, and that is not style.**
+   A cap read off the reply bounds the ANSWER and leaves it already computed —
+   and worse, it spends the minute's tool budget on a request nobody is served,
+   so a refused over-long batch of `tools/call` would deny the next legal one.
+   M2 moves the check after the map and exactly one test goes red: the one
+   written for it.
+
+**Found and NOT fixed.**
+
+- **`completion/complete` never clears the losing timer** of its
+  `Promise.race`, so each call arms a 1.5 s `setTimeout` that resolves into
+  nothing. It is now bounded at 100 per body by this cap instead of ~1,586, and
+  it measured 0 ms of lag, so it is a tidy-up and not a cost. Noted in § 7.
+- **The analysis relay still has no deadline on either hop** (§ 7). Unchanged
+  and re-read tonight: `proxyToVulnPipe` has no `AbortController` and `api.ts`
+  sets no `requestTimeout`/`headersTimeout`, so Node's defaults are the only
+  bound. It is a missing deadline, not a measured bill.
+- **The uncounted catalogue listings stay uncounted.** That is a stated
+  decision with boundary tests, and the cap is the axis that bounds them
+  without reopening it. I did not touch `rateLimited`.
+- **Standing leads, re-checked and unchanged**: the `Fold` summary's no-wrap
+  flex line at 320 px, the Guide's seventeen section titles not being headings,
+  the incident card's heading outline, the ninety-odd French strings in
+  `server/engine/`, `npm audit` not in CI, a write's 401 not reaching the
+  sign-in screen, `.vp-action`'s 36 px touch target, `MENATER_TEST_PG` still
+  never set, `src/i18n/dictionary.ts` at 7 % of the eager chunk.
+
+**Do not redo.**
+
+- **Do not memoise `tools/list` / `prompts/list` / `resources/list`.** Learning
+  5: the catalogue build is 9 ms of 266, so it buys ~3 % and adds an
+  invalidation for somebody to get wrong.
+- **Do not meter the catalogue listings to fix this.** They are constants and a
+  client is entitled to ask what a server offers; two tests claim that and pass
+  before AND after. The count of one body was the missing axis, not the budget.
+- **Do not raise the cap to keep the old 400-message test compiling.** Choosing
+  a security bound to protect a test is the wrong order. M7 (cap at 100,000) is
+  red precisely because the NUMBER is load-bearing, not only the mechanism.
+- **Do not word the over-long refusal and the empty-batch refusal the same
+  way.** *Too many* and *none at all* are two different things for a client to
+  fix; M6 replaces `Empty batch.` with the cap's sentence and goes red.
+- **Do not check the cap after the `Promise.all`.** Learning 7, and M2.
+- **Do not assert `MAX_BATCH_MESSAGES` against the SDK from a test.** The
+  console API has one production dependency, and importing another package's
+  `node_modules` to pin a constant is a second thing to keep in step. The
+  provenance is the comment in `mcp.ts` and the PR.
+- **Do not trust a response double's `body` for a SIZE.** Learning 3. Record
+  the Buffer length, and measure the raw size with no `accept-encoding`.
+
+**Verified** (Node 22.22.0, npm 10.9.4; every command run and its output read):
+
+| Command | Result |
+|---|---|
+| `npm ci` (dashboard) | clean |
+| `npm run typecheck` | **0 errors**, before and after |
+| `npm test` on the designated branch at 05398f3 | **1789 passed \| 1 skipped**, 115 files |
+| `npx vitest run server/assistant/mcp.test.ts`, fix NOT applied | **4 failed \| 37 passed** — exactly the four claims the change makes; the three boundary claims pass either way |
+| same file, fix applied | **41 passed** (the pre-existing 400-message test red in between, then re-driven) |
+| `npm test` with the fix | **1796 passed \| 1 skipped**, 115 files, 33.32 s |
+| `npm run build` | clean; `index-Bs5sfyph.css` **62.30 kB** byte-identical, no browser code touched |
+| the endpoint driven at the 256 kB cap, 9 methods, before | the table above |
+| the same body, after | **400 in 1.7 ms**, 137 B, heap +1.1 MB |
+| boundary driven | n=100 → **200 with 100 replies**; n=101 → **400** *« Batch of 101 messages: this endpoint answers at most 100 in one request. »* |
+| `VulnPipe` | **not touched**, suite not run |
+
+| Mutation | Result |
+|---|---|
+| CONTROL (unmutated) | GREEN, and the harness parses its own output |
+| M1 — the cap removed entirely | RED — 4 |
+| M2 — the cap checked AFTER `Promise.all` | RED — 1 (the test written for it) |
+| M3 — `>` becomes `>=` (off by one) | RED — 3 |
+| M4 — the refusal stops naming what arrived | RED — 2 |
+| M5 — the refusal stops naming the cap | RED — 1 |
+| M6 — `Empty batch.` reworded as the cap's sentence | RED — 1 |
+| M7 — the cap raised to 100,000 (number inert) | RED — 4 |
+| M8 — `resources/read` unmetered (the adapted test's own claim) | RED — 4 |
+| M9 — vacuity: every batch refused | RED — 5 |
+
+No model key and no database were needed. The three probes
+(`probe-mcp-batch`, `probe-mcp-after`, `probe-mcp-verify`) lived in
+`dashboard/scripts/` while I iterated and are deleted; `git status` shows only
+the five intended files.
+
 ## 2026-10-29 — Thursday · Bugs and technical debt
 
 **Subject**: **`PUT /api/settings` wrote the ingestion policy around
