@@ -859,6 +859,28 @@ stayed exactly where it was.*
 **What R does not do.** It adds no per-user layout preference; that is C1.5. It
 leaves the eight facts of a triage row intact: the table got shorter, not poorer.
 
+### C0.44 ✅ — The longest screen in the product, and one heading on it
+
+*The Guide is seventeen sections and a hundred-odd points, and the first thing
+somebody navigating with a screen reader does on a long document is list its
+headings. Measured in Chromium on the mounted tab, that list was `h1` —
+nothing else. The seventeen section titles were `<span class="soc-doc-title">`
+inside a `<summary>` and the four group labels `<span class="soc-kicker">`, so
+the whole reference was handed over as one undifferentiated block. C0.36 gave
+the console its level 1 and left the screen whose entire purpose is to be
+CONSULTED rather than read through with nothing under it.*
+
+| Point | Detail |
+|---|---|
+| **The level moves, the size does not** | `font: inherit` and `letter-spacing: inherit` on `.soc-doc-title`, so the title keeps the summary's own type — and `inherit` rather than the summary's numbers copied, because the 760 px block takes that summary from 0.94rem to 0.86rem and a copy would stop following it. Promoting the elements and skipping that rule is the silent half: 15.04px → 13.76px, weight 400 → 900, a 24.064px line box → 14.448px, a 12px margin inside a centred flex row, and the accordion 1805.75px → 1846.39px |
+| **Measured, not asserted** | 6 themes × 3 widths (1280 / 375 / 320) × 3 scenes, computed type and bounding box per element: **396 differences, every one of them the tag name**. Zero in font, weight, tracking, line box, geometry, panel height or horizontal overflow. The outline goes from `h1` to `h1 h2 h3 h3 h3 h2 h3 h3 h3 h3 h3 h3 h3 h3 h2 h3 h3 h3 h2 h3 h3 h3`, and under a filter to `h1 h2 h3 h2 h3 h3 h3 h3 h2 h3 h2 h3` — no skip either way |
+| **A heading inside a `<summary>` is exposed, open or closed** | Probed in Chromium 153 on five candidate markups before anything was written, because `CLARITY.md` § 8 records the opposite about a fold's CONTENT and the obvious reading of it rules this fix out. The summary is the disclosure control, not the content; its own role (`DisclosureTriangle`) and accessible name are unchanged by the promotion |
+| **The shape the HTML content model prefers is the wrong one** | A `<summary>` takes phrasing content *or* one heading element, so wrapping the whole summary is the tidy answer — and the heading is then named *« 01 The Alerts tab 9 points »*, i.e. after its number and its point count rather than after the section. The heading goes among the spans; the parser keeps it intact and the name is the title alone |
+| **A kicker that is also a heading** | The four group labels and the glossary-hits block name sections, so they are `h2` — and a kicker's whole point is not looking like one. `.soc-kicker` already wins the font, size, tracking, colour and margin; what a heading element adds and it does not declare is `font-weight` and `line-height`, which `h2.soc-kicker, .soc-panel h2.soc-kicker` takes back |
+| **The (0,2,1) member is durability, and the measurement says so** | The bare `h2.soc-kicker` renders **identically today** — it is (0,1,1), `.soc-panel h2` is (0,1,1), and it wins the tie only by sitting forty lines further down. Moved above that rule the bare form measures 16.384px → 13.312px on the glossary block: the defect back, from an edit touching neither the markup nor the rule. So the claim is read off `styles.css` rather than rendered, and the second member is what makes the cascade decide it — the `.soc-field.soc-check-field > span` lesson applied before it cost anything |
+| **Not every kicker is a heading** | The page head's stays a span: it sits above the `h1` that already names the screen, and promoting every kicker because two of them name sections would put a second heading on the one block that has its own. A test claims it, and passes before AND after |
+| **Unchanged** | No catalogue key, no colour, no token, no class name, no dependency. The render-blocking stylesheet grows **62,303 → 62,427 B raw and 11,489 → 11,516 B gzipped** — two declarations; the explanation costs nothing on the wire, the minifier strips it. 11 tests, 8 red on unmodified code and 3 green before AND after on purpose; **12 mutations, 12 killed**, with an unmutated control run first and again at the end |
+
 ### C0.43 ✅ — The injection follow-up, and the two reads it counted as answers
 
 *Health → Inject a test alert sends a real alert into the pipeline and then
@@ -2558,27 +2580,48 @@ the sign-in title's — a visual decision — or the step and its `DESIGN.md` ro
 go. Measured, if anybody wants the number: 16px → 44.8px at 1280, 28.8px at 375
 and 320, panel 278px → 304px, and no horizontal overflow at any of the three.
 
-### The Guide's seventeen section titles are not headings
+### ~~The Guide's seventeen section titles are not headings~~ — closed 2026-10-31
 
-Found while measuring C0.39, **not caused by it** — identical before and after.
-`Accessibility`-wise the Guide is the longest screen in the product, and
-`document.querySelectorAll('h1,h2,h3,h4')` over the mounted tab returns
-exactly **one** element: the page title. The seventeen section titles are
-`<span class="soc-doc-title">` inside a `<summary>`, and the four group labels
-are `<span class="soc-kicker">`. So somebody navigating by heading — the first
-thing a screen-reader user does on a long document — gets the whole Guide as
-one undifferentiated block, on the screen whose entire purpose is to be
-consulted rather than read through.
+Raised while measuring C0.39 and left here because *« what it costs is a
+decision about sizes »*. **It costs no such decision, and that is the half of
+this entry worth keeping.** The sizes do not have to move at all: the summary
+already sets the display face, the capitals and the size, so a heading that
+takes `font` and `letter-spacing` from it renders byte-for-byte as the span
+did. What the entry had right is that promoting the elements and stopping
+there is a silent typographic change — measured at 1280 px, an `h3` left to
+the cascade takes 13.76px where the summary says 15.04px, weight 900 for 400,
+0.8256px of tracking for none and a 14.448px line box for 24.064px, plus a
+12px bottom margin inside a centred flex row, and the accordion grows
+1805.75px → 1846.39px.
 
-It is the C0.36 family (*a heading level is a size AND an outline*) and it is
-**not** a one-line fix, which is why it is here. A `<summary>` may contain a
-heading, so the markup is available; what it costs is a decision about sizes,
-because `.soc-panel h2` and `.soc-panel h3` carry their own type scale and the
-fold's summary is already a three-column flex row (number, title, count,
-chevron). Promoting the title to `h2` without choosing that size changes the
-look of seventeen folds, and leaving the group labels as spans while the titles
-become `h2` makes the groups invisible to the same reader the change is for.
-Measured numbers for whoever takes it: 17 folds, 4 groups, 1 heading today.
+**Measured in Chromium 153 on the mounted tab**, heading nodes read out of CDP
+`Accessibility.getFullAXTree`:
+
+```
+BEFORE   h1
+AFTER    h1 h2 h3 h3 h3 h2 h3 h3 h3 h3 h3 h3 h3 h3 h2 h3 h3 h3 h2 h3 h3 h3
+```
+
+and over 6 themes × 3 widths × 3 scenes (idle, a search matching nothing, a
+search that filters) the before/after difference is **396 differences, 396 of
+them the TAG NAME** — zero in computed type, geometry, panel height or
+horizontal overflow.
+
+**Two things had to be probed rather than reasoned about, and both nearly ruled
+the fix out.** A heading inside a `<summary>` is exposed as a heading whether
+the fold is open or closed — `CLARITY.md` § 8 records the opposite fact about a
+fold's CONTENT, and the obvious reading of it says this cannot work; it is not
+the same place, the summary being the disclosure control. And the HTML content
+model actually prefers the shape that is WRONG here: a `<summary>` takes
+phrasing content *or* one heading element, so wrapping the whole summary is the
+tidy answer — and it names the fold *« 01 The Alerts tab 9 points »*, which is
+not the section's name. The heading sits among the spans, which the parser
+keeps intact and Chromium exposes named by the title alone.
+
+**What stays open**: nothing about the Guide's outline. The group labels and
+the glossary-hits block are level 2, the seventeen sections level 3, and the
+page-head kicker stays a span on purpose — it sits above the `h1` that already
+names the screen.
 
 ### A `Fold`'s summary is a no-wrap flex line — closed by C0.42, and NOT the way this entry proposed
 

@@ -4,6 +4,185 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-10-31 — Saturday · Interface, clarity, accessibility
+
+**Subject**: **the Guide — seventeen sections, a hundred-odd points, and one
+heading on the whole screen.** ROADMAP § 7 raised it while measuring C0.39 and
+parked it as *« not a one-line fix [...] what it costs is a decision about
+sizes »*. It costs no such decision, and that is the correction this night
+carries.
+
+**Result**: PR opened on `claude/sleepy-volta-gbednh`. Two code files —
+`src/components/DocsPanel.tsx` (three tag names: `span` → `h2` on the four
+group labels and the glossary-hits block, `span` → `h3` on the seventeen
+section titles) and `src/styles.css` (two rules, 124 raw bytes) — plus
+`src/components/heading-outline.test.tsx` (**+11 tests**, in the file whose
+whole subject this is), `ROADMAP.md` (§ 7 entry closed with what it got wrong,
+C0.44 delivered), `CLAUDE.md` (two traps rows, suite count 1796 → 1807, the
+Guide's tab row), `CLARITY.md` (one § 7 method block, two § 8 rows) and this
+journal. **No catalogue key, no colour, no token, no class name, no
+dependency, no new heading SIZE.** VulnPipe not touched, so its suite was not
+run.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-gbednh` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Fifty-eighth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: the designated branch
+at 337edac (= `origin/main`) gave typecheck **0 errors**, **1796 passed |
+1 skipped** and a clean build, run after `npm ci` rather than assumed, and
+`list_pull_requests --state open` was empty. Of § 7's open entries this is the
+only Saturday-shaped one that is an accessibility DEFECT rather than a design
+decision for a human (the incident card's outline and the `h1` size step are
+explicitly the latter, and they stay open).
+
+**What the measurement says.** Chromium 153.0.8010.12, heading nodes out of
+CDP `Accessibility.getFullAXTree`, the Guide mounted with its real catalogue:
+
+```
+BEFORE   h1
+AFTER    h1 h2 h3 h3 h3 h2 h3 h3 h3 h3 h3 h3 h3 h3 h2 h3 h3 h3 h2 h3 h3 h3
+under a filter   h1 h2 h3 h2 h3 h3 h3 h3 h2 h3 h2 h3
+```
+
+and the whole before/after diff over **6 themes × 3 widths (1280/375/320) ×
+3 scenes**, computed type and bounding box per element: **396 differences, 396
+of them the TAG NAME.** Zero in font, weight, tracking, line box, geometry,
+panel height or horizontal overflow.
+
+**What I learned that is written nowhere else.**
+
+1. **`Accessibility.getFullAXTree`'s flat node list is NOT in document order,
+   and this project has been reading outlines off it.** My first run reported
+   `h2 h2 h2 h2 h1 h3 …` — the four group labels before the page title — which
+   reads as a markup defect and is a defect in the ruler. A control page whose
+   order was known settled it: `H1 H2 H3 H2 H3` came back as
+   `h2 h2 h1 h3 h3`. Walking `childIds` from `nodes[0]` gives the right answer.
+   `heading-outline.test.tsx`'s own header quotes per-tab sequences
+   (`HEALTH h2 h2 h2 h2 h3 h3 h3 h2`) read that way: their multisets and their
+   `h1` counts stand, **the ORDER in those notes does not**. Same family as a
+   contrast sampled during the theme cross-fade, and I nearly filed a
+   non-existent defect off it.
+2. **§ 7's stated cost was wrong, and the right answer was already in
+   `CLARITY.md` § 2.** The entry said promoting the titles means choosing new
+   sizes because `.soc-panel h2`/`h3` carry their own scale. But the look of a
+   Guide fold comes from the SUMMARY — display face, capitals, 0.94rem — so
+   `font: inherit` and `letter-spacing: inherit` on the title make the level
+   move and nothing else. *« A size may stay where a level moves »* is § 2's
+   own sentence, written for the Settings checklist; applied here it dissolves
+   the blocker that kept this entry open for three weeks. **`inherit` and not
+   the summary's numbers copied**: the 760 px block takes that summary to
+   0.86rem, and a copy would silently stop following it.
+3. **A heading inside a `<summary>` IS exposed, open or closed — and
+   `CLARITY.md` § 8 reads as saying it is not.** That row records a closed
+   `<details>`'s CONTENT being absent from the accessibility tree, which is
+   true and is a different place: the summary is the disclosure control.
+   Probed on five candidate markups in both states before a line was written.
+   **And the shape the HTML content model prefers is the wrong one**: a
+   `<summary>` takes phrasing content *or* one heading element, so wrapping the
+   whole summary is the tidy answer — and the heading is then named
+   *« 01 The Alerts tab 9 points »*, after its number and its point count
+   instead of after the section. The heading goes among the spans; the parser
+   keeps it intact, the name is the title alone, and the summary's own role
+   (`DisclosureTriangle`) and accessible name do not move.
+4. **The (0,2,1) selector is durability, and measuring is what made the comment
+   honest.** I wrote that `.soc-panel h2.soc-kicker` *had* to be (0,2,1)
+   because `.soc-panel .soc-kicker` (0,2,0) declares no line height. Measured,
+   the bare `h2.soc-kicker` renders **identically**: it ties with
+   `.soc-panel h2` at (0,1,1) and wins only by sitting forty lines further
+   down the sheet. Moved above that rule, the glossary block goes 16.384px →
+   13.312px — the defect back, from an edit touching neither the markup nor the
+   rule. So the second member is right for the reason CLAUDE.md already records
+   for `.soc-field.soc-check-field > span`, not for the reason I first gave;
+   the rule stands and the comment changed.
+5. **The natural outline assertion is green on the defect.** *« No level is
+   skipped, in document order »* passes perfectly over ONE heading — there is
+   no second one to skip anything. It was green on unmodified `main` until I
+   gave it a floor (`>= 22` headings). Running the new tests against the
+   unfixed screen is what found it: 8 of 11 red, and this was one of the three
+   that were not, beside the two boundary claims that are meant to pass.
+6. **My own mutation harness mis-reported twelve kills as harness errors.** Its
+   error detector grepped for `Error`, which matches every `AssertionError`
+   vitest prints. Last night's journal states the rule — *a harness that cannot
+   parse its own result must report an ERROR, never a survival* — and mine
+   failed in the safe direction, but a ruler that cannot tell a kill from a
+   crash is still a broken ruler. It reads the `Tests` summary line and nothing
+   else now, and reports a missing summary as an error.
+
+**Found and NOT fixed.**
+
+- **The page-head kicker stays a span, deliberately.** It sits above the `h1`
+  that already names the screen. A test claims it and passes before AND after.
+- **Standing leads, re-checked and unchanged**: the incident card's heading
+  outline and the unused `h1` size step (both § 7, both explicitly design
+  decisions for a human), the ninety-odd French strings in `server/engine/`,
+  the analysis relay's missing deadline, `npm audit` not in CI, a write's 401
+  not reaching the sign-in screen, `.vp-action`'s 36 px touch target,
+  `MENATER_TEST_PG` still never set, `src/i18n/dictionary.ts` at 7 % of the
+  eager chunk, `completion/complete`'s uncleared race timer.
+- **The console still has no automated narrow-width sweep** (`CLARITY.md` § 9
+  point 9). My harness measured 320/375/1280 px on one screen and was deleted
+  with the session, as that file prescribes. The marketing site has
+  `site/check.cjs`; the console does not.
+
+**Do not redo.**
+
+- **Do not read a heading outline off `getFullAXTree().nodes`.** Learning 1.
+  Walk `childIds` from the root, and treat an order the markup cannot produce
+  as a bug in the instrument.
+- **Do not wrap the whole `<summary>` in the heading**, however much the HTML
+  content model prefers it. Learning 3: it names the fold after its number and
+  its point count.
+- **Do not choose new sizes for the Guide's titles.** Learning 2. The scale
+  does not have to move, and moving it is a look somebody has to choose —
+  which is what kept this entry closed for three weeks.
+- **Do not write the kicker rule as a bare `h2.soc-kicker`.** Learning 4. It
+  works today and only because of source order.
+- **Do not promote the page-head kicker.** Two kickers name sections; that one
+  does not.
+- **Do not assert a « no skipped level » claim without a floor on the number
+  of headings walked.** Learning 5.
+
+**Verified** (Node 22.23.4, npm 10.9.4, Chromium 153.0.8010.12; every command
+run and its output read):
+
+| Command | Result |
+|---|---|
+| `npm ci` (dashboard) | clean |
+| `npm run typecheck` | **0 errors**, before and after |
+| `npm test` on the designated branch at 337edac | **1796 passed \| 1 skipped**, 115 files |
+| `npx vitest run heading-outline.test.tsx`, fix reverted (markup AND css) | **8 failed \| 24 passed** — and the three green ones are two deliberate boundaries plus the vacuous claim of learning 5, which is why it gained a floor |
+| same file, fix applied | **32 passed** |
+| `npm test` with the fix | **1807 passed \| 1 skipped**, 115 files, 37.01 s |
+| `npm run build` | clean; render-blocking sheet **62,303 → 62,427 B raw, 11,489 → 11,516 B gzipped** (two declarations; the minifier strips the comments) |
+| the Guide driven in Chromium, before/after | **396 differences, 396 of them the tag name**; outline `h1` → `h1 h2 h3…`; overflow 0 at 1280, 375 and 320 px; `innerText` heading sweep `[]` |
+| the bare-class variant, measured | identical in place; **16.384 → 13.312px** moved above `.soc-panel h2` |
+| `VulnPipe` | **not touched**, suite not run |
+
+| Mutation | Result |
+|---|---|
+| CONTROL (unmutated), run first AND last | GREEN both times |
+| M1 — group label back to a `span` | RED — 4 |
+| M2 — section title back to a `span` | RED — 4 |
+| M3 — glossary kicker back to a `span` | RED — 1 |
+| M4 — title promoted to `h2` (a skip under the group) | RED — 1 |
+| M5 — group promoted to `h1` (two level-1 titles) | RED — 5 |
+| M6 — the heading moved OUT of the summary | RED — 1 |
+| M7 — the title's whole font reset dropped | RED — 1 |
+| M8 — only `font: inherit` dropped | RED — 1 |
+| M9 — the kicker-as-heading rule dropped | RED — 2 |
+| M10 — that rule written as a bare class | RED — 2 |
+| M11 — the summary loses its display register | RED — 1 |
+| M12 — vacuity: no section renders at all | RED — 5 |
+
+No model key and no database were needed. The throwaway preview page
+(`preview-guide.html` + `src/preview-guide.tsx`, the device `CLARITY.md` § 7
+prescribes) and the four probe scripts lived outside the repository or were
+deleted in the same session; `git status` shows only the seven intended files.
+
 ## 2026-10-30 — Friday · Performance and cost
 
 **Subject**: **the MCP endpoint's 256 kB body cap is on BYTES, and a JSON-RPC
@@ -555,7 +734,7 @@ methods are spied, the clock is faked, and the browser probes read this
 repository's own `dist/`. The probes (`probe-warn-note.mjs`,
 `probe-screen.mjs`, `mutate.py`) and the throwaway preview test that dumped the
 component's markup for Chromium lived in the scratchpad and are **deleted** —
-`git status` shows only the six intended files.
+`git status` shows only the seven intended files.
 
 ## 2026-10-27 — Tuesday · Security
 

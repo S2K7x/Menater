@@ -386,3 +386,231 @@ describe('the three sizes are addressed at the three levels', () => {
     expect(new Set([page, section, block]).size).toBe(3);
   });
 });
+
+/* ==========================================================================
+ * The Guide: seventeen sections, four groups, and one heading between them
+ *
+ * C0.36 gave the console its level 1 and left the longest screen in the
+ * product with nothing under it. Measured in Chromium 153 on the mounted tab,
+ * reading the heading nodes out of CDP `Accessibility.getFullAXTree`:
+ *
+ *     BEFORE   h1
+ *     AFTER    h1 h2 h3 h3 h3 h2 h3 h3 h3 h3 h3 h3 h3 h3 h2 h3 h3 h3 h2 h3 h3 h3
+ *
+ * One heading for a hundred-odd points: the seventeen section titles were
+ * `<span class="soc-doc-title">` and the four group labels
+ * `<span class="soc-kicker">`, so somebody navigating by heading — the first
+ * thing a screen-reader user does on a long document — was handed the whole
+ * Guide as one undifferentiated block.
+ *
+ * Three things these tests are shaped around.
+ *
+ * ONE — the claim is the OUTLINE, never the size. Measured over 6 themes x 3
+ * widths x 3 scenes (idle, a search that matches nothing, a search that
+ * filters), the only difference between before and after is the TAG NAME:
+ * 396 differences, 396 of them `_tag`, and zero in computed type, geometry,
+ * panel height or horizontal overflow. That is what the two stylesheet
+ * assertions below protect — promoting the elements WITHOUT them is a silent
+ * typographic change (the title loses 15.04px for 13.76px, weight 400 for
+ * 900, a 24.064px line box for 14.448px and gains a 12px bottom margin inside
+ * a centred flex row; the accordion grows 1805.75px -> 1846.39px).
+ *
+ * TWO — a heading inside a `<summary>` is exposed, and a closed fold does not
+ * hide it. That had to be PROBED rather than assumed, because `CLARITY.md`
+ * § 8 records the opposite fact about a fold's CONTENT — a closed
+ * `<details>`'s content is absent from the accessibility tree — and the
+ * obvious reading of it is that this fix cannot work. It is not the same
+ * place: the summary is the disclosure control, not the content. Probed in
+ * Chromium 153 on five candidate markups, open and closed:
+ *
+ *     <summary><span>01</span><h3>T</h3><span>9 points</span></summary>
+ *         -> heading level 3, name "T", open=false AND open=true
+ *     the same summary with the heading wrapped round everything
+ *         -> heading named "01 T 9 points", which is not the section's name
+ *     today's markup, spans only
+ *         -> no heading at all, either state
+ *
+ * and the `<summary>`'s own role (`DisclosureTriangle`) and accessible name
+ * are unchanged by the promotion. The heading wrapping the whole summary is
+ * the plausible wrong shape — it is the one the HTML content model actually
+ * prefers — and it names the fold after its number and its point count.
+ *
+ * THREE — not every kicker is a heading, and the page head is the proof. Its
+ * kicker sits above the `h1` that names the screen, so promoting it would put
+ * a second heading on the one block that already has its own. The claim that
+ * it stays a span passes BEFORE and AFTER, on purpose.
+ * ========================================================================== */
+
+/** The Guide's headings, in document order, each tagged with what it names. */
+type GuideHead = { lvl: number; text: string; kind: 'title' | 'group' | 'glossary' | 'page' | 'other'; inSummary: boolean };
+
+const guideOutline = (root: HTMLElement): GuideHead[] =>
+  [...root.querySelectorAll('h1,h2,h3,h4,h5,h6')].map((h) => ({
+    lvl: Number(h.tagName[1]),
+    text: (h.textContent ?? '').replace(/\s+/g, ' ').trim(),
+    kind: h.classList.contains('soc-doc-title')
+      ? 'title'
+      : h.classList.contains('soc-doc-group-label')
+        ? 'group'
+        : h.closest('.soc-doc-glossary')
+          ? 'glossary'
+          : h.closest('.soc-page-head')
+            ? 'page'
+            : 'other',
+    inSummary: h.parentElement?.tagName === 'SUMMARY',
+  }));
+
+const searchGuide = async (text: string) => {
+  const { userEvent } = await import('@testing-library/user-event');
+  const field = screenQuery('Search the guide');
+  await userEvent.clear(field);
+  if (text) await userEvent.type(field, text);
+};
+
+/** `screen` is not imported in this file; the field is found on the document. */
+function screenQuery(label: string): HTMLElement {
+  const field = document.querySelector<HTMLElement>(`[aria-label="${label}"]`);
+  expect(field, `no field labelled ${label}`).toBeTruthy();
+  return field!;
+}
+
+describe('the Guide has an outline, not one heading and a hundred labels', () => {
+  it('names each of its four groups at level 2', () => {
+    const heads = guideOutline(render(<DocsPanel />).container);
+    const groups = heads.filter((h) => h.kind === 'group');
+    // Non-vacuity: four groups render, and the claim says nothing without them.
+    expect(groups).toHaveLength(4);
+    for (const g of groups) expect(g.lvl).toBe(2);
+  });
+
+  it('names each of its seventeen sections at level 3, inside the fold it opens', () => {
+    const heads = guideOutline(render(<DocsPanel />).container);
+    const titles = heads.filter((h) => h.kind === 'title');
+    expect(titles).toHaveLength(17);
+    for (const t of titles) {
+      expect(t.lvl).toBe(3);
+      // The heading is the summary's own child: that is what keeps it in the
+      // accessibility tree while the fold is CLOSED, and what keeps the
+      // summary's accessible name the section's title. Probed — see the
+      // header.
+      expect(t.inSummary, `${t.text} is not inside its summary`).toBe(true);
+    }
+  });
+
+  it('puts no section and no group at the page title\'s level', () => {
+    const heads = guideOutline(render(<DocsPanel />).container);
+    const title = heads.find((h) => h.kind === 'page');
+    expect(title?.lvl).toBe(1);
+    const rest = heads.filter((h) => h.kind !== 'page');
+    // Lesson TWO of this file's header: the peer claim is made RELATIVE to the
+    // title. « Every section is below level 1 » would have passed over the
+    // whole C0.36 defect, because 2 is greater than 1.
+    expect(rest.length).toBeGreaterThanOrEqual(21);
+    for (const h of rest) expect(h.lvl).toBeGreaterThan(title!.lvl);
+  });
+
+  it('skips no level, in document order', () => {
+    const heads = guideOutline(render(<DocsPanel />).container);
+    // The non-vacuity guard, and it is not tidiness: on the unfixed screen
+    // this claim passes PERFECTLY, because one heading cannot skip a level.
+    // A « no skip » assertion over an outline with no outline in it is the
+    // reassurance-over-a-hole this product refuses everywhere else.
+    expect(heads.length).toBeGreaterThanOrEqual(22);
+    let prev = heads[0]!.lvl;
+    expect(prev).toBe(1);
+    for (const h of heads.slice(1)) {
+      expect(h.lvl, `${h.text} after level ${prev}`).toBeLessThanOrEqual(prev + 1);
+      prev = h.lvl;
+    }
+  });
+
+  it('skips no level under a filter either', async () => {
+    // A search re-cuts the page: groups disappear whole, and a group that
+    // survives keeps only some of its sections. A filtered outline measured
+    // `h1 h2 h3 h2 h3 h3 h3 h3 h2 h3 h2 h3` — no group left without its level,
+    // no section left as the first heading under the page title.
+    const { container } = render(<DocsPanel />);
+    await searchGuide('approval');
+    const heads = guideOutline(container);
+    expect(heads.filter((h) => h.kind === 'title').length).toBeGreaterThan(0);
+    expect(heads.filter((h) => h.kind === 'group').length).toBeGreaterThan(0);
+    // Non-vacuity the other way: the filter really did hide something.
+    expect(heads.filter((h) => h.kind === 'title').length).toBeLessThan(17);
+    let prev = heads[0]!.lvl;
+    for (const h of heads.slice(1)) {
+      expect(h.lvl, `${h.text} after level ${prev}`).toBeLessThanOrEqual(prev + 1);
+      prev = h.lvl;
+    }
+  });
+
+  it('names the glossary answers at level 2 as well', async () => {
+    // « shadow » is the search that found this block in the first place: the
+    // Guide calls it watch-only mode, so no section matches and the glossary
+    // is the whole answer. A block that IS the answer and carries no heading
+    // is unreachable to the reader this pass is for.
+    const { container } = render(<DocsPanel />);
+    await searchGuide('shadow');
+    const heads = guideOutline(container);
+    const glossary = heads.filter((h) => h.kind === 'glossary');
+    expect(glossary).toHaveLength(1);
+    expect(glossary[0]!.lvl).toBe(2);
+  });
+
+  it('leaves the page head\'s kicker a span', () => {
+    // Passes before AND after. The kicker sits above the `h1` that names the
+    // screen: promoting every kicker because two of them name sections would
+    // put a second heading on the one block that already has its own.
+    const { container } = render(<DocsPanel />);
+    const kicker = container.querySelector('.soc-page-head .soc-kicker');
+    expect(kicker).toBeTruthy();
+    expect(kicker!.tagName).toBe('SPAN');
+  });
+});
+
+describe('the Guide\'s headings keep the type they had', () => {
+  it('takes the section title\'s font from the summary, not from the h3 scale', () => {
+    // The half a mutation reaches: promoting the element and skipping this
+    // rule is a silent change on seventeen folds. `font: inherit` rather than
+    // the summary's numbers copied, because the 760px block takes that
+    // summary to 0.86rem and a copy would stop following it.
+    const rule = SHEET.match(/\n\.soc-doc-title \{([^}]*)\}/)?.[1] ?? '';
+    expect(rule).toMatch(/font:\s*inherit/);
+    expect(rule).toMatch(/letter-spacing:\s*inherit/);
+    expect(rule).toMatch(/margin:\s*0/);
+  });
+
+  it('gives a kicker that is also a heading back its weight and line height', () => {
+    // `.soc-kicker` already declares the font, the size, the tracking, the
+    // colour and the margin; what a heading element adds and it does not is
+    // `font-weight` and `line-height`.
+    const rule = SHEET.match(/h2\.soc-kicker,\s*\.soc-panel h2\.soc-kicker \{([^}]*)\}/)?.[1] ?? '';
+    expect(rule).toMatch(/font-weight:\s*inherit/);
+    expect(rule).toMatch(/line-height:\s*inherit/);
+  });
+
+  it('names the element for the kicker inside a panel', () => {
+    // A CLAIM ABOUT DURABILITY, AND IT IS HONEST ABOUT TODAY. Measured in
+    // Chromium, the bare `h2.soc-kicker` renders IDENTICALLY: it is (0,1,1),
+    // `.soc-panel h2` is (0,1,1), and the bare form wins the tie only by
+    // sitting forty lines further down the sheet. Moved above that rule it
+    // measures 16.384px -> 13.312px on the glossary block — the defect back,
+    // from an edit that touched neither the markup nor this rule. So this
+    // assertion cannot be made as a rendering one in jsdom, which applies no
+    // cascade, and it would be vacuous as one in a browser: it is read off
+    // `styles.css`, the way the `.soc-setup` claim above it is. (0,2,1) is
+    // what makes the cascade decide it — the `.soc-field.soc-check-field >
+    // span` lesson, paid for once already.
+    expect(SHEET).toMatch(/\.soc-panel h2\.soc-kicker/);
+  });
+
+  it('leaves the fold\'s own register on the summary', () => {
+    // Passes before AND after. The Guide's titles look the way they do
+    // because the SUMMARY sets the display face, the capitals and the size —
+    // not because a heading scale reached them. A change that moved that onto
+    // the heading would pass every assertion above and alter the screen.
+    const rule = SHEET.match(/\.soc-doc summary \{([^}]*)\}/)?.[1] ?? '';
+    expect(rule).toMatch(/font-family:\s*var\(--display\)/);
+    expect(rule).toMatch(/text-transform:\s*uppercase/);
+    expect(rule).toMatch(/font-size:\s*0\.94rem/);
+  });
+});

@@ -904,7 +904,21 @@ code, .soc-mono { font-family: var(--mono); }
   font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.14em;
   color: var(--faint); flex: none;
 }
-.soc-doc-title { flex: 1; }
+/*
+ * The section title is the Guide's level-3 heading, and the LEVEL is the only
+ * thing that moves: `font` and `letter-spacing` come from the summary it sits
+ * in, so the seventeen folds look exactly as they did. Measured at 1280 px,
+ * left to the cascade an `h3` takes 13.76px where the summary says 15.04px,
+ * weight 900 for 400, 0.8256px of tracking for none, a 14.448px line box for
+ * 24.064px and a 12px bottom margin inside a centred flex row — and the
+ * accordion grows 1805.75px -> 1846.39px.
+ *
+ * `font: inherit` rather than the summary's numbers written out: the 760px
+ * block below takes that summary to 0.86rem, and a copied size would stop
+ * following it. A bare class is enough here, unlike `.soc-field span`: what it
+ * has to beat is `h3` and `h1, h2, h3`, which are ELEMENT rules at (0,0,1).
+ */
+.soc-doc-title { flex: 1; font: inherit; letter-spacing: inherit; margin: 0; }
 
 /* The chevron rotates on opening: that is the cue the block folds away. */
 .soc-doc summary .soc-icon { color: var(--muted); transition: transform 0.15s ease; }
@@ -2441,6 +2455,33 @@ code, .soc-mono { font-family: var(--mono); }
 
 /* Level 3. */
 h3 { font-size: 0.86rem; letter-spacing: 0.06em; }
+
+/*
+ * A KICKER THAT IS ALSO A HEADING.
+ *
+ * The Guide's four group labels and its glossary-hits block name sections of
+ * the longest screen in the product, so they are level 2 — and a kicker's
+ * whole point is that it does not look like one. `.soc-kicker` already wins
+ * the font, the size, the tracking, the colour and the margin; what a heading
+ * element adds and the kicker does not declare is `font-weight` and
+ * `line-height`, which is what these two take back. Measured: weight 400 ->
+ * 900 on both, and the line box 18.432px -> 12.096px on a group label,
+ * 16.384px -> 13.312px on the glossary block.
+ *
+ * THE SECOND MEMBER IS WHY THIS IS NOT A BARE `h2.soc-kicker`, and the reason
+ * was measured rather than reasoned: `.soc-panel .soc-kicker` (0,2,0) wins the
+ * size and the tracking but declares no line height, so what reaches the
+ * glossary block is `.soc-panel h2` (0,1,1) just above — and `h2.soc-kicker`
+ * is (0,1,1) too. It TIES, and today it wins only by sitting forty lines
+ * further down. Moved above that rule, the bare form measures 16.384px ->
+ * 13.312px on the glossary block, i.e. the defect back. (0,2,1) wins by
+ * SPECIFICITY, which the next edit to this sheet cannot silently change —
+ * the `.soc-field.soc-check-field > span` lesson, applied before it costs
+ * anything. The first member covers the group labels, which render outside
+ * any panel and where nothing competes.
+ */
+h2.soc-kicker,
+.soc-panel h2.soc-kicker { font-weight: inherit; line-height: inherit; }
 
 /*
  * The kicker keeps its job — naming the question a section answers — and loses
