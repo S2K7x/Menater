@@ -248,14 +248,10 @@ No model key and no database were needed. The throwaway preview page
 prescribes) and the four probe scripts lived outside the repository or were
 deleted in the same session; `git status` shows only the seven intended files.
 
-**One operational trap, for whoever runs the next night.** `NIGHTLY.md` § 6's
-own sending snippet slices the message at `[:1800]` — **characters, silently,
-mid-word**. Tonight's summary was 1,907 characters, so Discord answered `204`
-over a message whose last sentence had been cut off: delivered, confirmed, and
-incomplete, with nothing in the HTTP code to say so. The tail went out as a
-second message. Measure `len(text)` before posting, not the file's byte count
-(accents make those differ — 1,973 bytes for 1,907 characters here), and treat
-a `204` as proof the message ARRIVED, never as proof it was whole.
+**One operational trap found after this PR had merged**: `NIGHTLY.md` § 6's own
+sending snippet cut this night's Discord summary in half and Discord answered
+`204` anyway. It has its own entry above — *2026-10-31 (follow-up)* — because
+closing it needed a second pull request.
 
 ## 2026-10-30 — Friday · Performance and cost
 
