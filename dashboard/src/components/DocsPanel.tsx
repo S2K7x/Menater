@@ -287,7 +287,7 @@ export function DocsPanel({ openSection }: { openSection?: string | null }) {
 
       {glossaryHits.length > 0 ? (
         <section className="soc-panel soc-doc-glossary">
-          <span className="soc-kicker">{d.glossaryHits}</span>
+          <h2 className="soc-kicker">{d.glossaryHits}</h2>
           <dl className="soc-doc-list">
             {glossaryHits.map(([key, entry]) => (
               <div key={key} className="soc-doc-point">
@@ -318,7 +318,7 @@ export function DocsPanel({ openSection }: { openSection?: string | null }) {
           <div key={group} className="soc-doc-group">
             {/* Le groupe nomme ce qu'on va trouver dessous. Il ne se replie
                 pas : ce serait un troisieme niveau a ouvrir avant de lire. */}
-            <span className="soc-kicker soc-doc-group-label">{d.groups[group]}</span>
+            <h2 className="soc-kicker soc-doc-group-label">{d.groups[group]}</h2>
             {inGroup.map(({ section, points, whole }) => (
               <details
                 key={section.id}
@@ -331,9 +331,9 @@ export function DocsPanel({ openSection }: { openSection?: string | null }) {
               >
                 <summary>
                   <span className="soc-doc-num">{String(numberOf(section)).padStart(2, '0')}</span>
-                  <span className="soc-doc-title">
+                  <h3 className="soc-doc-title">
                     <Highlight text={section.title} query={needle} />
-                  </span>
+                  </h3>
                   {/* Ce que la section contient, annonce sur le pli — et, en
                       recherche, ce qu'elle en garde. Une section repliee muette
                       oblige a l'ouvrir pour savoir si elle valait la peine. */}
