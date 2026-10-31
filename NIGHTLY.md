@@ -263,14 +263,34 @@ Sending it — Discord answers **204 with an EMPTY body**, so test the HTTP code
 never the body. That trap is already in the `CLAUDE.md` table:
 
 ```bash
-python3 -c "import json,sys;print(json.dumps({'content':sys.stdin.read()[:1800]}))" \
-  < /tmp/discord-msg.txt > /tmp/discord-payload.json
+# Step 1 — the cap is on CHARACTERS, and this REFUSES rather than cutting. The
+# earlier version of this snippet sliced the message at `[:1800]`, so a summary
+# one sentence too long went out truncated and Discord still answered 204: a
+# failure that shows green, on the one message the whole run exists to send.
+# Measured on 2026-10-31 — 1,907 characters, cut mid-sentence, 204. And the
+# BYTE count is not the character count (accents made that same message 1,973
+# bytes), so `wc -c` cannot tell you whether it fits.
+python3 - <<'GUARD'
+import json, pathlib, sys
+text = pathlib.Path('/tmp/discord-msg.txt').read_text(encoding='utf-8')
+if len(text) > 1800:
+    sys.exit(f'{len(text)} characters, the cap is 1800: SHORTEN it, do not let '
+             'it be cut. Nothing has been sent.')
+pathlib.Path('/tmp/discord-payload.json').write_text(json.dumps({'content': text}))
+print(f'{len(text)} characters, within the cap')
+GUARD
+
+# Step 2 — ONLY if step 1 printed a count. Discord answers 204 with an EMPTY
+# body, so test the HTTP code, never the body.
 code=$(curl -s -o /tmp/discord-resp.txt -w '%{http_code}' \
   -X POST "$DISCORD_WEBHOOK_URL" \
   -H 'Content-Type: application/json' \
   --data-binary @/tmp/discord-payload.json)
 echo "discord http=$code"; cat /tmp/discord-resp.txt
 ```
+
+A refusal that names its own limit, and nothing posted when it refuses: half a
+summary is worse than being told to shorten it.
 
 `204` means delivered. `429` means you are rate-limited: read `retry_after` (in
 SECONDS), wait, retry ONCE. Any other code: say so explicitly at the end of the

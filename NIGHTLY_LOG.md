@@ -4,6 +4,71 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-10-31 (follow-up) — the routine's own summary was delivered truncated
+
+**Subject**: `NIGHTLY.md` § 6's sending snippet slices the Discord message at
+`[:1800]` — **characters, silently, mid-word**. Tonight's summary was 1,907
+characters, so Discord answered **204** over a message whose last sentence had
+been cut off: delivered, confirmed, and incomplete, with nothing in the HTTP
+code to say so. **A failure that shows green, on the one message the whole run
+exists to send** — the exact defect this product is built to make impossible,
+committed by the routine against itself.
+
+**Result**: a second PR, because PR #87 had already merged (CI green at
+03:24:34, merged 03:24:49) and `NIGHTLY.md` § 5 is explicit that a merged pull
+request cannot carry follow-up work. The branch was restarted from the new
+`main` under the same name, as that section prescribes. Two files: `NIGHTLY.md`
+(the snippet) and this journal.
+
+**Why the snippet and not just a note.** A journal line would have warned the
+next night; the snippet would still have cut its message. It now **refuses**
+and names its own limit — this project's own rule — and writes no payload when
+it refuses, so step 2 cannot post half a summary. Tested both ways before
+committing, because a documented command nobody has run is a guess: tonight's
+real 1,907-character message exits 1 with *« 1907 characters, the cap is 1800:
+SHORTEN it »* and **no payload file**; an 869-character one exits 0 and the
+payload's `content` is byte-identical to the source.
+
+**What I learned that is written nowhere else.**
+
+1. **A 204 proves the message ARRIVED, never that it was WHOLE.** The § 6
+   instruction *« test the HTTP code, never the body »* is right about Discord's
+   empty body and says nothing about what you handed it. The status code cannot
+   see a slice that happened before the request was built.
+2. **`wc -c` cannot tell you whether a message fits.** The cap is on
+   characters; the same message was 1,973 bytes and 1,907 characters, because
+   of the accents a French summary is full of. I read the byte count, saw 1,973
+   against a cap of 1,800, and assumed the truncation I had just caused was
+   merely possible rather than certain.
+3. **The journal commit lost the race NIGHTLY.md § 5 documents, exactly as
+   written.** The night's whole entry was in the first commit and merged
+   correctly; a note pushed afterwards at 03:25 never reached `main` —
+   `automerge.yml` had merged at 03:24:49. **The rule is not « commit the
+   journal early », it is « everything you want on `main` is in the commit that
+   opens the PR ».** Anything found after the PR is a new PR, and an afterthought
+   costs one.
+
+**Do not redo.**
+
+- **Do not re-add the `[:1800]` slice**, in any form, however convenient. A
+  message that does not fit is a message to shorten.
+- **Do not measure the message in bytes.** Learning 2.
+- **Do not push a follow-up commit to a nightly branch whose PR is open.**
+  Learning 3: the merge takes about 45 seconds and the commit loses.
+
+**Verified** (every command run and its output read):
+
+| Command | Result |
+|---|---|
+| the new snippet on tonight's 1,907-character message | **exit 1**, *« 1907 characters, the cap is 1800: SHORTEN it »*, **no payload written** |
+| the same on an 869-character message | exit 0, *« 869 characters, within the cap »*, payload `content` **byte-identical** to the source |
+| `git merge-base --is-ancestor` on both of last night's commits | the night's entry **is** on `main`, the afterthought **is not** |
+| `npm run typecheck` | **0 errors** |
+| `npm test` | **1807 passed \| 1 skipped**, 115 files |
+| `npm run build` | clean |
+
+No code file is touched: this change is two Markdown files.
+
 ## 2026-10-31 — Saturday · Interface, clarity, accessibility
 
 **Subject**: **the Guide — seventeen sections, a hundred-odd points, and one
@@ -182,6 +247,11 @@ No model key and no database were needed. The throwaway preview page
 (`preview-guide.html` + `src/preview-guide.tsx`, the device `CLARITY.md` § 7
 prescribes) and the four probe scripts lived outside the repository or were
 deleted in the same session; `git status` shows only the seven intended files.
+
+**One operational trap found after this PR had merged**: `NIGHTLY.md` § 6's own
+sending snippet cut this night's Discord summary in half and Discord answered
+`204` anyway. It has its own entry above — *2026-10-31 (follow-up)* — because
+closing it needed a second pull request.
 
 ## 2026-10-30 — Friday · Performance and cost
 
