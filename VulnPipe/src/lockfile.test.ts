@@ -291,6 +291,87 @@ const ADVISORY_FLOORS = [
     // not import. This package speaks stdio and serves no static file.
     floor: '4.13.11',
   },
+  {
+    half: 'VulnPipe',
+    root: '../',
+    path: 'node_modules/@hono/node-server',
+    // GHSA-rmxm-3fg6-px4f, `>= 1.19.10 < 2.1.3`: `serveStatic` decodes the
+    // request path a SECOND time, so middleware mounted on a static path can
+    // be bypassed. This half's PRODUCTION tree, through the SDK's HTTP
+    // transport.
+    //
+    // THE ROW ABOVE IS WHY THIS ONE EXISTS, AND IT IS THE LESSON. `hono` got a
+    // floor for GHSA-5r4p-p66f-jhc7 — the same defect, in the same function
+    // name, published for the sibling package — and `@hono/node-server`, which
+    // is the half that actually serves on Node, got none. The mirror of a rule
+    // is not the rule, one package over.
+    //
+    // NOT reachable here, measured rather than reasoned, same instrument and
+    // same controls as the rows above: 0 loads on all five entry points this
+    // package imports (`server/mcp.js`, `server/stdio.js`, `client/index.js`,
+    // `client/stdio.js`, `inMemory.js`), against 2 on
+    // `server/streamableHttp.js` — the control — which it does not import.
+    // And the vulnerable entry point is a SUBPATH, `@hono/node-server/serve-static`:
+    // even the control loads only `dist/index.mjs` and a constants chunk, so
+    // nothing in this tree reaches the function the advisory is about.
+    floor: '2.1.3',
+  },
+  {
+    half: 'VulnPipe',
+    root: '../',
+    path: 'node_modules/@vitest/mocker',
+    // GHSA-qxg6-89mg-rqv8 (`>= 2.1.0-beta.7 < 4.1.12`, code injection through
+    // unauthenticated manual mock registration) and GHSA-xp26-3454-mjgp
+    // (`>= 4.1.11 < 4.1.12`, a Windows backslash traversal bypassing the
+    // redirect allowlist the first one was fixed with). The test runner, so
+    // dev-only on both halves: both Dockerfiles install with `--omit=dev`.
+    //
+    // The floor is on `@vitest/mocker` and not on `vitest`, which `npm audit`
+    // reports only `via` it — the rule the `shell-quote` row states: the floor
+    // belongs on the package the advisory's boundary is about.
+    floor: '4.1.12',
+  },
+  {
+    half: 'dashboard',
+    root: '../../dashboard/',
+    path: 'node_modules/@vitest/mocker',
+    // The same two advisories on the other half. Claimed from here for the
+    // reason the header gives: the mirror of a rule is not the rule.
+    floor: '4.1.12',
+  },
+  {
+    half: 'VulnPipe',
+    root: '../',
+    path: 'node_modules/vite',
+    // Six advisories at once, the highest being GHSA-587h-7wmj-h5pm (high,
+    // `launch-editor`'s `fs.existsSync()` existence check bypassed on
+    // Windows); then GHSA-698v-4r3x-3vcv and GHSA-r825-w8mm-5pxw (also
+    // `launch-editor`, which vite's error overlay opens a file with),
+    // GHSA-rq7h-c2jc-7f22 and GHSA-vfpm-58rq-9qcg (files outside
+    // `server.fs.allow` served, and the first 4 bytes of one exposed through
+    // `?vite-wasm-instance`) and GHSA-9jrq-w75r-8gcw (cross-origin script
+    // execution through custom middleware). Every one of them is about the DEV
+    // SERVER; vite is a devDependency and the built output contains none of
+    // it, so this never ships either.
+    //
+    // THE FLOOR IS DELIBERATELY CONSERVATIVE, AND THAT IS WORTH READING. The
+    // advisories carry TWO disjoint ranges, one per release line —
+    // `>= 8.2.0 <= 8.2.3` and `>= 8.3.0 <= 8.3.2` — so 8.2.4 is a BACKPORT
+    // that is also fixed and would fail this row. A floor cannot express a
+    // hole, and the safe direction is the one that never passes a vulnerable
+    // version: both manifests ask for `^8.2.1` or resolve vite through vitest,
+    // and npm takes the newest match, so landing on the 8.2 line takes a
+    // deliberate pin — at which point this comment is what to read.
+    floor: '8.3.3',
+  },
+  {
+    half: 'dashboard',
+    root: '../../dashboard/',
+    path: 'node_modules/vite',
+    // The same six on the other half, where vite is also what `npm run build`
+    // runs. Read the row above before changing this floor.
+    floor: '8.3.3',
+  },
 ] as const;
 
 /**
@@ -432,5 +513,83 @@ describe('the advisory floor comparator', () => {
     expect(() => isAtLeast('10.8.0-rc.1', '10.7.1')).toThrow(/not a plain release/);
     expect(() => isAtLeast('^10.7.3', '10.7.1')).toThrow(/not a plain release/);
     expect(() => isAtLeast('undefined', '10.7.1')).toThrow(/not a plain release/);
+  });
+});
+
+/**
+ * A measurement whose comment names the version it was taken on.
+ *
+ * ============================================================================
+ * THE GENERALISATION OF THE BLOCK ABOVE, AND WHY IT IS WORTH ITS LINES
+ *
+ * `BANNER_VERSIONS` exists because `mcp-server/server.ts` dated four claims by
+ * naming an SDK version, the lockfile moved under it, and nothing failed — a
+ * comment cannot fail. That guard was written for one file, and the defect is
+ * not about that file: it is about every measurement in this repository whose
+ * only date is a dependency version. A refresh that moves the dependency and
+ * leaves the sentence behind turns a measurement into an undated claim, which
+ * this project's traps table calls the cheapest thing to carry and the most
+ * expensive thing to believe.
+ *
+ * The three sites below were found by the advisory refresh of 2026-11-01, i.e.
+ * by the exact event this guard is about: moving vite 8.2.2 -> 8.3.5 and
+ * vitest 4.1.11 -> 4.1.12 silently invalidated the dates on two live claims
+ * about the dev proxy's 502 and one about how `vi.stubEnv` reaches
+ * `import.meta.env`. All three were re-measured that night and all three held;
+ * what was missing was anything to ask the NEXT refresh to re-run them.
+ *
+ * Each row carries its own marker, deliberately, rather than one pattern for
+ * all of them: a loose regex over prose would match some other version number
+ * in the same file and vouch for the wrong line. And each row asserts its
+ * marker MATCHED before comparing, because a guard that reads nothing agrees
+ * with everything — the vacuous pass this project has paid for more than once.
+ * ============================================================================
+ */
+const DATED_MEASUREMENTS = [
+  {
+    what: "lib/api.ts — the dev proxy's empty 502",
+    file: '../../dashboard/src/lib/api.ts',
+    pkg: 'vite',
+    root: '../../dashboard/',
+    marker: /measured on Vite (\d+\.\d+\.\d+)/,
+  },
+  {
+    what: 'api-named-failures.test.ts — the same measurement, in the test header',
+    file: '../../dashboard/src/lib/api-named-failures.test.ts',
+    pkg: 'vite',
+    root: '../../dashboard/',
+    marker: /Measured on this repository's Vite\s*\n?\s*\*?\s*(\d+\.\d+\.\d+)/,
+  },
+  {
+    what: 'promote-refusals.test.tsx — how `vi.stubEnv` reaches `import.meta.env`',
+    file: '../../dashboard/src/vulnpipe/components/promote-refusals.test.tsx',
+    pkg: 'vitest',
+    root: '../../dashboard/',
+    marker: /Probed on vitest (\d+\.\d+\.\d+)/,
+  },
+] as const;
+
+describe.each(DATED_MEASUREMENTS)('$what is dated by a version the lockfile resolves', (row) => {
+  const source = readFileSync(fileURLToPath(new URL(row.file, import.meta.url)), 'utf8');
+  const lock = readJson(row.root, 'package-lock.json');
+  const resolved = (lock.packages as Record<string, { version?: string } | undefined>)[
+    `node_modules/${row.pkg}`
+  ]?.version;
+  const stated = row.marker.exec(source)?.[1];
+
+  it(`names a ${row.pkg} version at all`, () => {
+    // Without this the comparison passes over an absent claim: the marker
+    // stops matching the day somebody rewords the sentence, and a silent
+    // non-match is indistinguishable from agreement.
+    expect(stated, `the marker ${row.marker} matched nothing in ${row.file}`).toBeDefined();
+  });
+
+  it(`names the ${row.pkg} version the lockfile resolves`, () => {
+    expect(
+      stated,
+      `${row.file} says it was measured on ${row.pkg} ${stated}, the lockfile resolves ` +
+        `${resolved}: re-run the measurement and re-date the comment, or it is a claim ` +
+        'nobody can date',
+    ).toBe(resolved);
   });
 });

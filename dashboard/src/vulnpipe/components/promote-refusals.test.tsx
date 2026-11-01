@@ -326,7 +326,7 @@ describe('nothing in the browser dials a server by itself', () => {
  * NOT show up on this file's own `import.meta.env` — Vite replaces that
  * expression per module at transform time, so reading it back here prints
  * `undefined` and a test written that way would conclude the stub did nothing.
- * It DOES reach a module imported after the stub. Probed on vitest 4.1.11:
+ * It DOES reach a module imported after the stub. Probed on vitest 4.1.12:
  *
  *   DEFAULT BASE URL = /api/findings/promote
  *   STUBBED BASE URL = https://api.example.test/api/findings/promote
