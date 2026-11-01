@@ -4,6 +4,190 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-11-01 — Sunday · Maintenance and state of the project
+
+**Subject**: **four published advisories, eight GHSAs, and the floor that was
+written for one package of a sibling pair.** `npm audit` reported 3 on the
+console and 4 on VulnPipe. One of them — `@hono/node-server`
+(GHSA-rmxm-3fg6-px4f, moderate) — sits in VulnPipe's **production** tree, and
+`lockfile.test.ts` already carries a floor for `hono` covering the *same
+defect in the same function name* (`serveStatic` decoding the request path
+twice). The sibling that actually serves on Node had none.
+
+**Result**: PR opened on `claude/sleepy-volta-eind85`. Two lockfiles (version
+lines only), `VulnPipe/src/lockfile.test.ts` (**+16 tests**: five advisory
+floors and a new dated-measurement guard), three one-line comment re-datings
+in the console, `ROADMAP.md`, `CLAUDE.md` and this journal. **No manifest
+change, no production dependency added, no code path touched, no CSS, no
+catalogue key, no colour, no class name.** The built stylesheet is
+byte-identical (`index-DpyowbMH.css`, 62.42 kB).
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-eind85` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Fifty-ninth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: the designated branch
+at 5ff311b (= `origin/main`) gave typecheck **0 errors**, **1807 passed |
+1 skipped**, a clean build and **437 passed** on VulnPipe, run after `npm ci`
+rather than assumed, and the open-PR list was empty. Sunday's first bullet is
+dependencies, and there were four real ones.
+
+**I took a decision a previous night explicitly deferred, and that is the thing
+to read first.** The 10-25 row *« Three dev advisories that this environment's
+npm cannot move at all »* left `vite` and `vitest` open and said in as many
+words that choosing a newer npm *« is not a night's to take »*, setting three
+conditions: both halves move together, deliberately, and CI pinned to match.
+Its fear was specific and it does not apply to what I did — it was about npm
+**12** writing fields npm 10 strips. **Measured: npm 11.21.1 PRESERVES
+VulnPipe's ten `libc` blocks and ADDS the six the console's lockfile was
+missing; it is npm 10 that strips them, in either direction.** Both halves
+moved in one refresh. The third condition is genuinely unmet and cannot be met
+— VulnPipe's CI is pinned to Node 22 by the tree-sitter constraint, i.e. to
+npm 10.9 — so the next `npm update` in that half still loses those ten lines.
+That is in § 7 as the one open decision, and it is in the PR under *Decision
+for a human*.
+
+**What I learned that is written nowhere else.**
+
+1. **`npm update` is still unusable here, three npm patch releases on.** On
+   10.9.9 / Node 22.23.4, naming `vite` or `vitest` dies with
+   `TypeError: Cannot read properties of null (reading 'edgesOut')` at
+   `#loadPeerSet` (`build-ideal-tree.js:1289`), on both halves, identically to
+   the 10.9.4 and 10.9.7 reports. **A premise that keeps holding is worth
+   re-checking anyway and worth re-recording when it does** — I re-ran it
+   rather than inheriting it, which is the only reason I can say this is a
+   standing npm bug rather than a version accident.
+2. **`npm update @hono/node-server` alone works, and costs 33 lines of
+   metadata.** npm 10.9.9 deletes the ten `libc` blocks, exactly as 10.9.4 did:
+   4 insertions and **34** deletions for a one-version bump. The night's first
+   fix was a hand-patched block that kept them (4/4), then the whole refresh
+   was redone under npm 11 instead.
+3. **`vite`'s advisories carry TWO disjoint ranges and a floor cannot express a
+   hole.** `>= 8.2.0 <= 8.2.3` and `>= 8.3.0 <= 8.3.2` — so 8.2.4 is a backport
+   that is also fixed and fails a floor of 8.3.3. I kept the floor at 8.3.3,
+   i.e. deliberately over-refusing in the direction that can never pass a
+   vulnerable version, and said so in the row. The alternative is a second data
+   shape in a shared test for one entry.
+4. **The dev-proxy 502 is unchanged on Vite 8.3.5.** Probed with a real Vite
+   server whose proxy points at a port the OS handed out and then closed:
+   `{"status":502,"contentType":"text/plain","bodyLength":0}` on GET **and**
+   POST, identical to the 8.2.1 measurement `lib/api.ts` was written on. So the
+   three dated claims were re-measured, not re-worded.
+5. **A dated measurement is undated by a dependency refresh, and nothing can
+   fail.** The guard for this existed — `BANNER_VERSIONS` — and it was written
+   for ONE file, so three other sentences dating themselves by a vite or vitest
+   version were free to go stale the moment I moved those packages. That is the
+   sixteenth recurrence of *the mirror of a rule is not the rule* and the first
+   one this routine committed against itself inside the same diff. The new
+   `DATED_MEASUREMENTS` block uses a **per-row marker** regex: one loose pattern
+   over prose matches some other version in the same file and vouches for the
+   wrong line.
+6. **My mutation harness reverted with `git checkout` and deleted the change it
+   was testing.** The fix was uncommitted, so each *« restore »* put the file
+   back to HEAD, i.e. to the defect; by the third mutation the counts were
+   about a state nobody had asked for, and the control AFTER them read red on a
+   tree `git status` called clean. It failed safe, which is exactly why it
+   nearly passed for a result. Running the control last is what caught it.
+
+**Found and NOT fixed.**
+
+- **`npm audit` still runs nowhere**, and this is the fourth Sunday to say so.
+  The rate data is now five, zero, twelve, **one** new advisory per week —
+  four samples spanning 0 to 12, which is not a rate, and that is the finding:
+  nothing about it predicts the next week. A scheduled job that opens an issue
+  rather than failing a check is the shape; whether a check may go red for
+  something no diff did is a human's call, because `automerge.yml` merges on
+  green.
+- **`vitest` 5.0.5 exists** and is a major out of `^4.1.10`. Not taken: a major
+  bump of the runner under 2,260 tests is not a lockfile refresh, and nothing
+  requires it — 4.1.12 closes both advisories inside the declared caret.
+- **Standing leads, re-checked and unchanged**: the regex-DoS comment in
+  `tuning.ts` that claims a defence § 7 measures as false by orders of
+  magnitude (the comment is the part a night could remove; I did not, because
+  tonight's subject was dependencies and that one deserves its own PR), the
+  analysis relay's missing deadline, the incident card's heading outline, the
+  ninety-odd French strings in `server/engine/`, `MENATER_TEST_PG` still never
+  set, `src/i18n/dictionary.ts` at 7 % of the eager chunk, a write's 401 not
+  reaching the sign-in screen, `.vp-action`'s 36 px touch target, the console's
+  still-absent narrow-width sweep.
+
+**State of the week** (10-26 → 11-01, seven merged nightly PRs, #82–#88):
+
+| Night | What moved |
+|---|---|
+| 10-26 | the console's display dash read as data by the assistant's fourteen getters |
+| 10-27 | every outbound body read capped — twelve call sites, one reader |
+| 10-28 | the injection follow-up said *« it arrived nowhere »* after reading nothing |
+| 10-29 | `PUT /api/settings` wrote the ingestion policy around its own validator |
+| 10-30 | the MCP batch bounded its calls and not its reply (132× amplification) |
+| 10-31 | the Guide's seventeen section titles became headings; then a follow-up PR for the routine's own truncated Discord message |
+| 11-01 | this one |
+
+**What moved**: the week closed five § 7 entries and opened three, which is the
+healthy direction. Every night shipped a test that was red first.
+**What is stuck**: `npm audit` in CI — four Sundays, one unchanged reason, and
+it is the only item on this list that no night can close. **What I recommend
+for next week**: the `tuning.ts` regex comment, as its own small PR. § 7 says
+*« the one thing that must not stay is the comment, which tells the next reader
+the subject is closed »*, it is three lines plus a source-reading test in the
+family this repository already uses twice, and it is the last place in this
+codebase where a comment asserts a security defence the code does not have.
+
+**Do not redo.**
+
+- **Do not run `npm update vite` or `npm update vitest` with the environment's
+  own npm.** Learning 1. Use `npx npm@11`; `npm@12` is what the 10-25 row
+  warned about and was not needed.
+- **Do not refresh either lockfile under npm 10.** Learning 2: it strips the
+  `libc` blocks from both halves now, silently, as collateral.
+- **Do not raise the `vite` floor's precision to admit 8.2.4** without adding a
+  second data shape to `ADVISORY_FLOORS`. Learning 3.
+- **Do not re-word a version inside a measurement; re-run the measurement.**
+  Learning 4 and 5. `lockfile.test.ts` will now tell you which ones.
+- **Do not restore a mutated file with `git checkout` while the change under
+  test is uncommitted.** Learning 6. Copy the working tree first.
+- **Do not add an `npm audit` step to `ci.yml`** on a night's own initiative.
+  It is the fourth Sunday the reason has been written down.
+
+**Verified** (Node 22.23.4, npm 10.9.9, refresh tool `npx npm@11.21.1`; every
+command run and its output read):
+
+| Command | Result |
+|---|---|
+| `npm ci` on the designated branch at 5ff311b, both halves | clean |
+| baseline `npm run typecheck` / `npm test` / `npm run build` (console) | **0 errors**, **1807 passed \| 1 skipped**, clean |
+| baseline `npm test` (VulnPipe) | **437 passed** |
+| `npm audit` before | console **3** (2 moderate, 1 high), VulnPipe **4** (3 moderate, 1 high) |
+| `npm update vite vitest --package-lock-only`, npm 10.9.9, both halves | `TypeError: Cannot read properties of null (reading 'edgesOut')` |
+| `npm update @hono/node-server`, npm 10.9.9 | moves 2.1.1 → 2.1.5 **and deletes ten `libc` blocks** (4 insertions, 34 deletions) |
+| `npx npm@11.21.1 update vite vitest @hono/node-server --package-lock-only` | both halves: **0 packages added, 0 removed**, 34 and 32 versions moved, `lockfileVersion` **3**, `libc` 10 → 10 (VulnPipe) and 0 → 6 (console) |
+| `npm ci` under the local **npm 10.9.9** on both npm-11 lockfiles | clean, `npm audit` **0** on both |
+| `npm ci --omit=dev` (the Dockerfiles' path) on both | clean, **0 vulnerabilities**, production tree carries `@hono/node-server` 2.1.5 |
+| the five new floors against the PRE-refresh lockfiles | **5 failed \| 41 passed**, each naming its resolved version |
+| `npm run typecheck` / `npm test` / `npm run build` (console, after) | **0 errors**, **1807 passed \| 1 skipped**, clean — CSS byte-identical, JS 446.57 → 446.77 kB raw / 130.77 → 130.86 kB gzipped |
+| `npm run typecheck` / `npm test` (VulnPipe, after) | **0 errors**, **453 passed** |
+| reachability of `@hono/node-server`, real loader instrumentation | **0 loads** on `server/mcp.js`, `server/stdio.js`, `client/index.js`, `client/stdio.js`, `inMemory.js`; **2** on `server/streamableHttp.js` (the control), **0** on `server/express.js`; the control loads `dist/index.mjs` and a constants chunk, **never `dist/serve-static.mjs`** |
+| Vite 8.3.5 dev proxy against a dead upstream | `502`, `text/plain`, **0-byte body**, on GET and POST |
+
+| Mutation | Result |
+|---|---|
+| CONTROL (unmutated), run first AND last | GREEN both times (52/52) |
+| M1 — `api.ts` version back to 8.2.1 | RED — 1 |
+| M2 — `api.ts` marker reworded so it matches nothing | RED — 2 (the vacuity half fires too) |
+| M3 — test header back to `(8.2.1)` | RED — 2 (same reason: the paren breaks the marker) |
+| M4 — `promote-refusals` back to vitest 4.1.11 | RED — 1 |
+| M5 — dashboard lockfile reverted | RED — 5 |
+| M6 — VulnPipe lockfile reverted | RED — 3 |
+| M7 — both reverted | RED — 8 |
+| M8 — a floor row pointing at an absent package | RED — 2 |
+
+No model key and no database were needed. The two probes (the loader
+instrument and the Vite dev-proxy measurement) lived in the scratchpad or were
+deleted in the same session; `git status` shows only the nine intended files.
+
 ## 2026-10-31 (follow-up) — the routine's own summary was delivered truncated
 
 **Subject**: `NIGHTLY.md` § 6's sending snippet slices the Discord message at
@@ -246,7 +430,7 @@ run and its output read):
 No model key and no database were needed. The throwaway preview page
 (`preview-guide.html` + `src/preview-guide.tsx`, the device `CLARITY.md` § 7
 prescribes) and the four probe scripts lived outside the repository or were
-deleted in the same session; `git status` shows only the seven intended files.
+deleted in the same session; `git status` shows only the nine intended files.
 
 **One operational trap found after this PR had merged**: `NIGHTLY.md` § 6's own
 sending snippet cut this night's Discord summary in half and Discord answered
@@ -804,7 +988,7 @@ methods are spied, the clock is faked, and the browser probes read this
 repository's own `dist/`. The probes (`probe-warn-note.mjs`,
 `probe-screen.mjs`, `mutate.py`) and the throwaway preview test that dumped the
 component's markup for Chromium lived in the scratchpad and are **deleted** —
-`git status` shows only the seven intended files.
+`git status` shows only the nine intended files.
 
 ## 2026-10-27 — Tuesday · Security
 
@@ -1456,7 +1640,7 @@ lockfiles were staged, and the file is red on the unmodified trees:
 database were needed. The probes lived in the scratchpad and in two throwaway
 `npm init` directories outside the repository; one had to run from
 `VulnPipe/scripts/` to resolve that half's `node_modules` and was deleted —
-`git status` shows only the seven intended files.
+`git status` shows only the nine intended files.
 
 ---
 
@@ -2824,7 +3008,7 @@ green the day somebody "fixed" the code to agree with a sentence that was wrong.
 
 **Nine mutations, nine killed**, no survivors. No model key and no database
 were needed. The four probes lived in the scratchpad and are not in the diff;
-`git status` shows only the seven intended files.
+`git status` shows only the nine intended files.
 
 ---
 
@@ -3018,7 +3202,7 @@ boundaries.
 
 **Eleven mutations, eleven killed**, no survivors. No model key and no database
 were needed. Probes, the sweep and the mutation harness lived in the scratchpad
-and are not in the diff; `git status` shows only the seven intended files.
+and are not in the diff; `git status` shows only the nine intended files.
 
 ---
 

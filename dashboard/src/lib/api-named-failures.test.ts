@@ -9,7 +9,7 @@
  *
  * That rule was written for the Vite dev proxy, which was the only thing that
  * could answer those codes at the time. Measured on this repository's Vite
- * (8.2.1), with the proxy pointed at a dead upstream:
+ * 8.3.5, with the proxy pointed at a dead upstream:
  *
  *     { "status": 502, "contentType": "text/plain", "body": "" }
  *

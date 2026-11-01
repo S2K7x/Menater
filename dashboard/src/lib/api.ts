@@ -144,9 +144,14 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 
   /**
    * 502/503/504 come from the Vite dev proxy when the API is not listening:
-   * measured on Vite 8.2.1 against a dead upstream, it answers 502 with an
-   * EMPTY `text/plain` body. Nothing named a reason, so the status code alone
-   * would tell an analyst nothing and the generic sentence is what to say.
+   * measured on Vite 8.3.5 against a dead upstream, it answers 502 with an
+   * EMPTY `text/plain` body, on GET and on POST alike. Nothing named a reason,
+   * so the status code alone would tell an analyst nothing and the generic
+   * sentence is what to say. (Identical to the first measurement, taken on
+   * 8.2.1; the version is re-stated because a dependency refresh that leaves
+   * one behind turns a measurement into a claim nobody can date —
+   * `VulnPipe/src/lockfile.test.ts` fails if this line and the lockfile
+   * disagree.)
    *
    * BUT THE CONSOLE ANSWERS 503 TOO, and never for that reason: no database
    * configured, the engine therefore not mounted, a configured database
