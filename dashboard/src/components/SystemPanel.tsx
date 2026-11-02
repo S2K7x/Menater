@@ -197,6 +197,40 @@ function System({
       </p>
       ) : null}
 
+      {/*
+        J0.2, one screen over — why THIS block's code is worth reading, and
+        what the analysis can answer.
+
+        The offer above is made on every system whose code is named, because
+        J0.3's jump is legitimate on all of them: it fills a field in and
+        starts nothing. What is NOT legitimate is making it ten times over on
+        an install with ten mapped machines and saying nothing about which one
+        to press — an offer made everywhere carries no information, which is
+        the whole reason `code-lead.ts` exists. The reason is read off
+        `code_lead`, so it is checkable against the ATT&CK tags the incident
+        card prints; this screen infers nothing.
+
+        GATED ON THE REPOSITORY, by `systems.ts`: the sentence names code, and
+        a sentence about code with no code to point at is the line nobody can
+        act on that J0.3 refuses.
+
+        IT REPORTS, SO IT DOES NOT FOLD. The second half is the coverage of an
+        answer somebody is about to pay for, and CLARITY § 3 keeps a coverage
+        hole on screen — a report finding nothing reads as *nothing wrong*
+        otherwise. Quiet all the same: no accent, which rule 4 of `styles.css`
+        reserves for something waiting on a human.
+
+        The class is `soc-inv-lead`, the card's: same sentence, same role, one
+        definition. It is a bare class with no parent in its selector, so it
+        carries its look here unchanged.
+      */}
+      {system.lead !== null ? (
+        <p className="soc-inv-lead">
+          {t.lead(system.leadAlerts, system.lead.technique_id, system.lead.technique)}{' '}
+          {c.caseView.repository.leadScope}
+        </p>
+      ) : null}
+
       <div className="soc-sys-stacks">
         <Stack
           label={t.alertsLabel(system.alerts.length)}

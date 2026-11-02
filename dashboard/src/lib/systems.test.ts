@@ -31,6 +31,8 @@ import { groupBySystem } from './systems.ts';
 import type { AlertCase, Severity } from './types.ts';
 import { findingToAlert, scanRepository } from '../../server/findings.ts';
 import { resolveRepository } from '../../server/inventory.ts';
+import { tagAttack } from '../../server/engine/attack.ts';
+import { codeLead } from '../../server/engine/code-lead.ts';
 
 const kase = (over: Partial<AlertCase> = {}): AlertCase =>
   ({
@@ -265,5 +267,96 @@ describe('the order is the queue’s order, for the queue’s reason', () => {
     ]);
     expect(systems[0].worst).toBe('high');
     expect(systems[0].failed).toBe(1);
+  });
+});
+
+/**
+ * J0.4 second slice — the offer this screen makes, and what qualifies it.
+ *
+ * J0.2 exists because *Analyse this code* on every case the inventory matched
+ * is an offer that carries no information, and because an offer whose scope is
+ * unstated buys a report whose silence reads as *nothing wrong*. The incident
+ * card was fixed; this screen makes the same offer once per block and said
+ * neither thing. The three claims below are what stop it saying nothing again.
+ */
+describe('the lead that qualifies the offer', () => {
+  /** A detection built through the REAL pair, as the pipeline builds one. */
+  function exploited(over: Partial<AlertCase> = {}): AlertCase {
+    const c = detection(over);
+    const attack = tagAttack(c.rule_name, c.raw_log);
+    return { ...c, attack, code_lead: codeLead(attack) };
+  }
+
+  it('says WHY this system’s code is worth reading, and how many alerts said so', () => {
+    const { systems } = groupBySystem([
+      exploited({
+        alert_id: 'ALT-A', host: 'web-01',
+        rule_name: 'Web attack: SQL injection attempt on /orders',
+      }),
+      exploited({
+        alert_id: 'ALT-B', host: 'web-01',
+        rule_name: 'Cross-site scripting attempt blocked',
+      }),
+      // Same system, and nothing to do with the code: it must not be counted.
+      exploited({
+        alert_id: 'ALT-C', host: 'web-01',
+        rule_name: 'Brute force: 40 failed SSH logins',
+      }),
+    ]);
+
+    expect(systems).toHaveLength(1);
+    expect(systems[0].lead).toEqual({
+      technique_id: 'T1190', technique: 'Exploit Public-Facing Application',
+    });
+    // Scoped to the technique the sentence NAMES, not to the system's size:
+    // the set of application techniques is built to grow, and a count covering
+    // a technique the sentence does not name would stop being true the day it
+    // does.
+    expect(systems[0].leadAlerts).toBe(2);
+  });
+
+  it('reads the field the pipeline wrote, and never re-infers it from the rule name', () => {
+    // The rule name matches `attack.ts`'s T1190 pattern exactly. `code_lead`
+    // is `null` because this case did not go through that inference — a
+    // promoted finding is the real example, since `tagAttack` deliberately
+    // does not match flaw names. A second ruler here would disagree with the
+    // tags printed on the card, on the screen that sends somebody to read
+    // code during an incident.
+    const { systems } = groupBySystem([
+      detection({
+        alert_id: 'ALT-A', host: 'web-01',
+        rule_name: 'Web attack: SQL injection attempt on /orders',
+        code_lead: null,
+      }),
+    ]);
+    expect(systems[0].lead).toBeNull();
+    expect(systems[0].leadAlerts).toBe(0);
+  });
+
+  it('answers nothing on a machine no code is mapped to', () => {
+    // Gated on the repository, exactly as the card is: "the flaw may be in
+    // this code" with no code to name is the line nobody can act on that J0.3
+    // prints nothing at all rather than carry.
+    const { systems } = groupBySystem([
+      exploited({
+        alert_id: 'ALT-A', host: 'unmapped-host',
+        rule_name: 'Web attack: SQL injection attempt on /orders',
+      }),
+    ]);
+    expect(systems[0].repository).toBeNull();
+    expect(systems[0].lead).toBeNull();
+  });
+
+  it('leaves a system nothing exploited alone', () => {
+    const { systems } = groupBySystem([
+      exploited({
+        alert_id: 'ALT-A', host: 'web-01',
+        rule_name: 'Brute force: 40 failed SSH logins',
+      }),
+      promoted('/srv/src/billing-api'),
+    ]);
+    expect(systems[0].repository).toBe('/srv/src/billing-api');
+    expect(systems[0].lead).toBeNull();
+    expect(systems[0].leadAlerts).toBe(0);
   });
 });

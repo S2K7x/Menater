@@ -44,7 +44,7 @@
  * ============================================================================
  */
 
-import type { AlertCase, Severity } from './types.ts';
+import type { AlertCase, CodeLead, Severity } from './types.ts';
 
 /** How the system was identified — which decides what the screen may claim. */
 export type SystemKind =
@@ -78,6 +78,31 @@ export interface SystemThreats {
   alerts: AlertCase[];
   /** Cases opened by promoting a finding out of a scan of this code. */
   flaws: AlertCase[];
+  /**
+   * Why this system's code is worth reading, or `null`.
+   *
+   * READ, NEVER RE-INFERRED. `code_lead` is written once, by `cases.ts`, off
+   * the ATT&CK tags the incident card prints — so the reason this screen
+   * gives is checkable against something already on the operator's screen.
+   * Matching the rule name a second time here would be a second ruler
+   * disagreeing with the first, on the decision to go and read code during an
+   * incident.
+   *
+   * GATED ON THE REPOSITORY, exactly as the incident card gates it: *the flaw
+   * may be in this code* with no code to name is the line nobody can act on
+   * that J0.3 prints nothing at all rather than carry. So this is `null` on
+   * every `machine`-kind system, whatever its alerts say.
+   */
+  lead: CodeLead | null;
+  /**
+   * How many of this system's cases carry the technique `lead` NAMES.
+   *
+   * Scoped to that one technique and not to the system: `APPLICATION_TECHNIQUES`
+   * is a set built to grow, and a count covering a technique the sentence does
+   * not name would stop being true the day a second one is added. `0` exactly
+   * when `lead` is `null`.
+   */
+  leadAlerts: number;
   /** Cases waiting on a human decision, across both lists. */
   awaiting: number;
   /** Cases the pipeline could not finish, across both lists. */
@@ -206,6 +231,12 @@ export function groupBySystem(cases: AlertCase[]): SystemView {
     const all = [...b.alerts, ...b.flaws];
     const services = [...b.services.values()];
     const machines = [...b.machines.values()];
+    // The first lead in the caller's order, which is the queue's order — the
+    // same choice the card makes between two techniques pointing at the code:
+    // two of them do not make the code twice as worth reading.
+    const lead = b.repository !== null
+      ? all.find((c) => c.code_lead !== null)?.code_lead ?? null
+      : null;
     return {
       key,
       kind: b.kind,
@@ -218,6 +249,10 @@ export function groupBySystem(cases: AlertCase[]): SystemView {
       machines,
       alerts: b.alerts,
       flaws: b.flaws,
+      lead,
+      leadAlerts: lead === null
+        ? 0
+        : all.filter((c) => c.code_lead?.technique_id === lead.technique_id).length,
       awaiting: all.filter((c) => c.state === 'awaiting_approval').length,
       failed: all.filter((c) => c.state === 'failed').length,
       worst: all.reduce<Severity>(
