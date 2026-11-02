@@ -41,6 +41,8 @@ import { consoleDictionary } from '../i18n/console.ts';
 import type { AlertCase, Severity } from '../lib/types.ts';
 import { findingToAlert, scanRepository } from '../../server/findings.ts';
 import { resolveRepository } from '../../server/inventory.ts';
+import { tagAttack } from '../../server/engine/attack.ts';
+import { codeLead } from '../../server/engine/code-lead.ts';
 
 afterEach(cleanup);
 
@@ -254,5 +256,78 @@ describe('what the screen refuses to claim', () => {
     render(<SystemPanel cases={[]} onSelect={() => {}} />);
     expect(screen.getByText(t.empty)).toBeTruthy();
     expect(screen.getByText(t.shown(0))).toBeTruthy();
+  });
+});
+
+/**
+ * J0.4 second slice — the offer, and the two sentences that qualify it.
+ *
+ * `Analyse this code` is rendered once per block, so on an install whose
+ * inventory maps ten machines it is ten identical offers and nothing says
+ * which one is worth pressing. J0.2 answered exactly that on the incident
+ * card and this screen, written one commit later, carried neither half of it.
+ *
+ * The second test claims the BOUNDARY and passes before this change as much
+ * as after: qualifying every block would rebuild the defect inside its own
+ * fix, which is the shape this repository has paid for more than once.
+ */
+describe('the offer says why, and what the analysis can answer', () => {
+  const v = consoleDictionary('en').caseView;
+
+  /** A detection carrying the tags and the lead the real pipeline derives. */
+  function exploited(over: Partial<AlertCase> = {}): AlertCase {
+    const c = detection(over);
+    const attack = tagAttack(c.rule_name, c.raw_log);
+    return { ...c, attack, code_lead: codeLead(attack) };
+  }
+
+  it('qualifies the block whose alerts say the way in was the code', () => {
+    render(
+      <SystemPanel
+        cases={[
+          exploited({
+            alert_id: 'ALT-A', host: 'web-01',
+            rule_name: 'Web attack: SQL injection attempt on /orders',
+          }),
+        ]}
+        onSelect={() => {}}
+        onAnalyse={() => {}}
+      />,
+    );
+
+    const lead = screen.getByText(
+      t.lead(1, 'T1190', 'Exploit Public-Facing Application'), { exact: false },
+    );
+    // IT REPORTS, so it does not fold: the scope of an answer somebody is
+    // about to pay for is a coverage hole, and CLARITY § 3 keeps those on
+    // screen. Folding it is how a report finding nothing reads as "nothing
+    // wrong".
+    expect(lead.closest('details')).toBeNull();
+    // The scope sentence is the caseView's own, read from one place: a second
+    // copy of it is a second thing to keep true.
+    expect(lead.textContent).toContain(v.repository.leadScope);
+    expect(screen.getByRole('button', { name: t.analyseLabel('Billing API') })).toBeTruthy();
+  });
+
+  it('leaves a block nothing exploited unqualified, offer and all', () => {
+    const { container } = render(
+      <SystemPanel
+        cases={[
+          exploited({
+            alert_id: 'ALT-A', host: 'web-01',
+            rule_name: 'Brute force: 40 failed SSH logins',
+          }),
+        ]}
+        onSelect={() => {}}
+        onAnalyse={() => {}}
+      />,
+    );
+    // No reason printed — a reason on every block is the offer made
+    // everywhere, which is what J0.2 removed.
+    expect(container.querySelector('.soc-inv-lead')).toBeNull();
+    expect(screen.queryByText(v.repository.leadScope, { exact: false })).toBeNull();
+    // And the jump is still offered: it resolves, it never acts, and J0.3's
+    // jump is legitimate on any system whose code is named.
+    expect(screen.getByRole('button', { name: t.analyseLabel('Billing API') })).toBeTruthy();
   });
 });

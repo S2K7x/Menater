@@ -321,6 +321,17 @@ export interface ConsoleDictionary {
     code: string;
     /** Names the system, because the button repeats once per system. */
     analyseLabel: (system: string) => string;
+    /**
+     * Why THIS system's code is worth the money the offer beside it costs.
+     *
+     * The count is of the alerts carrying the technique this sentence names,
+     * so it is comparable across blocks: on an install whose inventory maps
+     * ten machines the offer is made ten times, and this is the only thing
+     * that says which one to press. The scope half is NOT duplicated here —
+     * `caseView.repository.leadScope` is the one definition of what the
+     * analysis can answer, and a second copy is a second thing to keep true.
+     */
+    lead: (n: number, techniqueId: string, technique: string) => string;
     awaiting: (n: number) => string;
     failed: (n: number) => string;
     /**
@@ -1563,6 +1574,11 @@ const EN: ConsoleDictionary = {
     machines: 'Machines',
     code: 'Code',
     analyseLabel: (system) => `Analyse the code of ${system}`,
+    lead: (n, id, technique) => (n === 1
+      ? `1 alert here says the way in was the application itself (${id} — ${technique}), `
+        + 'so the flaw behind it may be in this code.'
+      : `${n} alerts here say the way in was the application itself (${id} — ${technique}), `
+        + 'so the flaw behind them may be in this code.'),
     awaiting: (n) => (n === 1 ? '1 waiting on you' : `${n} waiting on you`),
     failed: (n) => (n === 1 ? '1 failure' : `${n} failures`),
     unattributed: (n) =>

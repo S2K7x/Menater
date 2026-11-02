@@ -558,7 +558,14 @@ code, .soc-mono { font-family: var(--mono); }
    can answer. PROSE, so `--mono` is wrong here: the line above it is metadata
    you compare character by character, this one is a sentence you read. And
    `--muted`, not `--faint`: `--faint` is the token for what you may skip, and
-   the scope of an answer somebody is about to pay for is not skippable. */
+   the scope of an answer somebody is about to pay for is not skippable.
+
+   TWO CALL SITES: the incident card's repository block and, since J0.4's
+   second slice, each system block that offers the same jump. Both say the
+   same thing in the same role, so they share one definition rather than one
+   of them drifting. Nothing in the selector names a parent, which is what
+   makes the reuse safe — see the traps table on a shared element whose CSS
+   named only one of them. */
 .soc-inv-lead {
   margin: 8px 0 0; max-width: 68ch;
   font-size: 0.82rem; line-height: 1.5; color: var(--muted);

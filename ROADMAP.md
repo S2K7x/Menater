@@ -71,7 +71,7 @@ application. Until it is done, the merge is visual.
 | ~~**J0.1**~~ ✅ | ~~**A scan creates a case in the queue**~~ — `server/findings.ts` maps a finding to the alert contract, `POST /api/findings/promote` runs it through `01-Ingestion`, and the report carries a *Send to the triage queue* button per finding. A human presses it; nothing promotes itself | A flaw in the code stops being a report you close; it enters the circuit that gets it handled |
 | ~~**J0.2**~~ ✅ | ~~**An alert offers a scan**~~ — a case whose inferred technique says the way in was the application itself carries the reason on its card, beside the target J0.3 resolved and beside what the analysis can actually look for. `server/engine/code-lead.ts`; `attack.ts` gained T1190, which it did not have. It offers: no alert launches anything | Bring the incident next to the defect that made it possible, while you have it in front of you |
 | ~~**J0.3**~~ ✅ | ~~**Service ↔ repository inventory**~~ — `server/inventory.ts`, a Settings sub-tab, resolved onto every case in `snapshot.ts`. Exact matching only, ambiguity refused at the save, and the incident card names the code running on the machine it is about — with a jump that opens the Code tab on that target | Without it neither link means anything: nothing said which repository runs on `10.12.4.31` |
-| **J0.4** ◐ | **Unified "what threatens this system" view** — one screen stacking, for one asset, its alerts and its flaws. **First slice delivered**: the Alerts tab's second view groups the window by system — the alerts about a machine beside the flaws promoted out of the code the inventory says runs on it. What is NOT there is the rest of a scan report: this reads the queue, and says so | The question the user actually asks, which neither tab answers alone |
+| **J0.4** ◐ | **Unified "what threatens this system" view** — one screen stacking, for one asset, its alerts and its flaws. **First slice delivered**: the Alerts tab's second view groups the window by system — the alerts about a machine beside the flaws promoted out of the code the inventory says runs on it. **Second slice**: each block's *Analyse this code* offer now carries J0.2's two sentences, so one of ten offers says why it is the one to press. What is NOT there is the rest of a scan report: this reads the queue, and says so | The question the user actually asks, which neither tab answers alone |
 | ~~**J0.5**~~ ✅ | ~~**The door opens both ways**~~ — a report finding that has already been promoted says so, names what the queue made of it, and carries a jump to the case. `src/lib/promoted.ts` reads it out of the window the browser already holds; `src/lib/finding-identity.ts` is the one definition of a flaw's identity, used by the server to derive the alert id and by the report to find the case. Nothing is stored | J0.1 forgot its own outcome the moment you left the report: twelve findings, three of them sent, and no way to tell which three |
 
 > **Order:** J0.3 before J0.1 and J0.2. Guessing the repository from an IP
@@ -146,6 +146,39 @@ has run one scan and triaged one alert.
 | **A case it cannot attribute is COUNTED, never filed** | An alert naming no machine of ours and no code is not put under a likely system: the screen says how many there are and that they are in the queue. An overview that silently omits part of the queue is the failure that shows green, rebuilt in the screen whose job is the overview |
 | **The flaw half says what it read** | It reads the QUEUE, not scan reports, so an empty list means nobody promoted a finding. The sentence is on screen and not behind the disc — same rule as `clean` requiring a source that ANSWERED on the Lookup tab, and as the scan report's own coverage line. A machine the inventory maps to no code gets a DIFFERENT sentence, because "nobody promoted one" and "we could not have listed one" are two facts |
 | **A second view, not an eleventh tab** | Ten tabs in four groups is a decision this console already took, and this is the same data as the Alerts tab answering a second question. The page header and the stat bar — where "n waiting on you" is written — stay above both views, so nothing that needs a human is hidden by the switch |
+
+#### Second slice — the offer this screen makes, qualified
+
+**What it is.** A system block whose alerts say the way in was the application
+itself now carries one line saying so and what the analysis can answer — *« 2
+alerts here say the way in was the application itself (T1190 — Exploit
+Public-Facing Application), so the flaw behind them may be in this code. The
+analysis looks for broken access control… »* — directly under the offer it
+qualifies. `SystemThreats.lead` and `SystemThreats.leadAlerts` in
+`src/lib/systems.ts`; nothing new is fetched and nothing is inferred.
+
+**Why it was missing.** J0.2 exists because *Analyse this code* on every case
+the inventory matched is an offer that carries no information, and because an
+offer whose scope is unstated buys a report whose silence reads as *nothing
+wrong*. It fixed the incident card. This screen, written one commit later,
+makes the same offer **once per block** — so on an install whose inventory maps
+ten machines it was ten identical buttons with nothing saying which one to
+press. The grep that finds this is not *who calls the thing I fixed*: the
+second door did not exist when the first was closed.
+
+**Three decisions.**
+
+| Decision | Why the other answer was worse |
+|---|---|
+| **The reason is READ, never re-inferred** | `code_lead` is written once, by `cases.ts`, off the ATT&CK tags the incident card prints — so the reason this screen gives is checkable against something already on the operator's screen. A second matcher here would be two rulers disagreeing about one alert, on the decision to send somebody to read code while an incident is open; `code-lead.ts`'s own header refuses it for the card, and the same argument holds one screen over |
+| **The count is scoped to the technique the sentence NAMES** | `APPLICATION_TECHNIQUES` is a set built to grow. A count over the whole system reads as *this many alerts point at the code* and stops being true the day a second application technique is added — and the count is the only thing that lets an operator compare ten blocks, so it has to mean exactly what it says |
+| **A block nothing exploited stays unqualified, offer and all** | Qualifying every block is the defect rebuilt inside its own repair: the offer would be everywhere again, carrying no information. The jump itself stays on every system whose code is named, because J0.3's jump fills a field in and starts nothing. Two tests claim that side and pass before the change as much as after |
+
+**What it does NOT do:** it does not change the offer's scope sentence (one
+definition, `caseView.repository.leadScope`, read by both screens), it does not
+re-order the systems — what is waiting on a human still comes first, which is
+the queue's rule and this screen's — and the assistant and the MCP catalogue
+still do not read any of it.
 
 **What it does NOT do, and is honest to say so:**
 

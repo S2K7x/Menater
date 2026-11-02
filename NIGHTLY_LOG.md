@@ -4,6 +4,165 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-11-02 — Monday · Feature
+
+**Subject**: **J0.4's second slice — the *Analyse this code* offer, qualified
+on the screen that makes it ten times.** J0.2 exists for one reason: that
+offer on every case the inventory matched is an offer that carries no
+information, and an offer whose scope is unstated buys a report whose silence
+reads as *nothing wrong*. It fixed the incident card (`7976b74`).
+`SystemPanel` was written **one commit later** (`9b75d41`), makes the same
+offer **once per system block**, and carried neither sentence.
+
+**Result**: PR opened on `claude/sleepy-volta-nurlkt`. Seven files:
+`src/lib/systems.ts` (+`lead`, +`leadAlerts`), `src/components/SystemPanel.tsx`
+(one paragraph), `src/i18n/console.ts` (one key), `src/styles.css` (**a comment
+only** — the built sheet is byte-identical, `index-DpyowbMH.css` 62.42 kB),
+two test files extended and `src/components/analyse-offer.test.ts` added
+(**+8 tests**), plus `ROADMAP.md` and `CLAUDE.md`. No route, no payload, no
+store, no new CSS rule, no new class name, no dependency.
+
+**Why this subject.** The calendar rule did not preempt: after `npm ci` on the
+designated branch at `0035ffa` (= `origin/main`) the baseline was typecheck
+**0 errors**, **1807 passed | 1 skipped**, clean build, and the open-PR list
+was empty. Monday's reservoir is ROADMAP § 2, where J0 outranks everything and
+**J0.4 is the only J0 item still `◐`**. Its own « what is NOT there » is the
+rest of a scan report, which the section itself refuses as *a subject, not a
+slice* (it needs a store, a retention policy and a fourth copy of code
+excerpts). So I read the screen instead of the backlog, and the gap was in it.
+
+**What I learned that is written nowhere else.**
+
+1. **A door opened AFTER a fix cannot be found by grepping the fix's callers.**
+   This repository's traps table records *« a fix applied at the front door
+   and not at the two buttons behind it »* four times, and its remedy is always
+   *grep for the other callers of the thing you fixed*. That could not have
+   worked here: when J0.2 landed, `SystemPanel` did not exist. What finds this
+   one is grepping for **the offer** — `grep -rn 'repository.analyse\b'` over
+   `src/`, two hits, one qualified. The transferable rule is that the thing to
+   grep is the CONTROL, not the fix.
+2. **The sentence was already fully written, in two pieces, and one of them is
+   deliberately not duplicated.** `caseView.repository.leadScope` is the one
+   definition of what the analysis can answer; `SystemPanel` reads it directly,
+   as it already read `repository.analyse` and `analyseHint`. Only the *why*
+   half needed a new string, because « This alert says… » is false of a block
+   holding seven.
+3. **`.soc-inv-lead` could be reused as-is, and checking WHY is the whole
+   safety argument.** Its selector names no parent, so the traps row about *a
+   shared component whose CSS names only one parent* does not bite — but it
+   had one call site and a comment written for one, so the comment now names
+   both. The built stylesheet is byte-identical: the measurement that says
+   this added no CSS.
+4. **A preview page that imports `server/findings.ts` still dies.** J0.5's
+   journal entry says so and I did it anyway: `createHash is not a function`
+   in the browser bundle. The fixture's promoted case is hand-built as a
+   `CaseRepository` with `matched_on: 'scan_target'` — which is all `isFlaw`
+   reads — and `resolveRepository`, `tagAttack` and `codeLead` are pure and
+   import cleanly.
+5. **A Chromium measurement needs `waitForSelector`, not `waitUntil: 'load'`.**
+   The first run of the sweep read `document.querySelector('.soc-panel')` as
+   `null` and threw inside `getComputedStyle` — React had not mounted. It
+   failed loudly, which is the only reason it was not a silent zero; the
+   neighbouring risk is a ruler that reads an empty page as a clean one.
+6. **`playwright` is at `/opt/node-tools/node_modules/playwright` and is
+   CommonJS.** `import { chromium } from 'playwright'` fails twice over from a
+   scratchpad script: the package is not resolvable from there, and a named
+   import of `chromium` off the absolute path fails too. `import pw from
+   '<abs>/index.js'; const { chromium } = pw;` works. Chromium 1243 is in
+   `/opt/pw-browsers`.
+7. **My own mutation M5 killed by crashing, which is not a kill.** Replacing
+   `system.lead !== null` with `system.repository !== null` makes
+   `system.lead.technique_id` throw, so nine tests went red for the wrong
+   reason. The mutation that actually states *« qualify every block »* keeps
+   the lead optional and prints the scope unconditionally — M9 — and it is
+   killed by the boundary test alone. **A mutation that crashes has not tested
+   the assertion you wanted to test.**
+
+**Found and NOT fixed.**
+
+- **The systems are not re-ordered by the lead.** `groupBySystem` sorts on
+  *waiting on a human → worst severity → most recent*, which is the queue's
+  rule and a stated decision; a block whose code is implicated is found by
+  reading the sentence, not by its position. Changing that sort is a product
+  decision, not a night's, and it is in the PR under *Decision for a human*.
+- **`APPLICATION_TECHNIQUES` still holds one entry.** That is the honest size
+  (`code-lead.ts` argues it at length) and widening it is a security judgement
+  about ATT&CK inference, not a slice of this.
+- **Standing leads, unchanged and re-listed for the next night**: the
+  `tuning.ts` regex comment asserting a defence § 7 measures as false (last
+  Sunday's own recommendation, and still the last place in this codebase where
+  a comment claims a security property the code does not have), the analysis
+  relay's missing deadline on either hop, the incident card's heading outline,
+  the ninety-odd French strings in `server/engine/`, `MENATER_TEST_PG` still
+  never set, `src/i18n/dictionary.ts` at 7 % of the eager chunk, a write's 401
+  not reaching the sign-in screen, `.vp-action`'s 36 px touch target, and
+  `npm audit` running nowhere (four Sundays).
+
+**Do not redo.**
+
+- **Do not gate the BUTTON on the lead.** J0.3's jump fills a field in and
+  starts nothing, so it is legitimate on every system whose code is named;
+  hiding it would take away the only way to reach the Code tab from this
+  screen. J0.2 made exactly this choice on the card, and this slice copies it.
+- **Do not qualify every block.** The scope sentence printed wherever code is
+  named puts the offer back everywhere carrying no information — the defect
+  rebuilt inside its own repair. Two tests claim that boundary and pass before
+  AND after on purpose; M9 is red on it.
+- **Do not re-infer the lead from the rule name in the browser.** Two rulers
+  disagreeing about one alert, on the screen that sends somebody to read code
+  during an incident. Read `code_lead`; M4 is red.
+- **Do not copy `leadScope` into the `systems` catalogue.** One definition of
+  what the analysis can answer, read by both screens.
+- **Do not count the whole system in `leadAlerts`.** Scope it to the technique
+  the sentence names, or the count stops being true the day
+  `APPLICATION_TECHNIQUES` gains a second entry. M3 is red.
+- **Do not import `server/findings.ts` into a browser preview.** Learning 4;
+  twice now.
+
+**Verified** (Node 22.23.4, npm 10.9.9, Chromium 1243; every command run and
+its output read):
+
+| Command | Result |
+|---|---|
+| `npm ci` on the designated branch at `0035ffa`, both halves | clean |
+| baseline `npm run typecheck` / `npm test` / `npm run build` (console) | **0 errors**, **1807 passed \| 1 skipped**, clean |
+| the four new `systems.test.ts` tests, BEFORE the change | **4 failed \| 11 passed** |
+| `analyse-offer.test.ts`, BEFORE the change | **1 failed \| 1 passed**, naming `SystemPanel.tsx` |
+| `npm run typecheck` (after) | **0 errors** |
+| `npm test` (after) | **1815 passed \| 1 skipped**, 116 files |
+| `npm run build` (after) | clean — CSS **byte-identical** (`index-DpyowbMH.css`, 62.42 kB), JS 446.77 → 447.37 kB raw / 130.86 → 130.99 kB gzipped |
+| `npm test` (VulnPipe, untouched, as cross-half insurance) | **453 passed** |
+| Chromium sweep, built sheet, 6 themes × 320/375/1280 px, 3 systems mounted | **0 horizontal overflow** (`scrollWidth == innerWidth == requested`), 2 blocks of 3 qualified, `folded=false`, live regions **0**, headings `H2 H3 H3 H3` unchanged |
+| the sentence's contrast on `.soc-panel`, six themes | **4.57** (punk) · 4.69 · 5.09 · 5.29 · 6.21 · **6.92** (acme) — all ≥ 4.5 |
+| the sentence's font | Inter, i.e. prose — **not** `--mono`, which means *this came from the machine* |
+| panel height, before → after, same fixture | 320 px **1670.7 → 2001.7**, 375 px 1548.5 → 1800.8, 1280 px **767.1 → 940.6** — +87 px per qualified block at 1280, **0 px** on a block with no lead |
+
+| Mutation | Result |
+|---|---|
+| CONTROL (unmutated), run first AND last | GREEN both times (29/29) |
+| M1 — the lead paragraph deleted from `SystemPanel` | RED — 2 |
+| M2 — the repository gate dropped in `systems.ts` | RED — 1 |
+| M3 — `leadAlerts` counts the whole system | RED — 1 |
+| M4 — the lead re-inferred from the rule name | RED — 1 |
+| M5 — `lead !== null` → `repository !== null` | RED — 9, **but by crashing**: see learning 7 |
+| M6 — the lead sentence folded into a `<details>` | RED — 1 |
+| M7 — the scope half dropped, the reason kept | RED — 2 |
+| M8 — the guard's vacuity floor removed, both offers inlined | RED — 1 |
+| M9 — the scope printed on every block that names code | RED — 1 (the boundary test) |
+
+No model key and no database were needed. The harness restored from a **copy
+of the working tree**, never `git checkout` (the 11-01 lesson), and the control
+after the run confirms it. The preview page, its throwaway vite config and the
+measurement scripts were deleted or live in the scratchpad; `git status` shows
+only the seven intended files.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-nurlkt` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Sixtieth entry saying so**; it is a line in the
+routine's configuration, not a thing a night can fix.
+
 ## 2026-11-01 — Sunday · Maintenance and state of the project
 
 **Subject**: **four published advisories, eight GHSAs, and the floor that was
