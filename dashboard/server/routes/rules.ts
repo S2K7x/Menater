@@ -9,6 +9,7 @@ import { json, readBody } from '../respond.ts';
 import {
   getRuleStore, ruleDb } from '../runtime.ts';
 import { evaluateRules, normalizeRuleInput, validateRule } from '../engine/transforms/tuning.ts';
+import { newRegexBudget } from '../engine/transforms/bounded-regex.ts';
 import { RULE_TEMPLATES, ruleFromTemplate } from '../engine/transforms/tuning-templates.ts';
 import type { Ctx } from './context.ts';
 
@@ -51,18 +52,25 @@ export async function rulesRoutes(c: Ctx): Promise<boolean> {
           // match" to the one question the dry run exists to answer.
           enabled: true }))
         : await store.list();
-      const outcome = evaluateRules(alert, rules);
+      // ONE budget for the whole request, not one per call. This route
+      // evaluates the set once and then every rule again for `evaluated`, and
+      // both the rules and the alert come out of the body — so a budget per
+      // call would be bounded by what the caller sent rather than by a number
+      // this console chose. See `bounded-regex.ts`.
+      const budget = newRegexBudget();
+      const outcome = evaluateRules(alert, rules, undefined, budget);
       return json(res, 200, {
         matched: outcome.rule ? { id: outcome.rule.id, name: outcome.rule.name } : null,
         action: outcome.action,
         severity: outcome.severity,
         note: outcome.note,
         expired: outcome.expired,
+        abandoned: outcome.abandoned,
         // Per-rule, so the UI can show which condition failed rather than a
         // bare "no match".
         evaluated: rules.map((r: any) => ({
           id: r.id, name: r.name, enabled: r.enabled,
-          matched: evaluateRules(alert, [r]).rule !== null })) });
+          matched: evaluateRules(alert, [r], undefined, budget).rule !== null })) });
     }
 
     if (path === '/api/rules' && req.method === 'GET') {

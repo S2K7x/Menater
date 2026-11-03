@@ -653,6 +653,15 @@ export interface ConsoleDictionary {
     testAgainst: (n: number) => string;
     testLede: string; testRun: string; testAlert: string;
     testNoMatch: string; testMatched: (name: string) => string;
+    /**
+     * A rule whose regular expressions ran out of their budget.
+     *
+     * It is on the dry run and not only in a log because the person reading
+     * this banner is the one who typed the pattern, and nobody else can fix
+     * it. It names the consequence first — the rule decided NOTHING, which is
+     * not the same as "did not match" — then what to do about it.
+     */
+    testAbandoned: (names: string) => string;
     saveFailed: string; loadFailed: string;
     /**
      * A row's write that did not land, worded by WHAT STILL HOLDS.
@@ -2000,6 +2009,9 @@ const EN: ConsoleDictionary = {
     testAlert: 'Alert (JSON)',
     testNoMatch: 'No rule matches: the alert would take its normal course.',
     testMatched: (name) => `“${name}” matches.`,
+    testAbandoned: (names) =>
+      `Too slow to decide, so they matched nothing: ${names}. A nested quantifier such as (a+)+ `
+      + 'can take hours on a long value — simplify the pattern.',
     saveFailed: 'Could not save.',
     loadFailed: 'Could not load the rules.',
     notDisabled: (name) => `“${name}” is still enabled.`,

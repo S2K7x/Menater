@@ -166,7 +166,10 @@ describe('a sentence produced by a button lands in a live region', () => {
     vi.spyOn(api, 'rules').mockResolvedValue({ rules: [] });
     vi.spyOn(api, 'ruleTemplates').mockResolvedValue({ templates: [] } as never);
     vi.spyOn(api, 'testRules').mockResolvedValue({
-      matched: null, expired: [], note: null, evaluated: 0,
+      // `abandoned` beside `expired`: the dry run answers both lists, and a
+      // hand-written payload that omits one is a fixture in the reader's
+      // vocabulary — this one took the whole page down when the field arrived.
+      matched: null, expired: [], abandoned: [], note: null, evaluated: 0,
     } as never);
 
     render(<RulesPage />);
