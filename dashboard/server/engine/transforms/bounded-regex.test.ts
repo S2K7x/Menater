@@ -80,7 +80,7 @@ describe('a pattern that cannot finish', () => {
      */
     const started = Date.now();
     const verdict = boundedRegexMatch(
-      [{ subject: NEVER_FINISHES, patterns: [EXPONENTIAL] }],
+      [{ subject: NEVER_FINISHES, patterns: [new RegExp(EXPONENTIAL, 'i')] }],
       newRegexBudget(),
     );
     const elapsed = Date.now() - started;

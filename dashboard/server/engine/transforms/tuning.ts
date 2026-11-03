@@ -195,9 +195,11 @@ export function inCidr(ip: string, cidr: string): boolean {
  * both the pattern and the subject small enough that even a pathological
  * pattern terminates" — and that claim was false by orders of magnitude:
  * `(a+)+$` is six characters and does not terminate inside a human lifetime
- * at the 2000-character subject this cap allows. What bounds the WORK is
- * `bounded-regex.ts`, which this file now matches through; these two keep the
- * stored row small and the quoted value readable.
+ * at the 2000-character subject this cap allows. No length makes
+ * `new RegExp(v, 'i').test(hay)` safe, which is the form that used to stand
+ * below. What bounds the WORK is `bounded-regex.ts`, which this file now
+ * matches through; these two keep the stored row small and the quoted value
+ * readable.
  */
 export const MAX_PATTERN = 200;
 export const MAX_SUBJECT = 2000;
@@ -217,7 +219,18 @@ function textOf(value: unknown): string | null {
 function prepareRegex(alert: unknown, condition: Condition): PreparedPatterns | null {
   const subject = textOf(readField(alert, condition.field));
   if (subject === null) return null;
-  const patterns = (condition.values ?? []).filter((v) => v.trim() !== '' && v.length <= MAX_PATTERN);
+  const patterns: RegExp[] = [];
+  for (const v of condition.values ?? []) {
+    if (v.trim() === '' || v.length > MAX_PATTERN) continue;
+    try {
+      // Compiled HERE, outside the budget: a compile is bounded work and
+      // matches nothing, so it cannot backtrack. And an invalid pattern
+      // matches NOTHING — treating it as "always true" would silently allow
+      // everything the rule names — which is the decision this file has always
+      // made, kept here rather than moved into the matcher.
+      patterns.push(new RegExp(v, 'i'));
+    } catch { /* not a pattern: it matches nothing, and the others still run */ }
+  }
   if (patterns.length === 0) return null;
   return { subject: subject.slice(0, MAX_SUBJECT), patterns };
 }
@@ -259,9 +272,7 @@ export function matchesCondition(
       return values.some((v) => inCidr(hay, v));
     case 'regex': {
       // The single-condition case of what `matchesRule` batches: one spelling,
-      // two sizes. An invalid pattern still matches NOTHING — treating it as
-      // "always true" would silently allow everything the rule names — and
-      // that decision now lives inside the matcher, with the budget.
+      // two sizes.
       const one = prepareRegex(alert, condition);
       return one !== null && boundedRegexMatch([one], budget).matched;
     }

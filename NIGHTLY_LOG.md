@@ -4,6 +4,238 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-11-03 — Tuesday · Security
+
+**Subject**: **a caller-supplied regular expression could stop the console for
+the life of the process, and the comment above it said it could not.**
+`tuning.ts` carried *« JavaScript cannot interrupt a running regex, so the only
+defence available here is to keep both the pattern and the subject small enough
+that even a pathological pattern terminates »* over `MAX_PATTERN` (200) and
+`MAX_SUBJECT` (2000). `(a+)+$` is six characters. Tuesday's list ends with
+denial of service, and `ROADMAP` § 7 had this filed as a **product decision**
+since 2026-10-13; the premise it rested on is false, and that is the night.
+
+**Result**: PR opened on `claude/sleepy-volta-k9kwej`. Thirteen files: one new
+production module (`server/engine/transforms/bounded-regex.ts`), five
+production edits (`tuning.ts`, `engine/transforms/registry.ts`,
+`routes/rules.ts`, `assistant/tools.ts`, `src/lib/types.ts`), two interface
+edits (`src/components/RulesPage.tsx` one block, `src/i18n/console.ts` one
+key), three new test files (**+16 tests**), two existing test files extended or
+corrected, plus `CLAUDE.md`, `ROADMAP.md` and this journal. **No CSS, no class
+name, no colour, no dependency** — `node:vm` is core, so the console API still
+has exactly one production dependency. VulnPipe untouched and not run.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-k9kwej` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Fifty-fifth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: after `npm ci` on the
+designated branch at `c976b14` (= `origin/main`) the baseline was typecheck
+**0 errors**, **1815 passed | 1 skipped**, a clean build, and
+`list_pull_requests --state open` was **empty**. Step 2's priority (2) is a
+real, reproducible bug, and this one is reproducible in 150 bytes.
+
+**What the defect actually is.** A regex cannot be interrupted and this API is
+single threaded, so one match that does not return ends the console, the
+engine, the scheduler and both ingestion doors for the life of the process —
+**with no log line, because nothing throws**. Measured on Node 22.23.4 through
+the real module, `(a+)+$` against `'a'.repeat(n) + '!'`: **1.4 s at n=24,
+3.6 s at 28, 14.5 s at 30**, roughly x4 per character, and the subject cap
+allows 2000 of them.
+
+**Four doors, and § 7 named two.** The `tuning` node on every alert (the
+subject is `raw_log`, i.e. text whoever triggered the detection composed);
+`POST /api/rules` storing a pattern `validateRule` accepts, because a nested
+quantifier is valid SYNTAX; `POST /api/rules/test`, which takes the pattern
+**and** the subject from one request and is outside the lock on an install with
+no console password (`requiresAuth` returns `false` for every path while
+`auth.enabled` is `false`, the shipped default); and the one § 7 missed — the
+assistant's **`test_rule`**, i.e. `POST /api/mcp` over a **read-only** bearer
+token. *« The catalogue has no write in it »* was true and did not mean a
+read-only client could not stop the console. It was found by grepping the
+callers of `evaluateRules`, not the routes.
+
+**What I learned that is written nowhere else.**
+
+1. **`vm.Script.runInContext(ctx, { timeout })` DOES interrupt a running
+   regular expression.** § 7 refused this subject on *« Node offers no way to
+   time out a regex in-process »*, and nobody had probed it. V8's backtracking
+   loop honours an interrupt and the watchdog fires from another thread, so it
+   works while this one is blocked inside the match. Probed on every shape I
+   could think of — `(a+)+$`, the backreference form `(a*)*\1$`, a 100-group
+   nesting, `(?:a{1000}){1000}` — and the context goes on answering correctly
+   after a termination, including after six in a row. **A premise nobody
+   re-probes is a decision nobody re-opens.**
+2. **The interrupt is the cost, not the sandbox.** Same call, same subject:
+   `runInContext` **without** `timeout` is **3.6 us**, **with** it
+   **126.5 us** — the watchdog is 123 of the 126. That single number decided
+   the whole shape: the bound is paid once per RULE (25 conditions in one run
+   measure 144 us against 126 us for one), and a rule's cheap operators run
+   FIRST so a rule that already fails on an `equals` arms nothing. Paid per
+   PATTERN instead, the 256 kB dry-run body this API accepts — measured at
+   **4,975 regex conditions across 199 rules** — would have gone from 1.0 ms to
+   about **1.3 s**: a cure that is its own denial of service.
+3. **A budget tuned on a WARM measurement over-refuses exactly once per
+   process, and my boundary test caught it.** The first draft used 25 ms, taken
+   from a probe that had warmed up first. The worst rule this product's caps
+   permit — 25 conditions x 200 patterns x 200 characters, each matching only
+   on its last value — costs **25.7 ms on the first call** and 7.2 ms warm, so
+   the budget refused a legal rule on the first alert after a restart. The
+   hardest moment to reproduce and the one an operator meets first.
+4. **The second red told me to change the DESIGN, not the number.** At 100 ms
+   that same assertion was still red under full-suite load, at **55.9 ms** —
+   and a margin that moves with how busy the machine is is a budget that will
+   one day refuse a legal rule. The cause was that the pattern COMPILES were
+   inside the timed region, and **a compile is bounded work that matches
+   nothing, so it cannot backtrack and never needed a budget.** Moved to the
+   caller, the same rule spends **3.7 ms cold and 3.5 ms warm** of its 100 — a
+   27x margin that does not move — plus 2.3 ms of compiling nothing pays a
+   watchdog for. The sandbox script lost its `try/catch` with it, so *« an
+   invalid pattern matches NOTHING »* stayed in `tuning.ts` where it always
+   was.
+5. **An all-`a` subject proves nothing.** My first fixture was
+   `'a'.repeat(2000)`, which `(a+)+$` matches on the first greedy path in
+   microseconds. The trailing `!` is what forces the exhaustive backtrack, and
+   four tests were green over a fixture that demonstrated the opposite of the
+   subject.
+6. **A stale hand-written fixture took the whole page down.** Adding
+   `abandoned` to the dry run's answer made `status-messages.test.tsx` crash on
+   `result.abandoned.length` — its mocked payload is a hand-built
+   `{ matched, expired, note, evaluated: 0 } as never`, cast past the type, and
+   the uncaught error unmounted the application rather than failing one
+   assertion. Fixed as a fixture, which is what it is; worth knowing that
+   `result.expired.length` next door has carried the same exposure since it was
+   written.
+7. **Two of my own tests were weaker than they looked, and only mutation said
+   so.** A `< 2 s` clock bound on the route was satisfied by a route handing
+   each of its calls a budget of its own (**M9 survived**); counting sandbox
+   runs kills it. And the structural sweep's comment-stripping could be deleted
+   with nothing going red (**M11 survived**) — *two guards where one suffices is
+   a line no test can fail on*. The repair was to make the first one
+   load-bearing: `tuning.ts` now documents the shape it no longer contains
+   (`new RegExp(v, 'i').test(hay)`), which is exactly what would produce a
+   false RED, so the stripping is required and M11 is red.
+8. **A mutation that crashes is not the mutation you wrote.** My first "cheap
+   operators are no longer evaluated first" appended a second check instead of
+   reordering, so it double-spent the budget and went red for the wrong reason.
+   Rewritten as *conditions run in declaration order*, it is red on the two
+   tests that claim the ordering.
+
+**What it costs, measured before and after on the real modules.** The realistic
+pipeline path is **29 us per alert, before and after** (30 stored rules, a
+third carrying a pattern), because most rules fail on a cheap condition and
+never arm a watchdog. Where every pattern IS reached: **57 us -> 3.6 ms** per
+alert for 30 such rules, against a chain that takes about sixteen seconds. The
+most expensive BENIGN dry-run body: **1.0 ms -> 61.9 ms**. A pathological
+condition: **never returns -> a flat 101 ms** at every subject size.
+
+**Found and NOT fixed** (both in § 7 with their limits stated):
+
+- **`/api/rules/test` has no rate limit of its own**, so the bound is 250 ms of
+  blocked event loop per REQUEST rather than per caller. The MCP endpoint meters
+  its calls; this route does not, and a per-route budget is a policy decision
+  about an unauthenticated door rather than a night's.
+- **`test_rule`'s new `patterns_abandoned` has no test of its own.** The budget
+  it reports is covered by the unit tests and by the two doors driven end to
+  end (the dry-run route and the pipeline through the real engine); the field
+  NAME on that one reply is carried by the typecheck alone. Adding a third
+  harness for one line was not worth the review surface, and it is said out
+  loud rather than left to be discovered.
+
+**Do not redo.**
+
+- **Do not treat `vm` as a sandbox here.** It is documented as not a security
+  boundary and nothing in this depends on it being one: the pattern is a
+  STRING this process compiles, never source anybody supplied. If that ever
+  stops being true, the whole argument changes.
+- **Do not move the compiles back inside the budget.** Learning 4. It is the
+  margin, not tidiness, and the headroom assertion is what goes red.
+- **Do not collapse the two budgets into one number.** Without the per-rule
+  slice a single pattern spends everything; without the total an attacker needs
+  no slower pattern, only more rules. The route therefore makes ONE budget for
+  its full pass AND for every per-rule pass behind `evaluated` — M9 is red on a
+  fresh budget per call.
+- **Do not lower `RULE_BUDGET_MS`.** M8 is red at 5 ms. Over-refusing a legal
+  rule is a silent hole, not a saving.
+- **Do not try to CLASSIFY patterns.** § 7's old star-height objection is still
+  right (`(a|a)*$` has height 1 and is exponential, `(foo|bar)+` has height 2
+  and is safe); the point of bounding the work is that no pattern has to be
+  judged.
+- **Do not make an abandoned rule look like a rule that did not match.** M4 and
+  M5 are red on six and seven tests. It is the `expired` list's own reason, and
+  the person who typed the pattern is the only one who can fix it.
+- **Do not assert this with a stopwatch where a count will do.** The route's
+  claim is the number of sandbox runs; the two assertions that do read a clock
+  read it with 100x and 27x of margin and provoke real exponential
+  backtracking rather than borrowing a slow machine.
+- **Do not restore a mutated file with `git checkout` while the change is
+  uncommitted.** Last Sunday's learning 6, obeyed: the harness copies the
+  working tree first, and the code was committed before the mutation pass.
+
+**The five other Tuesday areas, re-walked against this tree** so a future night
+can skip them: prompt-injection fencing (`UNTRUSTED_ALERT_FIELDS` carries
+`host`, `fenceEnrichment` inverts the rule, the nonce is per-request — and
+nothing this change adds travels to a model); `PUBLIC_ROUTES` / `requiresAuth`
+(unchanged, and read again here: `auth.enabled` false short-circuits
+everything, which is exactly why the dry-run door matters); secret egress (the
+new module logs nothing and the context is cleared after every match, so no
+subject outlives its request); SSRF (untouched — `fetchWithDeadline` still owns
+the redirect rule for all eight callers); and the audit chain, which still
+needs a database this environment does not have. `MENATER_TEST_PG` is still
+never set, for the fifth week.
+
+**Verified** (Node 22.23.4, npm 10.9.9; every command run and its output read):
+
+| Command | Result |
+|---|---|
+| `npm ci` on the designated branch at `c976b14`, console half | clean |
+| baseline `npm run typecheck` / `npm test` / `npm run build` | **0 errors**, **1815 passed \| 1 skipped**, clean |
+| `npm run typecheck` (after) | **0 errors** |
+| `npm test` (after), run three times | **1832 passed \| 1 skipped** every time (**+17**) |
+| `npm run build` (after) | clean — CSS **byte-identical** (`index-DpyowbMH.css`, 62.42 kB), JS 447.37 -> 447.65 kB raw / 130.99 -> 131.09 kB gzipped |
+| VulnPipe | **not touched**, not run — `git status` shows no file under it |
+
+**Checked RED first**, on `origin/main`'s `tuning.ts` with the test files in
+place: **6 of the 11 new unit tests fail fast**, **2 pass before and after on
+purpose** (the premise pin, and the boundary claim that a rule failing on a
+cheap operator arms nothing), and **3 do not return at all** — one was killed at
+45 s, which is the defect rather than a failure. The three new route, screen and
+pipeline tests do not return either.
+
+**Twelve mutations, twelve killed**, one at a time, pristine files restored
+from a COPY of the working tree, with an unmutated control run **first and
+last** and asserted identical:
+
+| Mutation | Result |
+|---|---|
+| CONTROL (unmutated), first AND last | GREEN both times (80/80) |
+| M1 — the regex branch back to an unbounded inline match | RED — 1 |
+| M2 — one watchdog per condition instead of one per rule | RED — 2 |
+| M3 — conditions in declaration order, so a regex runs before a cheap failure | RED — 2 |
+| M4 — an exhausted budget reported as a rule that did not match | RED — 6 |
+| M5 — the timeout caught and read as "no match", silently | RED — 7 |
+| M6 — the budget never charged, so the total bounds nothing | RED — 2 |
+| M7 — an exhausted budget runs anyway instead of refusing | RED — 2 |
+| M8 — `RULE_BUDGET_MS` lowered below the worst LEGAL rule | RED — 3 |
+| M9 — the dry-run route gives every call a fresh budget | RED — 1 (**survived** a clock bound; see learning 7) |
+| M10 — the screen stops rendering the abandoned list | RED — 1 |
+| M11 — comment-stripping dropped from the structural sweep | RED — 1 (**survived** until learning 7) |
+| M12 — an unparseable pattern read as a match instead of as nothing | RED — 2 |
+
+No model key, no database and no network egress were needed: the pathological
+patterns are real, the rule store is configured-and-unreachable on a privileged
+port so no socket is opened, and the engine runs on `MemoryRunStore`. The
+probes (`probe-regex.mjs`, `probe-vm-cost.mjs`, `probe-batch.mjs`,
+`probe-throw.mjs`, `probe-legalmax.mjs`, `probe-cold.mjs`,
+`probe-precompile.mjs`, `probe-worstbody.mjs`, `probe-cost-ab.mjs`,
+`probe-cost-worst.mjs`, `probe-red.mjs`, `mutate.py`) lived in the scratchpad
+and are **deleted**, together with the two `original-tuning.probe.ts` copies the
+before/after measurements needed — `git status` shows only the thirteen intended
+files.
+
 ## 2026-11-02 — Monday · Feature
 
 **Subject**: **J0.4's second slice — the *Analyse this code* offer, qualified

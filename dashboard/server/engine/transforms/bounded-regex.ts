@@ -58,6 +58,25 @@
  * terminated.
  *
  * ============================================================================
+ * WHAT IS INSIDE THE TIMED REGION, AND WHAT IS DELIBERATELY NOT
+ *
+ * Only the MATCHING. The patterns are compiled by the caller and handed over
+ * as `RegExp` objects, because compiling is bounded work by construction — a
+ * compile parses a pattern of at most `MAX_PATTERN` characters and matches
+ * nothing, so it cannot backtrack — while matching is the unbounded half this
+ * file exists for. Putting the bounded half inside the budget spends the
+ * budget on work that never needed it.
+ *
+ * That is not tidiness, it is the margin. Measured on the worst rule this
+ * product's caps permit: with the compiles inside, the timed region costs
+ * **32.4 ms on the first call and 6.7 ms warm**; with them outside, **3.7 ms
+ * cold and 3.5 ms warm**, plus 2.3 ms of compiling that the budget no longer
+ * pays for. The first version of this file compiled inside, and the headroom
+ * assertion in the test was RED under full-suite load at 55.9 ms — a budget
+ * whose margin depends on how busy the machine is is a budget that will
+ * one day refuse a legal rule.
+ *
+ * ============================================================================
  * WHY A WHOLE RULE'S PATTERNS GO IN ONE RUN
  *
  * The interrupt is the cost, not the sandbox. Measured, same call, 2000-char
@@ -87,22 +106,22 @@
  * Both are POLICY NUMBERS chosen against measurements, not maxima read off
  * this machine. The worst rule this product's own caps permit — 25 conditions
  * of 200 patterns of 200 characters each, every one of them matching only on
- * the last value, against a 2000-character subject — measures **25.7 ms on
- * the first call in a process and 7.2 ms median warm**. A realistic
- * two-condition rule measures 0.38 ms.
+ * the last value, against a 2000-character subject — spends **3.7 ms of the
+ * budget cold and 3.5 ms warm**. A realistic two-condition rule spends
+ * 0.38 ms including its compiles.
  *
- * The COLD number is the one the budget is chosen against, and that is not a
- * detail: the first draft of this file used 25 ms, taken from a probe that had
- * warmed up first, and the boundary test below was RED — the budget refused
- * the worst rule this product's own caps permit, on the first alert after a
- * restart, naming it as too slow. A bound tuned on a warm measurement
- * over-refuses exactly once per process, which is the hardest moment to
- * reproduce and the one an operator meets first.
+ * The COLD number is the one a budget is chosen against, and that is not a
+ * detail: the first draft used 25 ms, taken from a probe that had warmed up
+ * first, and the boundary test was RED — the budget refused the worst rule
+ * this product's own caps permit, on the first alert after a restart, naming
+ * it as too slow. A bound tuned on a warm measurement over-refuses exactly
+ * once per process, which is the hardest moment to reproduce and the one an
+ * operator meets first.
  *
- * So 100 ms is a 3.9x margin over the worst LEGAL rule cold, 14x warm and
- * 263x over a real one; and 250 ms is what one request may spend in total,
- * i.e. about 650 realistic rules, nine absurd ones, or two and a half
- * pathological ones before the rest are refused without being run.
+ * So 100 ms is a 27x margin over the worst LEGAL rule and 263x over a real
+ * one; and 250 ms is what one request may spend in total — about 650 realistic
+ * rules, sixty absurd ones, or two and a half pathological ones before the
+ * rest are refused without being run.
  *
  * ============================================================================
  * WHAT A BUDGET THAT RUNS OUT MEANS
@@ -141,10 +160,14 @@ export interface RegexBudget {
 
 export const newRegexBudget = (ms: number = REQUEST_BUDGET_MS): RegexBudget => ({ remainingMs: ms });
 
-/** One condition, already read off the alert and already bounded in size. */
+/**
+ * One condition: the subject read off the alert and bounded in size, and the
+ * patterns ALREADY COMPILED. See the header for why the compiling is the
+ * caller's and not this file's.
+ */
 export interface PreparedPatterns {
   subject: string;
-  patterns: string[];
+  patterns: RegExp[];
 }
 
 export interface RegexVerdict {
@@ -155,15 +178,16 @@ export interface RegexVerdict {
 
 /**
  * The script is a constant and the context is reused: compiling either one per
- * call would add to the overhead the batching above exists to avoid. The inner
- * `catch` keeps `tuning.ts`'s rule that an invalid pattern matches nothing,
- * and keeps it where the other patterns of the same condition can still run.
+ * call would add to the overhead the batching above exists to avoid. It does
+ * one thing — a conjunction of conditions, each satisfied by any of its
+ * patterns — and holds no `try`, because an unparseable pattern never reaches
+ * it: `tuning.ts` keeps that decision, where it has always been.
  */
 const MATCH = new vm.Script(
-  'cs.every(function (c) { return c.vs.some(function (p) {'
-  + ' try { return new RegExp(p, "i").test(c.s); } catch (e) { return false; } }); })',
+  'cs.every(function (c) { return c.rs.some(function (r) { return r.test(c.s); }); })',
 );
 const CONTEXT = vm.createContext(Object.create(null) as object);
+const EMPTY: PreparedPatterns[] = [];
 
 let runs = 0;
 
@@ -191,7 +215,7 @@ export function boundedRegexMatch(conditions: PreparedPatterns[], budget: RegexB
   if (slice < 1) return { matched: false, abandoned: true };
 
   runs += 1;
-  (CONTEXT as Record<string, unknown>).cs = conditions.map((c) => ({ s: c.subject, vs: c.patterns }));
+  (CONTEXT as Record<string, unknown>).cs = conditions.map((c) => ({ s: c.subject, rs: c.patterns }));
   const started = process.hrtime.bigint();
   try {
     return { matched: MATCH.runInContext(CONTEXT, { timeout: slice }) === true, abandoned: false };
@@ -200,11 +224,15 @@ export function boundedRegexMatch(conditions: PreparedPatterns[], budget: RegexB
       return { matched: false, abandoned: true };
     }
     // Nothing else is expected: the only code that runs in there is the
-    // constant above, and a pattern that does not compile is caught inside it.
+    // constant above, over `RegExp` objects the caller has already compiled.
     // An error that is not the budget is a fault in this file, and a fault
     // that explains itself must not be dressed as a pattern being too slow.
     throw err;
   } finally {
     budget.remainingMs -= Number(process.hrtime.bigint() - started) / 1e6;
+    // The context outlives the request, so what was handed to it must not: a
+    // rule's subject is `raw_log`, i.e. up to 2000 characters of text somebody
+    // else composed, per condition. Dropped as soon as the match is over.
+    (CONTEXT as Record<string, unknown>).cs = EMPTY;
   }
 }

@@ -623,10 +623,18 @@ rule set resolves to an empty one, and the alert continues untuned.
 | A `suppress` with **no expiry** | Temporary by definition. One with no end is an `allow` that has not admitted what it is. Enforced by the type, the validator AND a `CHECK` constraint |
 | A rule with **no owner or no reason** | An exception nobody owns and nobody can justify is security debt: nobody remembers why the pipeline stopped looking, so nobody dares remove it |
 | A rule with **no conditions** | It would match every alert. As an `allow` it would silence the whole pipeline |
-| A regex over 200 characters | It runs on every alert, and JavaScript cannot interrupt a running regex. Catastrophic backtracking needs no malice, only a nested quantifier |
+| A regex over 200 characters | It is stored, listed and run on every alert. The cap is on SIZE and nothing else — it was once described as the defence against catastrophic backtracking, and `(a+)+$` is six characters |
 
 An **invalid** regex matches *nothing*, never everything — the opposite choice
 would silently allow everything the rule names.
+
+A pattern **too slow to decide** matches nothing either, and it SAYS SO. No
+length makes a nested quantifier safe, so the bound is on the work:
+`bounded-regex.ts` gives one rule's patterns 100 ms and one request's 250 ms,
+and a rule that runs out is named on the dry run, in the run journal and in the
+assistant's reply — beside the expired ones, and for the same reason. See
+CLAUDE.md's traps table for what the caps were believed to do, and § 7 for the
+measurements.
 
 An **absent field never matches** (except `not_exists`). Since N1 most
 observables are optional, and reading a missing `source_ip` as "not in the
@@ -2929,7 +2937,7 @@ re-adding the blocks by hand each time, which is what happened once tonight
 before the refresh was redone under npm 11. That is a decision for a human and
 it is the one thing this subject leaves open.**
 
-### A caller-supplied regex can hang the process, and the comment says it cannot
+### ~~A caller-supplied regex can hang the process, and the comment says it cannot~~ — closed 2026-11-03
 
 Found on the security night of 2026-10-13 while mapping denial of service, and
 **not fixed**, because the fix is a decision about what a team may write in a
@@ -2971,21 +2979,58 @@ Two doors reach it, and the second is the one that needs no attacker:
   typed in good faith can stop the queue the moment a field holds forty
   repeated characters.
 
-**Why it is not fixed here.** There is no sound, cheap answer in this
-repository's constraints. The console API has exactly one production dependency
-and an RE2-style engine would be a second; Node offers no way to time out a
-regex in-process, and doing it in a worker puts thread startup on the path of
-every alert. The remaining option is to REFUSE patterns that can backtrack
-catastrophically — but the classic star-height test is neither necessary nor
-sufficient (`(a|a)*$` has star height 1 and is exponential; `(foo|bar)+` has
-height 2 and is safe), so any check will over-refuse, under-refuse, or both,
-and shipping one that reads as a guarantee would be exactly the *"a guard
-written for a state it cannot see"* this file refuses elsewhere. **Which
-regexes a team may write is a product decision, and the honest options are: a
-conservative syntactic refusal with the over-refusal stated on screen, dropping
-`op: 'regex'` for a narrower matcher, or accepting the risk and deleting the
-comment that claims it is handled.** The one thing that must not stay is the
-comment, which tells the next reader the subject is closed.
+**A third door this entry did not name**, found by grepping for the callers of
+`evaluateRules` rather than for the two routes: the assistant's `test_rule`,
+which is also `POST /api/mcp` over a **read-only** bearer token. It runs the
+stored rules against an alert's `raw_log`. *"The catalogue has no write in it"*
+was true, and it did not mean a read-only client could not stop the console.
+
+**Why this entry said it could not be fixed, and why that was wrong.** It read:
+*"Node offers no way to time out a regex in-process, and doing it in a worker
+puts thread startup on the path of every alert."* The first half is the premise
+the whole conclusion rested on, and nobody had probed it.
+`vm.Script.runInContext(ctx, { timeout })` **does** interrupt a running regular
+expression — V8's backtracking loop honours an interrupt and the watchdog fires
+from a separate thread, so it works while this one is blocked inside the match.
+Measured on Node 22.23.4 on every shape probed, the backreference form
+`(a*)*\1$` included, and the context goes on answering correctly afterwards.
+
+So no pattern has to be CLASSIFIED, which is what made this a product decision:
+the star-height objection in the paragraph that used to stand here is still
+right (`(a|a)*$` has height 1 and is exponential, `(foo|bar)+` has height 2 and
+is safe), and `bounded-regex.ts` does not need to be. It bounds the WORK
+instead, and `vm` is borrowed for its one property rather than as a sandbox —
+which the documentation is explicit it is not, and which nothing here depends
+on, because a pattern is a STRING this process compiles and never source
+anybody supplied.
+
+**What it costs, measured before and after on the real modules.** The realistic
+pipeline path is **29 us per alert, before and after** (30 stored rules, a
+third carrying a pattern), because a rule's cheap operators are evaluated first
+and most rules never arm a watchdog. Where every pattern IS reached it is
+**57 us -> 3.6 ms per alert** for 30 such rules, against a chain that takes
+about sixteen seconds. The most expensive BENIGN dry-run body this API accepts
+— 256 kB, 199 rules, 4,975 regex conditions — is **1.0 ms -> 61.9 ms**, and the
+same body carrying one nested quantifier went from never returning to about
+250 ms. One pathological condition is a flat **101 ms** at every subject size,
+against 1.4 s at n=24, 3.6 s at 28 and 14.5 s at 30 before.
+
+**The compiles are outside the budget, and that is the margin rather than a
+tidying.** With them inside, the worst rule the caps permit cost 32.4 ms of its
+budget cold and 6.7 ms warm, and the test's headroom assertion was red under
+full-suite load at 55.9 ms; outside, it is 3.7 ms cold and 3.5 ms warm, plus
+2.3 ms of compiling that no budget pays for. A compile parses a pattern of at
+most 200 characters and matches nothing, so it cannot backtrack — it is bounded
+by construction, and spending an interrupt budget on it buys nothing.
+
+**What stays open, and it is small.** `/api/rules/test` has no rate limit of
+its own, so the bound is 250 ms of blocked event loop per request rather than
+per caller; the assistant may call `test_rule` several times in one turn, each
+with its own budget, bounded by `assistant.maxSteps` and the tool-call cap. And
+`test_rule`'s reply gained `patterns_abandoned` with no test of its own — the
+budget it reports is covered by the unit tests and by the two doors that do
+have one (the dry-run route and the pipeline, both driven end to end), but the
+field name on that one reply is carried by the typecheck alone.
 
 ### State verified in testing
 

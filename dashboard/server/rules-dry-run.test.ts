@@ -37,7 +37,9 @@ process.env.MENATER_CONFIG = join(SCRATCH, 'config.json');
 // Imported AFTER the variable above: `CONFIG_PATH` is a module constant.
 const { handleRequest } = await import('./app.ts');
 const { saveConfig, getConfig } = await import('./config.ts');
-const { REQUEST_BUDGET_MS } = await import('./engine/transforms/bounded-regex.ts');
+const {
+  REQUEST_BUDGET_MS, RULE_BUDGET_MS, sandboxRuns,
+} = await import('./engine/transforms/bounded-regex.ts');
 
 afterAll(() => rmSync(SCRATCH, { recursive: true, force: true }));
 
@@ -121,10 +123,12 @@ describe('a pattern an anonymous caller supplies', () => {
      * per-rule pass behind `evaluated`.
      */
     const rules = Array.from({ length: 40 }, (_, i) => draft(`draft ${i}`, EXPONENTIAL));
+    const before = sandboxRuns();
     const r = await post('/api/rules/test', {
       alert: { alert_id: 'A-2', raw_log: SUBJECT },
       rules,
     });
+    const runs = sandboxRuns() - before;
 
     expect(r.status).toBe(200);
     const body = JSON.parse(r.body);
@@ -132,8 +136,15 @@ describe('a pattern an anonymous caller supplies', () => {
     // later rule look like a rule that did not match.
     expect(body.abandoned).toHaveLength(40);
     expect(body.evaluated.every((e: { matched: boolean }) => e.matched === false)).toBe(true);
-    // Forty rules do not cost forty slices. The margin is wide on purpose —
-    // this asserts the SHAPE of the bound, not a speed.
+    /**
+      * And the claim is about WORK, not about a clock: forty rules buy the
+      * number of slices the total allows, once for the whole request. Counted
+      * rather than timed, because a wide clock bound is satisfied by a route
+      * that hands each of its calls a budget of its own — measured: that
+      * mutation survived a `< 2 s` assertion and is red on this line.
+      */
+    expect(runs).toBeLessThan(rules.length);
+    expect(runs).toBeLessThanOrEqual(Math.ceil(REQUEST_BUDGET_MS / RULE_BUDGET_MS) + 1);
     expect(r.ms).toBeLessThan(REQUEST_BUDGET_MS * 8);
   });
 
