@@ -42,6 +42,10 @@
  */
 
 import { SEVERITIES, type Severity } from './domain.ts';
+import {
+  boundedRegexMatch, newRegexBudget,
+  type PreparedPatterns, type RegexBudget,
+} from './bounded-regex.ts';
 
 export const RULE_ACTIONS = ['allow', 'suppress', 'severity', 'escalate'] as const;
 export type RuleAction = (typeof RULE_ACTIONS)[number];
@@ -93,6 +97,12 @@ export interface RuleOutcome {
   note: string | null;
   /** Rules skipped because they had expired, so the UI can say so. */
   expired: string[];
+  /**
+   * Rules whose regular expressions ran out of their budget, named for the
+   * same reason `expired` is: a rule that stops deciding without saying so
+   * looks exactly like one that never matched. See `bounded-regex.ts`.
+   */
+  abandoned: string[];
 }
 
 // --- Field access ---------------------------------------------------------------
@@ -180,11 +190,16 @@ export function inCidr(ip: string, cidr: string): boolean {
 /**
  * Bounds on a user-supplied pattern.
  *
- * A regular expression typed into a form and run on every alert is a denial of
- * service waiting to happen — catastrophic backtracking needs no malice, only
- * a nested quantifier. JavaScript cannot interrupt a running regex, so the
- * only defence available here is to keep both the pattern and the subject
- * small enough that even a pathological pattern terminates.
+ * These are bounds on SIZE, and that is all they are. They used to be
+ * described here as the defence against catastrophic backtracking — "keep
+ * both the pattern and the subject small enough that even a pathological
+ * pattern terminates" — and that claim was false by orders of magnitude:
+ * `(a+)+$` is six characters and does not terminate inside a human lifetime
+ * at the 2000-character subject this cap allows. No length makes
+ * `new RegExp(v, 'i').test(hay)` safe, which is the form that used to stand
+ * below. What bounds the WORK is `bounded-regex.ts`, which this file now
+ * matches through; these two keep the stored row small and the quoted value
+ * readable.
  */
 export const MAX_PATTERN = 200;
 export const MAX_SUBJECT = 2000;
@@ -195,7 +210,36 @@ function textOf(value: unknown): string | null {
   return String(value);
 }
 
-export function matchesCondition(alert: unknown, condition: Condition): boolean {
+/**
+ * One regex condition, read off the alert and bounded in size, or `null` when
+ * it cannot match at all — the field is absent, or no value is usable as a
+ * pattern. Both are decided HERE and not in the matcher: neither is a question
+ * about how expensive a pattern is.
+ */
+function prepareRegex(alert: unknown, condition: Condition): PreparedPatterns | null {
+  const subject = textOf(readField(alert, condition.field));
+  if (subject === null) return null;
+  const patterns: RegExp[] = [];
+  for (const v of condition.values ?? []) {
+    if (v.trim() === '' || v.length > MAX_PATTERN) continue;
+    try {
+      // Compiled HERE, outside the budget: a compile is bounded work and
+      // matches nothing, so it cannot backtrack. And an invalid pattern
+      // matches NOTHING — treating it as "always true" would silently allow
+      // everything the rule names — which is the decision this file has always
+      // made, kept here rather than moved into the matcher.
+      patterns.push(new RegExp(v, 'i'));
+    } catch { /* not a pattern: it matches nothing, and the others still run */ }
+  }
+  if (patterns.length === 0) return null;
+  return { subject: subject.slice(0, MAX_SUBJECT), patterns };
+}
+
+export function matchesCondition(
+  alert: unknown,
+  condition: Condition,
+  budget: RegexBudget = newRegexBudget(),
+): boolean {
   const raw = readField(alert, condition.field);
 
   if (condition.op === 'exists') return raw !== undefined && raw !== null && raw !== '';
@@ -226,28 +270,51 @@ export function matchesCondition(alert: unknown, condition: Condition): boolean 
       return values.some((v) => lower.endsWith(v.trim().toLowerCase()));
     case 'cidr':
       return values.some((v) => inCidr(hay, v));
-    case 'regex':
-      return values.some((v) => {
-        if (v.length > MAX_PATTERN) return false;
-        try {
-          return new RegExp(v, 'i').test(hay);
-        } catch {
-          // An invalid pattern matches NOTHING. Treating it as "always true"
-          // would silently allow everything the rule names.
-          return false;
-        }
-      });
+    case 'regex': {
+      // The single-condition case of what `matchesRule` batches: one spelling,
+      // two sizes.
+      const one = prepareRegex(alert, condition);
+      return one !== null && boundedRegexMatch([one], budget).matched;
+    }
     default:
       return false;
   }
 }
 
-/** A rule matches when every one of its conditions does. */
-export function matchesRule(alert: unknown, rule: TuningRule): boolean {
+/**
+ * A rule matches when every one of its conditions does.
+ *
+ * The cheap operators are evaluated FIRST and every regular expression of the
+ * rule in a single bounded run. A conjunction has no side effects, so the
+ * order is free, and both halves are measurements rather than taste: the
+ * interrupt that bounds a pattern costs 123 us to arm, so a rule that already
+ * fails on an `equals` must not arm one, and a rule that needs several must
+ * not arm several. See `bounded-regex.ts`.
+ */
+export function matchesRule(
+  alert: unknown,
+  rule: TuningRule,
+  opts: { budget?: RegexBudget; onAbandoned?: () => void } = {},
+): boolean {
   // A rule with no conditions would match EVERYTHING. That is never what
   // anyone means, and as an `allow` it would silence the whole pipeline.
   if (!rule.conditions || rule.conditions.length === 0) return false;
-  return rule.conditions.every((cond) => matchesCondition(alert, cond));
+  const budget = opts.budget ?? newRegexBudget();
+
+  const patterns: PreparedPatterns[] = [];
+  for (const cond of rule.conditions) {
+    if (cond.op === 'regex') {
+      const prepared = prepareRegex(alert, cond);
+      if (prepared === null) return false;
+      patterns.push(prepared);
+      continue;
+    }
+    if (!matchesCondition(alert, cond, budget)) return false;
+  }
+
+  const verdict = boundedRegexMatch(patterns, budget);
+  if (verdict.abandoned) opts.onAbandoned?.();
+  return verdict.matched;
 }
 
 export const isExpired = (rule: TuningRule, now: Date): boolean =>
@@ -265,10 +332,17 @@ export function evaluateRules(
   alert: unknown,
   rules: TuningRule[],
   now: () => Date = () => new Date(),
+  /**
+   * Shared across every rule of this evaluation. A caller that evaluates
+   * SEVERAL times for one request passes one budget to all of them, or what it
+   * bounds is a total per call rather than per request.
+   */
+  budget: RegexBudget = newRegexBudget(),
 ): RuleOutcome {
   const at = now();
   const severity = (readField(alert, 'severity') as Severity) ?? 'medium';
   const expired: string[] = [];
+  const abandoned: string[] = [];
 
   const ordered = [...rules].sort((a, b) => a.priority - b.priority || a.id.localeCompare(b.id));
 
@@ -280,17 +354,20 @@ export function evaluateRules(
       expired.push(rule.name);
       continue;
     }
-    if (!matchesRule(alert, rule)) continue;
+    // NAMED, not silently skipped, for the reason written above `expired`:
+    // a rule whose patterns ran out of budget decided nothing, and the person
+    // who typed the pattern is the only one who can fix it.
+    if (!matchesRule(alert, rule, { budget, onAbandoned: () => abandoned.push(rule.name) })) continue;
 
     const note = `"${rule.name}" — ${rule.reason} (${rule.owner})`;
     if (rule.action === 'severity') {
       const target = rule.severity && SEVERITIES.includes(rule.severity) ? rule.severity : severity;
-      return { rule, action: 'severity', severity: target, note, expired };
+      return { rule, action: 'severity', severity: target, note, expired, abandoned };
     }
-    return { rule, action: rule.action, severity, note, expired };
+    return { rule, action: rule.action, severity, note, expired, abandoned };
   }
 
-  return { rule: null, action: null, severity, note: null, expired };
+  return { rule: null, action: null, severity, note: null, expired, abandoned };
 }
 
 // --- Validation ------------------------------------------------------------------

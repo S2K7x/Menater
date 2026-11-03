@@ -644,6 +644,9 @@ function RuleTester({ activeRules }: { activeRules: number }) {
               {result.expired.length > 0 ? (
                 <span style={{ display: 'block' }}>{t.expired}: {result.expired.join(', ')}</span>
               ) : null}
+              {result.abandoned.length > 0 ? (
+                <span style={{ display: 'block' }}>{t.testAbandoned(result.abandoned.join(', '))}</span>
+              ) : null}
             </p>
           </div>
         ) : null}

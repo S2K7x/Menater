@@ -520,6 +520,8 @@ export interface RuleTestResult {
   severity: string;
   note: string | null;
   expired: string[];
+  /** Rules whose regular expressions ran out of their budget. */
+  abandoned: string[];
   evaluated: Array<{ id: string; name: string; enabled: boolean; matched: boolean }>;
 }
 

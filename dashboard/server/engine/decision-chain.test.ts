@@ -393,6 +393,46 @@ describe('01-Ingestion, tuning rules', () => {
     expect(subflows).toEqual(['02-enrichment']);
   });
 
+  it('does not lose the pipeline to a rule whose pattern cannot finish', async () => {
+    /**
+     * The door that needs no attacker to open it: the rule was typed in good
+     * faith — `validateRule` accepts a nested quantifier, because it is valid
+     * syntax — and the SUBJECT is `raw_log`, i.e. text whoever triggered the
+     * detection composed. Before `bounded-regex.ts` this run never ended, and
+     * with it went the engine, the scheduler and both ingestion doors.
+     *
+     * Note which condition comes first: the cheap `cidr` has to pass for the
+     * pattern to be reached at all, which is the production shape of the
+     * ordering `matchesRule` relies on.
+     */
+    const { engine, store, subflows } = assembleIngestion([{
+      ...RULE,
+      conditions: [
+        { field: 'source_ip', op: 'cidr', values: ['10.0.0.0/24'] },
+        { field: 'raw_log', op: 'regex', values: ['(a+)+$'] },
+      ],
+    }]);
+
+    const run = await engine.start(
+      '01-ingestion',
+      incoming({ raw_log: `${'a'.repeat(1999)}!` }),
+      'W-7',
+    );
+
+    // The run finishes, and the alert takes its normal course rather than
+    // being closed by a rule nobody could evaluate.
+    expect(run.status).toBe('done');
+    expect(subflows).toEqual(['02-enrichment']);
+    const tuning = (await store.stepsOf(run.id)).find((s) => s.nodeId === 'tuning');
+    const out = (tuning?.output as any).tuning;
+    expect(out.closed_by_rule).toBeUndefined();
+    expect((tuning?.output as any).closed_by_rule).toBe(false);
+    // Named in the journal, for the reason `expired_rules` is: six months
+    // later this is the only thing that explains why the rule did nothing.
+    expect(out.abandoned_rules).toEqual(['Authorised scanner']);
+    expect(out.expired_rules).toEqual([]);
+  });
+
   it('ignores an expired rule, and says which one lapsed', async () => {
     const { engine, store, subflows } = assembleIngestion([
       { ...RULE, expires_at: '2026-08-01T00:00:00Z' },

@@ -207,6 +207,10 @@ export function buildRegistry(deps: RegistryDeps): TransformRegistry {
         // having looked. It travels as a flag the last barrier honours.
         force_human: outcome.action === 'escalate',
         expired_rules: outcome.expired,
+        // Same shape, same reason: a rule whose patterns ran out of their
+        // budget decided nothing, and silence here would look exactly like a
+        // rule that simply did not match.
+        abandoned_rules: outcome.abandoned,
       },
       /**
        * The payload 05-Audit-Log receives, FLAT.

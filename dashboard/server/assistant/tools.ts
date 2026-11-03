@@ -812,6 +812,9 @@ export const TOOLS: AssistantTool[] = [
         // Named rather than silently skipped: an expired exception that stops
         // working without saying so looks exactly like one that never worked.
         expired_rules_skipped: outcome.expired,
+        // Same rule, the other way a rule can stop deciding: its patterns ran
+        // out of the budget `bounded-regex.ts` gives them.
+        patterns_abandoned: outcome.abandoned,
         ordering: 'First match wins, ordered by priority, ties broken on id.',
         dry_run: true,
       };
