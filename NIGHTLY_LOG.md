@@ -4,6 +4,264 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-11-04 — Wednesday · Tests and QA
+
+**Subject**: **a `pg` connection pool with no `'error'` listener, and the
+handler one file away that was written for exactly this concern and could not
+see it.** Wednesday's rule is *a failure must never look like a success*, and
+this is the harshest form of it: the console process **ends**, and from the
+outside that looks like a container somebody stopped.
+
+**Result**: PR opened on `claude/sleepy-volta-q01ej9`. Five files: one
+production edit (`server/engine/pg-store.ts`, +47 lines of which 40 are the
+comment), one new test file (`server/engine/pool-error.test.ts`, **+9 tests**),
+plus `CLAUDE.md` (one traps row, suite count 1832 → 1841), `ROADMAP.md` (§ 7, a
+new entry opened and closed) and this journal. **No CSS, no class name, no
+colour, no catalogue key, no dependency** — `pg` was already the console API's
+one production dependency. The built bundle is **byte-identical**
+(`index-DRdTRqkR.js` 447.65 kB, `index-DpyowbMH.css` 62.42 kB): the change is
+server-only. VulnPipe untouched and not run.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-q01ej9` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Fifty-sixth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: after `npm ci` on the
+designated branch at `8a406ee` (= `origin/main`) the baseline was typecheck
+**0 errors**, **1832 passed | 1 skipped**, a clean build, `npm audit` **0
+vulnerabilities** on both halves, and `list_pull_requests --state open` was
+**empty**. Step 2's priority (2) is a real, reproducible bug.
+
+**How it was found, because the sweep is the transferable part.** Not by
+grepping for `catch` — three previous Wednesdays have done that and the eight
+remaining `.catch(() => …)` in `server/` are each reasoned about where they
+sit. The sweep was *every place a rejection can escape into nothing*:
+`setInterval`, `setTimeout` and `void <async call>` across `server/`. It found
+three fire-and-forget entry points — `WaitScheduler.tick()`,
+`noteRuleMatch` → `recordRuleMatch`, and `Poller.tick()` — and then the shape
+it was not looking for, which is not a promise at all: **an `EventEmitter`.**
+
+**What the defect is.** `pg`'s `Pool` emits `'error'` when a connection it
+holds IDLE loses the server at the other end, and an `EventEmitter` with no
+listener for `'error'` **throws**. `createPool` attached **zero**. Driven
+against the real `server/api.ts` on a real PostgreSQL 16.15 stood up in this
+container:
+
+```
+GET /api/snapshot                      200, "the pipeline answers"
+backends the pool holds                1, idle
+pg_terminate_backend on it             the console process is GONE
+GET /api/snapshot                      000 — connection refused
+the log                                301 lines of a dumped `Client` object
+```
+
+**What it costs, stated honestly rather than dramatised.** `docker-compose.yml`
+says `restart: unless-stopped`, so the container comes back; this is a downtime
+window, not a dead install. The window is not free. A pushed alert that arrives
+at a closed port is this project's own *« a webhook nobody received is a webhook
+nobody knows about »* — silent loss on the push lane, where the pull lane's
+cursor is exactly what protects it — and in-flight runs die mid-step, so a
+`write` step returns `indeterminate` for a human to settle. Under
+`npm run serve` nothing brings it back.
+
+**What I learned that is written nowhere else.**
+
+1. **It is an uncaught EXCEPTION, not a rejection, and that is why the existing
+   guard was blind to it.** `api.ts` carries
+   `process.on('unhandledRejection')` under the comment *« a promise rejected
+   outside the handler must not bring the server down: the console would stay
+   unreachable until someone restarted it by hand »* — the rule, written
+   correctly, covering one of the two shapes a background failure takes. An
+   unlistened `EventEmitter` raises the other one. The sentence describing the
+   consequence was forty lines above the thing that produced it.
+2. **The pool heals itself, so the listener's only job is to not die.**
+   Measured: with the event merely listened to, the pool drops the dead client
+   (`idleCount` and `totalCount` both fall to 0) and the **next query answers on
+   a new connection** (pid 11085 → 11087). The missing listener contributed
+   *nothing but the death*. That single measurement decided the whole shape —
+   **node-postgres' own documentation puts `process.exit(-1)` in this
+   handler**, and on the process that answers the ingestion webhook that
+   rebuilds the defect inside its own repair.
+3. **No in-process test can claim this, and my first mutation harness proved
+   it by getting it wrong.** With the listener removed, every assertion in the
+   new file still passes and vitest prints `Tests 9 passed` beside
+   `Errors 3` — so a harness reading `numFailedTests` reports the defect
+   SURVIVED. Mine did, on M2 (`process.exit(-1)`), which is the mutation I had
+   singled out in the PR draft as *the one this test refuses*. It refused
+   nothing. Second instance of the 10-27 lesson, sharper: **a mutation harness
+   must read the run's EXIT CODE**, because the signal the assertion count
+   cannot carry is the only signal this defect has. The repair was a vehicle,
+   not a wording: a CHILD process, read off its exit code, which separates all
+   three outcomes — **0** with the listener, **1** with none, **255** with the
+   exit. It is the only assertion in the file that kills M2, and it is red on
+   M1 and M3 too.
+4. **`describePgError` here would be dead code dressed as prudence.** The
+   obvious move is to route the handler through it, because that is what this
+   project does with `pg` errors everywhere else. It exists for one reason:
+   `pg` reports a refused CONNECT as an `AggregateError` whose `.message` is
+   the **empty string**. An idle client is one that already connected, so that
+   shape cannot arrive here — and the three that can were probed on 16.15 and
+   every one carries its own sentence (`57P01` / *terminating connection due to
+   administrator command* for an admin command AND for an orderly
+   `pg_ctl restart -m fast`; a plain `Error` / *Connection terminated
+   unexpectedly* when the database is killed outright). Describing them again
+   prints one cause under two prefixes, which is the mistake the approval sweep
+   already made once. No test refuses it, because both spellings contain the
+   same cause; the reason is in the comment, with the numbers.
+5. **An orderly `pool.end()` emits nothing** — measured, 0 events. That is what
+   lets this handler exist at all: without it, every `docker compose down` and
+   every database re-point from Settings (`runtime.ts` ends the old pool) would
+   print a failure. It is claimed by a test that passes before AND after, and
+   the mutation that reports on `'remove'` too is red on it.
+6. **A fake Postgres wire server is about forty lines, and it produces the real
+   event.** `pg` 8.23.0 considers itself connected on **AuthenticationOk +
+   ReadyForQuery** alone (no ParameterStatus, no BackendKeyData), answers a
+   simple `'Q'` query on **CommandComplete + ReadyForQuery**, and then — this is
+   the part that mattered — an idle socket killed by **RST or by FIN alike**
+   emits `Error: "Connection terminated unexpectedly"`, *byte for byte the
+   string real PostgreSQL produces when its process is killed outright*. So the
+   suite drives this over real sockets and needs no database.
+7. **THIS CONTAINER HAS A REAL POSTGRES, and five weeks of entries recorded the
+   opposite.** `/usr/lib/postgresql/16/bin` is present, the `postgres` user
+   (uid 102) already exists, and the recipe is three commands:
+   `initdb -D <dir> -U menater --auth=trust`, then
+   `pg_ctl -D <dir> -o '-p 55432 -k <run> -c listen_addresses=127.0.0.1' start`,
+   then `psql -f sql/*.sql` in filename order → **19 tables**, one error, which
+   is the role already existing. The 11-01 entry found this once; it is written
+   here as a recipe so the next night does not re-derive it, and so that
+   *« this environment has no database »* stops being inherited. `MENATER_TEST_PG`
+   is still never set by the suite, for the sixth week.
+
+**Found and NOT fixed, each with why.**
+
+- **`Poller.tick()` has no `try`/`catch`, and it is the file the other two
+  name.** `scheduler.ts`'s header states the rule — *« Nothing escapes the
+  timer. `setInterval(() => void this.tick())` with an uncaught rejection
+  TERMINATES a Node 22 process — the trap this repository already paid for on
+  `pollSource` »* — and `noteRuleMatch`'s comment says its contract is *pinned
+  by a test rather than left to a `.catch` to imply*. `Poller.tick()` has
+  neither, and `pollSource`'s own header promises *« Never throws: a transport
+  is not allowed to take the console down »* twenty lines above
+  `if (!(err instanceof PayloadTooDeep)) throw err`. **I traced every escape and
+  none is reachable from data today**, which is why there is no diff: `normalize`
+  keeps its promise (the only `JSON.stringify` inside it cannot see a cycle or a
+  BigInt, both impossible out of `JSON.parse`, and the depth floor is checked
+  first); `readPath` guards `null` and non-objects, so `extractItems` survives a
+  source answering the literal `null`; `cursors.load()` catches its own read and
+  parse; and `pollUrl`'s `new URL` and `from.toISOString()` — the one that can
+  genuinely throw, on an Invalid Date from an unparseable stored `since` — are
+  both evaluated INSIDE the `try` around `fetchWithDeadline`. So a catch here
+  would be error handling for a case I could not demonstrate, which NIGHTLY.md
+  § 3 forbids in as many words. Written down with the trace so the next night
+  does not repeat the hunt; if anybody ever makes `normalize` throw a second
+  error type, this becomes a one-line fix and a process death.
+- **`server/probes.ts`'s `fetchWithTimeout` has no callers anywhere.**
+  Exported, documented at length, and `grep` over both halves returns only its
+  own definition. Same family as `NodeDef.retry`, `meta.from_env` and
+  `match_count`: a thing with writers and no readers. A deletion, not a
+  Wednesday subject.
+- **`readVariables` / `writeVariables` in `pg-store.ts` have no callers
+  either**, and `soc_variable`, `soc_variable_history` and their GRANTs exist
+  for them. `config.ts` is honest about it — *« They will live in `soc_variable`
+  once the database is wired in »* — but **`CLAUDE.md`'s architecture line
+  claims Postgres holds the "pipeline variables", and it does not**: they are in
+  `config.json`, read by `runtime.ts` on every run. Documentation describing an
+  unimplemented intention, which is Sunday's own brief.
+- **`diagnostics.ts` calls `pool.query` directly** and its catch prints
+  `(err as Error).message` under a comment asserting *« describePgError has
+  already turned pg's empty ECONNREFUSED message into a sentence by this
+  point »* — nothing calls it on that path. Measured here against a closed port
+  on both `127.0.0.1` and `localhost`: the message is non-empty
+  (`connect ECONNREFUSED 127.0.0.1:1`), so the claim is wrong in letter and
+  harmless in effect **as long as the host resolves to one address**; the
+  empty-message `AggregateError` needs several, which is what the 11-01 entry
+  measured from the other side.
+- **The relay's missing deadline (§ 7) was measured and deliberately left
+  open.** It was my first candidate for the night. All four shapes hang for
+  ever — a head that never arrives, a POST whose body the service never reads, a
+  listener speaking no HTTP, and a head followed by permanent silence — and
+  Node's inbound defaults do not bound it: `requestTimeout` (300 s) and
+  `headersTimeout` (60 s) both govern RECEIVING a request, `server.timeout` is
+  0, and a GET whose answer never comes was **still open after 400 s**. I did
+  not fix it because the fourth shape is a legitimate quiet SSE stream and
+  `/estimate` resolves its target, CLONES a GitHub repository and indexes it
+  with tree-sitter *before* writing a head — so the honest time-to-first-byte
+  has no bound I can name, and a number chosen tonight would break the estimate
+  it exists to protect. That is a policy decision for a human, and § 7 now
+  carries the measurement and that argument instead of an un-numbered
+  "no deadline".
+- **No flakiness tonight.** The baseline suite was run **five times** and gave
+  `1832 passed | 1 skipped` every time, so the 11-01 pair (the base64url nonce
+  and the `findBy*` fold) is genuinely fixed. The slowest file is
+  `inventory-settings.test.tsx` at 3.50 s, the slowest single test 1.12 s, and
+  the only real sleeps left in the suite are 5 ms and 40 ms.
+
+**Do not redo.**
+
+- **Do not put `process.exit(-1)` in the pool handler**, whatever
+  node-postgres' README says. Learning 2. M2 is red on the child-process test
+  and on nothing else, which is precisely why that test exists.
+- **Do not route the handler through `describePgError`.** Learning 4, with the
+  three measured shapes. It prints one cause under two prefixes.
+- **Do not add `process.on('uncaughtException')` to `api.ts`.** It is the
+  tempting general fix and it is the wrong one twice over: it leaves the
+  process in a state nothing can reason about, and it is *« a `catch` that maps
+  every failure to one value »* at process scope — it would have HIDDEN this
+  defect instead of surfacing it. Said out loud in § 7 as a decision rather
+  than left as an omission.
+- **Do not claim process survival from inside the process.** Learning 3. Every
+  assertion passes over the defect; only a child's exit code separates the
+  three outcomes.
+- **Do not read a mutation's verdict off `numFailedTests`.** Learning 3 again.
+  The harness reads the exit code AND the uncaught count now, and it runs an
+  unmutated control FIRST and LAST, asserting both.
+- **Do not add a `try`/`catch` to `Poller.tick()` on the strength of the
+  argument above.** It is the right-looking change and I could not demonstrate
+  a reachable throw; the trace is in *Found and NOT fixed* so the work is not
+  lost.
+- **Do not restore a mutated file with `git checkout` while the change is
+  uncommitted.** The 11-02 learning, obeyed: the harness copies the two files
+  to the scratchpad first and restores from those copies.
+
+**Verified** (Node 22.23.4, npm 10.9.9, PostgreSQL 16.15; every command run and
+its output read):
+
+| Command | Result |
+|---|---|
+| `npm ci`, both halves | clean, **0 vulnerabilities** each |
+| baseline `npm run typecheck` / `npm test` ×5 / `npm run build` | **0 errors**, **1832 passed \| 1 skipped** on all five runs, clean |
+| `npm run typecheck` (after) | **0 errors** |
+| `npm test` (after) | **1841 passed \| 1 skipped** (**+9**) |
+| `npm run build` (after) | clean — bundle **byte-identical**, `index-DRdTRqkR.js` 447.65 kB / `index-DpyowbMH.css` 62.42 kB |
+| the new file alone | 9 passed in **1.77 s** |
+| RED first | **4 failed \| 5 passed** with the production edit reverted, plus the uncaught `throw er; // Unhandled 'error' event` the defect IS; the three boundary claims green before and after on purpose |
+| end to end, real console + real PostgreSQL 16.15 | before: process **dead**, port closed, 301-line dump. after: **alive**, `GET /api/snapshot` **200**, one log line naming cause and consequence |
+| mutation | **7 mutations, 7 killed**, control green before AND after |
+| VulnPipe | **not touched**, not run — `git status` shows no file under it |
+
+**Seven mutations, seven killed**, one at a time, pristine files restored from a
+working-tree copy between each:
+
+| Mutation | Result |
+|---|---|
+| M1 — the listener removed (the defect) | RED — 4, the child test among them |
+| M2 — `process.exit(-1)`, node-postgres' README | RED — 1, **the child test alone** |
+| M3 — the handler swallows it silently | RED — 3 |
+| M4 — the cause dropped from the sentence | RED — 1 |
+| M5 — the consequence dropped from the sentence | RED — 1 |
+| M6 — a second pool built outside `createPool` | RED — 1, the structural sweep |
+| M7 — the handler reports on an orderly `pool.end()` too | RED — 1, the boundary |
+
+No model key and no network egress were needed. The Postgres used for the
+end-to-end measurement was stood up inside this container, torn down after, and
+its data directory deleted; the probes (`probe-hang.mjs`, `probe-pool.mjs`,
+`probe-shapes.mjs`, `probe-wire.mjs`, `probe-connect.mjs`, `probe-inbound.mjs`,
+`mutate.py`, `mutate2.py`) lived in the scratchpad and are gone — `git status`
+shows only the five intended files.
+
 ## 2026-11-03 — Tuesday · Security
 
 **Subject**: **a caller-supplied regular expression could stop the console for

@@ -2417,6 +2417,64 @@ holds the door on irreversible actions.
 
 ## 7. Known technical debt
 
+### ~~A `pg` pool with no `'error'` listener ends the process~~ — closed 2026-11-04
+
+Not previously in this list: it was found by enumerating every async callback a
+timer or a `void` call can reach in this process, and it was the one shape the
+enumeration did not expect — an `EventEmitter`, not a promise.
+
+`createPool` built a `pg.Pool` and attached **zero** `'error'` listeners. A pool
+emits that event when a connection it holds IDLE loses the server at the other
+end, and an `EventEmitter` with no listener for `'error'` throws. That throw is
+an uncaught EXCEPTION, so `api.ts`'s `process.on('unhandledRejection')` — the
+handler written under *« a promise rejected outside the handler must not bring
+the server down »* — never saw it.
+
+**Measured against the real console process on real PostgreSQL 16.15:**
+
+```
+GET /api/snapshot                      200, engine reachable
+backends the pool holds                1, idle
+pg_terminate_backend on it             the console process is GONE
+GET /api/snapshot                      000 (connection refused)
+the log                                301 lines of a dumped `Client` object
+```
+
+Three shapes reach it, all probed: `pg_terminate_backend` and an orderly
+`pg_ctl restart -m fast` give `DatabaseError` / `57P01` / *terminating
+connection due to administrator command*; killing the database outright gives a
+plain `Error` / *Connection terminated unexpectedly*.
+
+**What it cost, stated honestly.** In Docker `restart: unless-stopped` brings the
+container back, so this is a downtime window and not a dead install. The window
+is not free: a pushed alert that arrives at a closed port is *a webhook nobody
+received is a webhook nobody knows about*, which is silent loss on the push
+lane — the pull lane's cursor is precisely what protects it — and in-flight runs
+die mid-step, so a `write` step comes back `indeterminate` for a human to
+settle. Under `npm run serve` nothing brings it back.
+
+**The pool needed no repair, and that is the whole decision.** With the event
+merely listened to it drops the dead client (`idleCount` and `totalCount` both
+fall to 0) and the next query opens a new connection — measured. So the missing
+listener contributed nothing but the death, and the handler reports and
+returns. node-postgres' own documentation suggests `process.exit(-1)` here;
+on the process that answers the ingestion webhook that rebuilds the defect
+inside its own repair, and it is the mutation that corrected the tests rather
+than the code.
+
+**After**, same scenario: the console stays up, `GET /api/snapshot` answers 200,
+and the log holds one line — *« a pooled database connection was dropped:
+terminating connection due to administrator command — it will be reopened on
+the next query. »*
+
+**What stays open**: `api.ts` still has no `uncaughtException` handler, and that
+is deliberate rather than overlooked. A blanket net would leave the process in a
+state nothing can reason about, and it is the *« a `catch` that maps every
+failure to one value »* shape at process scope — it would have hidden this
+defect rather than surfaced it. The listener lives in `createPool` because that
+is the one choke point, and `pool-error.test.ts` holds the subtraction that
+keeps it so.
+
 ### Two body reads that say less than they could, measured and left alone
 
 Found by the sweep that fixed `notify`'s `discord-webhook` branch (CLAUDE.md,
@@ -2597,6 +2655,24 @@ request, no `AbortController`, and the only teardown is the client closing
 (`res.on('close')`). An analysis service that accepts a request and never
 answers holds both sockets for as long as the client waits, and `api.ts` sets
 no `requestTimeout` or `headersTimeout`, so only Node's defaults apply.
+
+**"As long as the client waits" was measured on 2026-11-04 rather than reasoned
+about, and Node's defaults do not bound it.** `requestTimeout` is 300 000 ms and
+`headersTimeout` 60 000, but both govern RECEIVING a request, so neither fires
+once the request is in and the answer is what never comes; `server.timeout` is
+0. A GET whose response never arrives was **still open after 400 s**, and the
+relay hangs for ever on all four shapes: a head that never arrives, a POST whose
+body the service never reads, a listener speaking no HTTP at all, and a head
+followed by permanent silence.
+
+**The fourth shape is why this is still open.** It is a legitimate quiet SSE
+stream — and `/estimate` is worse, because it resolves the target, CLONES a
+GitHub repository and indexes it with tree-sitter *before* writing a head, so
+the honest time-to-first-byte has no bound anybody here can name. A deadline is
+therefore a policy number somebody has to choose against their own
+repositories, not one a night can invent: a number too low breaks the estimate
+it exists to protect, which is the *over-refusing a legal rule is a silent hole*
+trade this project has already paid for once.
 
 ### The incident card's heading outline, and the `h1` size step
 
