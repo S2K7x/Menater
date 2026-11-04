@@ -57,7 +57,7 @@ export interface PgConfig {
  * limite de la base pendant qu'un autre outil en a besoin.
  */
 export function createPool(config: PgConfig): Pool {
-  return new Pool({
+  const pool = new Pool({
     host: config.host,
     port: config.port,
     database: config.database,
@@ -70,6 +70,52 @@ export function createPool(config: PgConfig): Pool {
     connectionTimeoutMillis: 8_000,
     statement_timeout: 15_000,
   });
+
+  // A CONNECTION NOBODY WAS USING MUST NOT BE ABLE TO END THE PROCESS.
+  //
+  // A `Pool` is an `EventEmitter`, and it emits `'error'` when a connection it
+  // holds IDLE loses the server at the other end: a database restart, a
+  // failover, an administrator's `pg_terminate_backend`, a middlebox reaping an
+  // idle socket. An `EventEmitter` that emits `'error'` with no listener
+  // THROWS — and that throw is an uncaught EXCEPTION, not a rejection, so
+  // `api.ts`'s `process.on('unhandledRejection')`, written under the comment
+  // « a promise rejected outside the handler must not bring the server down »,
+  // never saw it. Measured against the real console on PostgreSQL 16.15: a
+  // healthy `GET /api/snapshot` answered 200, one backend sat idle in the pool,
+  // `pg_terminate_backend` on it, and the process was gone — the port closed,
+  // the ingestion webhook with it, and 301 lines of a dumped internal `Client`
+  // object in the log naming nothing an operator can act on.
+  //
+  // IT REPORTS AND RETURNS, and that is the whole decision. The pool needs no
+  // repair: with this event merely listened to it drops the dead client
+  // (`idleCount` and `totalCount` both fall to 0) and the next query opens a
+  // new connection — measured. So the missing listener contributed nothing but
+  // the death. node-postgres' own documentation suggests `process.exit(-1)`
+  // here; on this process that rebuilds the defect inside its own repair, and
+  // `pool-error.test.ts` keeps a test whose only job is to refuse it.
+  //
+  // NO `describePgError`, deliberately. That function exists because `pg`
+  // reports a refused CONNECT as an `AggregateError` whose `.message` is the
+  // EMPTY STRING; an idle client is one that already connected, so that shape
+  // cannot arrive here. The three that can were probed on 16.15 and every one
+  // carries its own sentence: `57P01` / "terminating connection due to
+  // administrator command" for an admin command and for an orderly restart,
+  // and a plain `Error` / "Connection terminated unexpectedly" when the
+  // database process is killed outright. Describing them twice would print one
+  // cause under two prefixes, which is the mistake the approval sweep already
+  // made once.
+  //
+  // The consequence is named next to the cause: a dropped connection the pool
+  // reopens by itself is not a database that is down, and sending an operator
+  // to look at a database that is answering costs them the evening.
+  pool.on('error', (err: Error) => {
+    console.error(
+      `[menater] a pooled database connection was dropped: ${err.message}`
+      + ' — it will be reopened on the next query.',
+    );
+  });
+
+  return pool;
 }
 
 /**
