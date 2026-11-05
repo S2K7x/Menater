@@ -15,7 +15,7 @@
  */
 
 import { Engine } from './engine/engine.ts';
-import { PgRunStore, createPool, describePgError } from './engine/pg-store.ts';
+import { PgRunStore, createPool, describePgError, describeQueryError } from './engine/pg-store.ts';
 import type { RunStore } from './engine/store.ts';
 import { pureHandlers, TransformRegistry } from './engine/nodes/pure.ts';
 import { ioHandlers } from './engine/nodes/io.ts';
@@ -93,7 +93,7 @@ export function getEngine(): Engine | null {
     vars,
     now,
     secret: (name: string) => secretFor(name),
-    query: async (sql: string, params: unknown[]) => (await pool.query(sql, params as never[])).rows,
+    query: queryDep(pool),
     runSubflow: async (workflowId: string, input: unknown, alertId: string | null) => {
       const run = await engine.start(workflowId, input, alertId);
       return { run_id: run.id, status: run.status };
@@ -156,6 +156,45 @@ export function getRuleStore(): RuleStore | null {
   const engine = getEngine();
   if (!engine || !engineCache) return null;
   return new RuleStore(engineCache.pool);
+}
+
+/**
+ * The engine's SQL dependency: `pool.query`, with the cause of a failure named.
+ *
+ * ============================================================================
+ * THE ENGINE RECORDS THIS STRING AS THE STEP ERROR
+ *
+ * `nodes/io.ts`'s own header says where it then goes: « the console prints that
+ * string in the two places somebody reads while an incident is open: the
+ * technical incident on the card, and the run's note in the Tracking tab ». It
+ * is also `soc_run.error`, which `injection.ts` hands back as the `detail` of
+ * a test alert and of a replay.
+ *
+ * This was a bare `pool.query`, so a refused connection travelled as `pg`
+ * raises it — an `AggregateError` whose `.message` is the EMPTY STRING when
+ * the host resolves to more than one address. `ruleDb`, directly below, has
+ * wrapped the rule store's queries in `describePgError` since the day the
+ * Rules tab answered in French; the pool's OTHER direct consumer wrapped
+ * nothing. The mirror of a rule is not the rule, in the same file.
+ *
+ * It is the two `postgres` nodes that pay: `dedup` in `01-Ingestion`, and the
+ * audit write in `05-Audit-Log` — whose incident reads « the audit write
+ * failed: the trace of this alert is lost », with the cause interpolated.
+ *
+ * EXPORTED FOR ITS TEST, and for nothing else. The one thing it adds over
+ * `pool.query` is a sentence on the failure path, and that path cannot be
+ * reached through `getEngine()` without a database that answers the run header
+ * and then stops answering. `pg-empty-message.test.ts` drives it directly.
+ * ============================================================================
+ */
+export function queryDep(pool: Queryable) {
+  return async (sql: string, params: unknown[]): Promise<unknown[]> => {
+    try {
+      return (await pool.query(sql, params)).rows;
+    } catch (err) {
+      throw new Error(describeQueryError(err, sql));
+    }
+  };
 }
 
 /**

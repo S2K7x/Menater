@@ -4,6 +4,209 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-11-05 — Thursday · Bugs and technical debt
+
+**Subject**: **an unreachable database reaches the operator as the empty
+string, and the empty shape only happens when the host resolves to more than
+one address.** `pg` rejects a refused connection with an `AggregateError` whose
+`.message` is `""`; `describePgError` was written for exactly that, in this
+repository, after the entry point once answered `"error": ""`. Three paths went
+around it — and the two tests written against the empty message are green,
+because their fixtures name a literal address.
+
+**Result**: PR opened on `claude/sleepy-volta-0db04i`. Eight files: four
+production edits (`engine/pg-store.ts`, `runtime.ts`, `diagnostics.ts`,
+`engine/engine.ts`), one new test file (`server/pg-empty-message.test.ts`,
+**+10 tests**), one comment correction in an existing test
+(`diagnostics.test.ts`), plus `CLAUDE.md` (one traps row, suite count
+1841 → 1851), `ROADMAP.md` (§ 7, a new entry opened and closed) and this
+journal. **No CSS, no class name, no colour, no catalogue key, no dependency.**
+The built bundle is **byte-identical** (`index-DRdTRqkR.js` 447.65 kB,
+`index-DpyowbMH.css` 62.42 kB): the change is server-only. VulnPipe untouched
+and not run.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-0db04i` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Fifty-seventh entry saying so**; it is a line
+in the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: after `npm ci` on the
+designated branch at `0f0fd91` (= `origin/main`) the baseline was typecheck
+**0 errors**, **1841 passed | 1 skipped**, a clean build, `npm audit` **0
+vulnerabilities**, and `list_pull_requests --state open` was **empty**. Step 2's
+priority (2) is a real, reproducible bug. It came straight out of the 11-04
+entry's *Found and NOT fixed*, which recorded that `diagnostics.ts` prints
+`(err as Error).message` under a comment asserting `describePgError` has already
+run — and measured, correctly, that on THIS container the message is non-empty.
+That measurement is the whole lead: the container's `/etc/hosts` has no `::1`
+line, so `localhost` resolves to ONE address here.
+
+**What the defect is, measured rather than reasoned.** `pg` 8.23.0 on Node
+22.23.4, against a closed port:
+
+| host | constructor | `.message` | `.code` |
+|---|---|---|---|
+| `twohomed` (two A records) | `AggregateError` | `""` | `ECONNREFUSED` |
+| `127.0.0.1` | `Error` | `"connect ECONNREFUSED 127.0.0.1:1"` | `ECONNREFUSED` |
+
+The empty `.message` is Node's happy-eyeballs aggregate: one child error per
+address tried, the code on the parent AND on the children, nothing on the
+parent's message. `localhost` is two addresses on any machine carrying the usual
+`::1` line — and it is this product's DEFAULT database host.
+
+Driven against the real `runDiagnostics` with a two-address host, before and
+after:
+
+| host | before | after |
+|---|---|---|
+| two addresses | `detail: ""` | `detail: "the database refused the connection — nothing is listening at that address (ECONNREFUSED)"` |
+| one address | `detail: "connect ECONNREFUSED 127.0.0.1:1"` | **byte-identical** |
+
+And the engine's SQL dependency, against a real pool:
+
+| host | `pool.query` raw | `queryDep` |
+|---|---|---|
+| two addresses | `""` | `Database (INSERT): the database refused the connection — nothing is listening at that address (ECONNREFUSED)` |
+| one address | `connect ECONNREFUSED 127.0.0.1:1` | `Database (INSERT): connect ECONNREFUSED 127.0.0.1:1` |
+
+**What I learned that is written nowhere else.**
+
+1. **The condition on the empty message was not written down anywhere the three
+   callers could see it — and it WAS written down in the one file that did not
+   need it.** `audit-chain.ts`'s catch comment says *« `pg` rejects
+   `ECONNREFUSED` with an EMPTY message when the host resolves to several
+   addresses »*, and that file describes its errors correctly. The banner over
+   `describePgError` itself did not carry the condition. It does now, with the
+   two-row table, because the omission is the entire reason three callers went
+   around the function and two tests stayed green. And the empty-message HALF
+   of it was written eighteen lines below the bare `pool.query` that needed it:
+   `RuleDbError`'s own comment in `runtime.ts` says *« On `ECONNREFUSED` that
+   message is the EMPTY STRING, so the Rules tab showed a failure with no
+   cause: the very defect already fixed on the webhook, in a place the fix was
+   never applied »* — a sentence about this exact class of miss, in the file
+   where it was about to happen again.
+2. **`net.connect` honours a custom `lookup`, and it produces the GENUINE
+   aggregate.** That is what let the test provoke the failure instead of
+   borrowing it: hand `net.connect({ host, port, lookup })` a lookup answering
+   two loopback addresses for a port the test bound and released, and Node
+   raises `AggregateError` / `.message` `""` / `.code` `ECONNREFUSED` with one
+   described child per address — the same object `pg` handed up against a real
+   two-A-record host, because it is the same code path. **No DNS, no
+   `/etc/hosts`, no network, deterministic on any machine.** `pg` itself offers
+   no seam for this: `connection.js` calls `this.stream.connect(port, host)`,
+   the two-argument `Socket` form, so there is no `lookup` to pass — and
+   `createPool` builds its config from six fields. Hence one `vi.mock` of
+   `createPool` alone, with `describePgError`, `pgCause` and `PgRunStore` left
+   real.
+3. **`errorText` is a floor, not a cure, and saying so is what keeps the fix
+   honest.** On an empty message it returns `String(err)`, i.e. `"AggregateError"`
+   — non-empty, and naming no cause. So it cannot replace describing the pg
+   error at the two doors; what it buys is that the journal can never record a
+   step failure with nothing in it, whatever handler is installed, and that a
+   handler throwing a non-`Error` does not throw INSIDE the catch (which escapes
+   `drive()` and leaves the run `running` for ever).
+4. **The prefix was a measurement, not a preference.** The Health tab renders a
+   check's `detail` directly under its `label`, and the label IS « Database ».
+   The two sibling sentences on that same check (`dbNotConfigured`,
+   `dbReachable`) never repeat the word. So that one caller takes the cause
+   alone (`pgCause`) and everything else the prefixed form — and the mutation
+   writing `describePgError(err, dg.dbLabel)` there is red on a test that exists
+   for it.
+5. **There are exactly TWO modules in `server/` that build a pool**, and I got
+   that wrong first: I wrote the sweep's vacuity floor at 3 on the assumption
+   that `audit-chain.ts` was one, and the test told me otherwise. It mentions
+   `createPool` in a comment only — the route hands it `getAuditPool()`, i.e.
+   the engine's. The floor is 2, measured by the walk, and the comment says why
+   the sweep strips comments before looking.
+6. **`snapshot.ts` carries the same sentence as `diagnostics.ts` and there it is
+   TRUE.** Its try block awaits only `store.recentRuns` and `store.stepsOfMany`,
+   both of which go through `PgRunStore.q()`. Worth knowing before somebody
+   "fixes" it: the claim is a property of what is inside the `try`, not a
+   phrase to grep for.
+
+**Found and NOT fixed, each with why.**
+
+- **`readVariables` / `writeVariables` in `pg-store.ts` describe nothing** — the
+  first swallows its error into `null`, the second lets it through raw. They are
+  pool CONSUMERS (they take one), they sit in the module that owns `createPool`,
+  which the sweep excludes, and **they have no callers at all** (the 11-04 entry
+  found that, along with `CLAUDE.md`'s claim that Postgres holds the pipeline
+  variables, which it does not). Wrapping dead code would be error handling for
+  a case nobody can reach; the honest row is the deletion, and it is not this
+  night's subject.
+- **`RuleStore.history` has no callers either.** Found while sweeping the rule
+  store's query sites to check they all go through `ruleDb`. Same family as
+  `probes.ts`'s `fetchWithTimeout`: a thing with writers and no readers.
+- **`noteMatch`'s failure reaches a log through `errorText`, so on the empty
+  shape it logs `AggregateError`** and not a cause. Left alone on purpose: it is
+  a counter, `rules-match.ts`'s own header says measurement must never be able
+  to delay or fail an alert, and the one surface is a `console.error`. Naming
+  the cause there would mean a third door; it is one line the day somebody wants
+  it.
+- **The relay's missing deadline (§ 7) was not reopened.** The 11-04 entry
+  measured all four hang shapes and left it as a policy decision for a human,
+  because `/estimate` clones and indexes a repository before writing a head.
+  That argument has not changed.
+
+**Do not redo.**
+
+- **Do not try to make `pg` take a custom `lookup`.** Learning 2:
+  `connection.js` uses the two-argument `Socket.connect(port, host)` form, and
+  `createPool` passes six fields. The seam is `createPool` itself.
+- **Do not add `/etc/hosts` entries from a test**, and do not reach for
+  `dualstack` (`127.0.0.1` + `::1`) as a fixture: measured here, IPv6 is
+  unavailable in this container (`EAFNOSUPPORT` on a `::1` listen), so Node
+  discards the IPv6 candidate before it can be aggregated and the result is a
+  plain `Error` with a NON-empty message. The two-A-record form is the one that
+  reproduces on every machine.
+- **Do not use `errorText` as the fix at the two pg doors.** Learning 3. It
+  yields a constructor name.
+- **Do not prefix the Health tab's detail with `Database`.** Learning 4, and a
+  test refuses it.
+- **Do not restore a mutated file with `git checkout` while the change is
+  uncommitted.** The 11-02 learning, obeyed again: the harness copies the five
+  files to the scratchpad first and restores from those copies, and it runs an
+  unmutated control FIRST and LAST, asserting both.
+
+**Verified** (Node 22.23.4, npm 10.9.9; every command run and its output read):
+
+| Command | Result |
+|---|---|
+| `npm ci` | clean, **0 vulnerabilities** |
+| baseline `npm run typecheck` / `npm test` / `npm run build` | **0 errors**, **1841 passed \| 1 skipped**, clean |
+| `npm run typecheck` (after) | **0 errors** |
+| `npm test` (after) | **1851 passed \| 1 skipped** (**+10**) |
+| `npm run build` (after) | clean — bundle **byte-identical**, `index-DRdTRqkR.js` 447.65 kB / `index-DpyowbMH.css` 62.42 kB |
+| the new file alone | 10 passed in **0.75 s** |
+| RED first | the file does not even load without the two new exports; then each door's test is red on its own mutation, below |
+| end to end, real `runDiagnostics` | `detail: ""` → the named sentence on a two-address host; **byte-identical** on one address |
+| end to end, real `pg` pool | `""` → `Database (INSERT): …` |
+| mutation | **8 mutations, 8 killed**, control green before AND after |
+| VulnPipe | **not touched**, not run — `git status` shows no file under it |
+
+**Eight mutations, eight killed**, one at a time, pristine files restored from a
+working-tree copy between each:
+
+| Mutation | Result |
+|---|---|
+| M1 — the defect: `diagnostics.ts` reads the message raw | RED — 2 (the detail, and the sweep, which then sees a pool holder describing nothing) |
+| M2 — the defect: the query dep re-throws undescribed | RED — 1 |
+| M3 — the defect: the engine reads the message raw | RED — 2 |
+| M4 — `pgCause` gives up on an empty message | RED — 3 |
+| M5 — the plausible wrong fix: `describePgError(err, dg.dbLabel)` | RED — 1, the label test |
+| M6 — the SQL verb dropped from the query sentence | RED — 1 |
+| M7 — the query dep copies a successful answer | RED — 1, the boundary |
+| M8 — a THIRD module builds a pool and describes nothing | RED — 1, the sweep, naming the file |
+
+No model key, no database and no network egress were needed. The probes
+(`probe-pg-shape.mjs`, `probe-lookup.mjs`, `probe-diag.ts`, `probe-dep.ts`,
+`mutate.py`) lived in the scratchpad or were deleted from `dashboard/`;
+`git status` shows only the eight intended files. The two `/etc/hosts` entries
+this session added to MEASURE the real `pg` shape are in the container, not in
+the repository, and no test depends on them.
+
 ## 2026-11-04 — Wednesday · Tests and QA
 
 **Subject**: **a `pg` connection pool with no `'error'` listener, and the

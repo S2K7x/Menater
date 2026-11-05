@@ -155,9 +155,12 @@ describe('the database it cannot reach', () => {
     const d = await runDiagnostics({ probeWebhook: false, locale: 'en' });
     const c = checkOf(d, 'db');
     expect(c.status).toBe('fail');
-    // `describePgError` has already turned pg's empty ECONNREFUSED message
-    // into a sentence by this point; the whole value of the check is that the
-    // cause reaches a screen.
+    // THIS FIXTURE IS THE ONE-ADDRESS ROW, and that is worth saying out loud:
+    // `127.0.0.1` makes `pg` reject with a plain `Error` carrying
+    // `connect ECONNREFUSED 127.0.0.1:1`, so this case was green for a year
+    // over a path that read the message raw. The EMPTY-message row needs a
+    // host resolving to several addresses and lives in
+    // `pg-empty-message.test.ts`, which produces one without touching DNS.
     expect(c.detail.trim()).not.toBe('');
     expect(c.detail).toMatch(/ECONNREFUSED|refused/i);
     expect(c.remedy).toBeTruthy();

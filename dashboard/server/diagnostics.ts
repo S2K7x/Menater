@@ -43,7 +43,7 @@ import { describeFetchError, fetchWithDeadline, readCapped } from './http.ts';
 import { messages, type Locale } from './i18n.ts';
 import { getConfig } from './config.ts';
 import { getEngineStore } from './runtime.ts';
-import { createPool } from './engine/pg-store.ts';
+import { createPool, pgCause } from './engine/pg-store.ts';
 import { NODE_CONTRACT, WORKFLOW_LABELS } from './engine/cases.ts';
 import { PIPELINE_WORKFLOWS } from './engine/workflows/pipeline.ts';
 import { ROUTING_WORKFLOWS } from './engine/workflows/routing.ts';
@@ -118,12 +118,21 @@ export async function runDiagnostics(
         ...(missing.length ? { remedy: dg.schemaRemedy } : {}),
       });
     } catch (err) {
-      // NAMED, not "the database failed". `describePgError` has already turned
-      // pg's empty ECONNREFUSED message into a sentence by this point, and the
-      // whole value of this check is that the cause reaches a screen.
+      // NAMED, not "the database failed" — and not nothing, which is what this
+      // read `(err as Error).message` produced. The claim that used to sit here
+      // was that `describePgError` had already run by this point; it had not.
+      // `pool` is the raw pool, so nothing between it and this line describes
+      // anything, and `pg` rejects a refused connection with an EMPTY message
+      // whenever the host resolves to more than one address — which `localhost`,
+      // the default here, does on any machine carrying the usual `::1` line.
+      // Driven against the real `runDiagnostics`: `{ status: "fail", detail: "" }`
+      // on the one screen whose entire job is to say what is wrong.
+      //
+      // `pgCause` and not `describePgError`: the detail renders directly under
+      // `label`, which IS « Database ». See that function's own header.
       add({
         id: 'db', group: g.database, label: dg.dbLabel, status: 'fail',
-        detail: (err as Error).message, remedy: dg.dbRemedy,
+        detail: pgCause(err), remedy: dg.dbRemedy,
       });
     } finally {
       await pool.end().catch(() => {});
