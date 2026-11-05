@@ -2417,6 +2417,70 @@ holds the door on irreversible actions.
 
 ## 7. Known technical debt
 
+### ~~An unreachable database reaches the operator as nothing~~ — closed 2026-11-05
+
+Not previously in this list, and it had two tests written against it that were
+green over it.
+
+`pg` reports a refused connection as an `AggregateError` whose `.message` is the
+EMPTY STRING. `describePgError` exists for exactly that and is the choke point
+`PgRunStore.q()` established. **What nobody had written down is that the empty
+shape only happens when the host resolves to MORE THAN ONE ADDRESS**, so every
+fixture that names a literal address exercises the other row.
+
+Measured through `pg` 8.23.0 on Node 22.23.4, port closed:
+
+| host | constructor | `.message` | `.code` |
+|---|---|---|---|
+| `twohomed` (two A records) | `AggregateError` | `""` | `ECONNREFUSED` |
+| `127.0.0.1` | `Error` | `"connect ECONNREFUSED 127.0.0.1:1"` | `ECONNREFUSED` |
+
+`localhost` is two addresses on any machine carrying the usual `::1` line, and
+it is this product's **default** database host. So is a Docker service name, and
+so is a managed Postgres endpoint behind several A records.
+
+**Three paths read `.message` raw.**
+
+- `diagnostics.ts` — Health → *Test connectivity*, the DATABASE check. It holds
+  a RAW pool, so nothing between it and that line described anything. Driven
+  against the real `runDiagnostics` with a two-address host:
+  `{ status: "fail", detail: "" }` — on the one screen whose entire job is to
+  say what is wrong, under a comment asserting `describePgError` had already
+  run. Now `pgCause(err)`, the cause without the prefix, because the detail
+  renders directly under the label `Database` and the two sibling sentences on
+  that check do not repeat the word either.
+- `runtime.ts` — the `query` dependency the engine's `postgres` nodes are built
+  on (`dedup`, and the audit write). A bare `pool.query`, while `ruleDb`
+  eighteen lines further down the same file has wrapped the rule store's queries
+  since the Rules tab answered in French. Measured against a real pool:
+  `""` → `Database (INSERT): the database refused the connection — nothing is
+  listening at that address (ECONNREFUSED)`. Reaching it needs the database to
+  answer the run header and then stop answering, i.e. a restart or failover
+  mid-chain — the same event the `pg` pool listener closed on 11-04.
+- `engine.ts` — the node-failure catch, which writes `soc_run_step.error`,
+  `soc_run.error` and the error branch's output. `errorText` is declared 319
+  lines above it in the same file under *« A sentence for an error, never an
+  empty one »* and was called at one of its two sites there. It is the floor,
+  not the cure: on an empty message it yields `String(err)`, i.e. a constructor
+  name — non-empty, and no cause. It also stops a handler throwing a
+  non-`Error` from throwing INSIDE the catch, which escapes `drive()` and leaves
+  the run `running` for ever.
+
+**The guard is a subtraction**: *every module that builds a pool describes what
+a query failure was*, in both directions, comments and imports stripped. The
+floor is **2** and it is measured rather than rounded — `audit-chain.ts` only
+mentions `createPool` in a comment; it is a pool CONSUMER, and it had been
+calling `describePgError` correctly all along **with the multi-address reason
+written in its own comment**. `snapshot.ts` carries the same sentence as
+`diagnostics.ts`, and there it is true: its only queries go through the store.
+
+**Still open, and deliberately outside the sweep.** `readVariables` and
+`writeVariables` in `pg-store.ts` take a pool and describe nothing — the first
+swallows its error into `null`, the second lets it through raw. They have **no
+callers** (and `soc_variable` is not where the pipeline variables live; see the
+11-04 journal), so this is the dead-code row, not an error-reporting one. The
+sweep excludes the module that owns `createPool`, which is where they sit.
+
 ### ~~A `pg` pool with no `'error'` listener ends the process~~ — closed 2026-11-04
 
 Not previously in this list: it was found by enumerating every async callback a

@@ -447,7 +447,16 @@ export class Engine {
           alertId: run.alertId,
         });
       } catch (err) {
-        const message = (err as Error).message;
+        // `errorText` AND NOT `.message`: this is the line that writes
+        // `soc_run_step.error`, `soc_run.error` and the error branch's own
+        // output, i.e. every string the console prints about a failed step. The
+        // helper is declared at the top of this file under « A sentence for an
+        // error, never an empty one », and it was called at one of its two
+        // sites here — the other being the approval sweep. A `pg`
+        // `AggregateError` arrives with an EMPTY message, and a handler is an
+        // injected dependency, so the guarantee cannot rest on which ones
+        // happen to be installed.
+        const message = errorText(err);
         await this.store.endStep(run.id, next.node.id, attempt, {
           status: 'failed',
           error: message,

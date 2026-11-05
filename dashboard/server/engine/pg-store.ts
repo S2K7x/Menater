@@ -135,12 +135,44 @@ export function createPool(config: PgConfig): Pool {
  *
  * La règle du projet est « ne jamais throw une erreur silencieuse ». Une
  * erreur au message vide en est une.
+ *
+ * AND IT ONLY HAPPENS WITH MORE THAN ONE ADDRESS. That was missing here, and
+ * the omission is what let three callers go around this function while two
+ * tests written against the empty message stayed green. The empty `.message`
+ * is Node's happy-eyeballs `AggregateError`, raised when the host resolved to
+ * several addresses and every attempt failed; with ONE address `pg` rejects
+ * with a plain `Error` carrying `connect ECONNREFUSED <addr>:<port>`. Measured
+ * through `pg` 8.23.0 on Node 22.23.4 against a closed port:
+ *
+ *   host         constructor      .message                            .code
+ *   twohomed     AggregateError   ""                                  ECONNREFUSED
+ *   127.0.0.1    Error            "connect ECONNREFUSED 127.0.0.1:1"  ECONNREFUSED
+ *
+ * So every fixture that names a literal address exercises the row that works.
+ * `localhost` is two addresses on any machine whose `/etc/hosts` carries the
+ * usual `::1` line, and it is this product's default database host.
  * ============================================================================
  */
 export function describePgError(err: unknown, where: string): string {
-  const e = err as { message?: string; code?: string; errors?: unknown[]; detail?: string };
+  return `${where}: ${pgCause(err)}`;
+}
+
+/**
+ * The CAUSE alone, with no prefix.
+ *
+ * Split out of `describePgError` for the one surface that already supplies the
+ * prefix: the Health tab renders a check's `detail` directly under its `label`,
+ * which is « Database », and the two other sentences on that same check
+ * (`dbNotConfigured`, `dbReachable`) do not repeat the word either. Prefixing
+ * there would say the same thing twice, two lines apart.
+ *
+ * Everything else goes through `describePgError`, because a step error or a
+ * banner travels with no label beside it.
+ */
+export function pgCause(err: unknown): string {
+  const e = err as { message?: string; code?: string; errors?: unknown[] };
   const message = (e?.message ?? '').trim();
-  if (message !== '') return `${where}: ${message}`;
+  if (message !== '') return message;
 
   // Message vide : on va chercher le code, puis celui des erreurs agrégées.
   const code =
@@ -158,9 +190,24 @@ export function describePgError(err: unknown, where: string): string {
     '42P01': 'the table does not exist \u2014 the SQL schema was never applied',
   };
 
-  if (code) return `${where}: ${explained[code] ?? `error ${code}`} (${code})`;
-  return `${where}: an error carrying neither message nor code `
+  if (code) return `${explained[code] ?? `error ${code}`} (${code})`;
+  return 'an error carrying neither message nor code '
     + `(${(err as Error)?.constructor?.name ?? 'unknown'})`;
+}
+
+/**
+ * The sentence for a failed query against the engine's pool.
+ *
+ * ONE SPELLING FOR BOTH CALLERS. `PgRunStore.q()` is the store's own choke
+ * point; `queryDep` in `runtime.ts` is the dependency the engine's `postgres`
+ * node is built on. They are the same fact about the same pool, and two copies
+ * of `sql.trim().split(...)` is how two spellings of one number start
+ * disagreeing.
+ *
+ * The first word of the SQL situates the failure without exposing the query.
+ */
+export function describeQueryError(err: unknown, sql: string): string {
+  return describePgError(err, `Database (${sql.trim().split(/\s+/)[0]})`);
 }
 
 const iso = (v: unknown): string | null =>
@@ -230,8 +277,9 @@ export class PgRunStore implements RunStore {
     } catch (err) {
       // POINT DE PASSAGE UNIQUE : toutes les requêtes du magasin traversent
       // cette méthode, donc aucune ne peut remonter une erreur muette.
-      // Le premier mot du SQL suffit à situer l'échec sans exposer la requête.
-      throw new Error(describePgError(err, `Database (${sql.trim().split(/\s+/)[0]})`));
+      // `describeQueryError` est partagé avec `queryDep` (runtime.ts), qui est
+      // l'autre consommateur direct de ce pool : une seule formulation.
+      throw new Error(describeQueryError(err, sql));
     }
   }
 
