@@ -7,7 +7,7 @@
  * decision any individual route should be making twice.
  */
 
-import { gzipSync } from 'node:zlib';
+import { brotliCompressSync, constants, gzipSync } from 'node:zlib';
 
 /**
  * Below this size, compressing costs more than it returns: the gain is
@@ -16,6 +16,11 @@ import { gzipSync } from 'node:zlib';
  * Exported because `static.ts` compresses the interface's files against the
  * same floor. Two spellings of one number is how the two start disagreeing —
  * the reason `humanBytes` lives here and is imported in both directions.
+ *
+ * It is the floor for EVERY form this function can answer with, brotli
+ * included: the name is kept because `static.ts` imports it, and that file
+ * still has only gzip to offer — see `BROTLI_QUALITY` for why that is a
+ * measurement and not an oversight.
  */
 export const GZIP_MIN_BYTES = 4096;
 
@@ -49,7 +54,121 @@ export const GZIP_MIN_BYTES = 4096;
  * for the life of the process.
  * ============================================================================
  */
-const encoded = new WeakMap<object, { raw: Buffer; gzip: Buffer | null }>();
+const encoded = new WeakMap<object, Slot>();
+
+interface Slot {
+  raw: Buffer;
+  /** Produced on first use, kept BESIDE `raw` and beside each other. */
+  gzip: Buffer | null;
+  br: Buffer | null;
+}
+
+/**
+ * Brotli's quality, and why it is a number written here.
+ *
+ * ============================================================================
+ * WHY A SECOND FORM AT ALL: THE WINDOW, NOT THE ALGORITHM
+ *
+ * This console's largest answer is the execution window, and what dominates it
+ * COMPRESSED is run identifiers. Measured by driving the real pipeline into a
+ * 500-run window (100 alerts, the documented ceiling) and encoding what
+ * `json()` would answer: 610,517 raw bytes, 51,061 gzipped — and removing every
+ * run id leaves 16,847. **Two thirds of the compressed answer is UUIDs.** They
+ * are random, so they do not compress; and each of the 1,500 occurrences is
+ * paid for in FULL, because the three places a run appears — the case's
+ * stages, the chain's steps, the run log — sit about a hundred kilobytes apart,
+ * far outside DEFLATE's 32,768-byte sliding window. That is the same mechanism
+ * this repository measured for the duplicated `trace.chains[].payload`, and
+ * here it is structural rather than a duplicate anybody can delete: all three
+ * views are rendered, and the ids are shown.
+ *
+ * Brotli's window is megabytes, so it collapses what gzip cannot reach. The
+ * proof that the window IS the reason, same algorithm and same quality, only
+ * the window changed: `lgwin=16` (64 kB) gives 43,464 bytes where the default
+ * 22 (4 MB) gives 25,536.
+ *
+ * ============================================================================
+ * WHY QUALITY 4, CHOSEN AGAINST DATA
+ *
+ * `brotliCompressSync` with no parameters compresses at quality **11**, which
+ * on that window measured **992 ms** of blocked event loop — on the single
+ * thread that also answers the ingestion webhook. So a quality has to be
+ * named, and the only question is which. Medians of 101, Node 22.23.4, bytes
+ * and blocked loop against the gzip this replaces:
+ *
+ *   payload                      gzip          q4                  q5
+ *   2 cases      7,290 B    1,717 / 0.05ms   1,722 / 0.12ms   1,607 / 0.15ms
+ *   10 cases    36,351 B    3,460 / 0.18ms   3,153 / 0.25ms   2,932 / 0.36ms
+ *   window 120 147,148 B   12,480 / 0.96ms   8,495 / 0.65ms   7,725 / 1.17ms
+ *   window 500 610,517 B   51,061 / 4.10ms  29,126 / 2.20ms  25,536 / 4.09ms
+ *
+ * Four, because on the two payloads this route exists for — the window at its
+ * default size and at its ceiling, polled by every open tab every twenty
+ * seconds — it is better on BOTH axes: −31.9% bytes for −31.8% CPU, and −43.0%
+ * for −46.4%. Said honestly, it is not better everywhere: on a body just over
+ * the floor it is five bytes BIGGER (+0.3%) and costs +0.07 ms, and the small
+ * bodies' CPU is up in relative terms on an operation that takes a tenth of a
+ * millisecond. q5 is smaller everywhere and costs the same as gzip at the
+ * ceiling (4.09 against 4.10 ms) but +22% at the default window; choosing it
+ * is a judgement about an operator's hardware rather than a measurement, so it
+ * is ROADMAP § 7 and not a night's decision.
+ *
+ * Decompression is the browser's bill and it also falls: 0.47 ms against
+ * gunzip's 1.35 ms on the same window.
+ *
+ * `BROTLI_PARAM_SIZE_HINT` is deliberately absent: measured with and without,
+ * byte-identical output here, because a whole Buffer already tells the encoder
+ * its length. A parameter that changes nothing is a line somebody has to
+ * explain.
+ *
+ * NOT zstd, and the numbers are the reason to revisit rather than a reason to
+ * ship: zstd level 1 is 26,088 B in 0.97 ms — the best of both — but only
+ * Chromium-based browsers offer it, so it would be a third form and a third
+ * memo slot for clients that already get brotli. Written down in ROADMAP § 7.
+ *
+ * ============================================================================
+ * AND WHY THIS IS NOT THE SAME CHANGE IN `static.ts`
+ *
+ * The saving above is the WINDOW, not the algorithm, so it does not transfer to
+ * a payload with nothing far apart to collapse. Measured on this repository's
+ * own built bundle (447,651 B): gzip 129,991, brotli q4 **130,865 — bigger**,
+ * q5 122,737 (−5.6%) for the same CPU, and `lgwin` is worth 1.7% there against
+ * 41% here. So the file next door keeps gzip on purpose, and a reader who
+ * carries this change into it should expect to lose.
+ * ============================================================================
+ */
+const BROTLI_QUALITY = 4;
+
+/**
+ * Whether a client will accept an encoding.
+ *
+ * `q=0` means NOT acceptable (RFC 9110 § 12.5.3), and the single-token test
+ * this function used — `/\bgzip\b/` — matched `gzip;q=0` and answered with the
+ * one thing that caller had just refused. It never mattered while there was one
+ * form to choose; with two, "which does this client want" stops being a
+ * boolean, so the refusal is read.
+ *
+ * `*` is deliberately NOT honoured: it would start compressing answers to
+ * callers that have never been sent a compressed body — appliances posting
+ * alerts — on the strength of a wildcard nobody checked against a real client.
+ * Those keep the raw bytes they get today.
+ *
+ * Split and compared WHOLE rather than searched for, because `br` is two
+ * characters: a single-token regex for it also matches the start of any longer
+ * name, and answering brotli to a client that asked for something else is the
+ * same defect as answering a form it refused.
+ */
+function willAccept(header: string, token: 'br' | 'gzip'): boolean {
+  for (const offer of header.split(',')) {
+    const [name, ...params] = offer.split(';');
+    if (name.trim().toLowerCase() !== token) continue;
+    const q = params
+      .map((p) => /^\s*q=([0-9.]+)\s*$/i.exec(p)?.[1])
+      .find((value) => value !== undefined);
+    return Number(q ?? '1') > 0;
+  }
+  return false;
+}
 
 /**
  * The serialised body, produced once per object.
@@ -58,14 +177,39 @@ const encoded = new WeakMap<object, { raw: Buffer; gzip: Buffer | null }>();
  * `WeakMap`, so it is encoded as it always was. Those are small answers by
  * construction; the ones worth memoising are all objects.
  */
-function encodeOnce(body: unknown): { raw: Buffer; gzip: Buffer | null } {
+function encodeOnce(body: unknown): Slot {
   const key = typeof body === 'object' && body !== null ? (body as object) : null;
   const hit = key ? encoded.get(key) : undefined;
   if (hit) return hit;
 
-  const slot = { raw: Buffer.from(JSON.stringify(body), 'utf8'), gzip: null as Buffer | null };
+  const slot: Slot = { raw: Buffer.from(JSON.stringify(body), 'utf8'), gzip: null, br: null };
   if (key) encoded.set(key, slot);
   return slot;
+}
+
+/**
+ * The form to answer with, produced once per body and per form.
+ *
+ * Brotli first when it is offered — it is smaller and cheaper here, see
+ * `BROTLI_QUALITY`. `null` is the honest third answer: a client that offers
+ * neither, or refuses both, gets the raw bytes rather than something it said it
+ * could not read.
+ */
+function compressed(slot: Slot, offers: string): { encoding: string; bytes: Buffer } | null {
+  if (slot.raw.length < GZIP_MIN_BYTES) return null;
+  if (willAccept(offers, 'br')) {
+    if (!slot.br) {
+      slot.br = brotliCompressSync(slot.raw, {
+        params: { [constants.BROTLI_PARAM_QUALITY]: BROTLI_QUALITY },
+      });
+    }
+    return { encoding: 'br', bytes: slot.br };
+  }
+  if (willAccept(offers, 'gzip')) {
+    if (!slot.gzip) slot.gzip = gzipSync(slot.raw);
+    return { encoding: 'gzip', bytes: slot.gzip };
+  }
+  return null;
 }
 
 /**
@@ -90,16 +234,17 @@ export function json(
   // The snapshot runs to several hundred kB: it carries the ENTIRE execution
   // window, traceability included. It often travels over the network (console
   // open somewhere other than the API's machine), and JSON compresses about
-  // tenfold.
-  const accepts = String(res.req?.headers?.['accept-encoding'] ?? '');
-  if (slot.raw.length >= GZIP_MIN_BYTES && /\bgzip\b/.test(accepts)) {
-    // Compressed lazily and kept BESIDE the raw form, never instead of it: the
-    // next caller may be one that sends `accept-encoding: identity`, and it
-    // has to get bytes it can read.
-    if (!slot.gzip) slot.gzip = gzipSync(slot.raw);
+  // twentyfold once the compressor's window is wide enough to see the window's
+  // repeated run identifiers — see `BROTLI_QUALITY`.
+  //
+  // Compressed lazily and kept BESIDE the raw form, never instead of it: the
+  // next caller may be one that sends `accept-encoding: identity`, and it has
+  // to get bytes it can read.
+  const form = compressed(slot, String(res.req?.headers?.['accept-encoding'] ?? ''));
+  if (form) {
     res.writeHead(status, {
-      ...base, 'Content-Encoding': 'gzip', 'Content-Length': slot.gzip.length });
-    res.end(slot.gzip);
+      ...base, 'Content-Encoding': form.encoding, 'Content-Length': form.bytes.length });
+    res.end(form.bytes);
     // Returning `true` is what lets a route group say "handled" simply by
     // writing `return json(...)`, exactly as every branch already did.
     return true;

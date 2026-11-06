@@ -2417,6 +2417,95 @@ holds the door on irreversible actions.
 
 ## 7. Known technical debt
 
+### ~~Two thirds of the console's answer on the wire was UUIDs gzip could not reach~~ — closed 2026-11-06
+
+Not previously in this list. `respond.ts` has compressed every JSON answer over
+4 kB since the snapshot stopped being re-encoded per request, and the comment
+there is still true — *« the compression was never the waste, the REPETITION
+was »*. What nobody had measured is which bytes SURVIVE compression.
+
+Driven through the real pipeline into a 500-run window (100 Wazuh-shaped
+alerts, the documented `executionWindow` ceiling) and encoded exactly as
+`json()` would:
+
+| the window | raw | gzipped |
+|---|---|---|
+| as answered | 610,517 B | **51,061 B** |
+| with every run id removed | 529,517 B | **16,847 B** |
+
+**Two thirds of what the wire carries is run identifiers.** They are UUIDs, so
+they are incompressible, and all 1,500 occurrences are paid for in FULL: a run
+appears three times — `cases[].stages`, `trace.chains[].steps`, the run log in
+`trace.executions` — and the copies sit about a hundred kilobytes apart, far
+outside DEFLATE's **32,768-byte** sliding window. The share grows with the
+window (56% at the default 120 runs, 67% at 500), which is what a fixed window
+predicts.
+
+That is the mechanism the duplicated `trace.chains[].payload` row recorded in
+2026-09-18, with one difference that decides the fix: **this duplication is
+structural.** All three views are rendered, and every one of them SHOWS the id
+— the card's stage line, the chain's step, the searchable log. So the payload is
+not the thing to change; the compressor is.
+
+**After, brotli at quality 4** (medians of 101, Node 22.23.4, blocked event
+loop on the thread that also answers the ingestion webhook):
+
+| payload | gzip | brotli q4 |
+|---|---|---|
+| window, 120 runs (default) | 12,480 B / 0.96 ms | **8,495 B / 0.65 ms** |
+| window, 500 runs (ceiling) | 51,061 B / 4.10 ms | **29,126 B / 2.20 ms** |
+
+Fewer bytes AND less CPU, on the answer every open tab polls every twenty
+seconds. **The proof that it is the WINDOW and not the algorithm** — same
+algorithm, same quality, only the window moved: `lgwin=16` (64 kB) gives
+43,464 B where the default 22 (4 MB) gives 25,536.
+
+Four things the change had to get right, each measured:
+
+- **The quality is a named number.** `brotliCompressSync` with no parameters
+  compresses at **11**, which on that window is **992 ms** of blocked event
+  loop — 250× the gzip it replaces. The library default is a trap here, not a
+  default, and a test pins the constant below it.
+- **A second form means `accept-encoding` stops being a boolean.** The old
+  `/\bgzip\b/` test matched `gzip;q=0` and answered with exactly the form that
+  caller had refused. `q=0` is now read (RFC 9110 § 12.5.3); `*` is deliberately
+  NOT honoured, because it would start compressing answers to callers nobody has
+  measured — appliances posting alerts.
+- **Every form is kept beside the others**, three slots on one `WeakMap` entry:
+  the next caller may read none of them.
+- **Verified end to end rather than reasoned.** Real Chromium 153 over **plain
+  HTTP** offers `gzip, deflate, br, zstd` and parses 100 cases out of the `br`
+  answer (the HTTPS-only restriction on `br` is long gone, and this product is
+  normally served over plain HTTP on a LAN); the Vite dev proxy passes it
+  through byte-identically; Node's own `fetch` offers only `gzip, deflate` and
+  is answered exactly as before, which is the boundary two tests claim.
+
+**What stays open, with its numbers.**
+
+- **zstd level 1 is better than both**: 26,088 B in 0.97 ms on the ceiling
+  window — brotli q5's ratio at a quarter of gzip's CPU. It is not shipped
+  because only Chromium-based browsers offer it, so it would be a third form
+  and a third memo slot for clients that already get brotli. Worth taking the
+  day a measurement says Firefox or Safari send it.
+- **Brotli q5 against q4** is a judgement, not a measurement: 25,536 B at the
+  ceiling (−50% against gzip rather than −43%) for 4.09 ms, i.e. gzip's own CPU
+  there but +22% at the default window. q4 was chosen because it cannot be
+  worse than what shipped; moving to q5 is a decision about an operator's
+  hardware.
+- **`static.ts` keeps gzip on purpose, and that is the measurement a reader
+  will want to copy wrongly.** On this repository's own bundle (447,651 B),
+  brotli q4 is **130,865 B against gzip's 129,991 — bigger** — and q5 is
+  122,737 (−5.6%) for the same CPU, because a JavaScript bundle has nothing far
+  apart to collapse (`lgwin` is worth 1.7% there against 41% on the window).
+  Assets also carry a fingerprint and `immutable`, so a browser fetches them
+  once per deployment: the saving would be per-deploy, not per-poll.
+- **The three copies of each run** are left alone. `trace.chains[].steps` is
+  derivable in the browser from `trace.executions` (−15.3% raw / −26.3%
+  gzipped, measured) but the derivation needs the chain-step status mapping
+  `cases.ts` owns, which would be a second ruler on the Tracking tab's
+  diagnosis; and dropping any displayed id is a product decision, not a
+  Friday's.
+
 ### ~~An unreachable database reaches the operator as nothing~~ — closed 2026-11-05
 
 Not previously in this list, and it had two tests written against it that were
