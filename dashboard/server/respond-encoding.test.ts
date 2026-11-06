@@ -22,17 +22,31 @@
  * in between), and the compressed form must never displace the raw one — a
  * client that does not accept gzip has to get the bytes it can read, whatever
  * the previous caller asked for.
+ *
+ * ============================================================================
+ * AND WHICH FORM, WHICH IS THE SECOND SUBJECT OF THIS FILE
+ *
+ * The window this console answers is 67% run UUIDs by compressed size, each one
+ * appearing three times about a hundred kilobytes from its copies — far outside
+ * DEFLATE's 32,768-byte sliding window, so gzip pays for every occurrence in
+ * full. Brotli's window is megabytes. Measured on a real 500-run window:
+ * 51,061 gzipped bytes against 29,126 at brotli q4, for LESS CPU.
+ *
+ * The claims below are therefore about the CHOICE of form: brotli when it is
+ * offered, gzip when it is not, nothing when neither is, and never a form the
+ * client refused. The quality is pinned as a number because the library's own
+ * default is 11, which measured 992 ms of blocked event loop on that window.
  * ============================================================================
  */
 
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { gunzipSync } from 'node:zlib';
+import { brotliDecompressSync, constants, gunzipSync } from 'node:zlib';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 /** Hoisted: `vi.mock` factories run before ordinary module-level consts. */
-const spy = vi.hoisted(() => ({ gzips: 0 }));
+const spy = vi.hoisted(() => ({ gzips: 0, brotlis: 0, quality: [] as unknown[] }));
 
 vi.mock('node:zlib', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:zlib')>();
@@ -41,6 +55,11 @@ vi.mock('node:zlib', async (importOriginal) => {
     gzipSync: (buf: any, opts?: any) => {
       spy.gzips += 1;
       return actual.gzipSync(buf, opts);
+    },
+    brotliCompressSync: (buf: any, opts?: any) => {
+      spy.brotlis += 1;
+      spy.quality.push(opts?.params?.[actual.constants.BROTLI_PARAM_QUALITY]);
+      return actual.brotliCompressSync(buf, opts);
     },
   };
 });
@@ -74,10 +93,17 @@ function counting(fill = FILLER) {
 
 interface Answer { status: number; headers: Record<string, any>; buf: Buffer }
 
-function answer(body: unknown, opts: { gzip?: boolean; status?: number } = {}): Answer {
+function answer(
+  body: unknown,
+  opts: { gzip?: boolean; status?: number; offers?: string } = {},
+): Answer {
   const captured: Answer = { status: 0, headers: {}, buf: Buffer.alloc(0) };
   const res: any = {
-    req: { headers: { 'accept-encoding': opts.gzip === false ? 'identity' : 'gzip, deflate' } },
+    req: {
+      headers: {
+        'accept-encoding': opts.offers ?? (opts.gzip === false ? 'identity' : 'gzip, deflate'),
+      },
+    },
     writeHead(status: number, headers: Record<string, any>) {
       captured.status = status;
       captured.headers = headers;
@@ -90,7 +116,12 @@ function answer(body: unknown, opts: { gzip?: boolean; status?: number } = {}): 
   return captured;
 }
 
-beforeEach(() => { spy.gzips = 0; });
+beforeEach(() => { spy.gzips = 0; spy.brotlis = 0; spy.quality = []; });
+
+/** What a browser really sends, measured in Chromium 1194 over plain HTTP. */
+const BROWSER = 'gzip, deflate, br, zstd';
+/** What Node's own `fetch` sends — an MCP client, an appliance, our probes. */
+const NODE_FETCH = 'gzip, deflate';
 
 describe('encoding one body object once', () => {
   /**
@@ -196,6 +227,125 @@ describe('what the saving must not change', () => {
 });
 
 /**
+ * WHICH FORM, AND NEVER ONE THE CLIENT REFUSED.
+ *
+ * Two of these five claims pass before AND after the brotli change, on
+ * purpose: the client that offers only gzip and the client that offers nothing
+ * are the console's own callers — Node's `fetch` (the MCP bridge, the loopback
+ * probes) and an appliance posting an alert — and a saving for browsers that
+ * changed what they are answered would be a different bug.
+ */
+describe('which compressed form the answer takes', () => {
+  it('answers a browser in brotli', () => {
+    const { body } = counting();
+
+    const a = answer(body, { offers: BROWSER });
+
+    expect(a.headers['Content-Encoding']).toBe('br');
+    expect(a.headers['Content-Length']).toBe(a.buf.length);
+    expect(JSON.parse(brotliDecompressSync(a.buf).toString('utf8')).payload).toBe(FILLER);
+  });
+
+  it('answers a client that offers only gzip in gzip', () => {
+    const { body } = counting();
+
+    const a = answer(body, { offers: NODE_FETCH });
+
+    expect(a.headers['Content-Encoding']).toBe('gzip');
+    expect(spy.brotlis).toBe(0);
+    expect(JSON.parse(gunzipSync(a.buf).toString('utf8')).payload).toBe(FILLER);
+  });
+
+  it('answers a client that offers nothing with the raw bytes', () => {
+    const { body } = counting();
+
+    const a = answer(body, { offers: '' });
+
+    expect(a.headers['Content-Encoding']).toBeUndefined();
+    expect(spy.gzips).toBe(0);
+    expect(spy.brotlis).toBe(0);
+    expect(JSON.parse(a.buf.toString('utf8')).payload).toBe(FILLER);
+  });
+
+  /**
+   * Every form is kept BESIDE the others, which is the rule the gzip memo
+   * already stated: the next caller may be one that reads none of them.
+   */
+  it('keeps all three forms of one body, each produced once', () => {
+    const { body, reads } = counting();
+
+    const brotli = answer(body, { offers: BROWSER });
+    const gzip = answer(body, { offers: NODE_FETCH });
+    const plain = answer(body, { offers: 'identity' });
+    answer(body, { offers: BROWSER });
+    answer(body, { offers: NODE_FETCH });
+
+    expect(JSON.parse(brotliDecompressSync(brotli.buf).toString('utf8')).payload).toBe(FILLER);
+    expect(JSON.parse(gunzipSync(gzip.buf).toString('utf8')).payload).toBe(FILLER);
+    expect(JSON.parse(plain.buf.toString('utf8')).payload).toBe(FILLER);
+    // One serialisation, one brotli, one gzip — for five answers.
+    expect(reads()).toBe(1);
+    expect(spy.brotlis).toBe(1);
+    expect(spy.gzips).toBe(1);
+  });
+
+  /**
+   * `q=0` is how a client says an encoding is NOT acceptable (RFC 9110 § 12.5.3),
+   * and the single-token regex this function used could not see it. Reading it
+   * is what makes a second encoding safe to add: with two forms on offer,
+   * "which one does this caller want" stops being a boolean.
+   */
+  it('never sends a form the client refused with q=0', () => {
+    const { body } = counting();
+
+    const noBrotli = answer(body, { offers: 'gzip, deflate, br;q=0' });
+    const neither = answer(body, { offers: 'br;q=0, gzip;q=0, deflate' });
+
+    expect(noBrotli.headers['Content-Encoding']).toBe('gzip');
+    expect(neither.headers['Content-Encoding']).toBeUndefined();
+    expect(JSON.parse(neither.buf.toString('utf8')).payload).toBe(FILLER);
+  });
+
+  /**
+   * `br` is two characters, so a token search for it matches the start of any
+   * longer name. Answering brotli to a client that named something else is the
+   * same defect as answering a form it refused.
+   */
+  it('compares the whole token, not a prefix of it', () => {
+    const { body } = counting();
+
+    const made_up = answer(body, { offers: 'brotli, gzipped' });
+
+    expect(made_up.headers['Content-Encoding']).toBeUndefined();
+    expect(JSON.parse(made_up.buf.toString('utf8')).payload).toBe(FILLER);
+  });
+
+  /**
+   * THE QUALITY IS A NUMBER THIS CODE CHOOSES, and that is not a style point:
+   * `brotliCompressSync` with no parameters compresses at quality 11, which
+   * measured 992 ms of blocked event loop on a 610 kB window against gzip's
+   * 3.9 ms. Four is the value for which there is no trade-off at all — fewer
+   * bytes AND less CPU than the gzip it replaces.
+   */
+  it('compresses at an explicitly chosen quality, not the library default', () => {
+    answer(counting().body, { offers: BROWSER });
+
+    expect(spy.quality).toHaveLength(1);
+    expect(typeof spy.quality[0]).toBe('number');
+    expect(spy.quality[0]).toBeLessThan(constants.BROTLI_DEFAULT_QUALITY);
+    expect(spy.quality[0]).toBeLessThanOrEqual(5);
+  });
+
+  it('does not compress a body under the threshold for a browser either', () => {
+    const a = answer({ ok: true }, { offers: BROWSER });
+
+    expect(spy.brotlis).toBe(0);
+    expect(a.headers['Content-Encoding']).toBeUndefined();
+    expect(a.buf.toString('utf8')).toBe('{"ok":true}');
+  });
+});
+
+/**
  * The route this whole memo exists for.
  *
  * No database here, so the snapshot is the sample set — which is still tens of
@@ -204,12 +354,12 @@ describe('what the saving must not change', () => {
  * the ordinary state of a console someone has left open.
  */
 describe('GET /api/snapshot, answered twice', () => {
-  async function get(): Promise<Answer> {
+  async function get(offers = NODE_FETCH): Promise<Answer> {
     const captured: Answer = { status: 0, headers: {}, buf: Buffer.alloc(0) };
     const req: any = {
       method: 'GET',
       url: '/api/snapshot',
-      headers: { 'accept-encoding': 'gzip, deflate' },
+      headers: { 'accept-encoding': offers },
       socket: { remoteAddress: '127.0.0.1' },
       async *[Symbol.asyncIterator]() {},
     };
@@ -250,5 +400,19 @@ describe('GET /api/snapshot, answered twice', () => {
   it('still carries the refresh cadence the screen reads', async () => {
     const body = JSON.parse(gunzipSync((await get()).buf).toString('utf8'));
     expect(body.refresh_seconds).toBe(20);
+  });
+
+  /**
+   * The polling browser, which is who this route is for: one snapshot object
+   * for fifteen seconds, one brotli for all of its answers.
+   */
+  it('answers the polling browser in brotli, encoded once', async () => {
+    const first = await get(BROWSER);
+    const second = await get(BROWSER);
+
+    expect(first.headers['Content-Encoding']).toBe('br');
+    expect(spy.brotlis).toBe(1);
+    expect(second.buf.equals(first.buf)).toBe(true);
+    expect(JSON.parse(brotliDecompressSync(first.buf).toString('utf8')).refresh_seconds).toBe(20);
   });
 });

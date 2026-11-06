@@ -4,6 +4,232 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-11-06 — Friday · Performance and cost
+
+**Subject**: **two thirds of the console's answer on the wire were UUIDs gzip
+could not reach.** `respond.ts` has compressed every JSON answer over 4 kB
+since the night the snapshot stopped being re-encoded per request, and that
+comment is still right — *« the compression was never the waste, the REPETITION
+was »*. Nobody had measured which bytes SURVIVE the compression. Driven through
+the real pipeline into a 500-run window: 610,517 raw bytes, **51,061
+gzipped — and 16,847 once every run id is removed**.
+
+**Result**: PR opened on `claude/sleepy-volta-35p3k7`. Four files: one
+production edit (`server/respond.ts` — a `Slot` with three forms, `willAccept`,
+`compressed`, `BROTLI_QUALITY`), `server/respond-encoding.test.ts` (**+9
+tests**, 5 of them red before the change and 3 green before AND after on
+purpose), `CLAUDE.md` (one traps row, suite count 1851 → 1860) and `ROADMAP.md`
+(a § 7 entry opened and closed, carrying what stays open with its numbers),
+plus this journal. **No CSS, no class name, no colour, no catalogue key, no
+heading level, no dependency** — `node:zlib` is built in. The built bundle is
+**byte-identical** (`index-DRdTRqkR.js` 447.65 kB, `index-DpyowbMH.css`
+62.42 kB): nothing here reaches the browser. VulnPipe untouched and not run.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-35p3k7` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Fifty-eighth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: after `npm ci` on the
+designated branch at `52f505d` (= `origin/main`) the baseline was typecheck
+**0 errors**, **1851 passed | 1 skipped**, a clean build and `npm audit` **0
+vulnerabilities**. Of § 7's Friday-shaped entries, the two I could have taken
+are both refused by their own text: the analysis dictionary at 7% of the eager
+chunk needs *« a deliberate decision about where the analysis vocabulary is
+provided »* and touches 28 call sites in 13 files, and the relay's missing
+deadline is a policy decision for a human. So I measured instead of picking:
+sourcemap attribution over the eager chunk (unchanged from the 10-30 figures),
+then the WINDOW — which nobody had taken apart by field. That is where the
+subject was.
+
+**What the measurement says**, driving 100 Wazuh-shaped alerts through the real
+engine into a 500-run window (the documented `executionWindow` ceiling) and
+encoding exactly what `json()` would answer:
+
+| the window | raw | gzipped |
+|---|---|---|
+| as answered today | 610,517 B | **51,061 B** |
+| with `trace.chains[].steps` removed | 516,917 B | 37,653 B (−26.3%) |
+| with every run id removed | 529,517 B | **16,847 B (−67.0%)** |
+
+1,500 occurrences of 500 distinct ids: a run appears three times — the case's
+`stages`, the chain's `steps`, the run log — and the copies sit about a hundred
+kilobytes apart, **far outside DEFLATE's 32,768-byte sliding window**, so every
+occurrence is paid for in full. The ids alone gzip to 10,388 B; 1,500 of them
+cost 34,214.
+
+**After**, brotli q4, medians of 101 on Node 22.23.4:
+
+| payload | gzip | brotli q4 |
+|---|---|---|
+| window, 120 runs (default) | 12,480 B / 0.96 ms | **8,495 B / 0.65 ms** |
+| window, 500 runs (ceiling) | 51,061 B / 4.10 ms | **29,126 B / 2.20 ms** |
+
+Fewer bytes AND less blocked event loop, on the single answer every open tab
+polls every twenty seconds, on the thread that also serves the ingestion
+webhook.
+
+**What I learned that is written nowhere else.**
+
+1. **The saving is the WINDOW, not the algorithm — and the measurement that
+   proves it is the one to copy.** Same algorithm, same quality, only the window
+   moved: brotli q5 with `lgwin=16` (64 kB) gives 43,464 B where the default 22
+   (4 MB) gives 25,536. Which is why the same change in `static.ts` would LOSE:
+   on this repository's own bundle, brotli q4 is **130,865 B against gzip's
+   129,991 — bigger**, and `lgwin` is worth 1.7% there against 41% here. A
+   JavaScript bundle has nothing far apart to collapse. **If you read
+   « brotli beats gzip » out of tonight's diff you have read the wrong thing.**
+2. **`brotliCompressSync` with no parameters compresses at quality 11**, which
+   measured **992 ms** of blocked event loop on that window — 250× the gzip it
+   replaces. The library default is a trap here, not a default, and that is why
+   the quality is a constant with a test under it rather than an omitted
+   argument. (`zlib.constants.BROTLI_DEFAULT_QUALITY` is 11;
+   `BROTLI_DEFAULT_WINDOW` is 22.)
+3. **A real browser offers `br` over PLAIN HTTP, and that had to be measured
+   because the whole saving depends on it.** This product's normal deployment is
+   `http://host:4400` on a LAN, and `br` was once advertised only over HTTPS.
+   Measured in Chromium **153.0.8010.12** against a plain-HTTP listener on a
+   bare IP: `accept-encoding: gzip, deflate, br, zstd`, on the document AND on
+   a `fetch()` from the page. It took the `br` answer and parsed 100 cases out
+   of it. Node's own `fetch` offers `gzip, deflate` — so the MCP bridge, the
+   loopback probes and an appliance keep exactly what they had, which is the
+   boundary rather than an accident.
+4. **The Vite dev proxy passes `br` through byte-identically.** Measured over a
+   raw socket, head and body, against `npx vite` with the proxy pointed at the
+   real `json()`: `content-encoding: br`, 8,495 B, same bytes as direct, decodes
+   to 24 cases. So `npm run dev` is unaffected — worth knowing before somebody
+   assumes a proxy must be re-compressing.
+5. **Adding a second form turns `accept-encoding` from a boolean into a
+   question, and the old test had a hole.** `/\bgzip\b/` matches `gzip;q=0`,
+   which is RFC 9110 § 12.5.3 for *not acceptable* — so the server would have
+   answered with the one form that caller had just refused. It never mattered
+   with one form on offer. `*` is deliberately NOT honoured: honouring it would
+   start compressing answers to callers nobody has measured.
+6. **`BROTLI_PARAM_SIZE_HINT` changes nothing when you compress a whole
+   Buffer** — byte-identical output with and without, measured at q4 and q5 —
+   because the encoder already knows the length. It is left out rather than
+   carried as a line somebody has to explain.
+7. **zstd is in Node 22** (`zstdCompressSync`) and at level 1 it beats both:
+   26,088 B in **0.97 ms**, i.e. brotli q5's ratio at a quarter of gzip's CPU.
+   Not shipped: only Chromium-based browsers offer it, so it would be a third
+   form and a third memo slot for clients that already get brotli. In § 7 with
+   the numbers.
+8. **The window is 59% cases and 41% trace**, and within the cases
+   `stages` is 30.6%, `raw_log` 13.2%, `decision` 13.1%. Written down because
+   this is the first time the payload has been taken apart by field, and the
+   next person asking "what is the snapshot made of" should not have to seed it
+   again. `trace.chains` is 116,091 B against `trace.executions`' 131,851 for
+   the same 500 runs.
+
+9. **`\b` happens to defend the two-character token and a comma anchor does
+   not** — found by mutation, not by reading. `br` is two characters, so a
+   search for it can match the start of a longer name; the old `/\bgzip\b/`
+   form is safe there by accident (the `o` of `brotli` is a word character, so
+   the trailing `\b` fails), while my own first draft —
+   `(?:^|,)\s*br\s*(?:;\s*q=…)?` — matched `brotli` happily. M12 is that
+   draft, and it is red. The reader splits on commas and compares the name
+   WHOLE, which is the form where neither accident is load-bearing.
+
+**Found and NOT fixed, each with why.**
+
+- **The three copies of each run** stay. `trace.chains[].steps` is derivable in
+  the browser from `trace.executions` (−15.3% raw / −26.3% gzipped, measured),
+  but the derivation needs the chain-step status mapping `cases.ts` owns — a
+  second ruler on the Tracking tab's own diagnosis — and every one of the three
+  ids is DISPLAYED (the card's stage line, the chain step, the searchable log),
+  so dropping one is a product decision. § 7.
+- **`static.ts` keeps gzip**, measured above, and assets are `immutable` with a
+  fingerprint: the saving there would be per-deployment, not per-poll.
+- **brotli q5** is left as a human's call: −50% against gzip at the ceiling for
+  gzip's own CPU there, but +22% at the default window. q4 cannot be worse than
+  what shipped, which is the conservative answer NIGHTLY asks for.
+- **Fields the browser never reads**, found while sweeping the case shape and
+  deliberately not touched: `decision.validator_violations`,
+  `enrichment_meta.file_hash`, `file_hash_type`, `source_ip_is_private`,
+  `approver.identity_source`, `signature_verified`, `slack_user_id`. Tens of
+  bytes a case, and three of them are audit-record shape rather than display
+  data, so removing them is a doctrine question and not a saving.
+- **`approval.execution_id` is still read by `ApprovalPanel`** (`canSubmit`)
+  while `cases.ts` writes `execution_id: run.id` on the stages and `demo.ts`
+  writes `'demo-waiting'` on the approval. Not re-opened tonight: the 11-01
+  traps row says the fix was to resolve the wait from the RUN id server-side,
+  and the live path is covered by its own tests. Worth a reader's eye.
+- **Standing leads, re-checked and unchanged**: the `Fold` summary's no-wrap
+  flex line at 320 px, the incident card's heading outline, the ninety-odd
+  French strings in `server/engine/`, `npm audit` not in CI, a forwarded
+  upstream 401 still sending an operator to the sign-in screen, `.vp-action`'s
+  36 px touch target, `MENATER_TEST_PG` still never set,
+  `src/i18n/dictionary.ts` at 7% of the eager chunk (re-measured tonight:
+  30,953 of 446,001 attributed bytes).
+
+**Do not redo.**
+
+- **Do not carry brotli into `static.ts`.** Learning 1, with the number: q4 is
+  BIGGER than gzip on the bundle.
+- **Do not call `brotliCompressSync` without a quality.** Learning 2: 992 ms.
+- **Do not add `BROTLI_PARAM_SIZE_HINT`.** Learning 6: it changes nothing here.
+- **Do not assume a dev proxy or a plain-HTTP browser kills this.** Learnings 3
+  and 4, both measured; re-measure rather than reason if a Vite major moves.
+- **Do not trust a `Content-Length` read back off `res.getHeader()` after
+  `writeHead(status, object)`**: it answers nothing, because that form does not
+  record the headers in the lookup table. Read what the CLIENT saw — my first
+  wire probe printed `0 B` for answers the browser reported as 29,126 and
+  51,061.
+- **Do not time a compressor on its first call in a process.** The brotli path
+  measured 10.14 ms on the first request of the wire probe and 2.20 ms as a
+  median of 101. All numbers above are medians after two warm-up calls.
+- **Do not restore a mutated file with `git checkout` while the change is
+  uncommitted** (the 11-02 lesson, obeyed): the harness copies the file to the
+  scratchpad and restores from that, and runs an unmutated control FIRST and
+  LAST.
+- **Do not pipe a mutation run's output through plain `grep`.** M7's failure
+  output contains raw compressed bytes, so `grep` answered *« binary file
+  matches »* and the harness printed an empty result for it. It did not claim
+  green — but `grep -a` is what makes the harness able to parse its own output,
+  which this table already requires.
+
+**Verified** (Node 22.23.4, npm 10.9.9; every command run and its output read):
+
+| Command | Result |
+|---|---|
+| `npm ci` | clean, **0 vulnerabilities** |
+| baseline `npm run typecheck` / `npm test` / `npm run build` | **0 errors**, **1851 passed \| 1 skipped**, clean |
+| `npm run typecheck` (after) | **0 errors** |
+| `npm test` (after) | **1860 passed \| 1 skipped** (**+9**) |
+| `npm run build` (after) | clean — bundle **byte-identical**, `index-DRdTRqkR.js` 447.65 kB / `index-DpyowbMH.css` 62.42 kB |
+| the one test file, fix NOT applied | **5 failed \| 13 passed** — exactly the five new claims; the three boundary claims pass either way |
+| the same file, fix applied | **19 passed** in 1.5 s |
+| end to end, real `json()` over a real socket, real Chromium 153 | `br` **29,126 B**, decodes to 100 cases; forced onto `gzip, deflate` the same browser gets **51,061 B**, byte-identical to what shipped |
+| end to end, Node `fetch` | `gzip`, 51,061 B — unchanged |
+| through `npx vite`'s proxy, raw socket | `br`, 8,495 B, byte-identical to direct, 24 cases |
+| mutation | **11 mutations, 11 killed**, control green before AND after, file restored identically |
+| VulnPipe | **not touched**, not run |
+
+| Mutation | Result |
+|---|---|
+| CONTROL (first and last) | GREEN both times |
+| M1 — the brotli branch removed (the defect) | RED — 4 |
+| M2 — `brotliCompressSync` with no parameters (q11) | RED — 1 |
+| M3 — quality set to 11 explicitly | RED — 1 |
+| M5 — gzip preferred over brotli | RED — 4 |
+| M6 — brotli stored in the gzip slot (forms displace each other) | RED — 2 |
+| M7 — the 4 kB threshold dropped | RED — 3 |
+| M8 — an absent header or `*` treated as "anything" | RED — 1 |
+| M9 — vacuity: always brotli | RED — 12 |
+| M10 — the old `/\bgzip\b/` single-token regex | RED — 1 (the `q=0` claim) |
+| M11 — whole token compared, `q=0` unread | RED — 1 |
+| M12 — my own first draft: comma-anchored, prefix unanchored | RED — 1 (the prefix claim) |
+
+No model key and no database were needed: the window was seeded by driving the
+REAL six workflows through the REAL engine on a `MemoryRunStore`, which is the
+harness `pipeline-to-case.test.ts` established. The eleven probes
+(`probe-window`, `probe-dup`, `probe-codec`, `probe-codec2`, `probe-hint`,
+`probe-accept`, `probe-wire`, `probe-small`, `probe-cpu`, `probe-mutate`,
+`probe-vite`) lived in `dashboard/scripts/` while I iterated and are deleted;
+`git status` shows only the five intended files.
+
 ## 2026-11-05 — Thursday · Bugs and technical debt
 
 **Subject**: **an unreachable database reaches the operator as the empty
