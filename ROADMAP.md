@@ -900,6 +900,35 @@ stayed exactly where it was.*
 **What R does not do.** It adds no per-user layout preference; that is C1.5. It
 leaves the eight facts of a triage row intact: the table got shorter, not poorer.
 
+### C0.45 ✅ — The scan report: five findings, and the only heading on it belonged to the empty state
+
+*The scan report is the longest screen this product renders, and one no sweep
+has ever reached: getting to it costs a model key, real code and a few minutes,
+so it is in no tab list and `CLARITY.md` § 7 files it under « enumerate the
+screens you cannot reach ». Mounted with a five-finding report in Chromium 1243
+and read out of CDP `Accessibility.getFullAXTree`, walked from the root, the
+outline was `h1 CODE` · `h2 YOUR REPORT` · `h2 WHAT THIS SCAN ACTUALLY USED` —
+three headings for 3,727 px of document at 1280 px, 5,857 at 320 px, and the
+unit of this screen is the FINDING. A reader listing the headings got the page,
+the report and the bill, and no way to reach any of the five things the report
+is about. The tell is in the same slot: `NothingFound` — the state where there
+is nothing to say — renders an `h3` and always has. **The empty report could be
+navigated and the full one could not.** C0.44 in the other half of the product.*
+
+| Point | Detail |
+|---|---|
+| **The route NAMES the finding** | `<h3 className="vp-finding-route">`, so the outline becomes `h1 h2 h3×5 h2` with no skip: the report titles itself at level 2 and a finding is a block inside it, the level `NothingFound` already used in the same slot. Nothing is invented — the route with its method is already the finding's identity (`key={vulnerability-method-route}`) and already the card's own header line. A title like « Finding 3: IDOR » would be a string this console wrote about data it was given |
+| **And it is a VALUE, so the display register comes back off it** | `.vp-embed h1, h2, h3` sets the display face, 900 and `text-transform: uppercase`, and a route is case-sensitive. Promoted and left to that rule it renders **`GET /ORDERS/:ID` in Archivo Black 13.76px/900, `display: block`** — and Chromium computes an accessible name from RENDERED text, so a screen reader dictates the wrong path too. Third instance after J0.4's repository URL and C0.42's `ossec.conf` path |
+| **The parent is NAMED, and the measurement is what says so** | A bare `h3.vp-finding-route` is (0,1,1) — exactly `.vp-embed h3` — so it wins only by source order. Measured with a copy of the base rule injected after the candidate, i.e. what moving the rule up the sheet amounts to: `.vp-embed h3.vp-finding-route` (0,2,1) gives `GET /orders/:id` in ui-monospace 12.48px, the bare form gives `GET /ORDERS/:ID` in Archivo Black. Fifth time this project has paid for that shape |
+| **Nine declarations, each measured by dropping it alone** | `font-family` ui-monospace → Archivo Black · `font-size` 12.48 → 13.76px · `font-weight` 400 → 900 · `text-transform` the spelling · `letter-spacing` normal → 0.7488px · `line-height` 19.968 → 13.104px · `margin` bottom 0 → 12px · `display` inline → block, the badge loses its line and the report grows 100px at 1280 · `overflow-wrap` the document goes 320 → 397px at 320. With all nine, the computed type and the bounding box are IDENTICAL to the span's on all six themes at 320, 375 and 1280 px |
+| **An inline heading is still a heading — probed, not assumed** | `display: inline` is what keeps the severity badge on the route's line, and the obvious worry is whether it costs the exposure. In Chromium's AX tree it comes back `heading`, level 3, named with the route's exact spelling |
+| **The same value was flooring the page** | C0.42's own row says it: the value put in a heading is also the longest unbreakable token on its line. `GET /invoices/:invoiceId/attachments/:attachmentId` is 345.3 px of mono with nowhere to break in a 264 px content box, so the report scrolled sideways on an ordinary phone — WCAG 2.2 § 1.4.10 (Reflow, AA). Document width, folds shut: **397 → 320** at 320 px, **397 → 375** at 375 px, 1280 unchanged |
+| **And the neighbour the same run found** | With the technical panel open, the `Where` definition holds `src/modules/orders/order.controller.ts` in a bare `dd` and takes the document to **370 px** at 320 on its own. *A width that passes is not a width that has margin*, and the rule is *grep for the neighbours of the line you are fixing*. `.vp-finding-where` closes it; both states now measure 320 / 375 / 1280 |
+| **`anywhere` and not `break-word`, with the honest reason** | The two spellings measure the SAME here today, because neither element is a flex or grid item — `.vp-finding-head` carries no rule at all. One `display: flex` away `break-word` leaves min-content where it was and the page floors again, and every other machine value in this product is spelled `anywhere`. A test refuses `break-word` and says why, rather than implying a measurement it does not have |
+| **The code excerpt is deliberately untouched** | `.vp-code-pre` scrolls on purpose — *« the code overflows horizontally rather than breaking the layout »* — and breaking a line of source mid-token is how somebody reads the wrong statement. A test claims that side and passes before AND after |
+| **The price, stated** | Reflow makes the report TALLER: **5,857 → 5,905 px at 320 px**, 5,094 → 5,118 at 375, and **0 px at 1280**. A page that scrolls sideways hides its own right-hand edge; a taller page hides nothing |
+| **Unchanged** | No catalogue key, no colour, no token, no dependency, no heading SIZE. The render-blocking stylesheet is **byte-identical** (`index-DpyowbMH.css`, 62.42 kB, same hash); the deferred Code-tab sheet goes 27.08 → 27.26 kB (gzip 5.13 → 5.18) and its script 64.75 → 64.78 kB, i.e. a tab nobody has opened pays all of it. 21 tests, **18 red on unmodified code** and 3 green before AND after on purpose; **11 mutations, 11 killed**, control run first and again at the end |
+
 ### C0.44 ✅ — The longest screen in the product, and one heading on it
 
 *The Guide is seventeen sections and a hundred-odd points, and the first thing
@@ -2826,6 +2855,44 @@ therefore a policy number somebody has to choose against their own
 repositories, not one a night can invent: a number too low breaks the estimate
 it exists to protect, which is the *over-refusing a legal rule is a silent hole*
 trade this project has already paid for once.
+
+### `var(--accent)` as TEXT is measured by nothing, and it fails on two themes
+
+Found while verifying C0.45 and deliberately not touched by it: the finding's
+route is `color: var(--accent)`, as it has been since the report shipped, and
+C0.45 changed the ELEMENT around it and not one byte of its colour.
+
+`theme/themes.test.ts` computes five families of WCAG ratios and refuses a
+palette that fails one. It measures `--accent-fg` **on** the accent (the text
+laid on a button), the risk palette on panels and in its own pills, secondary
+mentions, and — since the focus-ring pass — `--focus` on every surface a ring
+can land on. **It does not measure the accent used as a text colour on a
+panel**, which is the fifth thing this palette is asked to do. Measured in
+Chromium on the mounted report, accent on `--panel`:
+
+| theme | ratio |
+|---|---|
+| grayed | 12.22:1 |
+| blued | 9.15:1 |
+| attck | 9.89:1 |
+| acme | 4.58:1 |
+| **dark** | **3.90:1** |
+| **punk** | **2.12:1** |
+
+4.5:1 is the floor for normal text (WCAG 1.4.3, AA), and the route is 12.48px,
+i.e. not large text under any reading. On Punk the accent is a dark red on
+khaki — the same pair that already took the focus ring to 1.24:1 and produced
+the `--focus` role token.
+
+`color: var(--accent)` appears **34 times in `src/styles.css` and 25 times in
+`src/vulnpipe/styles.css`**, so this is not one element: it is links, active
+tabs, pressed chips, the logo sign, hovered row names, and the route. Some of
+those are large or bold and some are not, and the honest answer is almost
+certainly a `--accent-text` ROLE token following the contrast of what is behind
+it — exactly what `--accent-fg` and `--focus` already are — plus the same
+refusal written into `themes.test.ts` so a fourteenth call site cannot be
+silent. That is a palette decision across both halves of the product and a
+visual change on six themes, which is why it is here and not in C0.45's diff.
 
 ### The incident card's heading outline, and the `h1` size step
 

@@ -275,6 +275,15 @@ A screen that needs a model key, real code, a completed scan or a live database
 is a screen no browser sweep covers. Nine French strings and a whole empty-state
 defect lived there. **List them deliberately, or read the components.**
 
+The **scan report** is the sharpest case, because it is also the longest screen
+the product renders. Mounted with a five-finding report from a fixture — the
+throwaway preview page again — its outline was `h1` · `h2` · `h2`: three
+headings for 3,727 px at 1280 px and 5,857 at 320 px, with no way to reach any
+of the five findings the report is about, while the EMPTY report has carried an
+`h3` since it shipped. The same mount showed it scrolling sideways at 320 **and
+375** px. Neither needed a key to find; both needed somebody to mount the
+screen.
+
 **An ENVIRONMENT VARIABLE is the cheapest such gate, and the easiest to
 forget.** Settings → Database shows six fields read-only when `MENATER_DB_*`
 names them, which is every containerised install and no development one — so

@@ -272,9 +272,22 @@ export function FindingCard({
     >
       <header className="vp-finding-head">
         <SeverityBadge severity={finding.severity} />
-        <span className="vp-finding-route">
+        {/*
+          A HEADING, because a finding is what this screen is ABOUT. The report
+          titles itself at level 2 and `NothingFound` — the state with nothing
+          to say — has always carried an `h3`, so a report of five findings
+          reached a screen reader as three headings and no way to get to any of
+          them, while the EMPTY one could be navigated. C0.44 in the other half
+          of the product.
+
+          And it is a VALUE, so `.vp-embed h3.vp-finding-route` takes the
+          display register back off it: a route is case-sensitive, and left to
+          the heading rule this read `GET /ORDERS/:ID`. The parent is named in
+          that selector because a bare class ties with `.vp-embed h3`.
+        */}
+        <h3 className="vp-finding-route">
           {finding.http_method} {finding.route}
-        </span>
+        </h3>
       </header>
 
       {/* Ce que voit l'utilisateur non-technique, en premier et sans effort. */}
@@ -327,7 +340,10 @@ export function FindingCard({
             </dd>
 
             <dt>{t.report.whereLabel}</dt>
-            <dd>
+            {/* A file path, i.e. the other unbreakable machine value on this
+                screen: 38 characters in a bare `dd` took the document to
+                370 px at a 320 px viewport once this panel was open. */}
+            <dd className="vp-finding-where">
               {finding.file}
               {finding.line !== null ? t.report.lineSuffix(finding.line) : ''}
             </dd>

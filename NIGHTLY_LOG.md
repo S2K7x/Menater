@@ -4,6 +4,216 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-11-07 — Saturday · Interface, clarity, accessibility
+
+**Subject**: **the scan report — five findings, and the only heading on the
+screen belonged to the empty state.** It is the longest screen this product
+renders and one no sweep has ever reached: getting to it costs a model key,
+real code and a few minutes, so it is in no tab list and `CLARITY.md` § 7 files
+it under *« enumerate the screens you cannot reach »*. Mounted with a
+five-finding report, its outline was **`h1 CODE` · `h2 YOUR REPORT` ·
+`h2 WHAT THIS SCAN ACTUALLY USED`** — three headings for 3,727 px of document
+at 1280 px, 5,857 at 320 px — and it scrolled sideways at **320 and 375 px**.
+
+**Result**: PR opened on `claude/sleepy-volta-zkkcyn`. Two production files
+(`src/vulnpipe/components/ReportView.tsx`, one tag name and one `className`;
+`src/vulnpipe/styles.css`, one rule rewritten and one added),
+`src/vulnpipe/components/report-outline.test.tsx` (**+21 tests**, 18 of them
+red on unmodified code and 3 green before AND after on purpose), plus
+`ROADMAP.md` (C0.45 delivered, one § 7 entry opened), `CLAUDE.md` (one traps
+row, suite count 1860 → 1881), `CLARITY.md` (one § 7 method block) and
+`DESIGN.md` (one paragraph under The scale), and this journal. **No catalogue
+key, no colour, no token, no heading SIZE, no dependency.** VulnPipe's own
+package untouched, so its suite was not run.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-zkkcyn` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Fifty-ninth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: after `npm ci` on the
+designated branch at `9aa0e7c` (= `origin/main`) the baseline was typecheck
+**0 errors**, **1860 passed | 1 skipped**, a clean build, `npm audit` **0
+vulnerabilities**, and `list_pull_requests --state open` empty. Of § 7's
+Saturday-shaped entries, both remaining ones are explicitly design decisions
+for a human (the incident card's outline, the unused `h1` step) and three
+successive nights have left them there for that reason. So I mounted a screen
+instead of picking an entry — and the one I picked was the one `CLARITY.md`
+§ 7 names as uncoverable and nobody had ever mounted.
+
+**What the measurement says** (Chromium 1243, a throwaway preview page under
+`dashboard/` deleted in the same session, transitions killed first, the AX
+outline WALKED from the root):
+
+```
+BEFORE   h1 CODE / h2 YOUR REPORT / h2 WHAT THIS SCAN ACTUALLY USED
+AFTER    h1 CODE / h2 YOUR REPORT
+         h3 GET /orders/:id
+         h3 GET /invoices/:invoiceId/attachments/:attachmentId
+         h3 POST /admin/users/:id/impersonate
+         h3 DELETE /api/v2/projects/:projectId/members
+         h3 GET /files/:key
+         h2 WHAT THIS SCAN ACTUALLY USED
+```
+
+| document width | BEFORE | AFTER |
+|---|---|---|
+| 320 px, folds shut | 397 | **320** |
+| 375 px, folds shut | 397 | **375** |
+| 320 px, technical panels open | 397 | **320** |
+| 1280 px | 1280 | 1280 |
+
+**What I learned that is written nowhere else.**
+
+1. **The tell was in the same slot, and it is the cheapest kind of evidence to
+   look for.** `NothingFound` — the state where the report has nothing to say —
+   renders an `h3` and always has. So the EMPTY report could be navigated and
+   the full one could not. When one branch of a conditional names itself and
+   the other does not, the one that does is the measurement you already own.
+2. **An inline heading is still a heading — probed, not reasoned.**
+   `display: inline` is what keeps the severity badge on the route's line (as a
+   block the route moves down and the report grows 100 px at 1280), and the
+   obvious worry is that it costs the exposure. In Chromium's AX tree it comes
+   back `heading`, level 3, named with the route's exact spelling. Probed on the
+   real markup before the rule was written.
+3. **The bare-class trap, measured for the fifth time, and the way to measure
+   it.** `h3.vp-finding-route` is (0,1,1) — exactly `.vp-embed h3` — so it wins
+   only by source order. You cannot see that by rendering the fix; what shows it
+   is **injecting a copy of the base rule AFTER the candidate**, which is what
+   moving the rule up the sheet amounts to: `GET /ORDERS/:ID` in Archivo Black
+   comes straight back. `.vp-embed h3.vp-finding-route` is (0,2,1).
+4. **`break-word` measured the SAME as `anywhere` here, and the fix still
+   refuses it.** The trap row says `break-word` leaves min-content where it was;
+   that is true and it only MATTERS when the element's minimum floors a track.
+   Neither of these two is a flex or grid item — `.vp-finding-head` carries no
+   rule at all — so both spellings give 320/375 today. `anywhere` is kept
+   because one `display: flex` on that header silently undoes the other, and the
+   test says exactly that rather than implying a measurement it does not have.
+5. **Three of my own rulers were wrong before one was right, all in the same
+   direction: they could not see a bare TEXT NODE.** A sweep over
+   `querySelectorAll('*')` comparing `getBoundingClientRect().right` to the
+   viewport found the route and reported **zero** offenders once it was fixed —
+   over a document still 370 px wide at 320. The remaining offender was
+   `src/.../order.controller.ts` as a bare text node inside a `<dd>`: the dd's
+   own rect is inside the viewport, the TEXT is not, and there is no element to
+   measure. What finds it is `el.scrollWidth > el.clientWidth` on elements whose
+   `overflow-x` does not clip. A second version added an "does an ancestor clip"
+   filter and reported 0 offenders for the same reason. **An element sweep is
+   not a layout sweep.**
+6. **And a probe that adds a class before opening the panel that renders it
+   measures nothing.** My first `.vp-finding-where` run tagged the `dd`s before
+   clicking *Show technical detail*, so it tagged zero of them and printed
+   « no change » for a fix that works. It prints the count it tagged now. Same
+   family as a contrast sampled during the theme cross-fade: a ruler that
+   quietly measures something else, and it failed in the direction that would
+   have talked me out of a correct fix.
+7. **The deferred sheet is where this lands, which is why it is affordable.**
+   `main.tsx` imports the console's stylesheet and no other (the 10-09 pass), so
+   27 kB of Code-tab CSS travels with the lazy chunk: the render-blocking sheet
+   came out **byte-identical, same hash** (`index-DpyowbMH.css`, 62.42 kB) and
+   the whole cost — 27.08 → 27.26 kB raw, 5.13 → 5.18 gzipped — is paid by a tab
+   nobody has opened. The eager JS chunk's HASH moves and its SIZE does not
+   (447.65 kB): Vite rewrites the dynamic-import reference when the lazy chunk's
+   hash changes, which is worth knowing before somebody reads it as a
+   regression.
+
+**Found and NOT fixed, with why.**
+
+- **`var(--accent)` used as a TEXT colour is measured by nothing, and it fails
+  on two themes.** The route is `color: var(--accent)` and has been since the
+  report shipped — this pass changed the element around it and not one byte of
+  its colour. Measured on the mounted report, accent on `--panel`: grayed
+  12.22:1, attck 9.89, blued 9.15, acme 4.58, **dark 3.90, punk 2.12** against a
+  4.5:1 floor at 12.48px. `themes.test.ts` measures `--accent-fg` ON the accent,
+  the risk palette, secondary mentions and `--focus`, and **not this**. It is 34
+  call sites in `src/styles.css` and 25 in `src/vulnpipe/styles.css` — links,
+  active tabs, pressed chips, the logo sign — so the honest answer is an
+  `--accent-text` ROLE token following what is behind it, exactly as `--focus`
+  already is, plus the refusal written into the suite. That is a palette decision
+  on six themes and across both halves. § 7, with the numbers.
+- **The code excerpt keeps scrolling**, deliberately: `.vp-code-pre` says in its
+  own comment that the code overflows rather than breaking the layout, and
+  breaking a line of source mid-token is how somebody reads the wrong statement.
+  A test claims that side and passes before and after.
+- **`.vp-action` is still 36 px tall and `.vp-toggle` 21 px** at 375 px, against
+  this product's own stated 44 px touch target (WCAG 2.5.8 asks 24). Measured
+  again tonight on the report; untouched, because it is a sizing decision across
+  the whole Code tab rather than one element, and it is not what made the page
+  scroll.
+- **The VulnPipe settings page has six section titles that are `Fold`
+  summaries, i.e. spans**, with `h4` subheads inside them — the C0.44 shape
+  again, on a screen reachable from Settings → Code analysis. Not taken
+  tonight: it is a second screen, and one subject is the rule.
+- **Standing leads, re-checked and unchanged**: the incident card's heading
+  outline and the unused `h1` step (both § 7, both design decisions), the
+  `Fold` summary's no-wrap line at 320 px on the Ingestion tab, the ninety-odd
+  French strings in `server/engine/`, `npm audit` not in CI, a forwarded
+  upstream 401 still sending an operator to the sign-in screen,
+  `MENATER_TEST_PG` still never set, `src/i18n/dictionary.ts` at 7 % of the
+  eager chunk, the analysis relay's missing deadline.
+
+**Do not redo.**
+
+- **Do not sweep for horizontal overflow with an element-rect comparison
+  alone.** Learning 5. A bare text node has no element, and the sweep will tell
+  you the page is clean while it is 370 px wide at 320.
+- **Do not wrap the whole `.vp-finding-head` in the heading.** The C0.44 lesson
+  holds here: the finding is then named « CRITICAL GET /orders/:id », after its
+  severity rather than after the address it is about. A mutation carries it.
+- **Do not write the route's rule as a bare `h3.vp-finding-route`.** Learning 3.
+  It renders correctly today and only because of source order.
+- **Do not drop `display: inline` to make it "a normal heading".** The badge
+  loses its line and the report grows 100 px at 1280 px, for nothing: the AX
+  exposure is identical either way.
+- **Do not give the route a `title` or the card an `aria-label` instead.** A
+  heading is what a screen-reader user navigates a long document by; an article
+  label is not in the heading list, and `role="article"` with a name buys a
+  landmark nobody enumerates on a report.
+- **Do not reach for `overflow-wrap: break-word` here because it measured the
+  same.** Learning 4.
+- **Do not restore a mutated file with `git checkout` while the change is
+  uncommitted** (the 11-02 lesson, obeyed): the harness copies both files to the
+  scratchpad and restores from there, and runs an unmutated control FIRST and
+  LAST.
+
+**Verified** (Node 22.23.4, npm 10.9.9, Chromium 1243; every command run and
+its output read):
+
+| Command | Result |
+|---|---|
+| `npm ci` (dashboard) | clean, **0 vulnerabilities** |
+| baseline `npm run typecheck` / `npm test` / `npm run build` | **0 errors**, **1860 passed \| 1 skipped**, clean |
+| `npx vitest run report-outline.test.tsx` on unmodified code | **18 failed \| 3 passed** — and the 3 are the two deliberate boundaries plus the empty state's own heading |
+| same file, fix applied | **21 passed** |
+| `npm run typecheck` (after) | **0 errors** |
+| `npm test` (after) | **1881 passed \| 1 skipped** (**+21**), 122 files |
+| `npm run build` (after) | clean; render-blocking sheet **byte-identical** (`index-DpyowbMH.css`, 62.42 kB, same hash), Code-tab sheet 27.08 → 27.26 kB, its script 64.75 → 64.78 kB, eager chunk 447.65 kB unchanged in size |
+| the report driven in Chromium, before/after | outline `h1 h2 h2` → `h1 h2 h3×5 h2`; document 397 → 320 at 320 px and 397 → 375 at 375, folds shut AND technical panels open; 1280 unchanged; type and bounding box of the route IDENTICAL on all six themes at all three widths; `innerText` heading sweep `[]` |
+| the bare-class variant, measured | `GET /ORDERS/:ID`, Archivo Black 13.76px/900 |
+| `VulnPipe` | **not touched**, suite not run |
+
+| Mutation | Result |
+|---|---|
+| CONTROL (unmutated), run first AND last | GREEN both times (21/21) |
+| M1 — the route back to a `span` | RED — 5 |
+| M2 — the rule written as a bare class | RED — 12 |
+| M3 — `text-transform: none` dropped | RED — 1 |
+| M4 — `overflow-wrap` on the route dropped | RED — 1 |
+| M5 — that `overflow-wrap` written `break-word` | RED — 2 |
+| M6 — the file-path rule dropped | RED — 2 |
+| M7 — the `dd` loses the class, the rule kept | RED — 1 |
+| M8 — the heading promoted to `h2` (a peer of the report) | RED — 4 |
+| M9 — `display: inline` dropped | RED — 1 |
+| M10 — the heading rule declared twice | RED — 1 |
+| M11 — the whole header wrapped in the heading | RED — 3 |
+
+No model key and no database were needed. The throwaway preview page
+(`preview-report.html` + `src/preview-report.tsx`, the device `CLARITY.md` § 7
+prescribes) and the twelve probe scripts lived outside the repository or were
+deleted in the same session; `git status` shows only the eight intended files.
+
 ## 2026-11-06 — Friday · Performance and cost
 
 **Subject**: **two thirds of the console's answer on the wire were UUIDs gzip
