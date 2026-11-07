@@ -273,6 +273,16 @@ at the level-3 size — but then the element is named, because `.soc-panel h2` i
 (0,1,1) and a bare class loses to it. `.vp-embed` carries the same three
 levels so the two halves of the application do not read as two applications.
 
+**And a heading whose text is a VALUE takes none of that register.** The scan
+report's findings are named at level 3 by their route, which is mono, exact and
+case-sensitive: left to `.vp-embed h3` it rendered `GET /ORDERS/:ID` in the
+display face, i.e. the console naming an address that does not exist — to the
+eye and, since an accessible name is computed from rendered text, to a screen
+reader. The monospace rule above decides it: a name may shout, a value keeps
+its spelling. `.vp-embed h3.vp-finding-route` names the element for the same
+specificity reason, and it is the element that has to break, since it is also
+the longest unbreakable token on its line.
+
 *Why the section heading is a label and not a headline:* every panel used to
 open with one sized like the page title, so a tab whose whole content was
 "nothing to report" carried three billboards. When everything shouts, nothing is

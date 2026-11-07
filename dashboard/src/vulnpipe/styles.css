@@ -690,11 +690,59 @@
 .vp-finding.vp-medium { border-left-color: var(--orange); }
 .vp-finding.vp-low, .vp-finding.vp-info { border-left-color: var(--grey); }
 
-.vp-finding-route {
+/*
+ * The route NAMES the finding, so it is an `h3` — and it is a VALUE, so none
+ * of the heading register applies to it.
+ *
+ * THE PARENT IS NAMED, and that is not a style preference. A bare
+ * `h3.vp-finding-route` is (0,1,1), exactly like `.vp-embed h3` above, so it
+ * would win only by sitting further down this file. Measured with a copy of
+ * the base rule injected after it — which is what moving this rule up amounts
+ * to — it renders `GET /ORDERS/:ID` in Archivo Black 13.76px/900. Fifth time
+ * this project has paid for that selector shape.
+ *
+ * Each of the nine declarations was measured by dropping it alone:
+ *   font-family      ui-monospace → Archivo Black
+ *   font-size        12.48px → 13.76px
+ *   font-weight      400 → 900
+ *   text-transform   `GET /orders/:id` → `GET /ORDERS/:ID` — and a route is
+ *                    case-sensitive, so this one names an address that does
+ *                    not exist, to the eye AND to a screen reader, which
+ *                    computes the accessible name from RENDERED text
+ *   letter-spacing   normal → 0.7488px
+ *   line-height      19.968px → 13.104px
+ *   margin           margin-bottom 0 → 12px
+ *   display          inline → block: the severity badge loses its line and the
+ *                    report grows 100px at 1280px. Probed in Chromium: an
+ *                    inline heading is still exposed as `heading` level 3 with
+ *                    the route as its name
+ *   overflow-wrap    the document goes 320 → 397px at a 320px viewport
+ *
+ * With all nine, the computed type and the bounding box are IDENTICAL to the
+ * span this replaced, on all six themes at 320, 375 and 1280px.
+ *
+ * `anywhere` and not `break-word`: the two spellings measure the same here
+ * today, because `.vp-finding-head` carries no rule and this is not a flex
+ * item — one `display: flex` away, `break-word` leaves min-content where it
+ * was and the page floors again. Every other machine value in this product is
+ * spelled `anywhere`.
+ */
+.vp-embed h3.vp-finding-route {
   font-family: var(--mono);
   font-size: 0.78rem;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  line-height: inherit;
+  margin: 0;
+  display: inline;
+  overflow-wrap: anywhere;
   color: var(--accent);
 }
+
+/* The `Where` definition inside the technical panel: a source path, the other
+   unbreakable value on this screen. 370 → 320px at a 320px viewport. */
+.vp-finding-where { overflow-wrap: anywhere; }
 
 .vp-vuln-name { font-weight: 700; }
 .vp-vuln-gloss { color: var(--muted); font-size: 0.86rem; }
