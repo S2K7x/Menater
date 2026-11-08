@@ -4,6 +4,251 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-11-08 — Sunday · Maintenance and state of the project
+
+**Subject**: **a declaration with writers and no readers — the fifth instance,
+and the finding is that nothing in this repository ever looked for the first
+four.**
+`NodeDef.retry`, `Settings.meta.from_env`, `soc_tuning_rule.match_count` and
+`PromoteResult.alert_id` were each found SIDEWAYS, while somebody was looking at
+something else. So this journal has carried `readVariables` / `writeVariables`
+and `fetchWithTimeout` in its standing leads for weeks, each night under its own
+verdict — *« the honest row is the deletion, and it is not this night's
+subject »* — and `CLAUDE.md`'s Stack line went on claiming Postgres held the
+pipeline variables, which it does not. **A defect whose noticing is unscheduled
+gets noticed on the night somebody happens to look.**
+
+**Result**: PR opened on `claude/sleepy-volta-0h1n2m`. One new test file
+(`dashboard/server/dead-exports.test.ts`, **+5 tests**, 1 red on unmodified
+code), three production files from which things were REMOVED
+(`server/engine/pg-store.ts` −59 lines, `server/probes.ts`, `server/http.ts`),
+plus `CLAUDE.md` (the Stack line corrected, one traps row, suite count 1881 →
+1886) and `ROADMAP.md` (one § 7 entry opened and closed, one note settled, the
+`npm audit` row's fifth data point). **91 insertions, 105 deletions.** No CSS,
+no class name, no colour, no catalogue key, no heading level, no dependency, no
+SQL. The built bundle is **byte-identical, same three hashes** — every deletion
+is server-side. VulnPipe untouched; its suite was run anyway, because tonight's
+other half is the dependency check.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-0h1n2m` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Sixtieth entry saying so**; it is a line in the
+routine's configuration, not a thing a night can fix.
+
+**Why this subject.** Sunday's brief has three parts and the first two decided
+it. **Dependencies: nothing to do** — `npm ci` then `npm audit` on both halves
+reports **0 vulnerabilities each** (Node 22.23.4, npm 10.9.9), so there was no
+known vulnerability and NIGHTLY.md forbids a bump "to be current". **Documents
+against code**: the measurable claims hold — 14 tools / 8 prompts / 9 resources,
+16 node types, 12 credentials, 10 tabs, 10 Settings areas, 17 Guide sections,
+`DB_ENV`'s six variables, 1881 console tests and 453 VulnPipe tests were all
+true tonight, every file path the four documents name resolves, and I
+re-verified four of the documented subtraction invariants by hand (no body read
+outside `readCapped`, no `fetch` in `src/` outside the two clients, every pool
+holder describing its query failures, `.env.example` bridged correctly by
+`docker-compose.yml`). **One claim was false, and the journal had already
+filed it under this exact theme**: the 11-04 entry wrote *« `CLAUDE.md`'s
+architecture line claims Postgres holds the "pipeline variables", and it does
+not […] Documentation describing an unimplemented intention, which is Sunday's
+own brief. »* The baseline was green and no PR was open, so the calendar rule
+did not preempt.
+
+**What the measurement says.**
+
+```
+453 exported symbols scanned across 265 files
+ORPHANS (no reference in the declaring module, nor in any module importing it):
+  server/engine/pg-store.ts          readVariables
+  server/engine/pg-store.ts          writeVariables
+  server/ingest/cursors.ts           forgetCursor
+  server/intel/observables.ts        hostOf        <-- never reported before
+  server/probes.ts                   fetchWithTimeout
+  src/vulnpipe/lib/finding-status.ts DISMISSING_STATUSES
+```
+
+Three deleted, three kept with a written reason in `KEPT`. `hostOf` is the one
+no previous sweep could see — see learning 1.
+
+**What I learned that is written nowhere else.**
+
+1. **Resolution by NAME cannot find this defect, and the proof was sitting in
+   the tree.** Ten export names here are declared in two modules. `hostOf` is
+   exported by `intel/observables.ts` and ALSO declared, privately and with a
+   different signature, in `http.ts` and in `engine/nodes/io.ts` — so every
+   name-based sweep a previous night ran counted the private ones' uses and
+   reported it as referenced. It is not: nothing imports it. Resolving by
+   import PATH is reliable here for one reason worth knowing — this server runs
+   under `--experimental-strip-types`, so every relative import carries its
+   extension and there is nothing to guess.
+2. **`from '…'` is not the only way a module is reached.** My first
+   path-resolved sweep reported nine orphans; three of them
+   (`resetThrottle`, `throttleRecordCount`, `resetIntelThrottle`) are reached
+   ONLY through `await import('…')`, from `auth-throttle.test.ts`,
+   `app.test.ts` and `api-named-failures.test.ts`. A resolver without dynamic
+   imports calls them dead. **Two of my three rulers were wrong before one was
+   right, and both were wrong in the direction that invents work.**
+3. **The 10-25 `grep`-is-binary lesson, re-measured and narrowed.** That entry
+   recorded THREE files holding a NUL byte; tonight it is **two** —
+   `server/intel/lookup.ts` (2 NULs, 22,798 B) and
+   `server/assistant/assistant.test.ts` (2 NULs). **`server/findings.ts` holds
+   zero now** and `grep` no longer calls it binary. The sweep reads files itself
+   so it is immune, and a test pins that; what it costs today is **nothing** —
+   no symbol is referenced only from a NUL-bearing file, measured, because
+   `providersFor` is also reached from `intel/intel.test.ts`.
+4. **Two of my own guards were lines no test could fail on, and the mutation
+   pass is what said so.** Excluding the test file from its own corpus changes
+   the result by nothing: `KEPT`'s keys are string literals holding the names
+   the sweep hunts, and what makes them harmless is path resolution, not the
+   exclusion. So the exclusion is gone and the invariant that CAN break is
+   asserted instead — adding `import { forgetCursor } from './ingest/cursors.ts'`
+   to the test turns **two** tests red. Comment-stripping likewise changes the
+   orphan list by nothing today (no comment names a symbol from inside a module
+   that imports it, and there is not one commented-out relative import in
+   `server/` or `src/`); it is kept, because a comment is not a reference, with
+   **the measurement written beside it so the next reader does not believe a
+   test stands behind it**.
+5. **`http.ts`'s `onTimeout` was a facility for a caller that never arrived,
+   and two comments described it as live.** Its only consumer was
+   `probes.ts`'s `fetchWithTimeout`, which had none; the option's own docblock
+   said *« the console's settings probes pass one »* and
+   `describeFetchError`'s said *« `onTimeout` gives the callers that want the
+   host and the delay a better sentence still »*. Measured: **the two HTTP
+   probes this console runs both dial THIS process over the loopback** —
+   Health's ingestion-endpoint check (`diagnostics.ts`) and Settings' MCP
+   self-test (`routes/assistant.ts`) — so naming the host adds nothing to
+   either, and both already take `describeFetchError`'s sentence. The worded
+   timeout the wrapper existed to produce is in `tcpProbe` ten lines above it,
+   which is the one probe that dials an address somebody typed.
+6. **An orphan is not automatically a deletion, and three of the six are not.**
+   The useful distinction is whether anything WRITES what the dead reader would
+   read. `soc_variable` / `soc_variable_history` are never written by anything,
+   so `readVariables` / `writeVariables` are residue. `soc_tuning_rule_history`
+   IS written, by three paths, on every rule change — so `RuleStore.history`,
+   its only reader and itself callerless, is a missing SCREEN and was not
+   touched. Same test applied to the other two kept entries: `forgetCursor` is
+   the server half of an operator feature nobody built, and `hostOf` answers a
+   product question (a `url` observable reaches exactly ONE provider — the three
+   IP providers take `ipv4`/`ipv6` only — so whether a URL lookup should also
+   ask the domain providers about its host is a decision, not residue).
+
+**The state of the week** — Sunday's brief asks for it, so here it is plainly.
+
+- **What moved**: eight nights, eight merged subjects. Two security (a
+  caller-supplied regex that could stop the console for the life of the
+  process; a `pg` pool with no `'error'` listener, which ended it), two
+  error-reporting (an unreachable database reaching the operator as an empty
+  string; the same for the engine's query dependency), one performance (brotli
+  on the window: 51,061 → 29,126 B at the ceiling, for less CPU), one feature
+  (J0.4's second slice), one accessibility (the scan report's outline), and
+  tonight's maintenance. The suite went from roughly 1,800 to **1,886**.
+- **What is stuck, and has been for more than a week**: `npm audit` is still in
+  no CI (§ 7, five Sundays of data now, and explicitly a human's decision); the
+  `read`-node retry asymmetry (§ 7, a human's decision); `MENATER_TEST_PG` is
+  still never set, so the store contract's Postgres half has run exactly once
+  in this project's life; the ninety-odd French strings in `server/engine/`;
+  `var(--accent)` as TEXT failing on two themes, measured 11-07 and needing a
+  palette decision across six themes; the analysis relay's missing deadline.
+  Every one of them is blocked on a decision rather than on work, which is
+  worth saying out loud: **the backlog's cheap half is done.**
+- **What I recommend for next week, and why.** (1) **`RuleStore.history`** —
+  it is the sharpest thing this sweep leaves: a table filled on every rule
+  change, whose only reader has no caller, on the screen where a team writes
+  the rules that decide what stops reaching a human. It is a Monday (a small
+  feature) rather than a Thursday. (2) **A type-aware orphan pass.** Tonight's
+  guard sees top-level exports, and four of the five instances this project has
+  paid for were interface FIELDS or class METHODS; the remaining blind spot is
+  where the family actually lives. (3) **Leave the two § 7 human decisions
+  alone again** unless the person answers them — five nights have now deferred
+  the audit one, and a sixth deferral costs nothing while taking it unilaterally
+  would put a scheduled job into somebody's repository.
+
+**Found and NOT fixed, with why.**
+
+- **`RuleStore.history`**, above. Not touched: deleting it would remove the only
+  reader of data the product deliberately writes, and wiring it is a screen.
+- **`sql/10-engine.sql` still creates `soc_variable` and
+  `soc_variable_history` and GRANTs on both**, now with no code behind them at
+  all. Left alone deliberately: removing tables from the schema is a product
+  decision and `sql/` only runs on a database's FIRST start, so it would change
+  new installs and not existing ones. `config.ts` states the intention
+  correctly — *« They will live in `soc_variable` once the database is wired
+  in »* — and is now the only place that does.
+- **`.env.example` names six of the twelve credentials**, and
+  `docker-compose.yml` bridges every one of those six (`OPENROUTER_API_KEY` →
+  `OPENROUTER_APIKEY`, and so on), so the Docker path is correct. What it does
+  NOT offer is the assistant's four provider keys, the two chat webhook URLs or
+  `ASSISTANT_APIKEY`; those are store-only, which is defensible and is written
+  down nowhere. A one-paragraph documentation job, not tonight's subject.
+- **`npm run serve` reads `.env` literally**, so a developer who fills
+  `OPENROUTER_API_KEY` there gets nothing (the code reads `OPENROUTER_APIKEY`).
+  The file's own header says *« MENATER — Docker stack configuration »*, so this
+  is a gap in the development path only, and the Settings field stays editable
+  there rather than locking. Noted, not fixed.
+- **Standing leads, re-checked and unchanged**: the two § 7 human decisions,
+  `MENATER_TEST_PG`, the French in `server/engine/`, `var(--accent)` as text,
+  a forwarded upstream 401 still sending an operator to the sign-in screen,
+  `src/i18n/dictionary.ts` at 7 % of the eager chunk, the relay's deadline,
+  `DB_PRESETS.supabase`'s port, the VulnPipe settings page's six `Fold`-summary
+  section titles.
+
+**Do not redo.**
+
+- **Do not sweep for this by NAME.** Learning 1. It cannot see `hostOf`, and it
+  reports `providersFor` as dead if it uses `grep` without `-a`.
+- **Do not write the resolver with `from '…'` only.** Learning 2: three symbols
+  are reached solely through `await import('…')`.
+- **Do not exclude the test file from its own corpus and call it a guard.**
+  Learning 4 — measured, changes nothing, and the assertion that replaces it
+  goes red on the mutation that matters.
+- **Do not delete `RuleStore.history`, `forgetCursor`, `hostOf` or
+  `DISMISSING_STATUSES`.** Learning 6. Each is the unwired half of something,
+  and `KEPT` now carries the reason where previously there was none.
+- **Do not put `npm audit` in `ci.yml`.** § 7 states the objection and it still
+  holds: `automerge.yml` merges on a green check, so an advisory published at
+  3 a.m. blocks the queue for something no diff did. The shape § 7 names — a
+  scheduled job that opens an issue — is a human's call.
+- **Do not restore a mutated file with `git checkout` while the change is
+  uncommitted** (the 11-02 lesson, obeyed): the harness copies the five files to
+  the scratchpad and restores from there, and runs an unmutated control FIRST
+  and LAST. It also refuses to report a result it could not parse, after the
+  11-05 lesson about `--reporter=basic`.
+
+**Verified** (Node 22.23.4, npm 10.9.9; every command run and its output read):
+
+| Command | Result |
+|---|---|
+| `npm ci` (both halves) | clean; **0 vulnerabilities** each |
+| `npm audit` (both halves, explicit) | **found 0 vulnerabilities**, both |
+| baseline `npm run typecheck` / `npm test` / `npm run build` | **0 errors**, **1881 passed \| 1 skipped**, clean |
+| `VulnPipe: npm test` (baseline) | **453 passed** — the number `CLAUDE.md` claims |
+| `npx vitest run server/dead-exports.test.ts` on unmodified code | **1 failed \| 3 passed**, naming the three symbols to delete |
+| same file, after the deletions | **5 passed** |
+| `npm run typecheck` (after) | **0 errors** |
+| `npm test` (after) | **1886 passed \| 1 skipped** (**+5**), 123 files |
+| `npm run build` (after) | clean; `index-DBxDUhlj.js` 447.65 kB and `index-DpyowbMH.css` 62.42 kB — **the same three asset hashes as the baseline** |
+| `list_pull_requests --state open` | empty, before and after |
+
+| Mutation | Result |
+|---|---|
+| CONTROL (unmutated), run FIRST and LAST | GREEN both times (5/5) |
+| M1 — `fetchWithTimeout` restored | RED — 1 |
+| M2 — `readVariables` restored | RED — 1 |
+| M3 — a `KEPT` entry removed | RED — 1 |
+| M4 — a `KEPT` entry added for a symbol that has readers | RED — 1 |
+| M5 — an exempted symbol deleted, its `KEPT` entry left behind | RED — 1 |
+| M6 — resolution by NAME instead of by import path | RED — 1 (`hostOf` stops being an orphan) |
+| M7 — dynamic `import()` dropped from the resolver | RED — 1 |
+| M8 — the sweep scans almost nothing | RED — 3 |
+| M9 — a BARE `import './x.ts'` added to the test file | **GREEN, and correctly so** — a side-effect import carries no names, so it is not an edge |
+| M9′ — a NAMED import added to the test file | RED — **2** |
+| M10 — comments no longer stripped | **GREEN** — learning 4, measured and recorded in the file |
+
+No model key and no database were needed. The six probe scripts and the
+mutation harness lived in the scratchpad only; `git status` shows the five
+intended files plus the new test.
+
 ## 2026-11-07 — Saturday · Interface, clarity, accessibility
 
 **Subject**: **the scan report — five findings, and the only heading on the

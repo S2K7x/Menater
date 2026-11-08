@@ -1,14 +1,22 @@
 /**
- * Reachability probes for the settings screen.
+ * Reachability probe for the settings screen.
  *
- * Both answer the same question — "is the thing you just typed in actually
- * there?" — and both must fail with a sentence rather than a stack trace: the
- * person reading them is configuring, not debugging.
+ * It answers one question — "is the thing you just typed in actually there?" —
+ * and it must fail with a sentence rather than a stack trace: the person
+ * reading it is configuring, not debugging.
+ *
+ * IT USED TO SAY "BOTH". Beside it sat `fetchWithTimeout`, an HTTP probe
+ * wrapping `fetchWithDeadline` with a worded timeout, and it had no caller
+ * anywhere — nor a test, nor a mention outside its own declaration. The two
+ * HTTP probes this console actually runs (Health's ingestion-endpoint check,
+ * Settings' MCP self-test) both dial THIS process over the loopback, so naming
+ * the host in their timeout would add nothing, and both take the sentence
+ * `describeFetchError` gives them. The worded timeout the dead wrapper existed
+ * to produce is right here in `tcpProbe`, which is the one probe that dials an
+ * address somebody typed.
  */
 
 import { createConnection } from 'node:net';
-
-import { fetchWithDeadline } from './http.ts';
 
 /**
  * TCP reachability test. With no Postgres driver, this is what can be proven.
@@ -42,19 +50,5 @@ export function tcpProbe(host: string, port: number, timeoutMs = 5000): Promise<
       };
       done(false, known[e.code ?? ''] ?? e.message);
     });
-  });
-}
-
-/**
- * `fetch` with a deadline, worded for the operator.
- *
- * These probes dial a host somebody has just typed into a settings field, so a
- * timeout has to name the host and the delay: "no answer from X in 20 s" is a
- * diagnosis, "AbortError" is not.
- */
-export async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = 20_000): Promise<Response> {
-  return fetchWithDeadline(url, init, {
-    timeoutMs,
-    onTimeout: (u, ms) => new Error(`No answer from ${new URL(u).host} within ${ms / 1000} s.`),
   });
 }

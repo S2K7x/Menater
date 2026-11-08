@@ -34,7 +34,7 @@
  * faire au pire moment, et sur une base de sécurité c'est inacceptable.
  */
 
-import { Pool, type PoolClient } from 'pg';
+import { Pool } from 'pg';
 
 import type { RunReadOptions, RunStore, StepReadOptions } from './store.ts';
 import { INPUT_NOT_READ, OUTPUT_NOT_READ } from './types.ts';
@@ -529,62 +529,5 @@ export class PgRunStore implements RunStore {
       'UPDATE soc_run SET owner = NULL, claimed_at = NULL WHERE id = $1 AND owner = $2',
       [runId, owner],
     );
-  }
-}
-
-// --- Variables ------------------------------------------------------------------
-
-/**
- * Lit les variables de pipeline depuis la base.
- *
- * Rend `null` si la table n'existe pas encore : l'appelant retombe alors sur
- * `config.json`. C'est délibéré — la console doit rester utilisable avant que
- * le schéma soit appliqué, et le dire plutôt que d'échouer au démarrage.
- */
-export async function readVariables(pool: Pool): Promise<Map<string, unknown> | null> {
-  try {
-    const res = await pool.query('SELECT key, value FROM soc_variable');
-    return new Map(res.rows.map((r: { key: string; value: unknown }) => [r.key, r.value]));
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Écrit une variable, en conservant l'historique.
- *
- * L'ancienne valeur est archivée dans la même transaction : « qui a changé ce
- * seuil, et quand » est une question qu'on se pose toujours APRÈS l'incident,
- * quand il est trop tard pour commencer à l'enregistrer.
- */
-export async function writeVariables(
-  pool: Pool,
-  patch: Record<string, unknown>,
-  by: string,
-): Promise<void> {
-  const client: PoolClient = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    for (const [key, value] of Object.entries(patch)) {
-      const before = await client.query('SELECT value FROM soc_variable WHERE key = $1', [key]);
-      await client.query(
-        `INSERT INTO soc_variable (key, value, updated_at, updated_by)
-         VALUES ($1, $2::jsonb, now(), $3)
-         ON CONFLICT (key) DO UPDATE
-           SET value = EXCLUDED.value, updated_at = now(), updated_by = EXCLUDED.updated_by`,
-        [key, JSON.stringify(value), by],
-      );
-      await client.query(
-        `INSERT INTO soc_variable_history (key, old_value, new_value, changed_by)
-         VALUES ($1, $2::jsonb, $3::jsonb, $4)`,
-        [key, JSON.stringify(before.rows[0]?.value ?? null), JSON.stringify(value), by],
-      );
-    }
-    await client.query('COMMIT');
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
   }
 }

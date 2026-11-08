@@ -40,13 +40,6 @@ export interface DeadlineOptions {
   timeoutMs?: number;
   /** Injectable transport: tests must never reach the network. */
   fetchImpl?: FetchLike;
-  /**
-   * Builds the error thrown when the deadline fires. Without it the raw
-   * `AbortError` propagates, which is what callers that catch everything
-   * already expect; the console's settings probes pass one so the operator
-   * reads the host and the delay rather than the word "aborted".
-   */
-  onTimeout?: (url: string, timeoutMs: number) => Error;
 }
 
 /**
@@ -197,7 +190,7 @@ export async function fetchWithDeadline(
   init: RequestInit = {},
   opts: DeadlineOptions = {},
 ): Promise<Response> {
-  const { timeoutMs = 20_000, fetchImpl = globalThis.fetch, onTimeout } = opts;
+  const { timeoutMs = 20_000, fetchImpl = globalThis.fetch } = opts;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   // UPPERCASED because `fetch` normalises the well-known methods on the wire
@@ -241,11 +234,6 @@ export async function fetchWithDeadline(
       }
       target = step.next.toString();
     }
-  } catch (err) {
-    if (onTimeout && (err as Error).name === 'AbortError') {
-      throw onTimeout(url, timeoutMs);
-    }
-    throw err;
   } finally {
     clearTimeout(timer);
   }
@@ -443,9 +431,11 @@ export async function readCapped(res: Response, max: number = MAX_ANSWER_BYTES):
 export function describeFetchError(err: unknown): string {
   const e = err as { name?: string; message?: string } | undefined;
 
-  // The deadline above fired. `onTimeout` gives the callers that want the host
-  // and the delay a better sentence still; this is what the others get instead
-  // of the browser's "This operation was aborted".
+  // The deadline above fired. This is what every caller gets instead of the
+  // browser's "This operation was aborted" — there is no second wording, and
+  // there used to be: `DeadlineOptions` carried an `onTimeout` hook whose only
+  // consumer was `probes.ts`'s `fetchWithTimeout`, which had no caller at all.
+  // Its own comment claimed "the console's settings probes pass one"; none did.
   if (e?.name === 'AbortError' || e?.name === 'TimeoutError') {
     return 'the host did not answer before the deadline expired.';
   }
