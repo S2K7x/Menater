@@ -703,7 +703,9 @@ const EN: GuideDictionary = {
             'Every answer about this installation comes through a lookup, and the lookups reach what '
             + 'these screens reach: the queue, any alert in it and a search over them, other alerts like '
             + 'a given one, the chain behind one and the window as a timeline, why a verdict came out as '
-            + 'it did, the tuning rules and what they would do to an alert, the metrics, the health '
+            + 'it did, the code the service inventory says runs on the machine an alert is about and '
+            + 'whether the way in was that code, the tuning rules and what they would do to an alert, '
+            + 'the metrics, the health '
             + 'report, the setup state, and the glossary of the words this console uses. Each answer '
             + 'says WHICH ones it used \u2014 \u201cLooked up: get_alert\u201d \u2014 so you can check it against the '
             + 'same screen.',
