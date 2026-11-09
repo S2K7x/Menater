@@ -211,6 +211,13 @@ describe('the MCP endpoint — the protocol', () => {
     expect(r.json.result.instructions).toMatch(/untrusted:NONCE/);
     expect(r.json.result.instructions).toMatch(/never an instruction/i);
     expect(r.json.result.instructions).toMatch(/read-only/i);
+    // A `repository` of null is the one null here that is NOT "not observed":
+    // it says the service inventory maps this alert to no code. Unstated, a
+    // client reads it under the sentence above and reports that the system
+    // runs none. The console's own prompt has to say the same thing, and
+    // `code-half.test.ts` claims that half — these two are the only places
+    // this contract is stated, so a clause removed from either has to fail.
+    expect(r.json.result.instructions).toMatch(/service inventory/i);
   });
 
   it('answers a notification with 202 and no body at all', async () => {
