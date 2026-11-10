@@ -2457,6 +2457,14 @@ test flinching. The same test checks that shadow mode reaches **no** Slack node.
 identically and each has its test. `finalizeDecision` has one more, the most
 important: an exhaustive sweep of 3 verdicts × 4 actions × 8 confidences
 checking that **the final decision is never less cautious than the model's**.
+
+*Corrected 2026-11-10: "ported identically and each has its test" was true of
+the FUNCTION and not of the pipeline. G10 and G11 judge the answer against what
+the enrichment brought back, and the two nodes that call them were handed the
+model's output with no alert, so both lists were empty on every real run — G10
+fired on nothing and G11 refused every dotted lineage. Each of the six did have
+a unit test, and every one of those tests passes its own context in by hand.
+See § 7.*
 And the shadow-mode fail-safe default no longer depends on a `$env` that threw:
 absent, empty or unreadable means `true`; only the exact string "false" disables
 it.
@@ -2498,6 +2506,92 @@ holds the door on irreversible actions.
 ---
 
 ## 7. Known technical debt
+
+### A wrong SHAPE is reported as the model provider being unreachable — found 2026-11-10
+
+Found while wiring 03's system prompt, and left alone on purpose: it is a
+sentence, and the sentence is now reachable from one state fewer than it was.
+
+`makeLlm` refuses an answer missing one of the node's `requiredKeys` by
+THROWING, so the `model` node's `error` port is taken — and that port is wired
+to `fallback-api`, whose transform composes *« Verdict forced by the pipeline:
+the model is unreachable or erroring »*. Driven with a provider that answers
+HTTP 200 and a plausible object of another shape (`{assessment, score,
+notes}`), the run therefore reports `decision_source:
+"fallback_api_unavailable"` about a provider that answered in milliseconds. An
+operator reads it and goes to look at their key, their network and their
+quota — everything except the one thing that is wrong.
+
+It is the `makeLlm` family this repository already knows: *« a fallback
+sentence must not be reachable from a state it does not describe »*, the rule
+written when *"The model answered with no content"* was being printed over a
+401. The shape error is now much rarer — the model is finally told which five
+keys to return — which is exactly why it is worth naming rather than leaving
+to be met once a year.
+
+Why it is not a one-line fix. The two fallbacks are two transforms
+(`fallbackSchemaInvalid`, `fallbackApiUnavailable`) and the branch is chosen by
+a PORT, not by a reason, so telling the two apart means either a third fallback
+transform reached from a third port, or `makeLlm` returning
+`port: 'error'` with a classified output instead of throwing. The second is the
+better shape and it touches the one node every external call in the pipeline
+goes through. A decision about the engine's error vocabulary, not a repair.
+
+### Two n8n-era artifacts are still at the repository root — found 2026-11-10
+
+`prompts/03-ai-decision.system.xml` was the third, and it is gone: its text is
+`DECISION_SYSTEM` in `server/engine/transforms/decision.ts` now, beside the
+validator that enforces it, and `decision-system.test.ts` fails if a file under
+`prompts/` ever states the same contract a second time.
+
+The other two are referenced by nothing either — no code, no document, no
+workflow:
+
+- `schemas/03-ai-decision.schema.json`, whose own `description` names *« le node
+  "Parse & Validate Decision" »* of n8n. `validateDecision` replaced it, and
+  checks more than it does (the policy guardrails G6–G11 are not expressible in
+  JSON Schema).
+- `slack/04-approval-blockkit.json`, a sample payload with a 2026 alert id in
+  it. `buildApprovalRequest` replaced it, and builds Slack's Block Kit and
+  Discord's embeds from the same structured facts.
+
+Both are therefore residue rather than documentation of an intention — the
+distinction the 11-08 sweep drew between a dead reader and a missing screen.
+Deleting them is a two-line change and it is NOT this night's to make: they are
+the last trace of where this product came from, they cost nothing, and a sweep
+that removes files nobody asked about is the kind of diff that drowns a real
+change. Named here so the next Sunday has the list.
+
+### ~~03's contract was neither sent to the model nor enforced on the data it needed~~ — closed 2026-11-10
+
+Not previously in this list, which is part of the finding: nothing in 1,895
+tests could tell whether the triage call carried a system turn, because
+`transforms.test.ts` reads `prompt_text`, `pipeline.test.ts` reads the graph,
+and neither looks at the HTTP body.
+
+Two halves, measured on the real workflow through the real engine.
+
+**Not sent.** `roles sent: ["user"]`, 929 characters. The contract — role,
+calibration, enrichment weighting, the exact five-key output format, the six
+hard rules — was 6,011 bytes in `prompts/03-ai-decision.system.xml`, read by
+nothing and unreadable by anything: `prompts/` is outside the console image's
+build context. So the five key names `makeLlm` REFUSES an answer for had never
+been stated to the model.
+
+**Not enforced.** `validate` and `validate-retry` were handed `{decision,
+usage}` and no alert, so `sourcesOk` and `sourcesUnavailable` were empty on
+every real run: **G10 never fired on any answer**, and **G11 refused every
+dotted `data_lineage`** — the form `<output_format>` prints as its own example
+— so a compliant decision citing a source that DID answer was rejected twice
+and came out as `needs_human` at confidence 0.
+
+Fixed by `DECISION_SYSTEM` in `decision.ts` (sent by a new optional `system`
+parameter on the `llm` node, declared by both model nodes), the alert's
+untrusted fields fenced with the per-alert nonce `sanitize.ts` already mints,
+and declared `inputs` on both validation nodes. `CLAUDE.md`'s traps table
+carries the whole measurement, including what it costs: at this prompt's
+6,000-character log cap the exchange goes 15,165 → 14,651 bytes, because the
+correction round trip is gone.
 
 ### A scan target nobody authenticated, on the card and in the launcher — found 2026-11-09
 

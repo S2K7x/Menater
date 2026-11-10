@@ -109,11 +109,20 @@ const ALERT = {
  * refuses a citation of a source that did not answer, and with no enrichment
  * key none did. This is the only stubbed thing in the file: the workflows, the
  * engine, the transforms, the case builder and the tools are all real.
+ *
+ * AND THE REASONING NAMES WHAT IT DID NOT GET, which G10 requires. It did not
+ * have to before, because `validate` was handed the model's output and no
+ * alert, so `sourcesUnavailable` was empty and that guardrail could not fire
+ * on any answer. With the node wired, this run's state is exact: the raw log
+ * carries no hash so VirusTotal is `skipped`, and the two reputation sources
+ * are queried with no credential, so both are `unavailable`. A real model
+ * obeying the contract has to say so, and so does the stub.
  */
 const MODEL_DECISION = {
   verdict: 'true_positive',
   confidence: 0.9,
-  reasoning: 'Credential stuffing followed by a successful authentication on an internet-facing host.',
+  reasoning: 'Credential stuffing followed by a successful authentication on an '
+    + 'internet-facing host. Shodan and AbuseIPDB were unavailable.',
   recommended_action: 'isolate_host_temporary',
   data_lineage: [],
 };

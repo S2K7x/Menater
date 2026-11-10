@@ -345,6 +345,15 @@ export const DECISION: WorkflowDef = {
       params: {
         model: fromVar('llm.model'),
         prompt: fromInput('prompt_text'),
+        // LE CONTRAT DE SORTIE EST ENFIN ENVOYÉ. `requiredKeys` below refuses
+        // an answer that does not carry these five names, and until this line
+        // existed the model was never told them: the node sent one `user`
+        // turn, so the throw landed on the `error` port and the run reported
+        // `fallback_api_unavailable` — "the model is unreachable" — about a
+        // provider that had answered 200. It travels on `prompt`'s output
+        // rather than in this parameter because `GET /api/workflows` returns
+        // every parameter verbatim and the Ingestion tab prints it.
+        system: fromNode('prompt', 'system'),
         requiredKeys: ['verdict', 'confidence', 'reasoning', 'recommended_action', 'data_lineage'],
         timeoutMs: 60_000,
       },
@@ -352,7 +361,44 @@ export const DECISION: WorkflowDef = {
     },
     {
       id: 'validate', type: 'transform', label: 'Validation + guardrails G6–G11',
-      params: { fn: 'validateDecision' }, position: { x: 1000, y: 0 },
+      // JONCTION DÉCLARÉE — le même défaut de câblage que sur `finalize` et
+      // `correction`, laissé sur les deux nœuds qui se trouvent entre eux.
+      //
+      // G10 et G11 ne portent pas sur la réponse seule : ils portent sur la
+      // réponse CONFRONTÉE à ce que l'enrichissement a rapporté. Les deux
+      // listes vivent sur `enrichment_meta` de l'alerte, et l'entrée de ce
+      // nœud est la sortie de `model`, c'est-à-dire `{decision, usage}` : pas
+      // d'alerte, donc `sourcesOk: []` et `sourcesUnavailable: []`.
+      //
+      // Measured by driving this graph with both reputation sources answering
+      // and VirusTotal unavailable:
+      //
+      //   G10 — a reasoning naming no unavailable source: `violations: []`.
+      //         The one guardrail that exists to stop the model concluding
+      //         confidently on evidence it did not get never fired at all.
+      //   G11 — `data_lineage: ["enrichment.abuseipdb.abuse_confidence_score"]`,
+      //         i.e. the dotted form `<output_format>` asks for, citing a
+      //         source that DID answer: rejected, corrected, rejected again,
+      //         `fallback-schema`. A compliant decision came out of the
+      //         pipeline as `needs_human`, confidence 0.
+      //
+      // Two nights met that rejection and read it as correct, because they
+      // drove the whole pipeline with no enrichment keys: `sources_ok` was
+      // then legitimately empty, so the defect and the rule it broke produced
+      // the same sentence.
+      //
+      // `attempt` comes from `prompt` for the same reason: the validator
+      // reports which attempt it judged, and reading it off a model output
+      // that does not carry it means every answer is attempt 1.
+      params: {
+        fn: 'validateDecision',
+        inputs: {
+          alert: fromNode('guard', 'alert'),
+          decision: fromInput('decision'),
+          attempt: fromNode('prompt', 'attempt'),
+        },
+      },
+      position: { x: 1000, y: 0 },
     },
     {
       id: 'valid', type: 'if', label: 'Decision compliant?',
@@ -385,6 +431,12 @@ export const DECISION: WorkflowDef = {
       params: {
         model: fromVar('llm.model'),
         prompt: fromInput('prompt_text'),
+        // READ FROM `prompt`, NOT FROM THE CORRECTION NODE. The second attempt
+        // is the one that already received the rules, in the correction's own
+        // user turn — so a fix applied to the first call and not to this one
+        // would leave the retry told MORE than the call it is retrying. Same
+        // source, same bytes, and the correction node needs no new field.
+        system: fromNode('prompt', 'system'),
         requiredKeys: ['verdict', 'confidence', 'reasoning', 'recommended_action', 'data_lineage'],
         timeoutMs: 60_000,
       },
@@ -392,7 +444,18 @@ export const DECISION: WorkflowDef = {
     },
     {
       id: 'validate-retry', type: 'transform', label: 'Re-validation',
-      params: { fn: 'validateDecision' }, position: { x: 1600, y: 180 },
+      // La même correction, sur la seconde porte. Un correctif appliqué à
+      // l'une des deux validations laisserait la seconde tentative jugée sur
+      // des listes vides — et c'est elle qui décide du repli.
+      params: {
+        fn: 'validateDecision',
+        inputs: {
+          alert: fromNode('guard', 'alert'),
+          decision: fromInput('decision'),
+          attempt: fromNode('correction', 'attempt'),
+        },
+      },
+      position: { x: 1600, y: 180 },
     },
     {
       id: 'valid-retry', type: 'if', label: 'Compliant this time?',
