@@ -511,6 +511,22 @@ export function makeLlm(deps: IoDeps): NodeHandler {
     const p = ctx.node.params as {
       model: ValueRef;
       prompt: ValueRef;
+      /**
+       * The system turn, when the node declares one.
+       *
+       * OPTIONAL BECAUSE IT WAS NEVER SENT, and that is the defect this
+       * parameter closes rather than a feature it adds: this node used to
+       * build `messages` from `prompt` alone, so the whole triage contract —
+       * the output format `requiredKeys` below then REFUSES an answer for
+       * missing, the untrusted-content rule, the six hard rules — reached the
+       * model nowhere. See `transforms/decision.ts`.
+       *
+       * It stays optional because the shape is the node's, not 03's: a
+       * workflow that declares no system turn still sends exactly what it
+       * sent before, which is what makes this change provable by the one node
+       * that uses it.
+       */
+      system?: ValueRef;
       /** Schéma attendu en retour. La réponse est REFUSÉE si elle n'y répond pas. */
       requiredKeys?: string[];
       timeoutMs?: number;
@@ -521,6 +537,7 @@ export function makeLlm(deps: IoDeps): NodeHandler {
     }
 
     const s = scope(ctx, deps);
+    const systemText = p.system === undefined ? '' : String(resolve(p.system, s));
     const res = await reach(
       'the model provider (openrouter.ai)',
       'https://openrouter.ai/api/v1/chat/completions',
@@ -529,7 +546,14 @@ export function makeLlm(deps: IoDeps): NodeHandler {
         headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
         body: JSON.stringify({
           model: resolve(p.model, s),
-          messages: [{ role: 'user', content: String(resolve(p.prompt, s)) }],
+          // The system turn FIRST, and only when it carries something: an
+          // empty one is a message a provider counts and nothing reads. The
+          // order is also what makes it cacheable — every provider caches a
+          // prefix, and this is the half that does not change between alerts.
+          messages: [
+            ...(systemText ? [{ role: 'system', content: systemText }] : []),
+            { role: 'user', content: String(resolve(p.prompt, s)) },
+          ],
           response_format: { type: 'json_object' },
         }),
       },

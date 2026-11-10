@@ -110,7 +110,15 @@ describe('03-AI-Decision, chaîne complète', () => {
       modelReply({
         verdict: 'true_positive',
         confidence: 0.93,
-        reasoning: 'Force brute confirmée par la réputation de la source.',
+        // G10 REQUIRES THE UNAVAILABLE SOURCE TO BE NAMED, and `enrichedAlert`
+        // declares `vt` unavailable. This fixture did not name it and was
+        // accepted for its whole life, because `validate` was handed the
+        // model's output and no alert — so `sourcesUnavailable` was empty and
+        // the guardrail could not fire. The claims below are unchanged; what
+        // changes is that the stubbed answer now obeys the contract a real
+        // model is held to.
+        reasoning: 'Force brute confirmée par la réputation de la source. '
+          + 'VirusTotal unavailable.',
         recommended_action: 'escalate',
         data_lineage: ['abuseipdb'],
       }));
@@ -196,7 +204,8 @@ describe('isolate_host_temporary needs a host', () => {
   const decision = {
     verdict: 'true_positive',
     confidence: 0.95,
-    reasoning: 'Confirmed hands-on-keyboard activity.',
+    // Names the unavailable source: see the G10 note on the first fixture.
+    reasoning: 'Confirmed hands-on-keyboard activity. VirusTotal unavailable.',
     recommended_action: 'isolate_host_temporary',
     data_lineage: ['abuseipdb'],
   };

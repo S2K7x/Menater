@@ -40,6 +40,14 @@ import { randomBytes } from 'node:crypto';
  * and it is context budget taken from the conversation. The truncation SAYS
  * SO — a silently cut log would have the assistant reason about half a line
  * while sounding just as certain.
+ *
+ * IT IS THE ASSISTANT'S BUDGET, NOT THE PRODUCT'S, which is why the three
+ * functions below take it as an argument rather than reading it. The triage
+ * node fences the same fields on its way to the model that decides the
+ * verdict, and its budget is the 6,000 characters `buildAlertBlock` has always
+ * allowed `raw_log`: capping the log a verdict is made on to a chat panel's
+ * allowance would be a security fix that costs two thirds of the evidence.
+ * The default is unchanged, so every existing caller is unaffected.
  */
 const MAX_FIELD_CHARS = 2_000;
 
@@ -76,12 +84,12 @@ export function newFence(): Fence {
  */
 const CONTROL_CHARS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u200b-\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g;
 
-export function scrub(raw: unknown): string {
+export function scrub(raw: unknown, max = MAX_FIELD_CHARS): string {
   const text = typeof raw === 'string' ? raw : JSON.stringify(raw ?? null);
   const clean = text.replace(CONTROL_CHARS, '');
-  if (clean.length <= MAX_FIELD_CHARS) return clean;
-  const dropped = clean.length - MAX_FIELD_CHARS;
-  return `${clean.slice(0, MAX_FIELD_CHARS)}\n[truncated: ${dropped} more characters]`;
+  if (clean.length <= max) return clean;
+  const dropped = clean.length - max;
+  return `${clean.slice(0, max)}\n[truncated: ${dropped} more characters]`;
 }
 
 /**
@@ -93,9 +101,11 @@ export function scrub(raw: unknown): string {
  * it matters more here — a model shown `""` will describe a blank value as if
  * the field had been observed.
  */
-export function fenced(fence: Fence, label: string, value: unknown): string | null {
+export function fenced(
+  fence: Fence, label: string, value: unknown, max = MAX_FIELD_CHARS,
+): string | null {
   if (value === null || value === undefined || value === '') return null;
-  return `${fence.open(label)}\n${scrub(value)}\n${fence.close}`;
+  return `${fence.open(label)}\n${scrub(value, max)}\n${fence.close}`;
 }
 
 /**
@@ -109,11 +119,12 @@ export function fenceFields<T extends Record<string, unknown>>(
   fence: Fence,
   value: T,
   labels: readonly string[],
+  max = MAX_FIELD_CHARS,
 ): Record<string, unknown> {
   const out: Record<string, unknown> = { ...value };
   for (const label of labels) {
     if (!(label in out)) continue;
-    out[label] = fenced(fence, label, out[label]);
+    out[label] = fenced(fence, label, out[label], max);
   }
   return out;
 }
