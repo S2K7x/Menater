@@ -4,6 +4,190 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-11-11 — Wednesday · Tests and QA
+
+**Subject**: **a catalogue this console could not READ, rendered as a catalogue
+the server does not have.** Five screens fetch a list when they mount — the rule
+templates, the credential store, the assistant's providers, the threat-intel
+sources, the MCP endpoint's state — and every one of those reads was written
+`.catch(() => setX([]))` or `.catch(() => setX(null))`. An empty catalogue and a
+read that did not answer are two different facts; the render could not tell them
+apart, so each screen made a CLAIM out of the emptiness.
+
+**The finding is not the five, it is that the sixth was already fixed.** The
+Health tab's scenario catalogue had the identical defect, it was repaired, and
+`CLAUDE.md` records it — *« `.catch(() => setScenarios([]))` made a read that did
+not answer indistinguishable from a server offering no scenario »*. That fix was
+applied at ONE call site. Wednesday's brief says *hunt the places where a `catch`
+returns green*; `grep -rn "catch(\s*(\s*)\s*=>" src/` is the whole hunt, and it
+took one line.
+
+**Result**: PR opened on `claude/sleepy-volta-91ydh5`. One new test file
+(`dashboard/src/components/catalogue-unread.test.tsx`, **+18 tests**, **11 of
+them red on unmodified components**), four production components touched, the
+console catalogue (six new strings), plus `CLAUDE.md` (one traps row, suite count
+1911 → 1929) and `ROADMAP.md` (one § 7 entry opened and closed, three open items
+named). **225 insertions, 16 deletions.** No CSS (`soc-pill-neutral` already
+existed and is already in the contrast suite), no class name, no colour, no
+heading level, no dependency, no SQL, no new route, no server change at all. The
+built stylesheet is **byte-identical** (`index-DpyowbMH.css`, 62.42 kB); the main
+chunk moves 447.65 → 449.47 kB, which is the six strings and the branches.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-91ydh5` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Sixty-third entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: the baseline on the
+designated branch at `66bcb68` (= `origin/main`) was typecheck **0 errors**,
+**1911 passed | 1 skipped**, a clean build, `npm ci` with **0 vulnerabilities**,
+and no PR open.
+
+**What I learned that is written nowhere else.**
+
+1. **`McpPanel` is the only one of the five with an irreversible button under
+   it, and that is what decided its fix.** Measured on a refused
+   `GET /api/assistant/mcp`: the pill reads **`Closed`** and step 2 reads *« No
+   token yet. The endpoint stays closed until there is one. »* beside an
+   ENABLED *Generate a token*. Generating replaces the token in use and every
+   client configured with the old one stops working, so the page was inviting a
+   destructive act on the strength of a read that failed. It cannot say what
+   that press would destroy, so the button is **refused**, not offered —
+   `CredentialStatus.locked`'s own rule (*offering an input the server will
+   refuse is worse than offering none*) pointed at an action nobody can undo.
+   The pill takes `soc-pill-neutral`, not `-warn`: grey is the tone of the
+   undetermined, and orange is the tone of *closed*, which is the fact nobody
+   established.
+2. **The Settings one is a FALSE RED, and the fix is to make no claim rather
+   than a better one.** `checklistOf` reads
+   `credentials.some(k => k.required && k.set)`, so an empty list says the model
+   key is missing: measured on a fully configured install with the store read
+   refused, the top of Settings said *« 1 thing left to set — Triage model key »*
+   and *« Without it, EVERY alert takes the fail-safe verdict »*. The list now
+   stays **`null`**, which the checklist was ALREADY guarded on
+   (`credentials === null ? null : …`), so the panel simply does not render. One
+   line of behaviour, no new branch.
+3. **Where the refusal is said was the only real design question, and the
+   answer is "once, where the rows are missing".** The page-wide slot beside the
+   checklist is visible from all ten sub-sections, so a standing warning there
+   is the permanent alarm this console refuses everywhere else
+   (`diagnostic_probe`). The Credentials section owns the fact and is where the
+   checklist sends you.
+4. **The Lookup fold had to be opened by the refusal itself.** Its
+   `defaultOpen` is `providers !== null && reachable === 0`, so keeping
+   `providers` at `null` leaves the fold CLOSED — and a region inside a closed
+   `<details>` is absent from the accessibility tree, which `CLARITY.md` § 8
+   records. *A failure never folds*: the condition now carries
+   `providersUnread !== null`, and a mutation dropping it is red.
+5. **The sweep's first ruler matched NOTHING.** The obvious spelling of *a catch
+   handing a setter an empty literal* is `\.catch\([^)]*=>\s*set…`, and
+   `[^)]*` cannot cross the `)` of `()` — so it matched **none of the five lines
+   it was written for**, and the sweep passed on unmodified code while its
+   sibling rule went red. Found by running the sweep against the defect, not by
+   reading it. The regex now matches the argument list explicitly, the five
+   removed lines are quoted in the test as DATA, and a test asserts it still
+   recognises them.
+6. **Both sweep claims are NEGATIVE, so what was EXAMINED has to travel with
+   the answer.** Two mutations proved it: exempting every file left it green,
+   and so did hardcoding the count to the floor. It now asserts the exact number
+   — every screen minus the ones skipped — with a separate floor only on
+   `screens().length`, i.e. on the directory having been read at all.
+7. **Comment-stripping is load-bearing here rather than hygiene**, which is
+   unusual: four of these components now QUOTE the removed line in the comment
+   explaining why it went, so a sweep over raw text is satisfied by the prose
+   describing the defect. M9 (stripping removed) is red on two tests.
+8. **Two of the seven blind catches are right, and they are the boundary.**
+   `Assistant.tsx`'s readiness read — the only thing derived from it is
+   `blocked = state !== null && !state.ready`, so an unread state makes the
+   panel PERMISSIVE and claims nothing — and `App.tsx`'s `logout()`, which is
+   not a read of a catalogue. Both are exemptions with written reasons,
+   asserted in the OTHER direction so one whose line has gone fails and asks to
+   be deleted.
+9. **`src/vulnpipe/` was read and is clean, for a reason already in the file.**
+   `getProviderKeys`'s catch is empty on purpose: *« un second bandeau pour la
+   même panne ne dit rien de plus »*, and the sibling read's failure is already
+   on screen. Sound, so nothing to fix — but it means tonight's rule stops at
+   the console half.
+
+**Do not redo.**
+
+- **Do not put the Settings refusal beside the checklist** — learning 3.
+- **Do not write the sweep over raw source** — learning 7, M9 is red.
+- **Do not reach for `.soc-field span`'s register**: every note added tonight is
+  a `<p className="soc-warn-note">`, never a `<span>`. `.soc-field span` is
+  (0,1,1) and sits later in the sheet than `.soc-warn-note` (0,1,0), which this
+  table has paid for six times.
+- **Do not put these notes in a live region.** All five are STANDING
+  conditions, re-derived on every render — not the answer to something somebody
+  just pressed — and the console re-renders on every poll.
+- **Do not restore a mutated file with `git checkout` while the change is
+  uncommitted** (the 11-02 lesson, obeyed): the harness copies the six files to
+  the scratchpad and restores from there, with an unmutated control FIRST and
+  LAST, both green.
+- **Do not assert "no warn note at all" on the MCP panel's answered path**: step
+  3 legitimately carries one when a token is set and has not just been shown.
+  The boundary claims that nothing on screen says *could not be read*.
+
+**Found and NOT fixed, with why.**
+
+- **`SecretField`'s `isSet` is `credentials?.find(…)?.set ?? false`**, so it
+  reads "not set" while the store is LOADING too — three ternaries on one
+  screen. Pre-existing, and a transient state rather than a standing claim;
+  § 7 names it.
+- **The sweep sees a SHAPE, not a behaviour**, and its header says so instead
+  of implying a coverage it does not have: it would not notice
+  `.catch((e) => setTemplates(FALLBACK))`.
+- **Standing leads, re-checked and unchanged**: `RuleStore.history` (still the
+  sharpest non-J0 item); the § 7 human decisions; `MENATER_TEST_PG` still never
+  set, so `store-contract.test.ts`'s Postgres half is still the one skip;
+  `schemas/` and `slack/` still at the repository root; the ninety-odd French
+  strings in `server/engine/`; `var(--accent)` as text; the relay's deadline; a
+  forwarded upstream 401 still sending an operator to the sign-in screen; the
+  unauthenticated scan target of 11-09.
+
+**Verified** (Node 22.23.4, npm 10.9.9; every command run and its output read):
+
+| Command | Result |
+|---|---|
+| `npm ci` (console half) | clean; **0 vulnerabilities** |
+| baseline `npm run typecheck` / `npm test` / `npm run build` | **0 errors**, **1911 passed \| 1 skipped**, clean |
+| `npm run typecheck` (after) | **0 errors** |
+| `npm test` (after) | **1929 passed \| 1 skipped** (**+18**), 126 files |
+| `npm run build` (after) | clean — `index-Dzd5RyOO.js` 449.47 kB, `index-DpyowbMH.css` 62.42 kB **unchanged from the baseline** |
+| `VulnPipe: npm test` | **453 passed** — untouched tonight, run anyway |
+| new file against unmodified components | **11 failed \| 7 passed** of 18 |
+
+The 7 that pass before the change are the five BOUNDARIES (a catalogue that
+answers still lists what it holds, still counts what would answer, still drives
+the checklist, still offers the picker, still offers the button) and the two
+other-direction claims about the sweep's own rulers. They pass after as well, on
+purpose: trading one vagueness for another is not a fix.
+
+**Eleven mutations, eleven killed**, one at a time, files restored from a COPY
+of the working tree, control run first and last and identical (18/18):
+
+| Mutation | Result |
+|---|---|
+| CONTROL (unmutated), first AND last | GREEN both times |
+| M1 — `RulesPage`'s catch goes back to an empty list | RED — 3 |
+| M2 — the Lookup fold no longer opens on a refusal | RED — 1 |
+| M3 — `IntelPanel`'s catch goes back to an empty list | RED — 4 |
+| M4 — credentials set to `[]` as well as the reason | RED — 1 |
+| M5 — the empty provider picker is rendered anyway | RED — 1 |
+| M6 — the unknown pill takes the tone of "closed" | RED — 1 |
+| M7 — generate is offered over an unread state | RED — 1 |
+| M8 — the "no token yet" claim is kept | RED — 1 |
+| M9 — the sweep stops stripping comments | RED — 2 |
+| M10 — the sweep exempts every file | RED — 2 |
+| M11 — the sweep hardcodes what it examined | RED — 1 |
+
+No model key, no database and no network egress were needed: every read is an
+injected `vi.spyOn(api, …)`. The probes (`__probe.test.tsx`, `mutate.py`) lived
+in `dashboard/` and the scratchpad and are **deleted** — `git status` shows only
+the seven intended paths.
+
 ## 2026-11-10 — Tuesday · Security
 
 **Subject**: **`03-AI-Decision`'s contract was neither sent to the model nor

@@ -621,6 +621,8 @@ export interface ConsoleDictionary {
     kicker: string; title: string; lede: string;
     empty: string; emptyHint: string;
     add: string; fromTemplate: string; templatesTitle: string; templatesLede: string;
+    /** Why there is nothing to pick from, when the catalogue could not be read. */
+    templatesUnread: (reason: string | null) => string;
     use: string; placeholderWarn: (fields: string) => string;
     name: string; owner: string; ownerHelp: string; reason: string; reasonHelp: string;
     action: string; actions: Record<'allow' | 'suppress' | 'severity' | 'escalate', string>;
@@ -734,6 +736,14 @@ export interface ConsoleDictionary {
      * il dit d'avance que tous les resultats seront « pas demande ».
      */
     providersReady: (ready: number, total: number) => string;
+    /**
+     * Why there is no coverage figure, when the catalogue could not be read.
+     *
+     * `providersReady` is a CLAIM about how many sources would answer. An
+     * empty list is the state that makes it read `0 of 0`, which is the
+     * same shape as a verdict of `clean` over a source nobody queried.
+     */
+    providersUnread: (reason: string | null) => string;
     ready: string;
     noKey: string;
     getKey: string;
@@ -843,6 +853,8 @@ export interface ConsoleDictionary {
       optional: string;
       lockedTitle: string;
       locked: (name: string) => string;
+      /** Why no key is listed, when the store could not be read. */
+      unread: (reason: string | null) => string;
       fromStore: string;
       missingModel: string;
       saved: string;
@@ -961,6 +973,8 @@ export interface ConsoleDictionary {
     enableHelp: string;
     provider: string;
     providerHelp: string;
+    /** Why no provider is offered, when the catalogue could not be read. */
+    providersUnread: (reason: string | null) => string;
     model: string;
     modelHelp: string;
     modelDefault: (model: string) => string;
@@ -1093,6 +1107,9 @@ export interface ConsoleDictionary {
     lede: string;
     statusLive: string;
     statusOff: string;
+    /** Neither live nor closed: the state could not be read. */
+    statusUnknown: string;
+    stateUnread: (reason: string | null) => string;
     step1: string;
     enable: string;
     enableHelp: string;
@@ -1945,6 +1962,10 @@ const EN: ConsoleDictionary = {
     templatesTitle: 'Templates',
     templatesLede:
       'They arrive DISABLED and with no owner. A starter pack that silences alerts on install has decided something on your behalf.',
+    templatesUnread: (reason) =>
+      'The templates could not be read, so there is nothing to pick from here yet. '
+      + 'Writing a rule by hand still works.'
+      + (reason ? ` ${reason}` : ''),
     use: 'Use',
     placeholderWarn: (fields) => `Replace before enabling: ${fields}`,
     name: 'Name',
@@ -2090,6 +2111,10 @@ const EN: ConsoleDictionary = {
     again: 'Look up again',
     providersTitle: 'Sources',
     providersReady: (ready, total) => `${ready} of ${total} reachable`,
+    providersUnread: (reason) =>
+      'The source catalogue could not be read, so this tab cannot say how many sources '
+      + 'would answer. A lookup still works: every result names its own sources.'
+      + (reason ? ` ${reason}` : ''),
     providersLede:
       'What each one adds, and whether this install can reach it. A source with no key is '
       + 'not a failure: it is a question that was never asked, and it says so on every result.',
@@ -2231,6 +2256,11 @@ const EN: ConsoleDictionary = {
       locked: (name) =>
         `${name} is already set in this process's environment — look in .env first, then the shell, Docker or CI. That is a deployment decision and the console will not override it: change it where it is defined, or clear it there to set it here.`,
       fromStore: 'stored in the console',
+      unread: (reason) =>
+        'The credential store could not be read, so this console cannot say which keys are '
+        + 'set. Nothing has been changed, and the pipeline goes on using whatever is '
+        + 'already configured.'
+        + (reason ? ` ${reason}` : ''),
       missingModel:
         'No model key: the pipeline runs, but every alert goes to a human without having been analysed.',
       saved: 'Keys saved. They are already active.',
@@ -2360,6 +2390,10 @@ const EN: ConsoleDictionary = {
       providerHelp:
         'Where the assistant sends its questions. Each provider reads its own key, so switching '
         + 'here changes which key is used — nothing else about the assistant changes.',
+      providersUnread: (reason) =>
+        'The provider catalogue could not be read, so neither the provider nor its key can be '
+        + 'shown here. The assistant goes on using what is already saved.'
+        + (reason ? ` ${reason}` : ''),
       model: 'Model',
       modelHelp: 'Leave empty to use the provider\u2019s default. Must support tool calling.',
       modelDefault: (model: string) => `Empty: using ${model}.`,
@@ -2555,6 +2589,12 @@ const EN: ConsoleDictionary = {
         + 'same read-only catalogue the panel uses, and there is no tool in it that writes.',
       statusLive: 'Live',
       statusOff: 'Closed',
+      statusUnknown: 'Unknown',
+      stateUnread: (reason) =>
+        'The endpoint\u2019s state could not be read, so this page cannot say whether it is '
+        + 'answering or whether a token is already set. Generating one is refused until it '
+        + 'answers: it would replace a token that may be in use.'
+        + (reason ? ` ${reason}` : ''),
       step1: '1 · Turn it on',
       enable: 'Answer MCP clients on this console',
       enableHelp:

@@ -2507,6 +2507,62 @@ holds the door on irreversible actions.
 
 ## 7. Known technical debt
 
+### ~~A catalogue this console could not read, rendered as a catalogue the server does not have~~ — closed 2026-11-11
+
+Not previously in this list, and that is part of the finding: the Health tab had
+the identical defect, it was fixed, and `CLAUDE.md`'s traps table records it —
+*« `.catch(() => setScenarios([]))` made a read that did not answer
+indistinguishable from a server offering no scenario »*. **The fix was applied
+at one call site.** Four screens kept the line, and the fifth read is the one
+with an irreversible button under it.
+
+Measured on the built components, each read refused with everything else
+answering:
+
+| screen | what a refused read rendered |
+|---|---|
+| `McpPanel` | pill **Closed**, step 2 *« No token yet. The endpoint stays closed until there is one. »*, beside an enabled *Generate a token* |
+| `SettingsPage` (credentials) | *« 1 thing left to set — Triage model key »* at the top of Settings, on an install where the key IS set; Credentials section with a title and no row |
+| `SettingsPage` (providers) | a provider `<select>` with no option at all |
+| `IntelPanel` | **0 of 0 reachable**, with the fold opening itself |
+| `RulesPage` | the template block's title, its lede, no control and no reason |
+
+The MCP one is the only one that costs more than a wrong sentence: generating a
+token REPLACES the one in use, and every client configured with the old one
+stops working. A page that cannot say whether a token exists cannot say what
+that press would destroy, so the button is refused rather than offered — the
+rule `CredentialStatus.locked` already states on the Settings screen, pointed at
+an action nobody can undo.
+
+The Settings one is a **false red**, which this product treats as worse than no
+red: `checklistOf` reads `credentials.some(k => k.required && k.set)`, so an
+empty list says the model key is missing. The fix is not a better sentence — the
+list stays `null`, which the checklist is already guarded on, so it makes no
+claim at all.
+
+`src/components/catalogue-unread.test.tsx` is the guard: five per-screen claims,
+five boundaries that pass before AND after, and a **subtraction** over every
+screen in `src/components/` plus `src/App.tsx`, with two exemptions each
+carrying a written reason and asserted in both directions.
+
+**What stays open.**
+
+- **The sweep sees a SHAPE, not a behaviour**, and says so in its own header
+  rather than implying a coverage it does not have: a catch that does not
+  receive its error, and a catch handing a setter an empty literal. It would
+  not notice `.catch((e) => setTemplates(FALLBACK))`. The per-screen claims are
+  the real guarantee.
+- **`src/vulnpipe/` was read and left alone.** `getProviderKeys`'s catch is
+  empty on purpose and says why in the file: the sibling read's failure is
+  already on screen, and *« un second bandeau pour la même panne ne dit rien de
+  plus »*. That reasoning is sound, so there was nothing to fix — but it means
+  the sweep's rule stops at the console half, and carrying it over is a decision
+  about whether that comment should become an exemption in a shared guard.
+- **`SecretField`'s `isSet` is `credentials?.find(…)?.set ?? false`**, so it
+  reads "not set" while the store is still LOADING too. Three ternaries on one
+  screen, pre-existing, and it is a transient state rather than a standing
+  claim; separating "loading" from "not set" there is a Saturday's subject.
+
 ### A wrong SHAPE is reported as the model provider being unreachable — found 2026-11-10
 
 Found while wiring 03's system prompt, and left alone on purpose: it is a

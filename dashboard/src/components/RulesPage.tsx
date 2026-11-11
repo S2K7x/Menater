@@ -60,6 +60,16 @@ export function RulesPage() {
 
   const [rules, setRules] = useState<TuningRule[] | null>(null);
   const [templates, setTemplates] = useState<RuleTemplate[]>([]);
+  /**
+   * Why there is nothing to pick from, when there is nothing to pick from.
+   *
+   * `.catch(() => setTemplates([]))` made a read that did not answer
+   * indistinguishable from a server offering no template — and this list is
+   * the only thing inside the block the button opens, so it rendered its
+   * title, its lede, and no control and no reason. The same fix as the
+   * Health tab's scenario catalogue, which is where that defect was named.
+   */
+  const [templatesUnread, setTemplatesUnread] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<Partial<TuningRule> | null>(null);
   const [problems, setProblems] = useState<RuleProblem[]>([]);
@@ -74,7 +84,9 @@ export function RulesPage() {
 
   useEffect(() => {
     load();
-    api.ruleTemplates().then((r) => setTemplates(r.templates)).catch(() => setTemplates([]));
+    api.ruleTemplates()
+      .then((r) => setTemplates(r.templates))
+      .catch((e) => setTemplatesUnread(e instanceof ApiError ? e.message : null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -256,6 +268,12 @@ export function RulesPage() {
           <div className="soc-rule-templates">
             <h4 className="soc-wf-subhead">{t.templatesTitle}</h4>
             <p className="soc-muted">{t.templatesLede}</p>
+            {/* A `<p>`, not a `<span>`: `.soc-field span` is (0,1,1) and sits
+                later in the sheet than `.soc-warn-note` (0,1,0). A standing
+                condition, so deliberately not in a live region. */}
+            {templatesUnread !== null ? (
+              <p className="soc-warn-note">{t.templatesUnread(templatesUnread)}</p>
+            ) : null}
             {templates.map((tpl) => (
               <div className="soc-rule-template" key={tpl.id}>
                 <div>
