@@ -104,6 +104,21 @@ export function McpPanel({
   const t = c.mcp;
 
   const [state, setState] = useState<McpState | null>(null);
+  /**
+   * The state could not be READ, which is not the same fact as the endpoint
+   * being closed — and every claim on this page came off `state?.`, so a
+   * refused read made all of them say the reassuring thing.
+   *
+   * Measured on a refused `GET /api/assistant/mcp`: the pill read **Closed**
+   * and step 2 read *« No token yet. The endpoint stays closed until there is
+   * one. »* beside a *Generate a token* button — on an install whose endpoint
+   * may be live with a token in use. Pressing it is IRREVERSIBLE: the new
+   * token replaces the old, and every client configured with it stops
+   * working. So the state is said to be unknown, and the generate button is
+   * refused rather than offered over a fact nobody established: this page
+   * cannot say what it would destroy.
+   */
+  const [unread, setUnread] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [test, setTest] = useState<{ ok: boolean; detail: string } | null>(null);
@@ -115,7 +130,9 @@ export function McpPanel({
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
-    api.mcpState().then(setState).catch(() => setState(null));
+    api.mcpState()
+      .then((s) => { setState(s); setUnread(null); })
+      .catch((err) => setUnread(err instanceof ApiError ? err.message : null));
   }, []);
 
   useEffect(load, [load]);
@@ -211,8 +228,16 @@ export function McpPanel({
           <span className="soc-kicker">{t.kicker}</span>
           <h2>{t.title}</h2>
         </div>
-        <span className={`soc-pill ${state?.live ? 'soc-pill-ok' : 'soc-pill-warn'}`}>
-          {state?.live ? t.statusLive : t.statusOff}
+        <span
+          className={`soc-pill ${
+            // Grey is the tone of the undetermined — `soc-pill-neutral`, the
+            // same one the Tracking tab gives a run whose fate is not known
+            // yet. Not `-warn`: that is the tone of "closed", which is a fact
+            // nobody established here.
+            unread !== null ? 'soc-pill-neutral' : state?.live ? 'soc-pill-ok' : 'soc-pill-warn'
+          }`}
+        >
+          {unread !== null ? t.statusUnknown : state?.live ? t.statusLive : t.statusOff}
         </span>
       </div>
       <p className="soc-muted">{t.lede}</p>
@@ -234,14 +259,25 @@ export function McpPanel({
 
       {/* --- Step 2: the token -------------------------------------------- */}
       <h3 className="soc-mcp-step">{t.step2}</h3>
-      <p className="soc-muted">{state?.token_set ? t.tokenSet : t.tokenMissing}</p>
+      {unread !== null ? (
+        <p className="soc-warn-note">{t.stateUnread(unread)}</p>
+      ) : (
+        <p className="soc-muted">{state?.token_set ? t.tokenSet : t.tokenMissing}</p>
+      )}
       <div className="soc-actions">
-        <button type="button" className="soc-primary" onClick={generate} disabled={generating}>
+        <button
+          type="button"
+          className="soc-primary"
+          onClick={generate}
+          disabled={generating || unread !== null}
+        >
           <Icon name="lock" size={15} />
           {generating ? c.common.saving : state?.token_set ? t.regenerate : t.generate}
         </button>
       </div>
-      {state?.token_set ? <p className="soc-faint">{t.regenerateWarning}</p> : null}
+      {unread === null && state?.token_set ? (
+        <p className="soc-faint">{t.regenerateWarning}</p>
+      ) : null}
       <Announce>
         {error ? (
           <div className="soc-banner soc-banner-error">

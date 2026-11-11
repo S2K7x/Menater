@@ -375,6 +375,28 @@ export function SettingsPage({
    * reason the save bar is already hidden on the Credentials section.
    */
   const [providers, setProviders] = useState<AssistantProvider[]>([]);
+  /**
+   * Why neither catalogue is on screen, when it is not.
+   *
+   * Both reads were `.catch(() => setX([]))`, and an EMPTY list is not the
+   * same fact as a read that did not answer. Measured on this screen:
+   * `checklistOf` reads `credentials.some(k => k.required && k.set)`, so a
+   * refused store read put *« 1 thing left to set — Triage model key »* at the
+   * top of Settings on an otherwise fully configured install where the key IS
+   * set — a false red on the one screen that says what is left to configure,
+   * and *a false red costs more than no red at all*. And the provider
+   * `<select>` rendered with no options at all, over a provider the console
+   * is really running on.
+   *
+   * `credentials` therefore stays `null` on a refusal — the checklist is
+   * already guarded on `null`, so it makes NO claim rather than a wrong one —
+   * and each refusal is said once, in the section whose rows are missing. Not
+   * at the top beside the checklist: that slot is visible from all ten
+   * sub-sections, and a standing warning there is the permanent alarm this
+   * console refuses everywhere else.
+   */
+  const [credentialsUnread, setCredentialsUnread] = useState<string | null>(null);
+  const [providersUnread, setProvidersUnread] = useState<string | null>(null);
   const [assistantKeyDraft, setAssistantKeyDraft] = useState('');
   const [assistantKeyBusy, setAssistantKeyBusy] = useState(false);
   const [assistantKeyNote, setAssistantKeyNote] = useState<string | null>(null);
@@ -409,11 +431,15 @@ export function SettingsPage({
       .catch((err) => setError(err instanceof ApiError ? err.message : st.loadFailed));
     // Its own request: a credential store that cannot be read must not stop
     // the rest of Settings from rendering.
-    api.credentials().then((r) => setCredentials(r.credentials)).catch(() => setCredentials([]));
+    api.credentials()
+      .then((r) => setCredentials(r.credentials))
+      .catch((err) => setCredentialsUnread(err instanceof ApiError ? err.message : null));
     // Same reasoning: the provider catalogue failing to load must not take the
-    // rest of Settings down. An empty list hides the assistant's fields, which
-    // is honest — we do not know what to offer.
-    api.assistantProviders().then((r) => setProviders(r.providers)).catch(() => setProviders([]));
+    // rest of Settings down. Hiding the assistant's fields IS the right answer
+    // — we do not know what to offer — but it has to say so.
+    api.assistantProviders()
+      .then((r) => setProviders(r.providers))
+      .catch((err) => setProvidersUnread(err instanceof ApiError ? err.message : null));
     // `st` est un objet constant par langue : le relire ne doit pas relancer la
     // requete, sinon changer de langue rechargerait les reglages.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -896,7 +922,9 @@ export function SettingsPage({
 
       {/* ---------------- Ingestion ---------------- */}
       <SectionPanel id="credentials" active={section === 'credentials'}>
-        {credentials === null ? (
+        {credentialsUnread !== null ? (
+          <p className="soc-warn-note">{st.credentials.unread(credentialsUnread)}</p>
+        ) : credentials === null ? (
           <p className="soc-empty">{c.common.loading}</p>
         ) : (
           <CredentialsPanel credentials={credentials} onSaved={setCredentials} />
@@ -924,7 +952,18 @@ export function SettingsPage({
           {st.assistantSection.enableHelp}
         </p>
 
+        {/* Before the grid, not inside it: a grid cell here is 210 px wide, and
+            this is a sentence rather than a field. A standing condition, so not
+            in a live region. */}
+        {providersUnread !== null ? (
+          <p className="soc-warn-note">{st.assistantSection.providersUnread(providersUnread)}</p>
+        ) : null}
+
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '0 14px' }}>
+          {/* A picker with no option is a choice this screen cannot offer. The
+              note above says why it is absent; the fields beside it do not
+              depend on the catalogue, so they stay. */}
+          {providersUnread !== null ? null : (
           <label className="soc-field">
             <span>{st.assistantSection.provider}</span>
             {/* The list comes from the server. Restating it here would let the
@@ -955,6 +994,7 @@ export function SettingsPage({
               {st.assistantSection.providerHelp}
             </span>
           </label>
+          )}
 
           <label className="soc-field">
             <span>{st.assistantSection.model}</span>

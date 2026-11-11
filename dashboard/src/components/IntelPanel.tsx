@@ -345,6 +345,17 @@ export function IntelPanel({ prefill }: { prefill?: { value: string; n: number }
   const [result, setResult] = useState<IntelResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [providers, setProviders] = useState<IntelProvider[] | null>(null);
+  /**
+   * Why there is no coverage figure, when the catalogue could not be read.
+   *
+   * `.catch(() => setProviders([]))` turned a refused read into a LIST, and
+   * the fold's hint is a claim computed from that list: `0 of 0 reachable`,
+   * with the fold opening itself because zero coverage is the thing this tab
+   * refuses to file behind a silent click. Measured — that is the same shape
+   * as `clean` over a source nobody queried, which this tab also refuses.
+   * The list stays `null`, so no figure is computed at all.
+   */
+  const [providersUnread, setProvidersUnread] = useState<string | null>(null);
   const [history, setHistory] = useState<Array<{ value: string; verdict: IntelResult['verdict'] }>>([]);
   const [copied, setCopied] = useState(false);
   const input = useRef<HTMLInputElement>(null);
@@ -361,7 +372,9 @@ export function IntelPanel({ prefill }: { prefill?: { value: string; n: number }
   useEffect(() => {
     // Its own request, and a failure here must not take the tab down: the
     // lookup itself works without ever having read this list.
-    api.intelProviders().then((r) => setProviders(r.providers)).catch(() => setProviders([]));
+    api.intelProviders()
+      .then((r) => setProviders(r.providers))
+      .catch((err) => setProvidersUnread(err instanceof ApiError ? err.message : null));
   }, []);
 
   const run = useCallback(async (raw: string, forced: ObservableKind | '' = '', fresh = false) => {
@@ -645,10 +658,16 @@ export function IntelPanel({ prefill }: { prefill?: { value: string; n: number }
         <Fold
           title={t.providersTitle}
           hint={providers === null ? undefined : t.providersReady(reachable, relevant.length)}
-          defaultOpen={providers !== null && reachable === 0}
+          // A failure never folds (`CLARITY.md` § 3), and a region inside a
+          // CLOSED `<details>` is absent from the accessibility tree — so the
+          // refusal below has to open the fold itself, exactly as a coverage of
+          // zero does.
+          defaultOpen={providersUnread !== null || (providers !== null && reachable === 0)}
         >
         <p className="soc-muted">{t.providersLede}</p>
-        {providers === null ? (
+        {providersUnread !== null ? (
+          <p className="soc-warn-note">{t.providersUnread(providersUnread)}</p>
+        ) : providers === null ? (
           <p className="soc-empty">{c.common.loading}</p>
         ) : (
           <ul className="soc-intel-providers">
