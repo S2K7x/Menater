@@ -315,6 +315,148 @@ describe('the MCP endpoint — the protocol', () => {
 });
 
 /* -------------------------------------------------------------------------
+ * The instructions, against the catalogue they ship with
+ *
+ * `instructions` is the one place this server speaks to the model on the other
+ * side, and a client puts it in that model's system prompt. So it is prose
+ * about a catalogue, sitting beside the catalogue — the shape `CLAUDE.md`
+ * records as *« a capability list written in prose, beside the catalogue it
+ * describes »*, which this product has now paid for three times.
+ *
+ * The console's own prompt was fixed for exactly this and `assistant.test.ts`
+ * pins it in BOTH directions. This block is that claim on the other surface.
+ * Measured through the real endpoint before it existed: 0 of the 14 tool names
+ * and 5 of the 8 prompt names.
+ *
+ * The two halves are not the same claim, and the asymmetry is deliberate:
+ *
+ *  - TOOLS are named in full, because the grouping — which question each one
+ *    answers — is a judgement `tools/list` cannot carry. That list adds
+ *    routing over the schemas, so it has to be complete, and it is pinned
+ *    positively.
+ *  - PROMPTS and RESOURCES are not enumerated at all, because `prompts/list`
+ *    and `resources/list` already serve both catalogues whole, so a copy in
+ *    the prose buys nothing and can only rot. Their claim is therefore the
+ *    SUBTRACTION — a catalogue is never enumerated in PART — which is red on
+ *    the five-of-eight prompt list and vacuously true the day somebody writes
+ *    a complete one.
+ * ---------------------------------------------------------------------- */
+
+describe('the MCP endpoint — the instructions describe the catalogue they ship with', () => {
+  beforeEach(() => {
+    resetMcpRateLimit();
+    return configure({});
+  });
+
+  /** The instructions, and the three catalogues, as a client receives them. */
+  async function surface() {
+    const init = await call({
+      body: { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18' } },
+    });
+    const tools = await call({ body: { jsonrpc: '2.0', id: 2, method: 'tools/list' } });
+    const prompts = await call({ body: { jsonrpc: '2.0', id: 3, method: 'prompts/list' } });
+    const resources = await call({ body: { jsonrpc: '2.0', id: 4, method: 'resources/list' } });
+    const templates = await call({ body: { jsonrpc: '2.0', id: 5, method: 'resources/templates/list' } });
+    return {
+      instructions: String(init.json.result.instructions),
+      toolNames: tools.json.result.tools.map((t: any) => String(t.name)) as string[],
+      promptNames: prompts.json.result.prompts.map((p: any) => String(p.name)) as string[],
+      uris: [
+        ...resources.json.result.resources.map((r: any) => String(r.uri)),
+        ...templates.json.result.resourceTemplates.map((r: any) => String(r.uriTemplate)),
+      ] as string[],
+    };
+  }
+
+  /**
+   * The sentence whose whole job is to say what this server is listed seven
+   * capability KINDS — "the alert queue, one alert in full, the execution chain
+   * behind it, the tuning rules, the metrics, the health report, the setup
+   * state" — the same seven the console's own prompt opened with before `TOOLS`
+   * grew to fourteen. It named no callable at all.
+   */
+  it('names every tool in the catalogue, so none is invisible to the other side', async () => {
+    const { instructions, toolNames } = await surface();
+    expect(
+      toolNames.length,
+      'the catalogue came back empty, so this claim would pass over nothing',
+    ).toBeGreaterThan(0);
+    const unnamed = toolNames.filter((name) => !instructions.includes(name));
+    expect(
+      unnamed,
+      'These tools are served by tools/list and named nowhere in the instructions '
+      + 'that say what this server is for. Add them to WHAT IT CAN AND CANNOT DO.',
+    ).toEqual([]);
+  });
+
+  /**
+   * The other direction, and it is not decoration: a name left behind after its
+   * tool goes away tells the other side to call something that answers
+   * `Unknown tool`, and it will have spent a step finding out.
+   */
+  it('names no tool the catalogue does not have', async () => {
+    const { instructions, toolNames } = await surface();
+    const mentioned = instructions.match(/\b(?:list|get|search|find|explain|test)_[a-z_]+\b/g) ?? [];
+    const invented = [...new Set(mentioned)].filter((name) => !toolNames.includes(name));
+    expect(invented).toEqual([]);
+  });
+
+  /**
+   * The sharpest single loss, and the reason the tool list is worth its bytes.
+   * `explain_term` exists because the Guide is browser code the server cannot
+   * read: without it an external agent asked "what is shadow mode?" answers
+   * from its training, confidently, about a different product. The console's
+   * own prompt says so in as many words; this block said neither that the
+   * glossary existed nor that memory is the wrong source.
+   */
+  it('says not to answer about this installation from memory, and names the glossary', async () => {
+    const { instructions } = await surface();
+    expect(instructions).toContain('explain_term');
+    expect(instructions).toMatch(/memory/i);
+  });
+
+  /**
+   * The subtraction, and it is what makes this guard outlive the two lists that
+   * exist tonight: a catalogue the prose enumerates, it enumerates WHOLE.
+   *
+   * Red before the change on the prompts — the one sentence saying where to
+   * start carried a five-name parenthetical over an eight-name catalogue, so
+   * `triage-alert`, `hunt-related` and `explain-metrics` were presented as not
+   * existing. The fix is the deletion rather than the completion: `prompts/list`
+   * serves all eight with their titles and arguments, so the copy bought
+   * nothing and could only go stale.
+   */
+  it('never enumerates the prompt catalogue in part', async () => {
+    const { instructions, promptNames } = await surface();
+    const named = promptNames.filter((name) => instructions.includes(name));
+    expect(
+      named.length === 0 || named.length === promptNames.length,
+      `the instructions name ${named.length} of ${promptNames.length} prompts: `
+      + `${promptNames.filter((n) => !named.includes(n)).join(', ')} are presented as not existing. `
+      + 'Name all of them or none — prompts/list already serves the whole catalogue.',
+    ).toBe(true);
+  });
+
+  /**
+   * The same rule on the resources, and it passes BEFORE and after on purpose:
+   * the instructions say "Resources under menater:// are the same data,
+   * attachable rather than called", which enumerates nothing and therefore
+   * cannot rot. This claim exists so the next partial list is caught on the day
+   * it is written rather than on the day somebody happens to look — that is the
+   * whole lesson of the four declarations found sideways.
+   */
+  it('never enumerates the resource catalogue in part', async () => {
+    const { instructions, uris } = await surface();
+    expect(uris.length).toBeGreaterThan(0);
+    const named = uris.filter((uri) => instructions.includes(uri));
+    expect(
+      named.length === 0 || named.length === uris.length,
+      `the instructions name ${named.length} of ${uris.length} menater:// resources`,
+    ).toBe(true);
+  });
+});
+
+/* -------------------------------------------------------------------------
  * Prompts, resources and completion — the primitives that make it usable
  *
  * A client that sees only tool names sees ten getters and no reason to use

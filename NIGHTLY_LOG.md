@@ -4,6 +4,162 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-11-12 — Thursday · Bugs and technical debt
+
+**Subject**: **the MCP endpoint's `instructions` block under-described its own
+catalogue, in TWO lists, and nothing pinned either.** `instructions` is the one
+place an MCP server can speak to the model on the other side — a client puts it
+in that model's system prompt — so it is prose about a catalogue, sitting beside
+the catalogue. `ROADMAP` § 7 had carried it as a standing lead since 11-09.
+
+**Result**: PR opened on `claude/sleepy-volta-veq3qv`. Two files touched
+(`server/assistant/mcp.ts`, `server/assistant/mcp.test.ts`, **+5 tests, 3 of
+them red on unmodified code**), plus `ROADMAP.md` (the § 7 entry closed, one new
+open item named), `CLAUDE.md` (one traps row, suite count 1929 → 1934) and this
+journal. **No CSS, no class name, no colour, no heading level, no dependency, no
+SQL, no new route, no new tool, no client change.** The built bundle is
+**byte-identical, same three asset hashes** — every change is server-side.
+VulnPipe untouched; its suite was run anyway.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-veq3qv` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Sixty-fourth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: the baseline on the
+designated branch at `7e901e3` (= `origin/main`) was typecheck **0 errors**,
+**1929 passed | 1 skipped**, a clean build, `npm ci` clean with **0
+vulnerabilities** on both halves, and no PR open. Of § 7's open items this was
+the one whose fix the roadmap had already prescribed and sized; the others are
+each explicitly a decision for a human (the engine's error vocabulary, the
+promoted-target digest's compatibility, deleting the two n8n-era files) or a
+Saturday (`var(--accent)` as text, the incident card's outline).
+
+**What I learned that is written nowhere else.**
+
+1. **The standing note was wrong in both directions, and only driving the
+   endpoint said so.** It recorded *« still under-describes its own catalogue by
+   half »*, i.e. seven of fourteen. Those seven are capability KINDS — "the
+   alert queue, one alert in full, …" — never a callable, so `initialize`
+   answered instructions naming **0 of the 14 tool names**. And the same
+   paragraph held a SECOND stale list that no entry anywhere had: *« Start with
+   the prompts (explain-alert, assess-danger, why-waiting, shift-handover,
+   what-to-configure) »* is **5 of 8**, so `triage-alert`, `hunt-related` and
+   `explain-metrics` were presented as not existing, in the one sentence that
+   says where to start. A standing lead is a measurement somebody made once;
+   re-measure it before fixing it.
+2. **The fix for a partial enumeration is sometimes the DELETION, not the
+   completion — and what decides it is what the copy adds over the protocol's
+   own listing.** Naming all eight prompts was the obvious move and it is the
+   wrong one: `prompts/list` serves the whole catalogue with titles and
+   arguments, so a copy in the prose buys a conforming client nothing and can
+   only rot, which it had. The tools are the opposite case and that is why they
+   are named in full: `tools/list` carries name, description and schema, i.e.
+   *how do I call this*, and cannot carry the judgement *which one for this
+   question* — so the grouping is the thing the block adds, and it has to be
+   complete. Same labels as `stableSystemPrompt` so the two model-facing
+   surfaces speak one vocabulary.
+3. **The guard caught the fix re-introducing the defect, in the same commit.**
+   The resource half of the subtraction (*a catalogue is never enumerated in
+   PART*) passes before AND after on purpose, because *« Resources under
+   menater:// are the same data »* enumerates nothing. A first draft wrote
+   `menater://glossary` beside `explain_term` — one URI of nine — and that test
+   went red. It is this night's own row rebuilt inside its repair, the family
+   this project already records as the scan report taking green when coverage is
+   UNKNOWN. The tool is named; the resources are left to `resources/list`.
+   Mutation **M5** keeps that honest.
+4. **The sharpest loss was not a name, it was a missing rule.** `explain_term`
+   exists because the Guide is browser code this server cannot read, so an
+   external agent asked *what is shadow mode?* answers from training about a
+   different product — `CLAUDE.md` says exactly that. The block that is supposed
+   to prevent it carried **no instruction not to answer from memory at all**,
+   where `prompt.ts` has had one for months. So the clause travelled with the
+   names rather than the names alone.
+5. **Three operator-facing reach sentences were checked and are NOT stale**, so
+   I left them: `assistant.readOnlyNote`, `st.assistant.reads` and the Guide's
+   entry were corrected by the pass that fixed the panel's prompt, and a test
+   forbids the count. `readOnlyNote` mentions neither the glossary nor the
+   timeline, which is a clarity decision about whether a terse panel note should
+   enumerate at all — named in § 7, not touched, because widening here is the
+   three-scattered-improvements PR `NIGHTLY.md` refuses.
+6. **A `console.log` inside a vitest test is swallowed by this reporter.** The
+   measurement probe printed nothing and looked like a passing no-op;
+   `process.stderr.write` is what gets out. An instrument that silently prints
+   nothing reads exactly like an instrument that measured nothing.
+7. **The character cost had to be measured, not estimated.** I wrote "1,929 →
+   2,575" into the comment from an estimate; the endpoint answers **2,643**. The
+   comment now says so and says it was measured. A number in a comment cannot
+   fail, which is the whole reason `BANNER_VERSIONS` exists.
+
+**Do not redo.**
+
+- **Do not complete the prompt list in `INSTRUCTIONS`** — learning 2. It is
+  green under the subtraction (mutation M4 proves the rule allows it), and it
+  reintroduces a copy that rots for no gain.
+- **Do not name a `menater://` URI in `INSTRUCTIONS`** unless you name all nine
+  — learning 3, M5 is red.
+- **Do not pin the two surfaces' groupings as equal to each other.** Both are
+  already pinned to `TOOLS` in both directions independently, so neither can go
+  stale against the catalogue; an equality test between them would be a third
+  statement of one fact, which is how one of them rots.
+- **Do not restore a mutated file with `git checkout` while the change is
+  uncommitted** (the 11-02 lesson, obeyed): the harness copies `mcp.ts` to the
+  scratchpad and restores from there, with an unmutated control FIRST and LAST,
+  both green and identical, and a final `diff` against the copy.
+
+**Found and NOT fixed, with why.**
+
+- **Standing leads, re-checked and unchanged**: `RuleStore.history` (still the
+  sharpest non-J0 item, and still outside `dead-exports.test.ts` because a class
+  method is not a top-level export); the § 7 human decisions (the engine's error
+  vocabulary for a wrong model SHAPE, the promoted-target digest, the two
+  n8n-era files at the root); `MENATER_TEST_PG` still never set, so
+  `store-contract.test.ts`'s Postgres half is still the one skip; the ninety-odd
+  French strings in `server/engine/`; `var(--accent)` as text; the relay's
+  deadline; a forwarded upstream 401 still sending an operator to the sign-in
+  screen; `SecretField`'s `isSet` reading "not set" while the store loads.
+
+**Verified** (Node 22.23.4, npm 10.9.9; every command run and its output read):
+
+| Command | Result |
+|---|---|
+| `npm ci` (both halves) | clean; **0 vulnerabilities** each |
+| baseline `npm run typecheck` / `npm test` / `npm run build` | **0 errors**, **1929 passed \| 1 skipped**, clean |
+| new tests against unmodified `mcp.ts` | **3 failed \| 43 passed** of 46 |
+| `npm run typecheck` (after) | **0 errors** |
+| `npm test` (after) | **1934 passed \| 1 skipped** (**+5**), 126 files |
+| `npm run build` (after) | clean — `index-Dzd5RyOO.js` 449.47 kB, `index-DpyowbMH.css` 62.42 kB, **all three hashes unchanged from the baseline** |
+| `VulnPipe: npm test` | **453 passed** — untouched tonight, run anyway |
+| `initialize` instructions, probed | 1,929 → **2,643** characters; tool names named **0 → 14 of 14**; prompt names **5 → 0 of 8**; resource URIs **0 of 9**, before and after |
+
+The 2 that pass before the change are the BOUNDARIES, and they pass after on
+purpose: the tool list's other direction (no invented name) and the resource
+subtraction, which is vacuously true of a sentence that enumerates nothing.
+Trading one vagueness for another is not a fix.
+
+**Seven mutations, six killed, one green by design**, one at a time, `mcp.ts`
+restored from a COPY of the working tree, control run first and last and
+identical (5/5):
+
+| Mutation | Result |
+|---|---|
+| CONTROL (unmutated), first AND last | GREEN both times |
+| M1 — the seven-kind prose is back, naming no callable | RED — 1 |
+| M2 — one tool dropped from the grouped list | RED — 1 |
+| M3 — the five-prompt parenthetical is back | RED — 1 |
+| M4 — BOUNDARY: all eight prompts named instead | GREEN — the rule is all-or-none |
+| M5 — `menater://glossary` named beside `explain_term` | RED — 1 |
+| M6 — the "do not answer from memory" clause removed | RED — 1 |
+| M7 — an invented tool name left in the list | RED — 1 |
+
+No model key, no database and no network egress were needed: every assertion
+drives `mcpRoutes` over the in-process request recorder `mcp.test.ts` already
+owns. The probe (`__probe-instructions.test.ts`) and the mutation harness lived
+in `dashboard/` and the scratchpad and are **deleted** — `git status` shows only
+the five intended paths.
+
 ## 2026-11-11 — Wednesday · Tests and QA
 
 **Subject**: **a catalogue this console could not READ, rendered as a catalogue

@@ -2685,23 +2685,56 @@ Why it was not fixed tonight, and what the options are:
 J0.6 needed none of those: on the model-facing surface the answer is the fence,
 which marks the string as foreign without discarding it.
 
-### The MCP instructions still describe seven getters — found 2026-11-09
+### ~~The MCP instructions still describe seven getters~~ — closed 2026-11-12
 
 `CLAUDE.md`'s traps table records *« a capability list written in prose, beside
 the catalogue it describes »*: the system prompt opened by naming seven tools,
 `TOOLS` grew to fourteen, and the fix names all fourteen with a test failing in
-both directions. **`assistant/mcp.ts`'s `INSTRUCTIONS` carries the identical
+both directions. **`assistant/mcp.ts`'s `INSTRUCTIONS` carried the identical
 seven-item sentence** — *« the alert queue, one alert in full, the execution
 chain behind it, the tuning rules, the metrics, the health report, the setup
-state »* — and nothing pins it. So the one place an MCP server can speak to the
-model on the other side still under-describes its own catalogue by half, and
-`search_alerts`, `get_attention`, `explain_term`, `find_similar`,
-`explain_verdict`, `get_timeline` and `test_rule` are named nowhere in it.
+state »* — and nothing pinned it.
 
-The mirror of a rule is not the rule, for the twentieth time in this table's
-history. Not fixed tonight because it is its own subject — the fix is the
-fourteen names plus the both-directions test the prompt already has, and
-bundling it into J0.6 would have widened a reviewable PR into two.
+**Measured through the real endpoint rather than read, and it is worse than
+this entry claimed in one direction and narrower in another.** Those seven are
+capability KINDS, not callables, so `initialize` answered instructions naming
+**0 of the 14 tool names** — not seven. And a second stale list was in the same
+block, tracked nowhere: *« Start with the prompts (explain-alert,
+assess-danger, why-waiting, shift-handover, what-to-configure) »* names **5 of
+the 8** prompts, in the one sentence that says where to start, so
+`triage-alert`, `hunt-related` and `explain-metrics` were presented as not
+existing.
+
+**The two halves get opposite fixes, and the difference is what each adds over
+the protocol's own listings.** The tools are named in full, grouped by the
+question they answer, with the same labels `stableSystemPrompt` uses so the two
+model-facing surfaces speak one vocabulary: the schemas say how to call each
+one, the grouping says which to reach for, and `tools/list` cannot carry a
+judgement. The prompts are no longer named at all — `prompts/list` serves all
+eight with their titles and arguments, so a copy in the prose bought nothing a
+conforming client did not already hold and could only rot. The missing clause
+went with it: *do not answer about THIS installation from memory*, with
+`explain_term` named, which is the whole reason that tool exists.
+
+`mcp.test.ts` carries five claims — the tool list in BOTH directions, the
+memory-and-glossary clause, and the SUBTRACTION *a catalogue is never
+enumerated in part* applied to the prompts (red on five of eight) and to the
+resource URIs (green before and after, because that sentence enumerates
+nothing). Cost: instructions 1,929 → 2,643 characters, paid once in the
+`initialize` result rather than per request.
+
+**What the resource half caught.** That subtraction went red on a first draft
+of the fix, which named `menater://glossary` beside `explain_term` — one URI of
+nine, i.e. the defect being closed, rebuilt in the same commit. The tool is
+named and the resource is left to `resources/list`.
+
+**What stays open.** Three OPERATOR-facing sentences describe the assistant's
+reach in prose — the panel's note (`assistant.readOnlyNote`), the Settings
+blurb (`st.assistant.reads`) and the Guide's entry. They were corrected by the
+same pass that fixed the panel's prompt and a test forbids the COUNT, so they
+are not stale; but `readOnlyNote` is the one that mentions neither the glossary
+nor the timeline, and whether a terse panel note should enumerate at all is a
+clarity decision, not a repair.
 
 ### ~~Five declarations with writers and no readers, and nothing that looked for one~~ — closed 2026-11-08
 
