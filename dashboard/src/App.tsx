@@ -317,12 +317,40 @@ export function App() {
   // traitement, constats bloquants, jeu d'exemple. Changer de langue doit donc
   // RELIRE le snapshot, pas seulement retraduire les libelles — sinon la file
   // reste dans l'ancienne langue jusqu'au prochain rafraichissement.
-  const firstRender = useRef(true);
+  //
+  // ==========================================================================
+  // THE GUARD IS ON THE LOCALE THAT WAS READ, NOT ON THE RENDER COUNT
+  //
+  // `authed` is in the dependency array because the body READS it, and a guard
+  // in a dependency array is a TRIGGER: it goes from `null` to `true` once per
+  // page load, when the auth probe answers. A `useRef(true)` skipping the first
+  // run cannot cover for that — a render count is not the fact this effect
+  // needs, which is *has the locale changed since the last read*. It spent its
+  // one skip on the render before the probe answered, so every page load then
+  // asked for `?force=1`, i.e. the one request that deliberately walks past
+  // the fifteen-second cache `snapshot.ts` keeps so that "ten open tabs do not
+  // hammer the database". Measured in Chromium against a real PostgreSQL 16:
+  // two full-size answers per load — 10,804 B of duplicate wire bytes and a
+  // 24-29 ms rebuild at the default window, 37,508 B and 52 ms at the
+  // documented 500-run ceiling — of a window the cache had just answered in
+  // 3 ms. Signing in paid it twice over, since `onSuccess` already forces one.
+  //
+  // Holding the locale that was last read makes the effect idempotent on
+  // anything that is not a locale change, so it no longer matters what else
+  // ends up in the dependencies. `app-forced-reload.test.tsx` counts the reads.
+  //
+  // WHAT A PAGE LOAD NOW SHOWS is what an open tab shows between two polls:
+  // the cache's own cadence, which the footer already names ("Last check: …",
+  // "refreshing automatically every 20 s"). It is not a new staleness — the
+  // mount read was already unforced, so the queue painted first has always
+  // been the cached one, and `snapshot()` revalidates behind a stale answer.
+  // A read that wants the REAL state still asks for it: the Refresh button,
+  // the sign-in, and the injection follow-up.
+  // ==========================================================================
+  const loadedLocale = useRef(locale);
   useEffect(() => {
-    if (firstRender.current) {
-      firstRender.current = false;
-      return;
-    }
+    if (loadedLocale.current === locale) return;
+    loadedLocale.current = locale;
     if (authed !== false) void load(true);
   }, [locale, authed, load]);
 

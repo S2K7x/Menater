@@ -2507,6 +2507,72 @@ holds the door on irreversible actions.
 
 ## 7. Known technical debt
 
+### ~~Every page load forced a rebuild of the console's most expensive read~~ — closed 2026-11-13
+
+Not previously in this list, and nobody had ever counted the requests a page
+load makes. `GET /api/snapshot` is the triage queue, the metrics and the
+Tracking tab in one object; `snapshot.ts` caches it for fifteen seconds so that
+*"ten open tabs do not hammer the database"*, and `?force=1` walks past that
+cache for the two callers the module names — the Refresh button and the
+injection follow-up.
+
+**Measured in Chromium 1243 against a real PostgreSQL 16**, seeded by driving
+the six workflows through the engine (`/api/simulate`, 100 alerts, 500 runs; 24 alerts gave
+120 runs and 984 steps, the default window exactly; no model key, so every
+verdict is the fail-safe one):
+
+| window | requests per load | duplicate wire bytes | what the second one cost |
+|---|---|---|---|
+| 120 runs (default) | **2** | **10,804 B** | the plain read 3-5 ms from cache, the forced read a **24-29 ms** rebuild |
+| 500 runs (ceiling) | **2** | **37,508 B** | **63-71 ms** rebuild, of a window the cache had just answered in 7 ms |
+
+Cold-load totals over the wire, same database, same probe: 167,824 → **157,064
+B** at the default window and 221,255 → **183,839 B** at the ceiling. A 55-56 ms
+long task appeared in 2 of 5 before-runs at the ceiling and in 0 of 5 after,
+which is suggestive rather than a median difference, and is reported as such.
+
+**Where it came from.** One effect, written so that changing language re-reads
+the sentences the server composes (chain notes, blocking findings, the sample
+set), carried `authed` in its dependency array in order to READ it as a guard —
+`if (authed !== false)`. `authed` goes from `null` to `true` once per page load,
+when the auth probe answers, so the effect fired there every time. What was
+supposed to stop that was a `useRef(true)` skipping the first run: a render
+COUNT, where the fact the effect needs is *has the locale changed since the last
+read*. It spent its one skip on the render before the probe answered. Signing in
+paid it twice over, since `onSuccess` already forces a read.
+
+The fix holds the locale that was last read, which makes the effect idempotent
+on anything that is not a locale change — so what else lands in the
+dependencies stops mattering. `src/components/app-forced-reload.test.tsx`
+counts the reads: 6 tests, 2 red before the change, 4 that pass before AND
+after (the Refresh button still forces, a locked console reads nothing, and the
+two structural claims). Six mutations, six killed, including the deletion of
+the re-read and the plausible wrong fix of letting `onSuccess` lean on the
+effect.
+
+**What stays open.**
+
+- **Whether a page load SHOULD bypass the cache is a policy question, and this
+  change answers it the way `snapshot.ts` already reads.** A load now sees what
+  an open tab sees between two polls — the cadence the footer names (*Last
+  check: …*, *refreshing automatically every 20 s*) — and the first paint was
+  already the cached answer, because the mount read was never forced. If a
+  human wants a page load to be fresh by definition, the honest shape is to
+  force the MOUNT read once, not to fire a second read from a language effect:
+  that keeps one request and gives back the rebuild.
+- **The locale half cannot be exercised.** `LOCALES` holds one entry, so
+  `setLocale` has no second value; the mechanism is claimed structurally and the
+  test asserts `LOCALES.length === 1`, so it fails and asks for a behavioural
+  claim the day a second locale arrives rather than vouching for a shape for
+  ever.
+- **The eager chunk, re-measured tonight by sourcemap attribution** (447,819
+  attributed bytes): `react-dom` 178,162 (39.8%), **`src/i18n/console.ts`
+  56,637 (12.6%)**, `src/i18n/dictionary.ts` 30,953 (6.9%),
+  `SettingsPage.tsx` 24,936 (5.6%). The dictionary row below is unchanged and
+  still refused for its shape; the console catalogue is the bigger number and
+  has never been named here, but every screen that reads it is eager, so there
+  is nothing to defer without first deciding which tabs are loaded on demand.
+
 ### ~~A catalogue this console could not read, rendered as a catalogue the server does not have~~ — closed 2026-11-11
 
 Not previously in this list, and that is part of the finding: the Health tab had

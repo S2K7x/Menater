@@ -4,6 +4,179 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-11-13 — Friday · Performance and cost
+
+**Subject**: **every page load asked the console to FORCE a rebuild of its most
+expensive read, and nobody had ever counted the requests a page load makes.**
+`GET /api/snapshot` is the triage queue, the metrics and the Tracking tab in one
+object; `snapshot.ts` caches it for fifteen seconds *« long enough that ten open
+tabs do not hammer the database »*, and `?force=1` walks past that cache for the
+two callers the module names — the Refresh button and the injection follow-up.
+A page load sent two full-size answers, the second one forced.
+
+**Result**: PR opened on `claude/sleepy-volta-ymgs4z`. Two files of product
+change — one of them a test: `src/App.tsx` (**five lines of code**, the rest
+comment) and `src/components/app-forced-reload.test.tsx` (**+6 tests, 2 red
+before the change**), plus `ROADMAP.md` (a § 7 entry opened and closed, carrying
+what stays open), `CLAUDE.md` (one traps row, suite count 1934 → 1940) and this
+journal. **No CSS, no class name, no colour, no catalogue key, no heading level,
+no dependency, no SQL, no new route, no server change at all.** VulnPipe
+untouched; its suite was run anyway.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-ymgs4z` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Sixty-fifth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: the baseline on the
+designated branch at `51cdab5` (= `origin/main`) was typecheck **0 errors**,
+**1934 passed | 1 skipped**, a clean build, `npm ci` clean with **0
+vulnerabilities** on the console half, and no PR open. Of § 7's Friday-shaped
+entries every one is refused by its own text (the analysis dictionary needs a
+decision about where the vocabulary is provided and touches 28 call sites in 13
+files; brotli q5, zstd and self-hosted fonts are each named as a human's call;
+`index.html`'s comments are a house-style judgement), so — like 11-06 — I
+measured instead of picking: sourcemap attribution over the eager chunk
+(unchanged), then the one thing nobody had instrumented, **the requests a real
+browser makes against the real API**. That is where the subject was, in the
+first probe.
+
+**What I learned that is written nowhere else.**
+
+1. **A guard in a dependency array is a trigger, and a render count is never
+   the guard you wanted.** The effect reads `authed` to decide (`if (authed !==
+   false)`), so `authed` is in its deps — and it goes `null` → `true` once per
+   page load when the auth probe answers. The `useRef(true)` first-render skip
+   cannot cover that: it is a COUNT, where the fact wanted is *has the locale
+   changed since the last read*. It spent its one skip on the render before the
+   probe answered. Holding the locale that was last read makes the effect
+   idempotent on everything else, so what lands in the deps stops mattering.
+2. **The build stamp in the payload is the instrument.** `health.checked_at` is
+   set once per build, so reading it off both answers says whether the server
+   rebuilt twice or the second request joined the first in flight. Measured
+   both: at the ceiling the forced request JOINS when the cache is cold (same
+   stamp, the rebuild is slow enough) and **rebuilds in full whenever the cache
+   is warm**, which is the normal state — so the cost is not an occasional
+   race, it is one rebuild per load. No instrumentation of the server was
+   needed; the answer already carries it.
+3. **Playwright's `response.body()` is DECODED, and that understates a wire
+   measurement by 12×.** `/api/snapshot` is brotli: 529,445 B decoded against
+   37,508 B on the wire. `performance.getEntriesByType('resource')`'s
+   `transferSize` is what a bill is counted in, and both numbers are reported
+   because the browser pays for both (the decode and the parse are the decoded
+   one).
+4. **A real PostgreSQL can be stood up in this container**, which the 11-05 and
+   11-12 nights had already proved and the routine's own prompt says otherwise
+   about. `initdb` refuses to run as root, so: `su postgres`, a data directory
+   under `/var/lib/postgresql` (the scratchpad's parents are not traversable by
+   that user), `-k /tmp` for the socket, then `sql/*.sql` applied with
+   `-v app_password=…`. A window is then seeded through the product itself —
+   `POST /api/simulate` with an explicit `alert_id` per call — 24 alerts give
+   exactly 120 runs and 984 steps (the default window), 100 alerts give 500
+   runs (the documented ceiling) in **6.9 s**. No model key: every verdict is the fail-safe one, which is what the
+   console does on a fresh install anyway.
+5. **The eager chunk's biggest module of our own is `src/i18n/console.ts` at
+   56,637 B (12.6% of 447,819 attributed)**, half again the analysis dictionary
+   § 7 tracks at 30,953 (6.9%). Written down because nobody had named it — and
+   it is NOT a lead: every screen that reads it is eager, so there is nothing to
+   defer until somebody decides which tabs load on demand.
+6. **Long tasks are not where this cost lands.** A 55-56 ms long task appeared
+   in 2 of 5 before-runs at the ceiling and 0 of 5 after; at the default window,
+   0 of 5 both ways. The duplicate's browser-side cost is a second brotli
+   decode and `JSON.parse` of half a megabyte plus a re-render, and it stays
+   under the 50 ms threshold most of the time. Reported as counts, not as a
+   median, because the median is 0 either way.
+
+**Do not redo.**
+
+- **Do not take `src/i18n/dictionary.ts` out of the eager chunk as a Friday.**
+  Re-checked tonight and § 7's refusal still holds in full: all 14 readers are
+  inside a lazy boundary (`DocsPanel` plus 13 files under `src/vulnpipe/`), and
+  every honest shape — a second hook, a second provider, a nested
+  `I18nContext.Provider` — needs the 28 `const { t } = useI18n()` call sites to
+  change, or a type that lies to eager callers. I looked for a fourth shape and
+  there is none.
+- **Do not restore a mutated file with `git checkout` while the change is
+  uncommitted** (the 11-02 lesson, obeyed): the harness copies `App.tsx` to the
+  scratchpad, restores from that copy, runs an unmutated control FIRST and LAST
+  and `diff`s the file at the end.
+- **Do not measure a browser-side saving with `response.body()`** — learning 3.
+- **Do not weaken the sign-in claim to "at least one read".** `[true, true]` →
+  `[true]` is the whole finding on that path; a `length >= 1` assertion is green
+  over both.
+- **Do not delete the locale re-read** to make the counts come out: it is the
+  one thing that makes the server's own sentences follow the selector, mutation
+  M2 is red on it, and the test says why it has to be claimed structurally.
+
+**Found and NOT fixed, with why.**
+
+- **`/api/workflows` answers 30,348 B** and is re-fetched on every visit to the
+  Ingestion tab (the tab unmounts, so there is no caching to lean on). The route
+  returns each definition AS IS under a comment that is an architecture
+  argument — *« a view that recomposed the graph could drift from what actually
+  runs »* — so trimming fields is a decision, not a saving, and it is per-visit
+  rather than per-poll. Measured and left alone.
+- **The Settings tab makes 7 reads per visit** (credentials, settings, the
+  assistant's MCP state and providers, and three `/api/vulnpipe/*` that answer
+  while the analysis service is down). All distinct, none duplicated.
+- **VulnPipe's `npm audit` reports 2 moderate advisories** —
+  `@hono/node-server` ≤ 2.1.5 and `hono` ≤ 4.13.15, both transitive under
+  `@modelcontextprotocol/sdk`, both fixable with a lockfile refresh. The
+  console half is at 0. Previous passes measured that half's HTTP transport as
+  unreachable from this product (stdio only), so this is hygiene and a Sunday's
+  subject, not tonight's.
+- **Standing leads, re-checked and unchanged**: `RuleStore.history` (still the
+  sharpest non-J0 item, still outside `dead-exports.test.ts` because a class
+  method is not a top-level export); the § 7 human decisions (the engine's error
+  vocabulary for a wrong model SHAPE, the promoted-target digest, the two
+  n8n-era files at the root); `MENATER_TEST_PG` never set, so
+  `store-contract.test.ts`'s Postgres half is still the one skip — and note that
+  tonight's cluster could have run it, but as the OWNER role, which § 7 says is
+  exactly the open question there; the ninety-odd French strings in
+  `server/engine/`; `var(--accent)` as text; the relay's missing deadline; a
+  forwarded upstream 401 still sending an operator to the sign-in screen;
+  `.vp-action`'s 36 px touch target; `SecretField`'s `isSet` reading "not set"
+  while the store loads.
+
+**Verified** (Node 22.23.4, npm 10.9.9, PostgreSQL 16, Chromium 1243; every
+command run and its output read):
+
+| Command | Result |
+|---|---|
+| `npm ci` (both halves) | clean; console **0 vulnerabilities**, VulnPipe 2 moderate (above) |
+| baseline `npm run typecheck` / `npm test` / `npm run build` | **0 errors**, **1934 passed \| 1 skipped**, clean |
+| the new test file against unmodified `App.tsx` | **2 failed \| 4 passed** — `[false, true]` on a load, `[true, true]` on a sign-in |
+| `npm run typecheck` (after) | **0 errors** |
+| `npm test` (after) | **1940 passed \| 1 skipped** (**+6**), 127 files |
+| `npm run build` (after) | clean — `index-Cn9SPg-V.js` 449.47 kB (gzip 131.52), CSS hashes unchanged |
+| `VulnPipe: npm test` | **453 passed** — untouched tonight, run anyway |
+| end to end, real Postgres + real Chromium, 120-run window | **2 → 1** snapshot answers per load; cold-load wire 167,824 → **157,064 B**; the second load 28 ms rebuild → **5 ms from cache** |
+| end to end, 500-run ceiling | **2 → 1**; wire 221,255 → **183,839 B** (−16.9%); the second load 71 ms rebuild → **5 ms from cache** |
+| mutation | **6 mutations, 6 killed**, control green before AND after, `App.tsx` restored byte-identical |
+
+| Mutation | Result |
+|---|---|
+| CONTROL (unmutated), first AND last | GREEN both times (6/6) |
+| M1 — the render-count guard restored (the defect) | RED — 2 |
+| M2 — the locale re-read deleted outright | RED — 1 (the structural claim) |
+| M3 — the re-read no longer forces | RED — 1 |
+| M4 — the locale comparison never short-circuits | RED — 3 |
+| M5 — sign-in leans on the effect instead of loading itself | RED — 1 |
+| M6 — the Refresh button stops forcing | RED — 1 (the boundary) |
+
+The four tests that pass before AND after are the boundaries, and they are
+meant to: the Refresh button still forces, a locked console reads nothing before
+the password, and the two structural claims about the locale mechanism. Trading
+one vagueness for another is not a fix.
+
+The seven probes (`probe-requests`, `probe-cold`, `probe-paint`, `probe-main`,
+`attribute`, `mutate`, the sourcemap build) lived in the scratchpad and are
+gone; the PostgreSQL cluster was stopped and deleted, the dev `config.json` the
+settings PUT created was removed, and `git status` shows only the five intended
+paths.
+
 ## 2026-11-12 — Thursday · Bugs and technical debt
 
 **Subject**: **the MCP endpoint's `instructions` block under-described its own
