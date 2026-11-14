@@ -4,6 +4,224 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-11-14 — Saturday · Interface, clarity, accessibility
+
+**Subject**: **Settings → Code analysis is six blocks, and five of them had no
+heading — so the outline a reader is handed was not incomplete, it was WRONG.**
+The first block holds the engine picker and names itself (`ProviderSwitcher`
+renders an `h3`); the other five are `Fold`s — *How findings are routed*, *What
+is already known*, *How scans start*, *What you see*, *Status* — and a `Fold`'s
+title is whatever the call site puts in its `<summary>`, so those five, the
+things somebody comes to this screen to find, were plain text. This was the
+standing lead the 2026-11-07 pass named and deferred: *« six section titles
+that are `Fold` summaries, i.e. spans, with `h4` subheads inside them — the
+C0.44 shape again. Not taken tonight: it is a second screen, and one subject
+is the rule. »*
+
+**Result**: PR opened on `claude/sleepy-volta-nw5jur`. Two production files
+(`src/vulnpipe/components/SettingsPage.tsx` — one local `SectionTitle` helper
+and five call sites; `src/vulnpipe/styles.css` — one rule of three
+declarations), `src/vulnpipe/components/settings-outline.test.tsx` (**+15
+tests, 9 red on unmodified code**, 2 premise guards and 4 boundaries green
+before AND after on purpose), plus `ROADMAP.md` (C0.46 delivered, one § 7 entry
+opened), `CLAUDE.md` (one traps row, suite count 1940 → 1955) and `CLARITY.md`
+(one § 7 method block, one § 8 row), and this journal. **No catalogue key, no
+colour, no token, no heading SIZE, no dependency, no server change, no SQL, no
+new route.** `DESIGN.md` untouched on purpose: nothing visual moved, so there
+is no visual rule to record. VulnPipe's own package untouched; its suite was
+run anyway.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-nw5jur` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Sixty-sixth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: the baseline on the
+designated branch at `7ffdb65` (= `origin/main`) was, after `npm ci`, typecheck
+**0 errors**, **1940 passed | 1 skipped**, a clean build, `npm ci` with **0
+vulnerabilities** on the console half, and no PR open. Both of § 7's
+Saturday-shaped entries are explicitly design decisions for a human — the
+incident card's heading outline and the unused `h1` size step — and five
+successive nights have left them there for that reason. So, like 11-07, I
+mounted a screen instead of picking an entry, and the screen I mounted was the
+one 11-07 had written down and not taken.
+
+**What the measurement says** (Chromium 1243, a throwaway preview page under
+`dashboard/` deleted in the same session, transitions killed before any sample,
+the AX outline WALKED from the root, `mobile: false` and `innerWidth` checked
+against the width asked for):
+
+```
+BEFORE, folds shut (four of five are, on arrival)
+  h1 SETTINGS / h2 CODE ANALYSIS / h3 WHICH AI ENGINE?      <- three headings, 1,890 px
+
+BEFORE, every fold open
+  h1 SETTINGS / h2 CODE ANALYSIS / h3 WHICH AI ENGINE?
+  h4 ANALYSIS SPEED          <- belongs to « How findings are routed »
+  h4 CONFIDENCE THRESHOLDS   <- belongs to « How findings are routed »
+  h4 ENGINE ACCESS           <- belongs to « Status »
+  h4 SET A KEY               <- belongs to « Status »
+  h4 RESET                   <- belongs to « Status »
+
+BEFORE, analysis service not answering (a fresh install; the Status fold
+  opens ITSELF, because this product refuses to fold a failure)
+  h1 SETTINGS / h2 CODE ANALYSIS / h4 ENGINE ACCESS / h4 RESET   <- a SKIP
+
+AFTER, every fold open
+  h1 SETTINGS / h2 CODE ANALYSIS / h3 WHICH AI ENGINE?
+  h3 HOW FINDINGS ARE ROUTED / h4 ANALYSIS SPEED / h4 CONFIDENCE THRESHOLDS
+  h3 WHAT IS ALREADY KNOWN / h3 HOW SCANS START / h3 WHAT YOU SEE
+  h3 STATUS / h4 ENGINE ACCESS / h4 SET A KEY / h4 RESET
+
+AFTER, service not answering
+  h1 SETTINGS / h2 CODE ANALYSIS / h3 HOW FINDINGS ARE ROUTED
+  h3 HOW SCANS START / h3 WHAT YOU SEE / h3 STATUS / h4 ENGINE ACCESS / h4 RESET
+```
+
+**What I learned that is written nowhere else.**
+
+1. **The sharper half of this defect is not the missing heading, it is the
+   WRONG parent — and the 11-07 note did not have it.** That note recorded the
+   shape (*titles that are spans, with `h4` subheads inside them*) and I
+   expected to confirm it. What the mount actually showed is that with no level
+   3 of their own the five sub-blocks attach to the last heading that EXISTS,
+   which is the engine picker — so the document states that the confidence
+   thresholds and the reset button are parts of the engine selector. **A
+   missing heading tells a reader nothing; a wrong one tells them something
+   untrue**, and it reads as a valid outline, which is why no sweep would have
+   flagged it. A standing lead is a lead, not a measurement: mount it before
+   believing its description.
+2. **The state that matters here is the one the product opens a fold for.**
+   With the settings read refused, `providers` is null (no picker, so no `h3`),
+   `cache` is null (that fold does not render at all), and `health === 'offline'`
+   makes the Status fold open itself — the deliberate behaviour `SettingsPage`
+   carries forty lines of comment to justify. The outline is then `h1 h2 h4 h4`,
+   a genuine skipped level, and the `h4` in question is `ENGINE ACCESS`, which
+   names the missing key. **The defect is worst on the install the screen was
+   opened for**, and `CLARITY.md` § 7's « never review an empty screen » has a
+   corollary: review the FAILED one too, because its outline is a different
+   document.
+3. **One of my ten mutations survived, and the test was right.** *The heading
+   wraps the `<summary>` instead of sitting inside it* came back GREEN —
+   because my mutation ADDED a wrapping heading and left `SectionTitle` in
+   place, so `summary > h3` still matched the inner one. Written faithfully
+   (inner removed, wrapper added) it is red, and so is the subtler shape I then
+   added: the heading wrapping the chevron and the scope hint from *inside* the
+   summary, which is the one that makes the section announce itself as « How
+   findings are routed Applied on the server ». **A mutation must be the
+   alternative implementation, not the fix plus a defect**, and a surviving
+   mutation is a claim about your test that is itself worth checking — the
+   first reading would have sent me rewriting an assertion that was already
+   sound. In `CLARITY.md` § 7 now.
+4. **The grep that finds the next instance is a structural predicate, not a
+   call-site list.** C0.44 and C0.45 were both written as fixes to a SCREEN, so
+   « who calls `Fold` » is the wrong question: most folds hold an explanation
+   and are RIGHT to carry no heading (§ 3). What is exact is **a `Fold` that is
+   the immediate child of a `section.soc-panel` IS that panel**, so its summary
+   is the panel's title. Over `src/components/` it returns exactly two more —
+   `HealthPanel.tsx:555` (the published-workflows panel) and `IntelPanel.tsx:657`
+   (the Lookup source catalogue, whose *« 1 of 7 reachable »* § 3 calls the most
+   useful sentence on that screen) — and leaves the other nine alone. I read
+   all eleven rather than inferring: the install script, the mapping table, the
+   pull form's four advanced fields, the rule test bench, the tunnel block, the
+   card's raw log / chain / enrichment / hashes, the dismissed findings and the
+   two explainer folds are all correctly unheaded. § 7, not tonight: two more
+   screens, and one subject is the rule.
+5. **The two heading rules that had to be beaten are BOTH (0,1,1), and the
+   second one is easy to miss.** `.vp-embed h3` is the obvious one; forty lines
+   from where the fix lands, `.vp-settings-block h3 { margin-bottom: 6px }` is
+   the other. A bare `h3.vp-settings-fold-title` ties with both and wins only
+   by source order — sixth time this project has paid for that shape. Measured
+   the way C0.45 prescribes: a copy of BOTH base rules injected after the
+   candidate, which is what moving the rule up the file amounts to; the (0,2,1)
+   form is unmoved. And the test claims it over EVERY selector naming the
+   class, because a second, bare declaration added later would tie again — the
+   near-miss regex I wrote first matched the correct form and could not tell the
+   two apart.
+
+**Do not redo.**
+
+- **Do not promote the title inside `Fold` itself.** The primitive has eleven
+  call sites and most of them hold an explanation; a heading there would put
+  one on a raw log, an install script and a mapping table. The level also
+  depends on what names the surrounding screen, which the primitive cannot
+  know. The call site decides, which is what C0.44 did too.
+- **Do not wrap the `<summary>`** — learning 3, and two mutations carry it.
+- **Do not restore a mutated file with `git checkout` while the change is
+  uncommitted** (the 11-02 lesson, obeyed): the harness copies the three files
+  to the scratchpad, restores from those copies, runs an unmutated control
+  FIRST and LAST and diffs all three at the end (byte-identical).
+- **Do not take `var(--accent)` as a text colour as a Saturday** without a
+  palette decision: re-read tonight, § 7's refusal still holds in full — 34
+  call sites in `src/styles.css` and 25 in `src/vulnpipe/styles.css`, and the
+  honest answer is an `--accent-text` ROLE token on six themes.
+
+**Found and NOT fixed, with why.**
+
+- **Two more folds ARE their panel** — learning 4, now ROADMAP § 7 with the
+  predicate and the two call sites.
+- **The rest of this screen is clean, and I checked rather than assumed.**
+  Mounted with data of the right shape: the `innerText` hiding sweep returns
+  `[]`, every control has an accessible name (CDP AX tree, not a hand-read of
+  `aria-label`), no composite role owes a keyboard, the four live regions
+  pre-exist their sentence, and there is no horizontal overflow at 320 —
+  document width equals `innerWidth` at 320, 375 and 1280.
+- **Standing leads, re-checked and unchanged**: the incident card's heading
+  outline and the unused `h1` step (both § 7, both design decisions);
+  `var(--accent)` as text; `.vp-action` still 36 px and `.vp-toggle` 21 px
+  against this product's own 44 px target; `RuleStore.history` with no caller;
+  the ninety-odd French strings in `server/engine/`; `npm audit` not in CI;
+  `MENATER_TEST_PG` never set, so `store-contract.test.ts`'s Postgres half is
+  still the one skip; a forwarded upstream 401 still sending an operator to the
+  sign-in screen; the analysis relay's missing deadline; VulnPipe's two
+  moderate advisories (`@hono/node-server`, `hono`), a lockfile refresh and a
+  Sunday's subject.
+
+**Verified** (Node 22.23.4, Chromium 1243; every command run and its output
+read):
+
+| Command | Result |
+|---|---|
+| `npm ci` (both halves) | clean; console **0 vulnerabilities** |
+| baseline `npm run typecheck` / `npm test` / `npm run build` | **0 errors**, **1940 passed \| 1 skipped**, clean |
+| the new test file against unmodified production files | **9 failed \| 6 passed** |
+| `npm run typecheck` (after) | **0 errors** |
+| `npm test` (after) | **1955 passed \| 1 skipped** (**+15**), 128 files |
+| `npm run build` (after) | clean — render-blocking CSS **byte-identical** (`index-DpyowbMH.css`, 62.42 kB, same hash), eager JS 449.47 kB unchanged, deferred Code-tab sheet 27.26 → 27.34 kB |
+| `VulnPipe: npm test` | **453 passed** — untouched tonight, run anyway |
+| browser, 6 themes × 3 widths, 90 title readings | **0 differences** in computed type, summary box, document width and panel total. Panels 1,890.11 / 2,033.61 / 2,117.86 px at 1280 / 375 / 320, identical before and after |
+| each CSS declaration dropped alone | `font: inherit` w400 → **900**, lh 22.016 → **14.448px** · `letter-spacing: inherit` 0.8256 → **-0.1376px** · `margin: 0` mb 0 → **12px**, summary 44 → **54.02px** |
+| both base rules re-injected AFTER the fix | title **unmoved** — (0,2,1) wins by specificity, not source order |
+| mutation | **10 mutations, 10 killed**, control green first AND last, all three files restored byte-identical |
+
+| Mutation | Result |
+|---|---|
+| CONTROL (unmutated), first AND last | GREEN both times (15/15) |
+| M1 — the five titles back to plain strings (the defect) | RED — 6 |
+| M2 — only four of the five promoted (the subtraction) | RED — 4 |
+| M3 — the whole `<summary>` wrapped in the heading | RED — 4 |
+| M10 — the heading wraps the chevron and the hint from inside | RED — 1 |
+| M4 — promoted to `h2`, i.e. level with the host | RED — 4 |
+| M5 — promoted to `h4`, level with the sub-blocks it contains | RED — 3 |
+| M6 — the CSS rule written as a bare class | RED — 3 |
+| M7 — the CSS rule drops `margin: 0` | RED — 1 |
+| M8 — the CSS rule appended after the media queries | RED — 1 |
+| M9 — the circled "i" promoted too (the boundary) | RED — 1 |
+
+The six tests that pass before AND after are the two premise guards (five folds
+render; the host is an `h2`, pinned from the file that writes it) and the four
+boundaries, and they are meant to: `Explain`'s discs stay unheaded, the `h4`
+sub-blocks keep their level and their quiet mono register, the engine picker
+keeps naming itself, and all five section sentences are still on screen — a
+regrouping, not a deletion.
+
+The two preview pages and the five probes (`probe-outline`, `probe-open`,
+`probe-offline`, `probe-sweep`, `geom`, `decl`, `mutate`) lived in the
+scratchpad or were deleted from `dashboard/`, the dev server was stopped, and
+`git status` shows only the six intended paths.
+
 ## 2026-11-13 — Friday · Performance and cost
 
 **Subject**: **every page load asked the console to FORCE a rebuild of its most

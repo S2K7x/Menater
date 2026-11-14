@@ -312,6 +312,27 @@ night, and one edit away from being wrong in the direction that hides one.
 
 Should return `[]` on every tab.
 
+### A mutation that ADDS rather than REPLACES tests nothing
+
+The fix that promoted Settings → Code analysis's five section titles was
+checked with ten mutations, and one came back GREEN: *the heading wraps the
+`<summary>` instead of sitting inside it*, the plausible wrong fix `CLARITY.md`
+§ 8 exists to refuse. The test was sound. The MUTATION was not: it added a
+wrapping heading while leaving the inner one in place, so `summary > h3` still
+matched and the harness reported a hole that was not there. Written faithfully
+— the inner heading removed, the wrapper added — it is red, and so is the
+subtler shape beside it (the heading wrapping the chevron and the scope hint
+from *inside* the summary, which is the one that makes the section announce
+itself as « How findings are routed Applied on the server »).
+
+Two rules, and the second is the general one. **A mutation has to be the
+alternative implementation, not the fix plus a defect** — otherwise it measures
+a screen nobody would ship. And **a surviving mutation is a claim about your
+test that is itself worth checking**: the first reading here would have sent a
+night rewriting an assertion that was already right. Same family as a contrast
+sampled during the theme cross-fade and as `getFullAXTree`'s unordered node
+list — a ruler that quietly measures something else.
+
 ### The squint test
 
 Blur the screen. The loudest thing must be the thing worth being loud. On
@@ -351,6 +372,7 @@ deletion.
 | A live region holding a LINE of the answer | A region holds the answer to a request, not a fact inside it. « The analysis service is not answering » is the answer; « the "verdicts" memory could not be picked up again » is one of twelve facts in a payload that arrived perfectly, and announcing one line of a report as if it were the reply is worse than announcing none — it sounds like the whole reply |
 | A live region inside a `Fold` | It can never speak. Probed in Chromium with CDP `Accessibility.getFullAXTree`: a closed `<details>`'s content is ABSENT from the accessibility tree, while `getBoundingClientRect()` still reports a height for it and `offsetParent` is not null — so both the usual rulers call it rendered. jsdom does not hide it either, so the property is asserted structurally (`closest('details')` is `null`), not by rendering. And a sentence that must be announced is usually a failure, which § 3 already keeps out of a fold |
 | A heading inside a `<summary>`, and the row above read as forbidding it | The row above is about a fold's CONTENT. The summary is the disclosure CONTROL, and a heading in it is exposed whether the fold is open or closed — probed in Chromium 153 on five candidate markups, both states, before the Guide's seventeen section titles were promoted. The two facts look contradictory and are not, so the reading that matters is *where in the fold*. One trap inside it: a `<summary>` takes phrasing content **or** one heading element, so wrapping the whole summary is the shape the HTML content model prefers — and the heading is then named « 01 The Alerts tab 9 points », after its number and its point count instead of after the section. The heading goes among the spans, and the summary's own role and accessible name do not move |
+| Which folds are SECTIONS, and which are not | The row above says a heading in a `<summary>` works. It does not say every fold wants one, and most do not: § 3 keeps *explanations* in folds, and an install script, a mapping table or a raw log is not a section of the screen. So after the Guide (C0.44) and the scan report (C0.45), the search that found the third instance — Settings → Code analysis, whose five folds ARE its five sections — was not « who calls `Fold` ». It is a structural predicate, and it is exact: **a `Fold` that is the immediate child of a `section.soc-panel` IS that panel**, so its summary is the panel's title and the section has no heading at all. Over `src/components/` that returns two more (the Health tab's published-workflows panel, the Lookup tab's source catalogue — ROADMAP § 7), and it leaves the nine folds that correctly carry no heading alone. The cost of getting it wrong in the other direction is measured: `Explain`'s circled "i" is a `<details>` too, so « a summary is a heading » makes every popover trigger on the screen a heading and buys noise with the same keystroke |
 | A HEADING that must not look like one | The level is the element and the size may stay exactly where it was — § 2 already says so, and the Guide is the case where none of the twenty-two sizes may move. `font: inherit` and `letter-spacing: inherit` take the title's type from the summary it sits in, `inherit` rather than the summary's numbers copied, because the responsive block changes that summary's size and a copy stops following it. A kicker that is also a heading needs exactly the two properties `.soc-kicker` does not declare — `font-weight` and `line-height` — and nothing else. Measured over 6 themes x 3 widths x 3 scenes: 396 differences before/after, every one of them the tag name |
 | An always-present region inside a flex container with a `gap` | It becomes an extra flex item, so the block grows by one gap when the slot is empty — and if the paragraph it wraps carried `flex-basis: 100%`, the wrapper takes its place in the line and the sentence moves. `.soc-actions`, `.vp-promote`, `.vp-fix-prompt`, `.vp-report-export` and `.vp-status-form` are all in this case: the region goes outside the row, or the change is measured and stated, never slipped in |
 | A control whose whole content is an `Icon` | `Icon` keeps a captionless glyph `aria-hidden` on purpose — that is what stops « New rule » being read as « check New rule ». So a button holding an icon and nothing else has **no accessible name at all**: it reaches assistive technology as « button ». Give it an `aria-label` from the catalogue, the way `Assistant.tsx` does; do **not** give the icon a `title`, which announces the drawing beside every word it decorates. And when the control repeats per row, the label names the ROW — twenty identical « Delete » buttons name nothing, and one of them is the one that deletes |

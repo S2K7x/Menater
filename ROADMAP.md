@@ -951,6 +951,33 @@ stayed exactly where it was.*
 **What R does not do.** It adds no per-user layout preference; that is C1.5. It
 leaves the eight facts of a triage row intact: the table got shorter, not poorer.
 
+### C0.46 ✅ — Settings → Code analysis: five sections, and a heading for none of them
+
+*This screen is six blocks. The first holds the engine picker and names itself
+(`ProviderSwitcher` renders an `h3`). The other five are `Fold`s — « How
+findings are routed », « What is already known », « How scans start », « What
+you see », « Status » — and a `Fold`'s title is whatever the call site puts in
+its `<summary>`, so those five were plain text. They are the five things
+somebody comes to this screen to find. Measured in Chromium 1243 on a
+throwaway preview page, the AX outline WALKED from the root, folds shut as four
+of the five are on arrival: `h1 SETTINGS` · `h2 CODE ANALYSIS` ·
+`h3 WHICH AI ENGINE?` — three headings for a 1,890 px settings screen. Named
+as a standing lead by the 2026-11-07 pass and deferred there because one
+subject is the rule.*
+
+| Point | Detail |
+|---|---|
+| **The outline was not missing a level, it was WRONG** | With every fold open: `h1 h2 h3 WHICH AI ENGINE? h4 ANALYSIS SPEED h4 CONFIDENCE THRESHOLDS h4 ENGINE ACCESS h4 SET A KEY h4 RESET`. With no level 3 of their own, the five sub-blocks attach to the last heading that exists — the engine picker — so the document states that the confidence thresholds and the reset button are parts of the engine selector. **A reader walking the headings was told something untrue, which a missing heading does not do.** That half is not in the 11-07 note, which had the shape and not the consequence |
+| **And on a fresh install the level is genuinely SKIPPED** | With the analysis service not answering, `providers` is null so the engine picker renders no `h3`, the cache fold is absent, and the Status fold **opens itself** because this product refuses to file a failure behind a silent fold. Measured: `h1 SETTINGS` · `h2 CODE ANALYSIS` · `h4 ENGINE ACCESS` · `h4 RESET`. `ENGINE ACCESS` names which engine key is missing, i.e. the thing the operator was just sent here to fix |
+| **Third instance of the same shape, and the grep that finds the next one** | C0.44 promoted the Guide's seventeen section titles, C0.45 the scan report's five findings. Both were written as fixes to a SCREEN, so *the mirror of a rule is not the rule* — and the search that finds the next one is **not** « who calls `Fold` »: most folds hold an explanation and are right to carry no heading. It is *which folds are sections* |
+| **The heading goes AMONG the summary, never around it** | `Fold` renders a chevron span, the title, then the scope hint. Wrapping the summary names the section « How findings are routed Applied on the server », after its scope label instead of after itself — C0.44 measured that on the Guide (« 01 The Alerts tab 9 points ») and `CLARITY.md` § 8 carries it. Two mutations carry it here: the whole summary wrapped, and the heading wrapping the chevron and the hint from inside |
+| **A fold title is a NAME, so it keeps the register it already had** | The summary already dresses it, and correctly: Archivo Black 13.76px, weight 400, line-height 22.016px, letter-spacing 0.8256px, uppercase. `.vp-embed h3` would impose weight 900, line-height 1.05 and `margin: 0 0 12px`; `.vp-settings-block h3` a 6px bottom margin. Three declarations give it back, **each measured by dropping it alone**: `font: inherit` weight 400 → 900 and line-height 22.016 → 14.448px · `letter-spacing: inherit` 0.8256 → -0.1376px · `margin: 0` bottom margin 0 → 12px, and the summary 44 → 54.02px |
+| **The parent is NAMED, and the measurement is what says so** | `.vp-embed h3` and `.vp-settings-block h3` are BOTH (0,1,1), so a bare `h3.vp-settings-fold-title` ties with them and wins only by sitting further down the sheet. Measured the way C0.45 prescribes — a copy of both base rules injected AFTER the candidate, i.e. what moving the rule up the file amounts to: the (0,2,1) form is **unmoved**. Sixth time this project has paid for that shape. The test claims it over EVERY selector naming the class, not over the one spelling this fix wrote: a second, bare declaration added later would tie again |
+| **Measured, not asserted — and nothing visual moved** | 6 themes × 3 widths (1280 / 375 / 320), the five titles' computed type and the summary's own box, plus the document width and the panel total: **90 title readings, 0 differences.** Panels 1,890.11 px at 1280, 2,033.61 at 375, 2,117.86 at 320 — identical before and after to the hundredth of a pixel. No horizontal overflow at any width, and the title's colour is unchanged on all six themes, so no new contrast question |
+| **The outline after** | `h1 SETTINGS` · `h2 CODE ANALYSIS` · `h3 WHICH AI ENGINE?` · `h3 HOW FINDINGS ARE ROUTED` + its two `h4` · `h3 WHAT IS ALREADY KNOWN` · `h3 HOW SCANS START` · `h3 WHAT YOU SEE` · `h3 STATUS` + its three `h4`. And the four sections name themselves **closed** too, because the heading is in the summary — the disclosure control, which is in the accessibility tree either way (`CLARITY.md` § 8, probed by C0.44) |
+| **The boundary, claimed by tests that pass BEFORE and after** | `Explain`'s circled "i" is a `<details>` too, so a fix written as « a summary is a heading » would make every popover trigger on this screen a heading and buy noise with the same keystroke. The discs are `.soc-info`; only `.soc-fold` is a section. The `h4` sub-blocks keep their level and their quiet mono register, the engine picker keeps naming itself, and all five sentences are still on screen — a regrouping, not a deletion |
+| **Unchanged** | No catalogue key, no colour, no token, no heading SIZE, no dependency, no server change. The render-blocking stylesheet is **byte-identical** (`index-DpyowbMH.css`, 62.42 kB, same hash) and the eager script too (449.47 kB): the whole cost is the deferred Code-tab sheet, 27.26 → 27.34 kB, paid by a tab nobody has opened. 15 tests, **9 red on unmodified code**, 2 premise guards and 4 boundaries green before AND after on purpose; **10 mutations, 10 killed**, control run first and again at the end |
+
 ### C0.45 ✅ — The scan report: five findings, and the only heading on it belonged to the empty state
 
 *The scan report is the longest screen this product renders, and one no sweep
@@ -3266,6 +3293,44 @@ therefore a policy number somebody has to choose against their own
 repositories, not one a night can invent: a number too low breaks the estimate
 it exists to protect, which is the *over-refusing a legal rule is a silent hole*
 trade this project has already paid for once.
+
+### Two more folds ARE their panel, so two more sections have no heading — found 2026-11-14
+
+Found by the sweep C0.46 owed itself, and left for a night of its own because
+it is two more screens and one subject is the rule.
+
+C0.46 promoted the five section titles on Settings → Code analysis. The search
+that finds the next instance is **not** « who calls `Fold` » — most folds hold
+an explanation and are right to carry no heading, which is `CLARITY.md` § 3 —
+it is *which folds are sections*. There is a structural predicate for that, and
+it is exact: **a `Fold` that is the immediate child of a `section.soc-panel` IS
+that panel**, so its summary is the panel's title and the section carries no
+heading at all.
+
+Over `src/components/`, that predicate returns exactly two:
+
+| Screen | Panel | What the summary says |
+|---|---|---|
+| Health | `HealthPanel.tsx:555` | the published-workflows list, with its count on the closed fold |
+| Lookup | `IntelPanel.tsx:657` | the source catalogue — *« 1 of 7 reachable »*, which `CLARITY.md` § 3 calls the most useful sentence on the screen for an install with no keys |
+
+Both are sections of their tab by construction, and neither is navigable. The
+other nine `Fold` call sites were read and are correctly unheaded: the install
+script and the mapping table (a procedure run once elsewhere, C0.25's own
+decision), the pull form's four advanced fields (a group of inputs inside a
+form, not a section), the rule test bench, the tunnel block, the incident
+card's raw log, chain, enrichment and hashes, the dismissed findings and the
+two explainer folds.
+
+**What makes this an entry rather than a diff**: the two sit on different tabs
+from each other, the level each should take depends on what already names its
+tab — Health's panels are `h2` under the page's `h1`, and the Lookup
+catalogue's neighbours would have to be read the same way — and `CLARITY.md`
+§ 7 is explicit that an outline is measured on the MOUNTED screen, which means
+two more browser mounts and two more before/after sweeps. The shape of the fix
+is known and already paid for three times (C0.44, C0.45, C0.46): the heading
+goes among the summary's spans, and the rule that gives its register back names
+its parent.
 
 ### `var(--accent)` as TEXT is measured by nothing, and it fails on two themes
 
