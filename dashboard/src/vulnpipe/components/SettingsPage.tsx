@@ -82,6 +82,50 @@ function Toggle({
   );
 }
 
+/**
+ * The title of one section of this screen.
+ *
+ * ============================================================================
+ * A SECTION IS A HEADING, AND THESE FIVE WERE NOT
+ *
+ * This screen is six blocks. The first holds the engine picker and names
+ * itself (`ProviderSwitcher` renders an `h3`). The other five are `Fold`s, and
+ * a `Fold`'s title is whatever the call site puts in its `<summary>` — so
+ * those five were plain text. They are the five things somebody comes to this
+ * screen to find.
+ *
+ * Measured in Chromium 1243, the accessibility tree WALKED from the root
+ * (`CLARITY.md` § 7: the flat node list is not in document order), with every
+ * fold open:
+ *
+ *     h1 SETTINGS / h2 CODE ANALYSIS / h3 WHICH AI ENGINE?
+ *     h4 ANALYSIS SPEED / h4 CONFIDENCE THRESHOLDS / h4 ENGINE ACCESS
+ *     h4 SET A KEY / h4 RESET
+ *
+ * That is not a heading MISSING, it is an outline that is WRONG: with no
+ * level 3 of their own the five sub-blocks attach to the last heading that
+ * exists — the engine picker — so the document states that the confidence
+ * thresholds and the reset button are parts of the engine selector. With the
+ * analysis service not answering, which is a fresh install and the state in
+ * which the Status fold opens ITSELF, it was `h1 h2 h4 h4`: a skipped level,
+ * on the screen somebody was just sent to.
+ *
+ * TWO THINGS NOT TO GET WRONG, both already paid for elsewhere.
+ *
+ * The heading goes INSIDE the `<summary>`, never around it: `Fold` renders a
+ * chevron, the title, then the scope hint, so wrapping the summary names the
+ * section « How findings are routed Applied on the server ». C0.44 measured
+ * that on the Guide.
+ *
+ * And a fold title is a NAME, so it keeps the display register it already
+ * had: `.vp-embed h3.vp-settings-fold-title` gives it back, with the parent
+ * NAMED because `.vp-embed h3` and `.vp-settings-block h3` are both (0,1,1).
+ * ============================================================================
+ */
+function SectionTitle({ children }: { children: string }) {
+  return <h3 className="vp-settings-fold-title">{children}</h3>;
+}
+
 /** Étiquette de portée : serveur (engage tout le monde) ou navigateur (moi). */
 function Scope({ kind }: { kind: 'server' | 'local' }) {
   const { t } = useI18n();
@@ -206,7 +250,7 @@ export function SettingsPage({
           {scanError && <p className="vp-provider-warning">{scanError}</p>}
         </Announce>
 
-        <Fold title={s.arbitrationTitle} hint={<Scope kind="server" />}>
+        <Fold title={<SectionTitle>{s.arbitrationTitle}</SectionTitle>} hint={<Scope kind="server" />}>
         <p className="vp-field-help">{s.arbitrationLede}</p>
 
         <Toggle
@@ -295,7 +339,7 @@ export function SettingsPage({
            l'échappatoire. */}
       {cache && (
         <section className="vp-settings-block">
-          <Fold title={s.cacheTitle} hint={<Scope kind="server" />}>
+          <Fold title={<SectionTitle>{s.cacheTitle}</SectionTitle>} hint={<Scope kind="server" />}>
           <p className="vp-field-help">
             {cache.persisted ? s.cachePersisted : s.cacheMemoryOnly}
           </p>
@@ -343,7 +387,7 @@ export function SettingsPage({
 
       {/* --- Défauts du lanceur ------------------------------------------------ */}
       <section className="vp-settings-block">
-        <Fold title={s.scanTitle} hint={<Scope kind="local" />}>
+        <Fold title={<SectionTitle>{s.scanTitle}</SectionTitle>} hint={<Scope kind="local" />}>
         <p className="vp-field-help">{s.scanLede}</p>
 
         <div className="vp-setting">
@@ -422,7 +466,7 @@ export function SettingsPage({
 
       {/* --- Confort de lecture ------------------------------------------------ */}
       <section className="vp-settings-block">
-        <Fold title={s.displayTitle} hint={<Scope kind="local" />}>
+        <Fold title={<SectionTitle>{s.displayTitle}</SectionTitle>} hint={<Scope kind="local" />}>
         <p className="vp-field-help">{s.displayLede}</p>
 
         <Toggle
@@ -479,7 +523,7 @@ export function SettingsPage({
           diagnostic pas encore rendu annoncait un probleme qui n'existait
           peut-etre pas — puis se refermait quand la reponse arrivait.
         */}
-        <Fold title={s.systemTitle} defaultOpen={health === 'offline'}>
+        <Fold title={<SectionTitle>{s.systemTitle}</SectionTitle>} defaultOpen={health === 'offline'}>
         <p className="vp-field-help">{s.systemLede}</p>
 
         <p className={`vp-health vp-health-${health}`}>
