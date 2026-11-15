@@ -282,23 +282,44 @@ const ADVISORY_FLOORS = [
     half: 'VulnPipe',
     root: '../',
     path: 'node_modules/hono',
-    // GHSA-5r4p-p66f-jhc7, `>= 4.12.4 < 4.13.11`: `serveStatic` decodes the
-    // request path twice, so middleware on a static path can be bypassed.
-    // This half's PRODUCTION tree, through the SDK's HTTP transport.
+    // `< 4.13.16`: GHSA-4m76-xfj5-7975 (`mount()` forwards a path that
+    // bypasses middleware scoped inside the mount prefix) and
+    // GHSA-46wx-v44x-9hh2 (`csrf()` does not check a request sent by hyperlink
+    // auditing, `text/ping`), on top of three whose own upper bound is 4.13.15
+    // — GHSA-h7mg-cq63-vhpq (RegExpRouter skips wildcard middleware for some
+    // route sets and for a path carrying an encoded line terminator),
+    // GHSA-4h7h-rv7c-7m2v (`validator('form')` skips `multipart/form-data`
+    // with extra parameters) and GHSA-3gg2-335m-rxc6 (the `css` helper does
+    // not escape a closing tag split across the template and an interpolated
+    // value). The floor is the HIGHEST of the five boundaries, not the one of
+    // whichever advisory `npm audit` happens to print first.
     //
-    // NOT reachable here: 0 loads on all five entry points this package
-    // imports, 1 on `server/streamableHttp.js` — the control — which it does
-    // not import. This package speaks stdio and serves no static file.
-    floor: '4.13.11',
+    // THIRD INSTANCE OF THE LIMITATION THIS LIST STATES, and like `ip-address`
+    // and `undici` before it the floor held perfectly: the tree never slid
+    // back below the 4.13.11 this row was opened at — GHSA-5r4p-p66f-jhc7,
+    // `serveStatic` decoding the request path twice, the advisory the sibling
+    // row below cites by name — and the package was vulnerable again anyway,
+    // because the next five were published ABOVE the boundary somebody had
+    // closed. A floor refuses a regression and cannot refuse a discovery.
+    //
+    // Arrives through @modelcontextprotocol/sdk's HTTP transport. NOT
+    // reachable here, re-measured on 4.13.18 rather than inherited: 0 loads on
+    // all five entry points this package imports, against 1 on
+    // `server/streamableHttp.js` — the control — which it does not import.
+    floor: '4.13.16',
   },
   {
     half: 'VulnPipe',
     root: '../',
     path: 'node_modules/@hono/node-server',
-    // GHSA-rmxm-3fg6-px4f, `>= 1.19.10 < 2.1.3`: `serveStatic` decodes the
-    // request path a SECOND time, so middleware mounted on a static path can
-    // be bypassed. This half's PRODUCTION tree, through the SDK's HTTP
-    // transport.
+    // `< 2.1.6`: GHSA-qv5m-9pm6-hqp3 (an unhandled `ECONNRESET` on the socket
+    // during an ASYNCHRONOUS WebSocket upgrade ends the process) and
+    // GHSA-jpvv-r467-5p4w (a backslash in the request path is parsed as a path
+    // separator, so path-based access control at a reverse proxy in front is
+    // bypassed) — on top of GHSA-rmxm-3fg6-px4f at `>= 1.19.10 < 2.1.3`, which
+    // this row was opened at: `serveStatic` decoding the request path a SECOND
+    // time, so middleware mounted on a static path can be bypassed. This
+    // half's PRODUCTION tree, through the SDK's HTTP transport.
     //
     // THE ROW ABOVE IS WHY THIS ONE EXISTS, AND IT IS THE LESSON. `hono` got a
     // floor for GHSA-5r4p-p66f-jhc7 — the same defect, in the same function
@@ -306,15 +327,24 @@ const ADVISORY_FLOORS = [
     // is the half that actually serves on Node, got none. The mirror of a rule
     // is not the rule, one package over.
     //
-    // NOT reachable here, measured rather than reasoned, same instrument and
-    // same controls as the rows above: 0 loads on all five entry points this
-    // package imports (`server/mcp.js`, `server/stdio.js`, `client/index.js`,
-    // `client/stdio.js`, `inMemory.js`), against 2 on
+    // NOT reachable here, re-measured on 2.1.8 rather than inherited, same
+    // instrument and same controls as the rows above: 0 loads on all five
+    // entry points this package imports (`server/mcp.js`, `server/stdio.js`,
+    // `client/index.js`, `client/stdio.js`, `inMemory.js`), against 2 on
     // `server/streamableHttp.js` — the control — which it does not import.
-    // And the vulnerable entry point is a SUBPATH, `@hono/node-server/serve-static`:
-    // even the control loads only `dist/index.mjs` and a constants chunk, so
-    // nothing in this tree reaches the function the advisory is about.
-    floor: '2.1.3',
+    //
+    // AND THE SECOND HALF OF THE OLD ARGUMENT HAS EXPIRED, which is why it is
+    // written out rather than carried over. Until tonight this row added that
+    // the vulnerable code sat behind a SUBPATH (`@hono/node-server/serve-static`)
+    // even the control does not load. That is still true of serve-static and
+    // says nothing about these two: the backslash one is in the request path
+    // the main entry parses, and the control's file-level load list is
+    // `dist/index.mjs`, a constants chunk and `hono/dist/helper/websocket/index.js`
+    // — i.e. the WebSocket helper the first advisory is about. The claim that
+    // holds is the one that was always the primary one: the package is not
+    // loaded here at all. A secondary argument is worth re-deriving per
+    // advisory, or it outlives the advisory it was true of.
+    floor: '2.1.6',
   },
   {
     half: 'VulnPipe',

@@ -4,6 +4,258 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-11-15 — Sunday · Maintenance and state of the project
+
+**Subject**: **two published advisories in VulnPipe's PRODUCTION tree, closed
+by a six-line lockfile refresh — and the third instance of this project's own
+written limitation: a floor refuses a regression and is structurally unable to
+refuse a discovery.** `hono` was floored at 4.13.11 on 11-01 and
+`@hono/node-server` at 2.1.3; both floors held perfectly, the tree never slid
+back, and both packages were vulnerable again anyway because the next seven
+advisories were published ABOVE the boundaries somebody had closed. That is
+exactly what `ip-address` and `undici` did on 10-25, and three instances is
+enough to stop arguing it.
+
+**Result**: PR opened on `claude/sleepy-volta-79a9io`. **Four files, 55
+insertions and 25 deletions**: `VulnPipe/package-lock.json` (six lines — two
+packages, version/resolved/integrity each), `VulnPipe/src/lockfile.test.ts`
+(the two floors raised, both rows rewritten), `ROADMAP.md` (§ 7's `npm audit`
+row, sixth data point) and `CLAUDE.md` (one dated correction to an existing
+row, one new traps row). **No manifest change, no production code, no CSS, no
+catalogue key, no SQL, no new test file and no new test** — the floors already
+existed as rows, so the console stays at 1955 and VulnPipe at 453. The console
+half was not touched at all and its bundle is therefore byte-identical.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-79a9io` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Sixty-seventh entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: the baseline on the
+designated branch at `f647bea` (= `origin/main`) was, after `npm ci` on both
+halves, typecheck **0 errors** on each, **1955 passed | 1 skipped** on the
+console and **453 passed** on VulnPipe, a clean build, and **no PR open**.
+Sunday's brief has three parts and the first decided it — `npm audit` reports
+**0 on the console and 2 moderate on VulnPipe**, both in the production tree,
+and this is the standing lead 11-14 left in as many words: *« VulnPipe's two
+moderate advisories (`@hono/node-server`, `hono`), a lockfile refresh and a
+Sunday's subject. »*
+
+**What the advisories are.** `hono` `< 4.13.16` — GHSA-4m76-xfj5-7975
+(`mount()` forwards a path that bypasses middleware scoped inside the mount
+prefix) and GHSA-46wx-v44x-9hh2 (`csrf()` does not check a request sent by
+hyperlink auditing, `text/ping`), plus three whose own upper bound is 4.13.15:
+GHSA-h7mg-cq63-vhpq (RegExpRouter skips wildcard middleware for some route sets
+and for a path carrying an encoded line terminator), GHSA-4h7h-rv7c-7m2v
+(`validator('form')` skips `multipart/form-data` with extra parameters) and
+GHSA-3gg2-335m-rxc6 (the `css` helper does not escape a closing tag split
+across the template and an interpolated value). `@hono/node-server` `< 2.1.6` —
+GHSA-qv5m-9pm6-hqp3 (an unhandled `ECONNRESET` during an ASYNCHRONOUS WebSocket
+upgrade ends the process) and GHSA-jpvv-r467-5p4w (a backslash in the request
+path is read as a path separator, so path-based access control at a reverse
+proxy in front is bypassed).
+
+**Neither is reachable here, and this product does not get to overstate a
+finding.** Both arrive through `@modelcontextprotocol/sdk`'s HTTP transport,
+which this half does not import — it speaks stdio. Measured, in one invocation
+with the controls, on the refreshed tree:
+
+```
+                              hono            @hono/node-server
+server/mcp.js                 0               0
+server/stdio.js               0               0
+client/index.js               0               0
+client/stdio.js               0               0
+inMemory.js                   0               0
+-- controls, NOT imported by this half --
+server/streamableHttp.js      1               2      <- the instrument works
+server/express.js             0               0
+server/auth/router.js         0               0
+```
+
+**What I learned that is written nowhere else.**
+
+1. **My reachability probe read ZERO EVERYWHERE first, and zero is the answer
+   the probe exists to produce.** The throwaway entry file was written to
+   `/tmp`, and Node resolves a bare specifier from the importing FILE's
+   directory — so it found no `@modelcontextprotocol/sdk` at all and the
+   instrument wrote `{"hono":{"esm":0,"cjs":0}}` for all eight entry points,
+   controls included. **Byte-identical to « not reachable », about a production
+   advisory.** What saved it is that the harness printed the child's exit code
+   beside the counts and ran the controls in the same invocation: eight zeros
+   and `rc=1` is a broken ruler, eight zeros and `rc=0` would have been a
+   finding I would have published. The control is the whole of what makes a
+   zero worth reading, and it has to be in the SAME run — not a number
+   remembered from a previous night's row. In `CLAUDE.md` now.
+2. **`grep -rl $'\x00'` matches every file, and it contradicted a documented
+   claim that was correct.** Checking `CLAUDE.md`'s dead-exports row — *« `grep`
+   prints no lines from a file holding a NUL byte: two here do »* — that command
+   returned about ninety files under `VulnPipe/src` and `scripts`, i.e. nearly
+   all of them, which reads as the documentation badly understating the problem.
+   Bash cannot hold a NUL byte in a word, so `$'\x00'` expands to the EMPTY
+   string and what runs is `grep -rl ''`. Counted in Python it is exactly
+   **two** (`src/master/arbitration-cache.ts`, `scripts/qa-stress.ts`) and the
+   row was right. Bash prints `warning: command substitution: ignored null byte
+   in input` for a `$(printf '\x00')` and says NOTHING for `$'\x00'`.
+3. **A reachability argument about WHICH FUNCTION is per-advisory; only the one
+   about the PACKAGE transfers.** The 11-01 row on `@hono/node-server` added a
+   second argument — the vulnerable code sits behind the
+   `@hono/node-server/serve-static` subpath, which even the control does not
+   load. True of GHSA-rmxm-3fg6-px4f and of nothing else: two weeks later, one
+   of the two new advisories is in the request path the main entry parses and
+   the other is the WebSocket upgrade, and a file-level probe of the control
+   loads `dist/index.mjs`, a constants chunk and
+   `hono/dist/helper/websocket/index.js` — i.e. it DOES load that helper. The
+   clause would have been carried forward as reassurance. Corrected in place,
+   dated, in `CLAUDE.md`.
+4. **npm 10.9.9 strips the ten `libc` blocks too**, so all three npm 10 patches
+   measured on this repository — 10.9.4, 10.9.7, 10.9.9 — delete them when they
+   rewrite the file. `npm update hono @hono/node-server --package-lock-only`
+   produced **6 insertions for 36 deletions**: the two version bumps plus 33
+   lines of `libc` metadata off the ten `@rolldown` / `lightningcss` optional
+   binaries. Restored by hand from a copy of the pre-refresh file, so the
+   committed diff is six lines; `npm ci` then installs from it, is byte-stable,
+   and reports 0 vulnerabilities.
+5. **The one skip is not an environment limitation, and I ran it.** The journal
+   has carried *« `MENATER_TEST_PG` never set, so `store-contract.test.ts`'s
+   Postgres half is still the one skip »* as a standing lead for weeks. This
+   container ships `/usr/lib/postgresql/16`, so I stood up **PostgreSQL 16.15**
+   on port 54329, applied `sql/`, and ran it: as the OWNER role the file is
+   **66 passed**, and the whole console suite is **1988 passed | 0 skipped**
+   (+33, which is exactly the Postgres half). As the application role
+   `n8n_soc` it is **33 failed | 33 passed** on `permission denied for table
+   soc_run` — § 7's row on that is correct to the number, re-measured rather
+   than inherited. The two store implementations still agree against real SQL.
+
+**Do not redo.**
+
+- **Do not run `npm audit fix`, and do not touch either manifest.** Both fixes
+  sit inside caret ranges the tree already declares (`hono ^4.11.4`,
+  `@hono/node-server ^1.19.9 || ^2.0.5`, both from the SDK), so this is a
+  lockfile refresh and nothing else — the same shape as every advisory row
+  before it.
+- **Do not grow the floor list expecting it to catch the next advisory.** Three
+  instances now say it cannot: a floor is a regression guard by construction.
+  The open decision in § 7 — a scheduled job that opens an issue instead of
+  failing a check — is the only thing that changes the sequence, and it is not
+  a night's to take.
+- **Do not refresh either lockfile under npm 10** without diffing for `libc`
+  afterwards; `npx npm@11.21.1` preserved them on 11-01.
+- **Do not believe a reachability zero without the control in the same run** —
+  learning 1.
+
+**State of the week (2026-11-09 → 2026-11-15).**
+
+| Night | Theme | Subject | Result |
+|---|---|---|---|
+| 11-09 | Feature | J0.6 — `repository` and `code_lead` on every alert row the assistant and the MCP catalogue return, the scan-derived half fenced | merged #97 |
+| 11-10 | Security | 03's system contract was never SENT to the model and its guardrails never RECEIVED the enrichment lists; the fence around the attacker's half was a tag the attacker could close | merged #98 |
+| 11-11 | Tests/QA | five screens turned a refused catalogue read into a claim about the server, one of them over an irreversible button | merged #99 |
+| 11-12 | Bugs/debt | the MCP `instructions` block named 0 of 14 tools and 5 of 8 prompts | merged #100 |
+| 11-13 | Performance | every page load forced a rebuild of the console's most expensive read | merged #101 |
+| 11-14 | Interface | five of Settings → Code analysis's six blocks had no heading, so the outline was wrong rather than incomplete | merged #102 |
+| 11-15 | Maintenance | this entry | PR open |
+
+**What moved.** Six PRs, all merged by CI, none reverted. The console suite went
+**1886 → 1955** (+69) and VulnPipe stayed at **453**; typecheck has been 0 on
+both halves every night. The week's shape is worth naming: **four of the six
+were a documented rule kept in one place and not in another** — the capability
+list stale on the second model-facing surface, the catch-to-empty-literal fixed
+at one call site of five, the heading promotion applied to one screen of three,
+the fence applied to the chat panel and not to the triage prompt. *The mirror of
+a rule is not the rule* is no longer a curiosity in the traps table; it is this
+project's dominant defect class, and the thing that found all four was a
+SUBTRACTION (« nothing anywhere does X ») rather than a list of call sites.
+
+**What is stuck, and why.**
+
+- **`npm audit` in CI** — six data points now (5, 0, 12, 1, 0, 2) and three
+  instances of the floor list's structural limit. **My recommendation, stated
+  plainly because this row has deferred it five times: a scheduled workflow,
+  weekly, that runs `npm audit` on both halves and opens an ISSUE on a non-zero
+  count.** It cannot block `automerge.yml` (which is the objection that killed
+  an `npm audit` step), it does not need the network from the suite (which is
+  the objection that killed asserting it), and it replaces « a Sunday happened
+  to look » with something that looks whether or not a Sunday does. The only
+  thing it needs from a human is permission to add a workflow file.
+- **Which npm major writes these lockfiles** — unchanged and now measured on
+  three npm 10 patches. npm 10 strips `libc`, npm 11/12 write it; CI runs
+  whatever the runner ships. A human picks one and pins CI to match.
+- **Design decisions, re-checked and unchanged**: the incident card's heading
+  outline, the unused `h1` size step, `var(--accent)` as a text colour (34 + 25
+  call sites; the honest answer is an `--accent-text` ROLE token across six
+  themes).
+- **Carried leads, re-checked tonight**: two more folds ARE their panel
+  (`HealthPanel.tsx:555`, `IntelPanel.tsx:657`); `RuleStore.history` is still
+  the only reader of `soc_tuning_rule_history` and still has no caller; the
+  ninety-odd French strings in `server/engine/`; the analysis relay's missing
+  deadline; a forwarded upstream 401 still sending an operator to the sign-in
+  screen; `.vp-action` at 36 px and `.vp-toggle` at 21 px against this
+  product's own 44 px target.
+
+**Found and NOT fixed, with why.**
+
+- **Every measurable claim in the four documents holds**, and I checked rather
+  than assumed: 14 tools / 8 prompts / 9 resources, 16 node types, 12 managed
+  credentials, 10 tabs, 10 Settings areas, 17 Guide sections in 4 groups, 9
+  injection scenarios, 6 themes, `DB_ENV`'s 6 variables, one production
+  dependency on the console half, 6 `.soc-lang-wide` call sites, 2 NUL-holding
+  files, 1955 and 453 tests. **188 path-shaped tokens in `CLAUDE.md` resolve**
+  except seven, and all seven are deliberate (gitignored `config.json` and
+  `keys.json`, two illustrative paths from the `persistent-cache` row, an API
+  URL, and `site-manifest.json`, which is a `static.test.ts` fixture name and
+  is correctly described as one). **One clause was stale** — learning 3 — and it
+  is corrected in place.
+- **`VulnPipe/scripts/qa-stress.ts`'s areas are in FRENCH** (`Entrées`,
+  `Chemins`, `Charge`, `Concurrence`, `Redémarrage`, `Corruption`,
+  `Rétention`, `Ressources`, `Croissance`, `SSE`) — 10 areas, matching
+  `CLAUDE.md`'s claim, and 43 `record()` call sites against the documented « 36
+  checks », which is a count that depends on loops and that I did not run. It is
+  an operator-facing script, so it belongs with the `server/engine/` French
+  strings rather than on its own; § 7's row on that is where it goes.
+- **The `n8n_soc` role half of § 7's store-contract row** is confirmed and left
+  alone: the repair is a truncation the owner performs or a per-test schema,
+  and both are bigger than a maintenance Sunday.
+
+**Verified** (Node 22.23.4, npm 10.9.9, PostgreSQL 16.15; every command run and
+its output read):
+
+| Command | Result |
+|---|---|
+| `npm ci` (both halves) | clean; console **0 vulnerabilities**, VulnPipe **2 moderate** |
+| baseline typecheck / test / build (console) | **0 errors**, **1955 passed \| 1 skipped**, clean |
+| baseline `npm test` (VulnPipe) | **453 passed** |
+| the two raised floors against the UNrefreshed lockfile | **2 failed \| 50 passed** — `hono` 4.13.13 < 4.13.16 and `@hono/node-server` 2.1.5 < 2.1.6, and no other row moved |
+| after the refresh | **52 passed**, `npm audit` **0 vulnerabilities** |
+| `npm ci` against the hand-edited lockfile | installs 4.13.18 / 2.1.8, lockfile unmodified afterwards, `libc` blocks **10** |
+| `npm test` / `npm run typecheck` (VulnPipe, after) | **453 passed**, **0 errors** |
+| `npm run typecheck` / `npm test` / `npm run build` (console, after) | **0 errors**, **1955 passed \| 1 skipped**, clean — bundle hashes unchanged |
+| reachability, before AND after, controls in the same run | 0 on all five entry points; **1 and 2** on `server/streamableHttp.js` |
+| file-level load list of the control | `@hono/node-server/dist/index.mjs`, `constants-BLSFu_RU.mjs`, `hono/dist/helper/websocket/index.js` |
+| `store-contract.test.ts` with `MENATER_TEST_PG` (owner role) | **66 passed** — the skip is not an environment limitation |
+| whole console suite with `MENATER_TEST_PG` | **1988 passed \| 0 skipped** (+33) |
+| same, as the application role `n8n_soc` | **33 failed \| 33 passed**, `permission denied for table soc_run` — § 7's number, confirmed |
+| mutation | **2 mutations, 2 killed**; control green FIRST and LAST, lockfile restored byte-identical |
+
+| Mutation | Result |
+|---|---|
+| CONTROL (refreshed lockfile), first AND last | GREEN both times (52/52) |
+| M1 — only `hono` reverted to 4.13.13 | RED — 1 |
+| M2 — only `@hono/node-server` reverted to 2.1.5 | RED — 1 |
+
+Each floor is independently load-bearing, which is what says the row raised for
+the sibling package is not riding on the other one. What a mutation cannot
+check is the floor VALUE: 4.13.16 and 2.1.6 are read off the advisories' own
+upper bounds, and a floor one patch lower would pass here and wave a vulnerable
+version through later — that is a judgement, stated in both row comments.
+
+The Postgres instance, the three probe files and the two lockfile copies lived
+in the scratchpad and the instance was stopped; the one entry file the probe
+needs inside `VulnPipe/` was deleted after each run, and `git status` shows only
+the four intended paths.
+
 ## 2026-11-14 — Saturday · Interface, clarity, accessibility
 
 **Subject**: **Settings → Code analysis is six blocks, and five of them had no
