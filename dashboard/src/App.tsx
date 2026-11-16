@@ -441,6 +441,16 @@ export function App() {
         setSelected(id);
         goTab('queue');
       },
+      /**
+       * J0.7 — the screen that stacks a system's alerts beside the flaws
+       * promoted out of its code. The scan report's one jump: naming a single
+       * case out of several would be a tie-break, and this is the view J0.4
+       * built for the question.
+       */
+      openSystems: () => {
+        setAlertsView('systems');
+        goTab('queue');
+      },
     }),
     [snapshot, goTab],
   );

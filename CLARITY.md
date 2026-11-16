@@ -258,6 +258,17 @@ reason it already held.
 A preview page is three files' worth of imports and Vite serves it at
 `/preview-x.html`. Delete it in the same session.
 
+**And mount it under the real wrappers, or it is a second implementation of
+the screen's chrome.** `vulnpipe/styles.css` carries no tokens and no globals
+— its bare element selectors are scoped under `.vp-embed` — and `.soc-app` is
+what holds the page gutter. A preview that rendered the scan report under a
+`<main>` of its own measured **472 px of document at a 320 px viewport, on all
+six themes, before AND after** the change being tested: an overflow that was
+closed months ago, in a page nobody ships. The tell is a number identical
+either side of a change that cannot have been neutral. `.soc-app > main >
+.vp-embed` for that half of the product, and check `window.innerWidth` is the
+width you asked for.
+
 ### A STATE you click into is a screen too
 
 The browser sweep behind `narrow-viewport.test.tsx` walked the ten tabs and
@@ -324,6 +335,14 @@ matched and the harness reported a hole that was not there. Written faithfully
 subtler shape beside it (the heading wrapping the chevron and the scope hint
 from *inside* the summary, which is the one that makes the section announce
 itself as « How findings are routed Applied on the server »).
+
+**A mutation that does not COLLECT is not a survivor either.** The same
+mistake with a louder number: folding the J0.7 block away by opening a
+`<details>` and leaving the `</div>` that closed it left the file unparseable,
+so one test file never ran — and the harness read `Tests 30 passed (30)` as a
+survival where the control reads `39`. Its own guard looked for the word
+`Tests` and found it. **Compare the total against the control**, and treat a
+difference as a broken mutation rather than a finding.
 
 Two rules, and the second is the general one. **A mutation has to be the
 alternative implementation, not the fix plus a defect** — otherwise it measures

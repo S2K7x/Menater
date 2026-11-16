@@ -4,6 +4,175 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-11-16 — Monday · Feature
+
+**Subject**: **J0.7 — the scan report could not say that the machine running
+this code already had an incident open.** J0.2 brings the incident next to the
+code; nothing did the reverse. The report now names the detections the window
+holds about the system the service inventory maps to the scanned target, how
+many are waiting on a human, and how many say the way in was the application
+itself — with one button, to J0.4's "By system" view.
+
+**Result**: PR opened on `claude/sleepy-volta-4pojan`. Nine production files
+and one new test file: `src/lib/types.ts` (`INVENTORY_MATCHES` moved here from
+`server/assistant/tools.ts`), `src/lib/systems.ts` (`codeIncidents` +
+`CodeIncidents` + `CodeIncidentsLink`), `src/i18n/dictionary.ts` (three keys),
+`src/vulnpipe/components/ReportView.tsx` (one local component, one prop),
+`src/vulnpipe/VulnPipeSection.tsx` (the memo and the prop),
+`src/App.tsx` (`openSystems` on the queue link),
+`src/vulnpipe/styles.css` (two rules), plus `server/assistant/tools.ts` and
+`code-half.test.ts` following the moved constant. **+15 tests** — 6 in
+`src/lib/systems.test.ts`, 9 in `src/vulnpipe/components/queue-on-this-code.test.tsx`
+— so the console goes 1955 → **1970**. VulnPipe untouched, 453. No route, no
+payload, no SQL, no dependency, no new colour or token, no heading.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-4pojan` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Sixty-eighth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: the baseline on the
+designated branch at `1a48e71` (= `origin/main`) was, after `npm ci`, typecheck
+**0 errors**, **1955 passed | 1 skipped**, a clean build, and **no PR open**.
+Monday is the feature night and J0 outranks everything, and J0.4 is the only
+item still `◐` — but its remaining half is *the rest of a scan report*, which
+the roadmap itself files as needing a store, a retention policy and a fourth
+copy of code excerpts: a subject, not a slice. So I looked for the J0 slice
+that needed no new data, and the one that was missing is the SYMMETRIC half of
+J0.2. Every other J0 item ships a jump; the one direction with none was
+code → incidents.
+
+**The hole, measured before a line was written.** A throwaway vitest probe,
+driving the real `resolveRepository` for the join and the real `tagAttack` /
+`codeLead` for the technique, with three cases in the window about a machine
+the inventory maps to the scanned target (two carrying T1190, one awaiting a
+human):
+
+```
+cases resolved to the target: 3      matched_on: host,host,host
+code_lead: T1190,T1190,null          awaiting: 1
+
+report mentions "Billing API":   0
+report mentions "T1190":         0
+report mentions "waiting on you": 0
+report mentions "triage queue":  2   <- both of them the promote control's own
+                                        label and its Explain label: the door OUT
+```
+
+**What I learned that is written nowhere else.**
+
+1. **A mutation came back GREEN because the suite never collected it, and my
+   harness's guard did not notice.** Eleven mutations, and *the whole block
+   folded away* read GREEN. It was not a survivor: the edit opened a
+   `<details>` and left the `</div>` that closed it, the file stopped parsing,
+   one of the three test files failed to COLLECT, and the summary line read
+   `Tests 30 passed (30)` against the control's `39`. The guard I had written —
+   *« if the word `Tests` is absent, report an ERROR »* — was satisfied,
+   because the word was there. **The NUMBER is the guard**: compare the total
+   against the control and call a difference a broken mutation. And the
+   mutation itself was the shape `CLARITY.md` § 7 already refuses — not the
+   alternative implementation but the fix plus a defect; written faithfully
+   (closing tag moved too) it is red. In `CLAUDE.md` and in `CLARITY.md` § 7.
+2. **My preview page measured 472 px of document at a 320 px viewport, before
+   AND after, on all six themes — and it was the page, not the product.**
+   `vulnpipe/styles.css` carries no tokens and no globals: its bare element
+   selectors are scoped under `.vp-embed`, and `.soc-app` is what holds the
+   page gutter. Rendering `<ReportView>` under a `<main>` of my own measured a
+   screen nobody ships, and the reading was an overflow C0.45 had already
+   closed. Under `.soc-app > main > .vp-embed` it is 320 / 375 / 1280 exactly.
+   **The tell is a number identical either side of a change that cannot have
+   been neutral.** Both rulers are the family this table already carries twice.
+3. **Playwright's `page.accessibility.snapshot()` is gone in 1.63.0** (the
+   version at `/opt/node-tools`), and `import { chromium } from 'playwright'`
+   does not resolve from a scratchpad script — the package is CommonJS and
+   lives outside the repository. `import pw from
+   '/opt/node-tools/node_modules/playwright/index.js'; const { chromium } = pw;`
+   works, and the AX tree comes from a CDP session
+   (`Accessibility.enable` → `getFullAXTree`), WALKED from `nodes[0]` through
+   `childIds` because the flat list is not in document order.
+4. **`INVENTORY_MATCHES` was declared on the server and the browser needed the
+   same fact.** `src/lib/types.ts` is already the one module both halves share
+   at RUNTIME, not only for types: `server/engine/cases.ts` imports
+   `CHAIN_STEPS` and `UNEXPECTED_ORPHANS` from it. So the move costs nothing
+   and `code-half.test.ts`'s union check — which reads `types.ts` — keeps
+   working unchanged, now reading the set from the file it reads the union out
+   of.
+
+**Do not redo.**
+
+- **Do not put the flaws half on this line.** A case opened by promoting a
+  finding is `scan_target`, and its `repository` comes out of `extensions`,
+  whose `target` the derived alert id does not cover (§ 7). Counting it lets
+  anything that can post an alert put a fabricated incident at the top of a
+  report about code somebody just typed. J0.5 already answers *is this finding
+  in the queue* for the findings of the run.
+- **Do not make the button open a case.** With several matches that is a
+  tie-break J0.3 refuses to have; with a list it becomes a second queue on the
+  report.
+- **Do not loosen the comparison.** A suffix rule, a `.git` tolerance or a
+  trailing-slash tolerance sends somebody to the wrong incident. A target typed
+  in another spelling matches nothing and the report says nothing, which is the
+  honest direction.
+- **Do not hand `codeIncidents` the report header's label.** `shortLabel()` cut
+  it to its last two path segments; the walk takes `ScanState.launchedTarget`.
+  A test claims the CALL SITE, because no rendering can tell a join that found
+  nothing from a join that was never asked.
+- **Do not restart J0.4's remaining half as a night's subject** without
+  deciding the store question first. It is not a slice.
+
+**Found and NOT fixed, with why.**
+
+- **`App.tsx`'s `openSystems` has no behavioural test.** Three lines beside the
+  identical, tested `openCase`; exercising it means driving the whole
+  application with a completed scan in the Code tab. The button and its wiring
+  ARE tested; which screen the press lands on is not. Said in the PR.
+- The carried leads are unchanged and were not re-checked tonight beyond the
+  baseline: the two folds that ARE their panel, `RuleStore.history`'s missing
+  caller, the French strings in `server/engine/`, the analysis relay's missing
+  deadline, the forwarded upstream 401, `.vp-action` at 36 px against this
+  product's own 44 px target — which this change reuses rather than widening,
+  because inventing a different height for one button is worse than one
+  consistent shortfall.
+
+**Verified** (Node 22.23.4, npm 10.9.9, Chromium 1243; every command run and
+its output read):
+
+| Command | Result |
+|---|---|
+| baseline typecheck / test / build (console) | **0 errors**, **1955 passed \| 1 skipped**, clean |
+| `gh api …/pulls` | no PR open |
+| RED check — `codeIncidents` stubbed to `return null` | **5 failed \| 16 passed** in `systems.test.ts` |
+| RED check — `<QueueOnThisCode>` not rendered | **5 failed \| 3 passed** in the new file |
+| typecheck / test / build after | **0 errors**, **1970 passed \| 1 skipped**, clean |
+| `npm test` (VulnPipe), `npm ci` | **453 passed**, 0 vulnerabilities |
+| mutation | **11 mutations, 11 killed**; control GREEN first AND last (39/39) |
+| screen, 6 themes × 320 / 375 / 1280 px | overflow **none** before and after; outline `h2 h3 h3` unchanged; 0 live regions; `--muted` on `--surface` **4.57 (punk) → 6.92 (acme)** |
+| cost | **+152.92 px at 1280**, +194.21 at 375, +214.85 at 320; **0 px** with nothing to say |
+| bundle | render-blocking CSS **byte-identical** (`index-DpyowbMH.css`, 62.42 kB); deferred CSS 27.34 → 27.58 kB; eager JS 449.47 → 450.46 kB (gzip 131.52 → 131.78); lazy JS 65.00 → 65.87 kB |
+
+| Mutation | Result |
+|---|---|
+| M1 — trust gate dropped (`scan_target` counted) | RED — 3 |
+| M2 — `leadAlerts` counts every matched alert | RED — 2 |
+| M3 — target compared raw, not the inventory way | RED — 1 |
+| M4 — an empty answer instead of `null` | RED — 6 |
+| M5 — the header label handed to the walk | RED — 1 |
+| M6 — the sentence put in a live region | RED — 1 |
+| M7 — waiting clause coloured instead of weighted | RED — 1 |
+| M8 — the whole thing folded away (closing tag moved too) | RED — 1 |
+| M9 — the jump wired to nothing | RED — 1 |
+| M10 — the system not named | RED — 2 |
+| M11 — `scan_target` added to the trusted set | RED — 4 |
+
+Two of the fifteen tests pass BEFORE and after on purpose: a report handed no
+queue renders exactly as it did before J0.7, and a window with inventory-matched
+alerts about ANOTHER piece of code says nothing. The probe, the preview page
+(`preview-j07.html` + `src/preview-j07.tsx`), the mutation harness and the
+measurement scripts lived in the scratchpad or were deleted in the same
+session; `git status` shows only the fourteen intended paths.
+
 ## 2026-11-15 — Sunday · Maintenance and state of the project
 
 **Subject**: **two published advisories in VulnPipe's PRODUCTION tree, closed
