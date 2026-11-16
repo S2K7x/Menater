@@ -73,10 +73,74 @@ application. Until it is done, the merge is visual.
 | ~~**J0.3**~~ ✅ | ~~**Service ↔ repository inventory**~~ — `server/inventory.ts`, a Settings sub-tab, resolved onto every case in `snapshot.ts`. Exact matching only, ambiguity refused at the save, and the incident card names the code running on the machine it is about — with a jump that opens the Code tab on that target | Without it neither link means anything: nothing said which repository runs on `10.12.4.31` |
 | **J0.4** ◐ | **Unified "what threatens this system" view** — one screen stacking, for one asset, its alerts and its flaws. **First slice delivered**: the Alerts tab's second view groups the window by system — the alerts about a machine beside the flaws promoted out of the code the inventory says runs on it. **Second slice**: each block's *Analyse this code* offer now carries J0.2's two sentences, so one of ten offers says why it is the one to press. What is NOT there is the rest of a scan report: this reads the queue, and says so | The question the user actually asks, which neither tab answers alone |
 | ~~**J0.5**~~ ✅ | ~~**The door opens both ways**~~ — a report finding that has already been promoted says so, names what the queue made of it, and carries a jump to the case. `src/lib/promoted.ts` reads it out of the window the browser already holds; `src/lib/finding-identity.ts` is the one definition of a flaw's identity, used by the server to derive the alert id and by the report to find the case. Nothing is stored | J0.1 forgot its own outcome the moment you left the report: twelve findings, three of them sent, and no way to tell which three |
+| ~~**J0.7**~~ ✅ | ~~**The report says what the queue already holds about this code**~~ — a scan report of code the service inventory maps to a machine names the detections in the window about that machine, how many are waiting on a human, and how many say the way in was the application itself. `codeIncidents` in `src/lib/systems.ts`, gated on `INVENTORY_MATCHES`, which moved to `src/lib/types.ts` so both halves read one declaration. The press goes to J0.4's "By system" view | The symmetric half of J0.2. It is what separates *a flaw somebody should fix this quarter* from *a flaw somebody is standing on* — measured before it was written: the rendered report named the service **0** times |
 | ~~**J0.6**~~ ✅ | ~~**The code half reaches the model**~~ — `repository` and `code_lead` travel on every assistant and MCP reply that carries an alert row, with the scan-derived half FENCED: `CaseRepository` has one shape and two origins, and only one of them is the operator's own table. `codeOf` + `INVENTORY_MATCHES` in `server/assistant/tools.ts`; `search_alerts` searches the service name too | Measured before it was written: across all fourteen tools, the number of replies naming the repository was **0**. The panel docked beside the incident card could not say what the card says |
 
 > **Order:** J0.3 before J0.1 and J0.2. Guessing the repository from an IP
 > address would be exactly the kind of invented default that § 8 forbids.
+
+### J0.7 ✅ — the door J0.2 opened, from the other side
+
+**What it is.** A scan report whose target is code the service inventory maps
+to a machine carries one line saying what the triage queue already holds about
+that machine — *« 3 alerts in the triage queue are about Billing API, which
+your service inventory maps to this code. **1 waiting on you.** 2 of them say
+the way in was the application itself (T1190 — Exploit Public-Facing
+Application). »* — and one button, which opens J0.4's "By system" view.
+`codeIncidents` in `src/lib/systems.ts` answers it out of the window the
+browser already holds; nothing is fetched, nothing is stored, no route and no
+payload.
+
+**Why it was missing, and how big the hole was.** J0.2 brings the incident next
+to the code: a case whose inferred technique says the way in was the
+application itself carries that reason on its card, beside the repository J0.3
+resolved. Nothing did the reverse, so somebody reading a report could not tell
+whether a machine running this code already had an incident open. Measured on
+the real pair — `resolveRepository` for the join, `tagAttack` plus `codeLead`
+for the technique — with three cases in the window about a machine the
+inventory maps to the scanned target, two of them carrying T1190 and one
+waiting on a human: the rendered report named the service **0** times, named
+the technique **0** times and said nothing about anything waiting. Its only two
+mentions of the queue were the promote control's own label and that control's
+`Explain` label, i.e. the door OUT.
+
+**Four decisions, and three of them are refusals.**
+
+| Decision | Why the other answer was worse |
+|---|---|
+| **Only the operator's own table may answer** | `CaseRepository` has one shape and two origins. A promoted finding's `repository` comes out of `extensions`, an open bag whose `target` the derived alert id does not cover — § 7's own entry, measured — so counting it would let anything that can post an alert put a fabricated incident at the top of a report about code somebody had just typed. The gate is `INVENTORY_MATCHES`, read from its declaration rather than spelled as *« not a scan target »*, so a fifth origin is excluded on the day it is added. That declaration MOVED to `src/lib/types.ts`: J0.6 needed it on the server to decide what travels to a model fenced, this needs the same fact in the browser, and a second spelling of one trust boundary is how the two start disagreeing |
+| **Only the positive claim is ever made** | A miss is `null` and the report says nothing — the rule J0.5 states in the same words. The window is bounded and the Code tab renders with no snapshot at all, so *« no alert is about this code »* would be a claim whose scope this screen cannot show. Green is earned |
+| **The press goes to a SCREEN, not to a case** | *Which alerts are about this code* is a question about a system, and J0.4's view is this product's answer to it. Opening one of several cases would be picking a side of a tie J0.3 refuses to have, and listing them here would make the report carry a second queue |
+| **The walk is given the string that was TYPED** | `ScanState.launchedTarget`, never `target.label`, which `shortLabel()` cut to its last two path segments for a header: matching on it would compare `src/billing-api` against an inventory line reading `/srv/src/billing-api`, find nothing, and say nothing — a feature that looks shipped and never fires. This repository has paid for a display string used as an input twice. The claim is on the CALL SITE, because no rendering can tell a join that found nothing from a join that was never asked |
+
+**What it costs, measured** (Chromium 1243, the real wrappers, transitions
+killed, six themes × 320 / 375 / 1280 px): **+152.92 px at 1280**, +194.21 at
+375, +214.85 at 320 — and **0 px** on a report with nothing to say, which is
+every install that has not filled the inventory in. No horizontal overflow at
+any width on any theme, the heading outline unchanged (`h2 h3 h3`), `--muted`
+on `--surface` at **4.57 (punk) to 6.92 (acme)**, no live region, and the
+render-blocking stylesheet **byte-identical** — the rule lives in the sheet
+that travels with the Code tab.
+
+**What it does NOT do, and is honest to say so:**
+
+- **It does not count flaws**, and that falls out of the same gate: a case
+  opened by promoting a finding is `scan_target`. J0.5 already answers *is
+  THIS finding in the queue* for the findings of this run, which is the
+  question a report can scope.
+- **It does not match loosely.** No suffix rule, no `.git` tolerance, no
+  trailing-slash tolerance: a target typed in another spelling than the
+  inventory line matches nothing and the report says nothing. That is J0.3's
+  refusal to guess which repository runs where, and a near-match is a guess.
+- **It says nothing about an install with no inventory**, by construction.
+- **The assistant and the MCP catalogue do not read this.** They read the join
+  it is built on, since J0.6; this is a function in the browser over data they
+  already have, like J0.4's grouping and J0.5's index.
+- **`App.tsx`'s `openSystems` callback has no behavioural test.** It is three
+  lines beside the identical, tested `openCase`, and exercising it means
+  driving the whole application with a completed scan in the Code tab. The
+  jump's existence and its wiring to the button ARE tested; which screen it
+  lands on is not.
 
 ### J0.6 ✅ — the surface that could not see either half
 
@@ -2777,6 +2841,15 @@ Why it was not fixed tonight, and what the options are:
 
 J0.6 needed none of those: on the model-facing surface the answer is the fence,
 which marks the string as foreign without discarding it.
+
+**J0.7 needed none of them either, and settled its own half by REFUSING the
+string.** The scan report's *« N alerts in the triage queue are about … »* line
+is built only out of cases whose `repository` the operator's own inventory
+answered (`INVENTORY_MATCHES`), so a case carrying a crafted `target` is not
+counted and the sentence is not reachable from it. That is not a fix for this
+entry — the card and the launcher prefill are unchanged, and both are still
+the browser half — but it is one more surface where the answer is *which
+origin wrote this string* rather than *what does it look like*.
 
 ### ~~The MCP instructions still describe seven getters~~ — closed 2026-11-12
 

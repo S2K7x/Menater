@@ -206,6 +206,38 @@ export interface Dictionary {
      */
     promotedAlready: (state: string) => string;
     promotedOpen: string;
+    /**
+     * J0.7 — what the triage queue already holds about the code this report
+     * is about.
+     *
+     * It names the SYSTEM, because that is what the operator cannot otherwise
+     * find: on an install whose inventory maps ten machines, "there are alerts
+     * about this code" without saying which system is a sentence nobody can
+     * act on. The name comes from the inventory entry an operator typed.
+     *
+     * The second half of the sentence says what made us say it — the service
+     * inventory, exact matching — for the same reason the incident card prints
+     * `matched_on`: a claim about which code an alert concerns is only
+     * checkable next to the thing that answered it.
+     */
+    inQueue: (alerts: number, system: string) => string;
+    /**
+     * How many of those alerts say the way in was the application itself.
+     *
+     * Deliberately NOT `console.systems.lead`, which is the same fact in a
+     * sentence beginning « N alerts here » — « here » has a referent inside a
+     * system block and none on a report that lists no alerts. What is shared
+     * is the FIELD it is built from (`code_lead`, read and never re-inferred),
+     * not the wording, and the count is scoped to the technique the sentence
+     * names, as it is there.
+     *
+     * The scope half (`caseView.repository.leadScope`) is not repeated here:
+     * it exists to qualify an offer to SCAN, and by this point the scan has
+     * happened and this screen is its answer.
+     */
+    inQueueLead: (alerts: number, techniqueId: string, technique: string) => string;
+    /** Says where the press goes: J0.4's screen, which stacks both halves. */
+    inQueueOpen: string;
     copyReport: string;
     downloadReport: string;
     exportHelp: string;
@@ -727,6 +759,15 @@ const EN: Dictionary = {
     promoteNotSent: (reason) => `${reason} Nothing entered the queue.`,
     promotedAlready: (state) => `Already in the triage queue, from this scan — ${state}.`,
     promotedOpen: 'Open the case',
+    inQueue: (alerts, system) =>
+      `${alerts === 1 ? '1 alert' : `${alerts} alerts`} in the triage queue `
+      + `${alerts === 1 ? 'is' : 'are'} about ${system}, which your service inventory `
+      + 'maps to this code.',
+    inQueueLead: (alerts, techniqueId, technique) => (alerts === 1
+      ? `1 of them says the way in was the application itself (${techniqueId} — ${technique}).`
+      : `${alerts} of them say the way in was the application itself `
+        + `(${techniqueId} — ${technique}).`),
+    inQueueOpen: 'See them by system',
     copyReport: 'Copy the report',
     downloadReport: 'Download',
     exportHelp:

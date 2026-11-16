@@ -282,7 +282,10 @@ vi.mock('../runtime.ts', async (importOriginal) => {
   };
 });
 
-const { TOOLS, INVENTORY_MATCHES } = await import('./tools.ts');
+const { TOOLS } = await import('./tools.ts');
+// The trust boundary moved to `src/lib/types.ts` with J0.7, because the
+// browser half needs the same fact. One declaration, read from its home.
+const { INVENTORY_MATCHES } = await import('../../src/lib/types.ts');
 const { invalidate } = await import('../snapshot.ts');
 
 afterAll(() => rmSync(SCRATCH, { recursive: true, force: true }));
@@ -510,8 +513,9 @@ describe('the code behind an alert, as the assistant and the MCP catalogue read 
    * `INVENTORY_MATCHES` decides which origins travel in the clear, and it is
    * written as the TRUSTED set so a fifth origin is fenced by default. That
    * only holds while somebody notices the fifth one exists, so the union is
-   * read out of `types.ts` and compared: a value added there fails here, and a
-   * value dropped from the set fails here too.
+   * read out of `types.ts` — where the set itself now lives — and compared: a
+   * value added to the union fails here, and a value dropped from the set
+   * fails here too.
    */
   it('accounts for every origin `CaseRepository` declares', () => {
     const types = readFileSync(

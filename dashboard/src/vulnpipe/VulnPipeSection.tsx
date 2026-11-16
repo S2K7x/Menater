@@ -57,6 +57,7 @@ import { useI18n } from '../i18n/context.tsx';
 import { Announce } from '../components/Guidance.tsx';
 import { stepTranslations, STEP_ORDER, type StepName } from './lib/step_translations.ts';
 import { promotedIndex, promotedLink, type PromotedLink } from '../lib/promoted.ts';
+import { codeIncidents, type CodeIncidentsLink } from '../lib/systems.ts';
 import type { AlertCase } from '../lib/types.ts';
 
 /**
@@ -118,6 +119,11 @@ export interface QueueLink {
   /** The run window the console already holds. Not re-fetched, not re-sent. */
   cases: AlertCase[];
   openCase: (alertId: string) => void;
+  /**
+   * J0.7 — the Alerts tab's "By system" view, which is where the alerts about
+   * one piece of code are stacked beside the flaws promoted out of it.
+   */
+  openSystems: () => void;
 }
 
 export function VulnPipeSection({
@@ -168,6 +174,27 @@ export function VulnPipeSection({
   const promoted: PromotedLink | null = index === null || queue === null
     ? null
     : promotedLink(index, queue.openCase);
+
+  /**
+   * J0.7 — what the queue already holds about the code this scan read.
+   *
+   * Memoised on the same two things the index is, and for the same reason:
+   * this tab is kept mounted, the snapshot is replaced on every poll, and the
+   * walk is over the whole window.
+   *
+   * `launchedTarget` and NOT the report header's label — `shortLabel()` keeps
+   * the last two path segments, so matching on it would compare
+   * `src/billing-api` against an inventory line reading `/srv/src/billing-api`
+   * and find nothing, silently. A display string is not an input, the rule
+   * `ScanState.launchedTarget` exists for.
+   */
+  const onThisCode = useMemo(
+    () => (queue === null ? null : codeIncidents(queue.cases, state.launchedTarget)),
+    [queue?.cases, state.launchedTarget],
+  );
+  const inQueue: CodeIncidentsLink | null = onThisCode === null || queue === null
+    ? null
+    : { incidents: onThisCode, openSystems: queue.openSystems };
 
   const running = state.phase === 'running';
   const busy = running || state.phase === 'estimating';
@@ -295,6 +322,12 @@ export function VulnPipeSection({
             holds; nothing is fetched and nothing is stored.
           */
           promoted={promoted}
+          /*
+            J0.7 — the detections the window already holds about this code, and
+            the jump to the screen that stacks them. The symmetric half of
+            J0.2: it says whether these findings are hypothetical.
+          */
+          inQueue={inQueue}
           /*
             La couverture vient du snapshot, pas du rapport : c'est le moteur
             qui sait combien d'adresses il a lues et combien lui ont echappe.

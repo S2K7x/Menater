@@ -20,6 +20,7 @@ import { findingKey, statusStats } from '../lib/finding-status.ts';
 import { Fold } from '../../components/Guidance.tsx';
 import { PromoteFinding } from './PromoteFinding.tsx';
 import type { PromotedLink } from '../../lib/promoted.ts';
+import type { CodeIncidentsLink } from '../../lib/systems.ts';
 import { Icon } from './Icon.tsx';
 
 export interface ReportFinding {
@@ -612,6 +613,76 @@ export function NothingFound({
   );
 }
 
+/**
+ * J0.7 — what the triage queue already holds about the code this report reads.
+ *
+ * ============================================================================
+ * THE SYMMETRIC HALF OF J0.2, AND IT DECIDES HOW URGENT THE FINDINGS ARE
+ *
+ * J0.2 brings the incident next to the code: a case whose inferred technique
+ * says the way in was the application itself carries that reason on its card.
+ * Nothing did the reverse, so somebody reading this report could not tell
+ * whether a machine running this code already had an incident open — which is
+ * the fact that separates *a flaw somebody should fix this quarter* from *a
+ * flaw somebody is standing on*.
+ *
+ * ============================================================================
+ * IT REPORTS, SO IT DOES NOT FOLD AND IT IS NOT ANNOUNCED
+ *
+ * A count and a state (`CLARITY.md` § 3), so it stays on screen. And it is
+ * standing state, re-derived from every snapshot poll — not the answer to
+ * anything just pressed — so it is in no live region: a permanent
+ * announcement is the permanent alarm this console refuses everywhere else.
+ *
+ * Quiet, too. The accent is reserved for *something is waiting for a human*
+ * (rule 4 of `styles.css`), and `var(--accent)` as a TEXT colour is measured
+ * by nothing and fails on two of the six themes — ROADMAP § 7 — so the clause
+ * that says how many are waiting is emphasised by WEIGHT and by nothing else.
+ *
+ * ============================================================================
+ * THE PRESS GOES TO THE SCREEN BUILT FOR THE QUESTION
+ *
+ * "Which alerts are about this code" is a question about a SYSTEM, and J0.4's
+ * "By system" view is this product's answer to it: the alerts on one side, the
+ * flaws promoted out of the code on the other. Opening one of several cases
+ * would be picking a side of a tie J0.3 refuses to have, and listing them here
+ * would make the report carry a second queue.
+ * ============================================================================
+ */
+function QueueOnThisCode({ inQueue }: { inQueue: CodeIncidentsLink | null }) {
+  const { t, c } = useI18n();
+  if (inQueue === null) return null;
+  const { incidents } = inQueue;
+
+  return (
+    <div className="vp-queue-link">
+      <p className="vp-queue-link-note">
+        {t.report.inQueue(incidents.alerts, incidents.services.join(' · '))}
+        {incidents.awaiting > 0 ? (
+          <>
+            {' '}
+            <strong>{c.systems.awaiting(incidents.awaiting)}.</strong>
+          </>
+        ) : null}
+        {incidents.lead !== null ? (
+          <>
+            {' '}
+            {t.report.inQueueLead(
+              incidents.leadAlerts,
+              incidents.lead.technique_id,
+              incidents.lead.technique,
+            )}
+          </>
+        ) : null}
+      </p>
+      <button type="button" className="vp-action" onClick={inQueue.openSystems}>
+        <Icon name="inbox" />
+        {t.report.inQueueOpen}
+      </button>
+    </div>
+  );
+}
+
 export function ReportView({
   report,
   target = null,
@@ -619,6 +690,7 @@ export function ReportView({
   scanRunId = null,
   scanTarget = null,
   promoted = null,
+  inQueue = null,
 }: {
   report: SecurityReport;
   /** Cible analysée, pour l'en-tête du rapport exporté. */
@@ -648,6 +720,12 @@ export function ReportView({
    * the queue, and then it claims nothing about it.
    */
   promoted?: PromotedLink | null;
+  /**
+   * J0.7 — the detections the window already holds about this code, and the
+   * way to the screen that stacks them. `null` means this report cannot reach
+   * the queue, or nothing in it is about this code, and then nothing is said.
+   */
+  inQueue?: CodeIncidentsLink | null;
 }) {
   const { t } = useI18n();
   const { scan_summary: summary, findings } = report;
@@ -679,6 +757,9 @@ export function ReportView({
             </span>
           </p>
         )}
+        {/* Before the per-finding statuses, because it changes how the
+            counters above are read rather than adding to them. */}
+        <QueueOnThisCode inQueue={inQueue} />
         <StatusSummary findings={report.findings} />
         <ReportExport report={report} meta={{ targetLabel: target?.label ?? null }} />
       </header>

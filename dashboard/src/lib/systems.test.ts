@@ -25,10 +25,13 @@
  * ============================================================================
  */
 
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
-import { groupBySystem } from './systems.ts';
-import type { AlertCase, Severity } from './types.ts';
+import { codeIncidents, groupBySystem } from './systems.ts';
+import { INVENTORY_MATCHES, type AlertCase, type Severity } from './types.ts';
 import { findingToAlert, scanRepository } from '../../server/findings.ts';
 import { resolveRepository } from '../../server/inventory.ts';
 import { tagAttack } from '../../server/engine/attack.ts';
@@ -358,5 +361,164 @@ describe('the lead that qualifies the offer', () => {
     expect(systems[0].repository).toBe('/srv/src/billing-api');
     expect(systems[0].lead).toBeNull();
     expect(systems[0].leadAlerts).toBe(0);
+  });
+});
+
+/**
+ * J0.7 — the same join, read from the CODE's side.
+ *
+ * ============================================================================
+ * WHAT THESE TESTS PROTECT
+ *
+ * `groupBySystem` answers *what threatens this machine*. This answers the
+ * question a scan report asks: *is the code I am reading running anywhere that
+ * already has an incident?* The join is the same one — `case.repository` — and
+ * three ways of answering it are wrong in a way nothing else would catch:
+ *
+ *  - **counting a promoted finding's case.** Its `repository` comes out of
+ *    `extensions`, and the derived alert id does not cover `target`, so a log
+ *    source would decide which code this report calls attacked. The gate is
+ *    `INVENTORY_MATCHES`, read from its declaration rather than spelled as
+ *    "not a scan target", so a fifth origin is excluded the day it exists;
+ *  - **matching loosely.** A suffix rule or a `.git` tolerance would send
+ *    somebody to the wrong incident; the comparison is the inventory's own,
+ *    which is J0.3's refusal to guess which repository runs where;
+ *  - **claiming an absence.** The window is bounded and this tab renders with
+ *    no snapshot at all, so a miss is `null` and the screen says nothing.
+ * ============================================================================
+ */
+describe('what the queue already holds about one piece of code', () => {
+  /** A detection built through the REAL pair, as the pipeline builds one. */
+  function exploited(over: Partial<AlertCase> = {}): AlertCase {
+    const c = detection(over);
+    const attack = tagAttack(c.rule_name, c.raw_log);
+    return { ...c, attack, code_lead: codeLead(attack) };
+  }
+
+  it('counts the detections about the system the inventory maps to this code', () => {
+    const incidents = codeIncidents(
+      [
+        detection({ alert_id: 'ALT-A', host: 'web-01', state: 'awaiting_approval' }),
+        detection({ alert_id: 'ALT-B', host: '10.12.4.31' }),
+        // Another machine entirely: the count is about this code, not the window.
+        detection({ alert_id: 'ALT-C', host: 'db-07' }),
+      ],
+      '/srv/src/billing-api',
+    );
+
+    expect(incidents).not.toBeNull();
+    expect(incidents!.alerts).toBe(2);
+    expect(incidents!.awaiting).toBe(1);
+    // The name the operator gave the system, so the sentence says WHICH one.
+    expect(incidents!.services).toEqual(['Billing API']);
+  });
+
+  it('names the technique that says the way in was this code, and counts only it', () => {
+    const incidents = codeIncidents(
+      [
+        exploited({
+          alert_id: 'ALT-A', host: 'web-01',
+          rule_name: 'Web attack: SQL injection attempt on /orders',
+        }),
+        exploited({
+          alert_id: 'ALT-B', host: 'web-01',
+          rule_name: 'Cross-site scripting attempt blocked',
+        }),
+        exploited({
+          alert_id: 'ALT-C', host: 'web-01',
+          rule_name: 'Brute force: 40 failed SSH logins',
+        }),
+      ],
+      '/srv/src/billing-api',
+    );
+
+    expect(incidents!.alerts).toBe(3);
+    expect(incidents!.lead).toEqual({
+      technique_id: 'T1190', technique: 'Exploit Public-Facing Application',
+    });
+    expect(incidents!.leadAlerts).toBe(2);
+  });
+
+  /**
+   * THE SECURITY CLAIM, and the reason this is not `groupBySystem`.
+   *
+   * The promoted case here is built by the real `findingToAlert` and stamped
+   * by the real `scanRepository`, so its `repository` is exactly the string
+   * the scan carried — which is the string an attacker can choose, because
+   * `findingAlertId` covers the flaw and the run and not the target. Counted,
+   * it would let anything that can post an alert put a fabricated incident at
+   * the top of a report about code somebody just typed.
+   */
+  it('refuses a case whose answer came out of `extensions`', () => {
+    const forged = promoted('/srv/src/billing-api');
+    expect(forged.repository?.matched_on).toBe('scan_target');
+    expect(forged.repository?.repository).toBe('/srv/src/billing-api');
+
+    expect(codeIncidents([forged], '/srv/src/billing-api')).toBeNull();
+
+    // And it does not merely drop it from an otherwise empty answer: a real
+    // detection beside it is still counted, and counted ONCE.
+    const mixed = codeIncidents(
+      [forged, detection({ alert_id: 'ALT-A', host: 'web-01' })],
+      '/srv/src/billing-api',
+    );
+    expect(mixed!.alerts).toBe(1);
+  });
+
+  /**
+   * The gate is DERIVED from the declaration, not from a list written tonight.
+   * Every origin `CaseRepository` declares is either in the trusted set or
+   * excluded, and this reads the union out of `types.ts` the way
+   * `code-half.test.ts` does — so a fifth value cannot be counted by default.
+   */
+  it('counts an origin exactly when `INVENTORY_MATCHES` holds it', () => {
+    const types = readFileSync(
+      fileURLToPath(new URL('./types.ts', import.meta.url)), 'utf8',
+    );
+    const line = /matched_on:\s*([^;]+);/.exec(types);
+    expect(line, 'the `matched_on` union is no longer where this test reads it').not.toBeNull();
+    const declared = [...line![1]!.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]!);
+    expect(declared.length).toBeGreaterThan(1);
+
+    for (const origin of declared) {
+      const one = kase({
+        alert_id: `ALT-${origin}`,
+        repository: {
+          service: 'Billing API',
+          repository: '/srv/src/billing-api',
+          matched_on: origin as 'host',
+          matched_value: 'web-01',
+        },
+      });
+      const answer = codeIncidents([one], '/srv/src/billing-api');
+      expect(
+        answer !== null,
+        `origin ${origin} should ${INVENTORY_MATCHES.has(origin) ? '' : 'not '}be counted`,
+      ).toBe(INVENTORY_MATCHES.has(origin));
+    }
+  });
+
+  it('matches the repository the way the inventory matches an identifier', () => {
+    // Case and surrounding space, and nothing else. The same claim
+    // `groupBySystem` makes above, on the string a LAUNCHER typed rather than
+    // on the one a resolver stored.
+    const one = detection({ alert_id: 'ALT-A', host: 'web-01' });
+    expect(codeIncidents([one], '  /SRV/src/Billing-API  ')!.alerts).toBe(1);
+    // No suffix rule, no `.git` tolerance: a near-match is a guess, and J0.3
+    // refuses to guess which repository runs where.
+    expect(codeIncidents([one], '/srv/src/billing-api.git')).toBeNull();
+    expect(codeIncidents([one], 'billing-api')).toBeNull();
+  });
+
+  it('claims nothing when nothing matches, and nothing without a target', () => {
+    const window = [
+      detection({ alert_id: 'ALT-A', host: 'web-01' }),
+      detection({ alert_id: 'ALT-B', host: 'db-07' }),
+    ];
+    // A non-empty window, so this is the discriminating case rather than an
+    // absent one.
+    expect(codeIncidents(window, '/srv/src/orders-api')).toBeNull();
+    expect(codeIncidents(window, null)).toBeNull();
+    expect(codeIncidents(window, '   ')).toBeNull();
   });
 });
