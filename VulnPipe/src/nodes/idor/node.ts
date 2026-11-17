@@ -13,6 +13,7 @@ import { McpAccessError } from '../shared/mcp-client.ts';
 import { LlmError, type LlmClient } from '../shared/llm/types.ts';
 import { buildIdorPrompt, idorSystemPrompt, IDOR_OUTPUT_SCHEMA } from './prompt.ts';
 import { verdictCacheKey, type VerdictCache } from '../shared/verdict-cache.ts';
+import { newFence } from '../../shared/untrusted.ts';
 import { scanForIdor, type ScannerReport } from './scanner.ts';
 
 export type DoubtReason = 'missing_context' | 'ambiguous_logic' | null;
@@ -262,7 +263,12 @@ export async function analyzeRouteForIdor(
   const system = idorSystemPrompt({ includeFewShot: options.includeFewShot, locale });
 
   const ask = async (context: ContextBundle): Promise<RawVerdict> => {
-    const user = buildIdorPrompt(context);
+    // One fence per CALL. The repository under analysis cannot carry a marker
+    // for a value that did not exist when it was committed — which is the
+    // whole property, and the reason this is not hoisted out of `ask`: the
+    // retry at a deeper context is a second call and gets a second marker.
+    const fence = newFence();
+    const user = buildIdorPrompt(context, fence);
 
     // La clé porte le prompt MOT POUR MOT — donc le code montré au modèle.
     // Corriger la route change la clé : le cache est incapable de resservir
@@ -273,6 +279,10 @@ export async function analyzeRouteForIdor(
           model: options.llm.model,
           system,
           user,
+          // Without this the per-call marker above would land in the hash and
+          // every key would be single-use: the cache would stop answering, and
+          // nothing would fail. See `shared/untrusted.ts`.
+          nonce: fence.nonce,
           // La forme attendue en sortie fait partie de la question : un
           // schéma retouché ne doit pas resservir un verdict d'hier auquel
           // manquerait un champ. Sans persistance ce n'était pas un risque —
