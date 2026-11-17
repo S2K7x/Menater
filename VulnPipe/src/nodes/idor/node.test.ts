@@ -43,6 +43,7 @@ import { createLlmClient } from '../shared/llm/factory.ts';
 import { analyzeRouteForIdor, couldDeepenHelp } from './node.ts';
 import { scanForIdor } from './scanner.ts';
 import { buildIdorPrompt, idorSystemPrompt } from './prompt.ts';
+import { newFence } from '../../shared/untrusted.ts';
 import { InMemoryVerdictCache } from '../shared/verdict-cache.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -376,7 +377,7 @@ describe('Prompt', () => {
       route: '/orders/:id',
       httpMethod: 'GET',
     });
-    const prompt = buildIdorPrompt(guarded);
+    const prompt = buildIdorPrompt(guarded, newFence());
 
     expect(prompt).toContain("[CONTRÔLE D'ACCÈS DÉCLARÉ]");
     // Sans cette ligne, le modèle ne peut pas distinguer protégé / non protégé.
@@ -384,12 +385,12 @@ describe('Prompt', () => {
   });
 
   it('signale explicitement une route sans aucun contrôle d accès', () => {
-    const prompt = buildIdorPrompt(resolveContext(index, { route: '/orders/:id', httpMethod: 'GET' }));
+    const prompt = buildIdorPrompt(resolveContext(index, { route: '/orders/:id', httpMethod: 'GET' }), newFence());
     expect(prompt).toContain("Aucun contrôle d'accès déclaré");
   });
 
   it('conserve les sections imposées par la spec, réparties selon leur nature', () => {
-    const user = buildIdorPrompt(resolveContext(index, { route: '/orders/:id', httpMethod: 'GET' }));
+    const user = buildIdorPrompt(resolveContext(index, { route: '/orders/:id', httpMethod: 'GET' }), newFence());
     const system = idorSystemPrompt();
 
     // Le message utilisateur ne porte que ce qui change d'une route à l'autre.
@@ -423,7 +424,7 @@ describe('Prompt', () => {
     // Les exemples vivent du côté INVARIANT du prompt depuis qu'il est
     // structuré pour être réutilisable en préfixe : ils ne changent pas d'une
     // route à l'autre, donc ils n'ont rien à faire dans le message utilisateur.
-    expect(buildIdorPrompt(bundle)).not.toContain('EXEMPLES DE CALIBRATION');
+    expect(buildIdorPrompt(bundle, newFence())).not.toContain('EXEMPLES DE CALIBRATION');
     expect(idorSystemPrompt()).not.toContain('EXEMPLES DE CALIBRATION');
     expect(idorSystemPrompt({ includeFewShot: true })).toContain('EXEMPLES DE CALIBRATION');
   });

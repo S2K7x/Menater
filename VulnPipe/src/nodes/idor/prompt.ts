@@ -30,6 +30,9 @@
 
 import { DEFAULT_LOCALE, type Locale } from '../../i18n/locale.ts';
 import { messages } from '../../i18n/messages.ts';
+import {
+  UNTRUSTED_CONTRACT, fenceNotice, fenceSource, type Fence,
+} from '../../shared/untrusted.ts';
 import type { JsonSchema } from '../shared/llm/types.ts';
 import type { ContextBundle, ResolvedCall, ResolvedGuard } from '../../mcp-server/resolver.ts';
 
@@ -250,7 +253,9 @@ ${options.includeFewShot ? FEW_SHOT : ''}
 Le champ "plain_language_summary" est obligatoire : ce qui peut arriver
 concrètement à l'utilisateur et comment corriger. Jamais de jargon SAST
 ("taint analysis", "sink", "sanitization").
-${messages(options.locale ?? DEFAULT_LOCALE).prompt.answerLanguage}`;
+${messages(options.locale ?? DEFAULT_LOCALE).prompt.answerLanguage}
+
+${UNTRUSTED_CONTRACT}`;
 }
 
 /**
@@ -262,19 +267,56 @@ ${messages(options.locale ?? DEFAULT_LOCALE).prompt.answerLanguage}`;
  * `options` reste accepté pour ne pas casser les appelants existants, mais
  * n'influence plus ce message : les deux réglages qu'il portait
  * (`includeFewShot`, `locale`) sont passés du côté invariant.
+ *
+ * ===========================================================================
+ * THE THREE SECTIONS ARE FENCED, THE HEADERS ARE NOT
+ *
+ * Every byte of the three section BODIES comes out of the repository under
+ * analysis — the snapshot, the file path, the route taken off a decorator
+ * argument, the class and method names the resolver walked. The HEADERS are
+ * ours. Measured before the fence existed: a handler whose body reproduced
+ * `[CONTRÔLE D'ACCÈS DÉCLARÉ]` and `[CALL GRAPH RÉSOLU - NIVEAU 1 À 2]` byte
+ * for byte, claiming a guard and an owner-filtered query, arrived here
+ * verbatim — its forged section printed BEFORE the real one that said no
+ * access control was declared. See `shared/untrusted.ts`.
+ *
+ * `fence` is a required argument and not an option with a default. A default
+ * would make the unfenced form reachable by forgetting one, which is the
+ * "fix that looks applied and is not" this repository refuses elsewhere; the
+ * caller mints one per call so that no committed file can carry a marker.
+ *
+ * The notice naming the nonce goes LAST, i.e. closest to the fences it
+ * describes, and in this message rather than in the invariant prefix — a
+ * per-call value in a cached prefix is the trap `idorSystemPrompt` above is
+ * written around.
+ * ===========================================================================
  */
-export function buildIdorPrompt(bundle: ContextBundle, _options: BuildPromptOptions = {}): string {
+export function buildIdorPrompt(
+  bundle: ContextBundle,
+  fence: Fence,
+  _options: BuildPromptOptions = {},
+): string {
   const endpoint = bundle.endpoint;
 
   return `### CONTEXTE DU CODE À ANALYSER
+${fenceNotice(fence)}
+
 [ROUTE ET HANDLER]
-Route : ${endpoint.http_method.toUpperCase()} ${endpoint.route}
+${fenceSource(
+    fence,
+    'route-and-handler',
+    `Route : ${endpoint.http_method.toUpperCase()} ${endpoint.route}
 Fichier : ${endpoint.source.file} (lignes ${endpoint.source.start_line}-${endpoint.source.end_line})
-${endpoint.code_snapshot}
+${endpoint.code_snapshot}`,
+  )}
 
 [CONTRÔLE D'ACCÈS DÉCLARÉ]
-${formatGuards(bundle.resolved_guards)}
+${fenceSource(fence, 'declared-access-control', formatGuards(bundle.resolved_guards))}
 
 [CALL GRAPH RÉSOLU - NIVEAU 1 À ${bundle.depth}]
-${formatCalls(bundle.resolved_calls) || 'Aucun appel de fonction dans ce handler.'}`;
+${fenceSource(
+    fence,
+    'resolved-call-graph',
+    formatCalls(bundle.resolved_calls) || 'Aucun appel de fonction dans ce handler.',
+  )}`;
 }

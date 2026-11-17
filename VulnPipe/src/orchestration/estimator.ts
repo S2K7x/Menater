@@ -39,6 +39,7 @@ import { buildRepoIndex, type RepoIndex } from '../mcp-server/repo-index.ts';
 import { createServer } from '../mcp-server/server.ts';
 import { connectInProcess, type ContextProvider, type ListedRoute } from '../nodes/shared/mcp-client.ts';
 import { buildIdorPrompt, IDOR_SYSTEM_PROMPT } from '../nodes/idor/prompt.ts';
+import { newFence } from '../shared/untrusted.ts';
 import { scanForIdor } from '../nodes/idor/scanner.ts';
 import { DEFAULT_INITIAL_DEPTH } from '../nodes/idor/node.ts';
 import { latencyFor, priceFor, type ModelPrice } from './pricing.ts';
@@ -166,7 +167,9 @@ async function probeRoutes(
         decidedByScanner += 1;
         continue;
       }
-      promptChars.push(IDOR_SYSTEM_PROMPT.length + buildIdorPrompt(bundle).length);
+      // A fence of its own: the markers are real characters the real call pays,
+      // so an estimate built without them would quote a prompt nobody sends.
+      promptChars.push(IDOR_SYSTEM_PROMPT.length + buildIdorPrompt(bundle, newFence()).length);
     } catch {
       // Une route dont le contexte est illisible sera de toute façon un échec
       // au scan : on la compte comme telle plutôt que de fausser la moyenne.

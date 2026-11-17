@@ -46,6 +46,7 @@
 import { createHash } from 'node:crypto';
 
 import { BoundedLru } from '../../shared/bounded-lru.ts';
+import { withoutFence } from '../../shared/untrusted.ts';
 
 /**
  * Plus haut que les 500 de l'arbitre : ce cache voit une entrée par ROUTE
@@ -76,6 +77,22 @@ export interface VerdictCacheKeyInput {
    * de la question posée, au même titre que le prompt.
    */
   schema?: unknown;
+  /**
+   * The fence nonce carried by `user`, so the markers can be taken back out.
+   *
+   * ADDED WITH THE FENCE, and it is the one thing that keeps this cache alive.
+   * `user` now wraps the repository's code in markers carrying a value minted
+   * per CALL — unforgeable, which is the point — so hashing the prompt as it
+   * is sent would make every key unique and this cache answer nothing, for
+   * ever, with nothing failing anywhere. It is exactly the bill the
+   * measurement at the top of this file quantifies, run backwards: a second
+   * scan over unchanged code would go from 0 billed calls back to 2.
+   *
+   * Absent = the prompt carries no fence and the key is taken over it as it
+   * stands. See `shared/untrusted.ts` § THE TRAP INSIDE THE FIX for why whole
+   * MARKERS are removed rather than the bare nonce.
+   */
+  nonce?: string;
 }
 
 /**
@@ -85,12 +102,14 @@ export interface VerdictCacheKeyInput {
  * deux découpages différents des mêmes caractères donneraient la même clé.
  */
 export function verdictCacheKey(input: VerdictCacheKeyInput): string {
+  const user =
+    input.nonce === undefined ? input.user : withoutFence(input.user, input.nonce);
   const parts = [
     'v2',
     input.provider,
     input.model,
     input.system,
-    input.user,
+    user,
     input.schema === undefined ? '' : JSON.stringify(input.schema),
   ];
   return createHash('sha256').update(parts.join(' ')).digest('hex');
