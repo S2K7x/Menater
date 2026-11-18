@@ -12,6 +12,12 @@
 # tree-sitter has no linux-arm64 binary and compiles from source against
 # Node 24's C++20 headers, and testing on a runtime you do not ship is a
 # green that vouches for nothing.
+#
+# AND THE SAME ARGUMENT APPLIES TO THE DATABASE. The console's suite holds 33
+# assertions that run only when `MENATER_TEST_PG` names one, and nothing set
+# it — so they ran nowhere, and the checks here were green over them. They are
+# wired below; `dashboard/server/ci-environment.test.ts` is what now fails if
+# any gated test loses the environment it is gated on.
 
 name: CI
 
@@ -35,6 +41,51 @@ jobs:
   console:
     name: Console — typecheck, tests, build
     runs-on: ubuntu-latest
+
+    # WHY THIS JOB HAS A DATABASE.
+    #
+    # `server/engine/store-contract.test.ts` runs the SAME 33 assertions
+    # against both `RunStore` implementations — `MemoryRunStore`, which every
+    # other test uses, and `PgRunStore`, which production uses — because
+    # nothing else keeps the two in step, and a divergence shows up only on
+    # the resume of an interrupted run, i.e. at the worst possible moment.
+    #
+    # Its Postgres half is gated on `MENATER_TEST_PG`, and that variable had
+    # never been set anywhere. The first time it ran (2026-11-15, by hand) it
+    # was RED on unmodified `main` and reported exactly the drift it exists to
+    # catch. Measured on this schema: 1970 passed | 1 skipped without a
+    # database, 2003 passed | 0 skipped with one, same wall clock — the file
+    # itself costs 370 ms.
+    #
+    # A container that does not come up cannot pass for an absent one: with
+    # `MENATER_TEST_PG` pointing at a closed port the file is 33 failed | 33
+    # passed, not skipped. Measured, not assumed.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: menater
+          POSTGRES_DB: menater_test
+          # No password in this file, and none needed: the container is
+          # reachable from this job alone and from nothing else. `trust` is
+          # what lets the connection string below carry no credential at all,
+          # so there is nothing here for a reader to mistake for a deployment
+          # secret.
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        # `-h localhost` is not decoration. The image runs a temporary server
+        # on the unix socket while it initialises, so a bare `pg_isready`
+        # answers "ready" before the real TCP listener exists — the trap this
+        # repository already paid for in `docker/init-db.sh` and wrote down in
+        # CLAUDE.md. Forcing TCP is what makes this health check mean what the
+        # schema step needs it to mean.
+        options: >-
+          --health-cmd "pg_isready -h localhost -U menater -d menater_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
     steps:
       - uses: actions/checkout@v4
 
@@ -55,8 +106,36 @@ jobs:
       - run: npm run typecheck
         working-directory: dashboard
 
+      # The engine's own tables, applied the way `docker/init-db.sh` applies
+      # them — `ON_ERROR_STOP=1` included, because without it psql carries on
+      # past a failure and the suite then runs against a half-applied schema.
+      #
+      # `app_password` is the one psql variable `sql/01-role-and-dedup.sql`
+      # needs, and it is generated here rather than written down. The role it
+      # sets it on is `n8n_soc`, the application role, which is NOT the role
+      # the suite connects as — see the step below.
+      - name: Apply the SQL schema
+        run: |
+          app_password=$(openssl rand -hex 16)
+          for file in sql/*.sql; do
+            echo "::group::$file"
+            psql -v ON_ERROR_STOP=1 -v "app_password=$app_password" \
+                 -h localhost -p 5432 -U menater -d menater_test -f "$file"
+            echo "::endgroup::"
+          done
+
+      # THE SUITE CONNECTS AS THE SCHEMA OWNER, AND THAT IS A LIMIT WORTH
+      # KNOWING. Running the contract as the application role gives 33 failed
+      # and `permission denied for table soc_run` — not a missing GRANT but
+      # `sql/10-engine.sql`'s deliberate `REVOKE DELETE`, which is the
+      # property that stops the application rewriting its own journal. The
+      # test's fixture clears `soc_run` between cases, so it needs a right
+      # production is right to refuse. Measured; ROADMAP § 7 holds the two
+      # ways to close it, and both are bigger than a connection string.
       - run: npm test
         working-directory: dashboard
+        env:
+          MENATER_TEST_PG: postgres://menater@localhost:5432/menater_test
 
       # The build is a third question, not a repeat of the other two: the
       # suite runs under vitest, and `tsc --noEmit` emits nothing. A Vite
@@ -82,11 +161,13 @@ jobs:
       - run: npm run typecheck
         working-directory: VulnPipe
 
-      # NOTE FOR ANYONE RUNNING THIS SUITE AS ROOT — it will fail one test,
-      # and the code is fine. `persistent-cache.test.ts` writes to
-      # /nonexistent-root/ to check that saveCache REPORTS a refusal rather
-      # than throwing; root is allowed to create that directory, so the write
-      # succeeds and the assertion is right to complain. The runner is not
-      # root, so this passes here. Measured, not assumed.
+      # This note used to warn that the suite fails one test when run as root,
+      # because `persistent-cache.test.ts` named `/nonexistent-root/` and root
+      # is allowed to create it. That was repaired — the refusal is provoked
+      # structurally now, by a path under a REGULAR FILE, which is `ENOTDIR`
+      # for every UID and stays inside the test's own temp directory. Measured
+      # as uid 0: 22 passed, 477 passed for the whole suite. The warning
+      # outlived the defect, and a stale note telling a reader a red run is
+      # "fine" is the one kind of comment that costs more than none.
       - run: npm test
         working-directory: VulnPipe

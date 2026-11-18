@@ -4,6 +4,194 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-11-18 — Wednesday · Tests and QA
+
+**Subject**: **33 assertions in this repository had never run anywhere, and
+every green check vouched for them.** `store-contract.test.ts` runs the SAME
+suite against both `RunStore` implementations because nothing else keeps them in
+step and a divergence shows up only on the resume of an interrupted run. Its
+Postgres half is gated on `MENATER_TEST_PG`, and that variable was named in
+exactly one place: the test that skips without it. Not locally, not in CI.
+
+**Result**: PR opened on `claude/sleepy-volta-c3yz43`. One new test file
+(`dashboard/server/ci-environment.test.ts`, **+5 tests**, **1 red on unmodified
+`ci.yml`**), one workflow file (`.github/workflows/ci.yml`: a `postgres:16`
+service, a schema step, the variable on the `npm test` step, and one stale note
+corrected), plus `CLAUDE.md` (one traps row, the suite counts) and `ROADMAP.md`
+(one § 9 clause closed, one § 9 row confirmed by measurement, one new § 7
+entry). No production code at all — `src/` and `server/` are untouched except
+for the new test file, and the built bundle is **byte-identical**
+(`index-DBjaBOOm.js` 450.46 kB, `index-DpyowbMH.css` 62.42 kB). No dependency,
+no CSS, no class name, no SQL change, no catalogue key, no route.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-c3yz43` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Seventieth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: the baseline on the
+designated branch at `07675c1` (= `origin/main`) was, after `npm ci` on both
+halves, typecheck **0 errors**, console **1970 passed | 1 skipped**, VulnPipe
+**477 passed**, a clean build, and **no PR open**. The subject is the sentence
+`CLAUDE.md`'s own traps table ends that row with — *« the lesson is not delete
+the gate: it is that a conditional test is a claim about an environment, and
+nothing was checking that claim was ever met »* — which is a specification for
+a test that did not exist, beside a limitation `ROADMAP` § 9 had written down in
+as many words: *« what is NOT fixed is that CI still does not run it, so the
+next drift is as invisible as this one was »*.
+
+**What I learned that is written nowhere else.**
+
+1. **There IS a docker CLIENT in the nightly container and NO daemon.**
+   `/var/run/docker.sock` is absent, so the real `postgres:16` image cannot be
+   started here and `POSTGRES_HOST_AUTH_METHOD=trust` could not be probed. A
+   full PostgreSQL **16.15** server IS installed (`/usr/lib/postgresql/16/bin`)
+   and that is what every measurement below runs against.
+2. **The session scratchpad's permissions were reset under a running server,
+   mid-pass.** The cluster died with `PANIC: could not open file
+   "…/pgdata/global/pg_control": Permission denied`, and the full-suite run
+   that followed reported **33 failed** — which reads exactly like a defect in
+   the change under test. It is a broken ruler, and the tell is this project's
+   own: a reading that contradicts one taken twenty minutes earlier on the same
+   code. Put the cluster under **`/var/tmp`** owned by `postgres`, not in the
+   scratchpad. (`initdb` also refuses to run as root, which § 9 already knew.)
+3. **The mutation pass found my guard committing the defect it was written to
+   close.** The first reader searched the console job's RAW text, and the
+   mutation that DELETES the `MENATER_TEST_PG` line from the `npm test` step
+   left it **GREEN** — because the paragraph above that job explains, at
+   length, that the suite is gated on `MENATER_TEST_PG`. *A test whose own
+   prose vouches for the strings it hunts* (the `n8n-removed.test.ts` lesson),
+   rebuilt inside the test closing that very family. YAML comments are stripped
+   now, and M1 is red.
+4. **That strip cannot be killed on its own**, which is the *two guards where
+   one suffices* rule arriving from an unusual direction: with the wiring
+   present the variable is found whether comments are stripped or not, so M9
+   was green until the strip's property was claimed on a LITERAL (a sample job
+   whose only mention of the variable is in a comment). The answer was to make
+   the first guard load-bearing, not to delete it.
+5. **Neither detector is enough, and the reason is what each shape does to the
+   run's output.** `describe.skip` in an `else` is REPORTED by vitest and names
+   no variable; `if (process.env.X) { describe(…) }` names one and prints no
+   `skipped` line at all — the tests are simply not there, which is strictly
+   worse. Measured over the 152 test files of both halves: each rule finds
+   exactly **one** file, the same one. M2 (a `describe.skip` elsewhere) and M6
+   (a bare `if` gate elsewhere) are each red on one rule only.
+6. **The application-role row of § 9 is confirmed, not inherited.** Driving the
+   real file as each role: owner **66 passed**, `n8n_soc` **33 failed | 33
+   passed**, `permission denied for table soc_run`. The cause is visible in
+   `sql/10-engine.sql:199` — a deliberate `REVOKE DELETE` on the three engine
+   tables, the property that stops the application rewriting its own journal —
+   against a fixture that clears `soc_run` between cases. So CI connects as the
+   owner, and the comment beside the connection string says what that does and
+   does not cover.
+7. **A removed service container cannot pass for an absent one, and that was
+   worth measuring before relying on it.** `MENATER_TEST_PG` pointing at a
+   closed port gives **33 failed | 33 passed**, not a skip. So the only silent
+   failure mode left is the VARIABLE going away, which is what the new file
+   refuses — and the guard deliberately does not try to assert that a database
+   answers.
+8. **One stale claim in the same file, and it is the kind that teaches someone
+   to discount a red.** The VulnPipe job carried a seven-line note saying the
+   suite *« will fail one test »* run as root, because
+   `persistent-cache.test.ts` named `/nonexistent-root/`. That was repaired —
+   the refusal is provoked structurally now, under a REGULAR FILE, `ENOTDIR`
+   for every UID. Measured as **uid 0**: 22 passed in that file, 477 for the
+   half. The warning outlived the defect by weeks.
+
+**Do not redo.**
+
+- **Do not put a Postgres cluster in the session scratchpad** — learning 2.
+- **Do not search `ci.yml` as raw text** — learning 3, M1 is red on it.
+- **Do not try to assert that the CI database ANSWERS** from inside the suite:
+  learning 7 says the gated half already does it, loudly, and a second ruler on
+  the same fact is the line no test can fail on.
+- **Do not add a `yaml` dependency to parse the workflow.** This half has one
+  production dependency and it is `pg`. The reader is a text strip and its
+  header says so, including the one shape it would mis-handle (a `#` inside a
+  quoted value, of which there are none).
+- **Do not commit a `POSTGRES_PASSWORD`.** `trust` is the documented way to omit
+  it, the container is reachable from one job and nothing else, and the
+  connection string then carries no credential — which also keeps GitGuardian,
+  one of this repository's own checks, out of the way.
+- **Do not widen the guard to a third gate shape on speculation** — § 7 says
+  why: a rule written for a state that cannot occur is the dead code that looks
+  load-bearing.
+
+**Found and NOT fixed, with why.**
+
+- **Two CI facts are read off documentation rather than probed** — learning 1.
+  `POSTGRES_HOST_AUTH_METHOD=trust` and `psql` being present on
+  `ubuntu-latest`. Both fail loudly if wrong, and the PR's own first CI run is
+  the verification. In § 7.
+- **`themes.test.ts`'s focus-ring sweep was audited and is sound.** It is a
+  negative assertion (`expect(offenders).toEqual([])`) over a corpus derived by
+  regex from four stylesheets, i.e. the shape that goes vacuous when the ruler
+  under-reads. Measured: it sees **19 of 19** `:focus` blocks. No floor on the
+  corpus, so a future reformat could silently empty it — a one-line
+  improvement, and not tonight's subject.
+- **`pipeline.test.ts`'s per-node loops have no floor either**: `n.type === 'if'`
+  and `n.type === 'switch'` are literals, so renaming a node type in the engine
+  would make *« câble les deux ports de chaque `if` »* pass over every unwired
+  branch. Hypothetical (a rename is a refactor somebody notices) and listed
+  rather than fixed.
+- **Four fixed real-timer sleeps in `app-forced-reload.test.tsx`** (60/60/60/80
+  ms) and one in `app-routing.test.tsx` (40 ms), each followed by a NEGATIVE
+  assertion — the 11-04 shape, where read early a claim cannot tell *did not
+  happen* from *has not happened yet*. The defect path is microtask-driven, so
+  60 ms is generous today; it is a wall-clock budget on a loaded machine and
+  worth converting to a settle rather than a sleep. Not driven to a failure
+  tonight, so not claimed as a bug.
+- **Standing leads, re-checked and unchanged**: `RuleStore.history` (still the
+  sharpest non-J0 item); the § 7 human decisions; `schemas/` and `slack/` still
+  at the repository root; the ninety-odd French strings in `server/engine/`;
+  `var(--accent)` as text; the relay's deadline; a forwarded upstream 401 still
+  sending an operator to the sign-in screen; the unauthenticated scan target of
+  11-09.
+
+**Verified** (Node 22.23.4, npm 10.9.9, PostgreSQL 16.15; every command run and
+its output read):
+
+| Command | Result |
+|---|---|
+| `npm ci` (both halves) | clean |
+| baseline typecheck / test / build (console) | **0 errors**, **1970 passed \| 1 skipped**, clean |
+| baseline `npm test` (VulnPipe) | **477 passed** |
+| the new file against unmodified `ci.yml` | **1 failed \| 3 passed** — on the claim that was missing |
+| `npm run typecheck` (after) | **0 errors** |
+| `npm test` (after, no database — a fresh clone) | **1975 passed \| 1 skipped** (+5), 130 files |
+| `npm test` (after, `MENATER_TEST_PG` set — what CI does) | **2008 passed \| 0 skipped**, 30.26 s against 29.93 s |
+| `store-contract.test.ts` alone, with a database | **66 passed**, 370 ms |
+| same, variable set at a CLOSED port | **33 failed \| 33 passed** — not a skip |
+| same, as the application role `n8n_soc` | **33 failed \| 33 passed**, `permission denied for table soc_run` |
+| `sql/*.sql` with `ON_ERROR_STOP=1` on a virgin database | applies clean, **14 tables** |
+| `pg_isready -h localhost -U menater -d menater_test` | `accepting connections`, exit 0 |
+| `persistent-cache.test.ts` as **uid 0** | **22 passed** — the CI note's claim is false |
+| `npm run build` (after) | clean — `index-DBjaBOOm.js` 450.46 kB, `index-DpyowbMH.css` 62.42 kB, **both unchanged from the baseline** |
+| `npm test` (VulnPipe, after) | **477 passed** — untouched, run anyway |
+| mutation | **7 mutations, 7 killed**; control green FIRST and LAST |
+
+| Mutation | Result |
+|---|---|
+| CONTROL (unmutated), first AND last | GREEN both times (5/5) |
+| M1 — the `npm test` step loses `MENATER_TEST_PG` | RED — 1 *(green before the YAML comment strip)* |
+| M2 — a `describe.skip` appears in another test file | RED — 1 |
+| M3 — the variable is named, but in the `vulnpipe` job | RED — 1 |
+| M4 — `GATED` loses its only entry | RED — 2 |
+| M6 — a bare `if` gate, which prints no `skipped` line | RED — 1 |
+| M7 — the entry names a variable nothing reads | RED — 2 |
+| M9 — the YAML comment strip is removed | RED — 1 *(green until its property was claimed on a literal)* |
+
+M4 collects 3 cases rather than 5, and that is expected rather than a broken
+mutation: removing the table's only entry removes two `it.each` cases. The
+assertion that `GATED` is non-empty is what fires, which is the point of having
+it.
+
+No model key and no network egress were needed. The cluster, the probes and the
+mutation harness lived in `/var/tmp` and the scratchpad and are **deleted**;
+`git status` shows only the five intended paths.
+
 ## 2026-11-17 — Tuesday · Security
 
 **Subject**: **the half of this product whose whole premise is reading code
