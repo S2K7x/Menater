@@ -2796,26 +2796,79 @@ Three ways to close it, and each is a decision rather than a repair:
 - **Refusing a route carrying a control character at the indexer**, which is a
   decision about what this engine will index, not about prompts.
 
-### The scan estimate counts a system prompt 32 times smaller than the one sent — found 2026-11-17
+### ~~The scan estimate priced a system prompt 26 times smaller than the one sent~~ — closed 2026-11-19
 
-Pre-existing, and V5.1 makes the absolute error bigger, so it is written down
-here rather than fixed in the same change: a quoted price is a user-facing
-number and moving it belongs in its own before/after.
+Raised on 2026-11-17 and deliberately left: *« a quoted price is a user-facing
+number and moving it belongs in its own before/after »*. This is that
+before/after.
 
-`estimateScan`'s probe prices a call as
-`IDOR_SYSTEM_PROMPT.length + buildIdorPrompt(bundle, newFence()).length`.
-`IDOR_SYSTEM_PROMPT` is the two-line ROLE — **103 characters** — while what
-`node.ts` actually sends is `idorSystemPrompt()`, **1,836 characters before
-V5.1 and 3,318 after** (4,111 with the few-shot examples on). So the estimate
-has always omitted the whole directive block, the calibration grid, the
-coupling rule and the output format, and now omits the fencing contract too:
-about **800 tokens per call unpriced**, against a user message of ~330.
+`estimateScan`'s probe priced a call as
+`IDOR_SYSTEM_PROMPT.length + buildIdorPrompt(bundle, newFence()).length`, and
+`IDOR_SYSTEM_PROMPT` is the two-line ROLE while what `nodes/idor/node.ts`
+sends as its system turn is `idorSystemPrompt(...)`. So the quote omitted the
+directive block, the calibration grid, the coupling rule, the output format and
+the fencing contract — everything the model is actually told.
 
-The fix is one identifier. What stops it being a one-line change is that it
-moves the number an operator reads before paying for a scan, and
-`CLAUDE.md`'s own row on `estimateScan` is about exactly that: *an estimate
-that is wrong talks people out of an affordable scan*. Here it is wrong in the
-reassuring direction, which is the one this product refuses everywhere else.
+**Two of this entry's own numbers were wrong, and nobody had run them.**
+Measured: the role line is **128 characters** (134 bytes — the accents are why
+`wc -c` disagrees), not 103, so the ratio is **25.9x**, not 32. The 3,318
+figure for the whole system turn was right. Unpriced per billed call:
+**3,190 characters, ~798 tokens.** A character count asserted in prose is a
+measurement nobody took.
+
+**Before and after, on the real estimator over `nodes/idor/__fixtures__/repo`,
+at `VULNPIPE_PRICE_GEMINI=0.30/2.50` and `VULNPIPE_PRICE_ANTHROPIC=3/15`:**
+
+| scan | input tokens | quoted cost |
+|---|---|---|
+| fixture, 4 routes / 2 billed | 941 → **3,571** (x3.79) | $0.0037-$0.0183 → **$0.0041-$0.0219** |
+| 400 routes / 400 billed | 136,260 → **517,220** (x3.80) | $1.3187-$1.6110 → **$1.5387-$1.8931** |
+
+The dollars move far less than the tokens, and that is worth knowing rather
+than hiding: at this provider pair the price is dominated by OUTPUT tokens
+($2.50 and $15 per Mtok against $0.30 and $3), so a 3.8x correction on input
+is +17% on the bill. On an install whose detector runs on a model priced
+symmetrically the share is much larger — which is the argument for pricing what
+is sent rather than for calling the error small.
+
+**The fix is the one identifier this entry predicted**, plus the `locale`
+threaded into the probe (the system turn's last line is the answer-language
+instruction, so its length depends on it) and the string hoisted out of the
+loop, as `node.ts` hoists it. `includeFewShot` is deliberately NOT threaded: no
+production caller sets it, so pricing it would be a guess about a state this
+engine cannot reach.
+
+**How the guard reads the priced prompt back.** `ScanEstimate` publishes
+`tokens.input` for the whole scan, and that total also carries the arbitration
+margin — a declared approximation. Asserting the total against a formula would
+make the test a copy of the estimator's arithmetic, failing when the margin is
+retuned and still not being exact. So the per-call figure is obtained by
+DIFFERENCE: quote the same route once, then twice, and the two totals differ by
+exactly one detection call, because the arbitration term is 1 in both
+(`max(round(n * 0.15), 1)`) and the measured prompt is the same route's. That
+difference is compared for EQUALITY against the prompt the node would really
+build. No constant of the estimator's appears in the test.
+
+Six mutations, six killed, control green first and last: the fragment restored,
+the system turn priced twice, each half priced alone, the fence dropped, and the
+few-shot variant nobody sends.
+
+**What stays open.**
+
+- **The arbitration half is still modelled, not measured.** It is priced as one
+  call per pending finding at 1.3x the measured route prompt, while
+  `master/claude-client.ts` sends **one** call for the whole batch, with its own
+  system prompt — measured at **3,406 characters (~852 tokens)**, which is why
+  substituting the detection system turn into that 1.3x is not a new error
+  tonight: the two blocks are within 3% of each other. The real shape is
+  `one arbitration system prompt + one block per finding`, and changing it moves
+  both the quoted duration (which treats arbitration as N serial calls) and the
+  quoted price. That is a modelling decision with its own before/after, not a
+  repair.
+- **The guard is exact on the detection prompt and silent on that model.** The
+  difference trick reads the per-call figure; nothing here claims the
+  arbitration term is right, and the test says so rather than implying a
+  coverage it does not have.
 
 ### A wrong SHAPE is reported as the model provider being unreachable — found 2026-11-10
 

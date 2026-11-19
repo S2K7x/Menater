@@ -38,7 +38,7 @@
 import { buildRepoIndex, type RepoIndex } from '../mcp-server/repo-index.ts';
 import { createServer } from '../mcp-server/server.ts';
 import { connectInProcess, type ContextProvider, type ListedRoute } from '../nodes/shared/mcp-client.ts';
-import { buildIdorPrompt, IDOR_SYSTEM_PROMPT } from '../nodes/idor/prompt.ts';
+import { buildIdorPrompt, idorSystemPrompt } from '../nodes/idor/prompt.ts';
 import { newFence } from '../shared/untrusted.ts';
 import { scanForIdor } from '../nodes/idor/scanner.ts';
 import { DEFAULT_INITIAL_DEPTH } from '../nodes/idor/node.ts';
@@ -149,12 +149,19 @@ export interface EstimateInput {
  */
 async function probeRoutes(
   routes: ListedRoute[],
-  provider: ContextProvider
+  provider: ContextProvider,
+  locale: Locale
 ): Promise<{ promptChars: number[]; decidedByScanner: number; probed: number; failures: number }> {
   const sample = routes.slice(0, SAMPLE_LIMIT);
   const promptChars: number[] = [];
   let decidedByScanner = 0;
   let failures = 0;
+
+  // Hoisted for the reason `node.ts` hoists it: it is the same string for
+  // every route of a scan. `includeFewShot` is deliberately not threaded —
+  // no production caller sets it, so pricing it would be a guess about a
+  // state this engine cannot reach.
+  const systemChars = idorSystemPrompt({ locale }).length;
 
   for (const route of sample) {
     try {
@@ -167,9 +174,15 @@ async function probeRoutes(
         decidedByScanner += 1;
         continue;
       }
+      // Both halves of the call, as `nodes/idor/node.ts` sends them: the
+      // system turn built by `idorSystemPrompt` and the user message built by
+      // `buildIdorPrompt`. NOT `IDOR_SYSTEM_PROMPT`, which is the two-line
+      // role that system turn OPENS with — 128 characters of 3,318, so
+      // pricing the fragment quoted every billed call ~798 tokens short.
+      //
       // A fence of its own: the markers are real characters the real call pays,
       // so an estimate built without them would quote a prompt nobody sends.
-      promptChars.push(IDOR_SYSTEM_PROMPT.length + buildIdorPrompt(bundle, newFence()).length);
+      promptChars.push(systemChars + buildIdorPrompt(bundle, newFence()).length);
     } catch {
       // Une route dont le contexte est illisible sera de toute façon un échec
       // au scan : on la compte comme telle plutôt que de fausser la moyenne.
@@ -189,7 +202,7 @@ export async function estimateScan(input: EstimateInput): Promise<ScanEstimate> 
   const warnings: string[] = [...input.target.warnings, ...input.index.warnings.slice(0, 3)];
   const assumptions: string[] = [];
 
-  const probe = await probeRoutes(routes, input.provider);
+  const probe = await probeRoutes(routes, input.provider, locale);
   const sampled = routes.length > probe.probed;
 
   const freeShare = probe.probed > 0 ? probe.decidedByScanner / probe.probed : 0;

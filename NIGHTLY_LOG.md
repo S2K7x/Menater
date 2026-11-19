@@ -4,6 +4,171 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-11-19 — Thursday · Bugs and technical debt
+
+**Subject**: **the quote an operator reads BEFORE paying for a scan was built
+from a fragment of the prompt the scan sends.** `estimateScan`'s whole argument
+for being trustworthy is that it replays the real pipeline to the exact point
+where it becomes billable and measures the prompt it would have sent — its own
+header says *« le volume de jetons est mesuré sur le prompt réellement
+construit »*. It measured `IDOR_SYSTEM_PROMPT`, which reads like the system
+prompt and is the two-line role it OPENS with: **128 characters of 3,318**. So
+every billed call was quoted **~798 tokens short**.
+
+**Result**: PR opened on `claude/sleepy-volta-ga5r7g`. **Five changed lines** in
+`VulnPipe/src/orchestration/estimator.ts` (the identifier, the `locale`
+threaded into the probe, the string hoisted out of the loop) plus comments; one
+new test file (`src/orchestration/estimate-prompt-price.test.ts`, **+3 tests, 2
+red on unmodified code**); one stale measurement corrected in
+`src/nodes/idor/prompt.ts` (comment only); `ROADMAP.md` § 7 closed with the
+before/after; one `CLAUDE.md` traps row. No console code at all — the built
+bundle is **byte-identical** (`index-DBjaBOOm.js` 450.46 kB,
+`index-DpyowbMH.css` 62.42 kB). No dependency, no CSS, no class name, no SQL,
+no catalogue key, no route.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-ga5r7g` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Seventy-first entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: baseline on the
+designated branch at `4692c9b` (= `origin/main`), after `npm ci` on both halves,
+was typecheck **0 errors**, console **1975 passed | 1 skipped**, VulnPipe **477
+passed**, a clean build, and **no PR open**. The subject is a `ROADMAP` § 7 entry
+raised on 11-17 and deliberately deferred with its own reason — *« a quoted
+price is a user-facing number and moving it belongs in its own before/after »* —
+i.e. a specification for exactly one night's work.
+
+**What I learned that is written nowhere else.**
+
+1. **Two of the numbers in the § 7 entry that raised this were wrong, and they
+   were the entry's whole headline.** It said the role line is **103
+   characters** and the ratio *32 times*; measured, it is **128 characters (134
+   bytes — the accents are why `wc -c` disagrees)** and **25.9x**. `git show` on
+   the previous revision confirms the string did not change in between, so the
+   figure was never run. The 3,318 for the whole system turn was right.
+2. **The dollars move far less than the tokens, and that had to be measured
+   rather than assumed.** Input tokens **x3.79**; the quoted price **+11% to
+   +20%**, because at `gemini 0.30/2.50` + `anthropic 3/15` the bill is
+   dominated by OUTPUT tokens. That is an argument for pricing what is sent, not
+   for calling the error small — on a symmetrically priced detector the share is
+   much larger.
+3. **`ScanEstimate` publishes no per-call figure, and the way to read one back
+   without mirroring the estimator's arithmetic is a DIFFERENCE.** Quote the
+   same route once, then twice: the arbitration term is `max(round(n * 0.15), 1)`
+   = 1 in both, and the measured prompt is the same route's, so the two totals
+   differ by **exactly one detection call**. Compared for EQUALITY against the
+   real builders, that kills the fragment, the system turn priced twice, and
+   either half priced alone — where a floor on the total could not: the
+   arbitration margin is ~1.3x per pending finding, so the total carries ~2.3x
+   slack and absorbs a ~23% under-count. **My first draft WAS that floor** — red
+   on the real defect, so it would have shipped — and it is green over M3:
+   measured by driving the mutated estimator, pricing the system turn ALONE
+   quotes **2,739 input tokens against a floor of 2,164**, i.e. a quote for a
+   prompt nobody sends, passing. It does kill M4 (**835 < 2,164**). The lesson
+   is the one this repository already states about mutation: a floor that is red
+   on the defect you found is not therefore a claim about the defect.
+4. **`newFence()`'s LENGTH is constant**, which the test depends on:
+   `randomBytes(9).toString('base64url')` is 12 characters with no padding.
+   Probed, ten draws on each of the four fixture routes: four distinct prompt
+   lengths, one per route. (This is not the 11-04 nonce trap — that one is about
+   the ALPHABET, which does vary.)
+5. **The arbitration system prompt is 3,406 characters, within 3% of the
+   detection one (3,318).** That is why threading the detection system turn into
+   the `1.3x` margin is not a new error tonight: the margin substitutes one
+   block for a block of nearly the same size, where before it omitted a system
+   prompt entirely. It is the reason the arbitration half could be left alone
+   honestly rather than by not looking.
+6. **`includeFewShot` has no production caller.** `pipeline.ts` passes
+   `{ contextProvider, llm, locale, verdictCache }`, so `idorSystemPrompt`'s
+   few-shot branch is unreachable in a real scan. Pricing it would be a guess
+   about a state this engine cannot reach, so the probe does not thread it — and
+   a mutation that does is red.
+7. **`prompt.ts`'s own cache note carried the pre-fencing sizes.** It said the
+   prefix weighs *« 1 836 caractères sans les exemples, 2 629 avec »*; it is
+   3,318 and 4,111 since 11-17, against `CACHE_MIN_SYSTEM_CHARS = 4_000` — so
+   the note's conclusion is still right for the default scan (below the
+   threshold, correctly unmarked) and its own prediction has come TRUE for the
+   few-shot variant. Corrected with the date on it.
+8. **Nothing gates on the estimate.** `grep` over `webhook.ts` and
+   `EstimatePanel.tsx`: the only consumer is the screen. So a quote that grows
+   by 3.8x crosses no threshold and changes no behaviour — worth confirming
+   before moving a number, because the honest fix would have been harder if it
+   did.
+
+**Do not redo.**
+
+- **Do not assert the estimate's `tokens.input` against a formula.** It would be
+  a copy of the estimator's arithmetic: red the day the 1.3x margin is retuned,
+  and still not exact. Learning 3 has the shape that works.
+- **Do not "fix" the arbitration model in the same change.** It is priced as N
+  serial calls while `master/claude-client.ts` sends ONE for the batch; changing
+  it moves the quoted DURATION as well as the price, so it is a modelling
+  decision with its own before/after. Left in § 7.
+- **Do not restore from `git checkout --` in a mutation harness** while the
+  change is uncommitted — it restores the DEFECT. `CLAUDE.md` already carries
+  that row; this harness copies the working tree and compares the **collected
+  test count** against the control, which is the other row (a mutation that does
+  not parse reports green).
+- **Do not rename `IDOR_SYSTEM_PROMPT`.** It is tempting — the name IS the trap,
+  since it claims to be the whole prompt and is 4% of it — but its own comment
+  says it is kept under that name deliberately as a readability marker, and a
+  rename would add noise to a five-line fix. The subtraction in the new test
+  file is what stops the next reader reaching for it.
+
+**Found and NOT fixed, with why.**
+
+- **The guard is exact on the detection prompt and silent on the arbitration
+  model** — learning 5, and the test says so rather than implying a coverage it
+  does not have.
+- **`SAMPLE_LIMIT` extrapolation is unchanged and still right**: 12 routes
+  probed, the mean extrapolated, `sampled: true` declared. The 400-route
+  measurement above goes through exactly that path.
+- **Standing leads, re-checked and unchanged**: `RuleStore.history` (still the
+  sharpest non-J0 item — the only reader of `soc_tuning_rule_history`, three
+  write paths filling it, no caller); the relay's missing deadline (§ 7, needs a
+  policy number a human picks); `finding_id` travelling unfenced; the wrong-SHAPE
+  fallback sentence; `schemas/` and `slack/` at the repository root; the
+  ninety-odd French strings in `server/engine/`; the unauthenticated scan target
+  of 11-09.
+
+**Verified** (Node 22.23.5, npm 10.9.9; every command run and its output read):
+
+| Command | Result |
+|---|---|
+| `npm ci` (both halves) | clean, 0 vulnerabilities |
+| baseline typecheck / test / build (console) | **0 errors**, **1975 passed \| 1 skipped**, clean |
+| baseline `npm test` (VulnPipe) | **477 passed** |
+| the new file against the unmodified estimator | **2 failed \| 2 passed** — `941 < 2164`, and the sweep naming `orchestration/estimator.ts` |
+| the new file after the fix | **3 passed** |
+| `npm run typecheck` (VulnPipe, after) | **0 errors** |
+| `npm test` (VulnPipe, after) | **480 passed** (+3) |
+| `npm run typecheck` (console, after) | **0 errors** |
+| `npm test` (console, after) | **1975 passed \| 1 skipped** — untouched, run anyway |
+| `npm run build` (console) | clean — bundle **byte-identical** to the baseline |
+| estimate, fixture repo, 4 routes / 2 billed | input **941 → 3,571**, cost **$0.0037-$0.0183 → $0.0041-$0.0219** |
+| estimate, 400 routes / 400 billed | input **136,260 → 517,220**, cost **$1.3187-$1.6110 → $1.5387-$1.8931** |
+| role line vs system turn | **128 chars (134 bytes) vs 3,318** — 25.9x, 798 tokens unpriced per call |
+| arbitration system prompt | **3,406 chars (~852 tokens)** |
+| mutation | **6 mutations, 6 killed**; control green FIRST and LAST, every run collecting 3 tests |
+
+| Mutation | Result |
+|---|---|
+| CONTROL (unmutated), first AND last | GREEN both times (3/3) |
+| M1 — the fragment restored (`IDOR_SYSTEM_PROMPT.length`) | RED — 2 *(the equality AND the subtraction)* |
+| M2 — the system turn priced twice | RED — 1 |
+| M3 — the system turn priced alone | RED — 1 |
+| M4 — the user message priced alone | RED — 1 |
+| M5 — the fence dropped from the priced prompt | RED — 1 |
+| M6 — the few-shot variant nobody sends | RED — 1 |
+
+No model key, no database and no network egress were needed: the estimator stops
+at the point where the pipeline would become billable, which is exactly what
+makes it measurable here. The probes and the mutation harness lived in the
+scratchpad and are **deleted**; `git status` shows only the five intended paths.
+
 ## 2026-11-18 — Wednesday · Tests and QA
 
 **Subject**: **33 assertions in this repository had never run anywhere, and

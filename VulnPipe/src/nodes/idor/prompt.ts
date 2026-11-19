@@ -201,14 +201,24 @@ export interface BuildPromptOptions {
  *
  * Invariant d'abord et sans argument variable, volatile ensuite.
  *
- * CE QUE ÇA RAPPORTE AUJOURD'HUI, MESURÉ : RIEN ENCORE. Le préfixe ainsi
- * reconstitué pèse 1 836 caractères sans les exemples, 2 629 avec — soit
- * ~460 et ~660 tokens. Les caches de prompt ne s'amorcent qu'au-delà de
- * ~1 024 tokens ; en dessous, marquer le bloc reviendrait à payer la prime
- * d'écriture pour un bloc qui ne sera jamais relu, et `cacheableSystem`
- * (`nodes/shared/llm/types.ts`) refuse donc de le marquer. Écrit ici plutôt
- * que supposé : une optimisation qu'on croit active alors qu'elle dort est
- * pire qu'une optimisation absente.
+ * WHAT IT BUYS TODAY, RE-MEASURED 2026-11-19: the prefix is **3,318
+ * characters without the examples and 4,111 with** — ~830 and ~1,030 tokens,
+ * against `CACHE_MIN_SYSTEM_CHARS` = 4,000. So the default scan is still
+ * BELOW the threshold and `cacheableSystem` (`nodes/shared/llm/types.ts`)
+ * refuses to mark it, which is the right answer: marking costs a write
+ * premium for a block that would never be re-read. With the examples on it
+ * now crosses, i.e. the paragraph below has come true — the fencing contract
+ * is what carried it over.
+ *
+ * The figures this block carried until tonight (1,836 and 2,629) were taken
+ * before that contract existed and nobody re-ran them: a measurement written
+ * into a comment is a claim with a date on it, and the date is what goes
+ * stale. The neighbouring cost of not having that number anywhere checkable
+ * was `orchestration/estimator.ts` pricing a scan from `IDOR_SYSTEM_PROMPT` —
+ * the role line this prompt OPENS with, 128 characters of the 3,318 — which
+ * quoted every billed call ~798 tokens short (ROADMAP § 7, closed
+ * 2026-11-19). Written here rather than assumed: an optimisation believed
+ * active while it sleeps is worse than an absent one.
  *
  * Ce qui est acquis, c'est la FORME. Le jour où un détecteur porte une grille
  * plus longue, ou qu'on active les exemples sur plusieurs détecteurs, le
