@@ -51,7 +51,14 @@ function recordingPool() {
   const inputsSent: number[] = [];
   const idsAsked: string[][] = [];
   const pool = {
-    async query(sql: string, params: unknown[] = []) {
+    // BOTH CALL SHAPES, because pg accepts both and the double must not be the
+    // thing that decides which one the store uses: `q()` passes a config
+    // object since it has to carry `types` (see `ISO_TIMESTAMPS`), and a
+    // double that only read the positional form would turn that into a
+    // failure of the projection this file is about.
+    async query(config: string | { text: string; values?: unknown[] }, legacy: unknown[] = []) {
+      const sql = typeof config === 'string' ? config : config.text;
+      const params = (typeof config === 'string' ? legacy : config.values) ?? [];
       const named = /SELECT\s+(.*?)\s+FROM/is.exec(sql)?.[1] ?? '';
       const wantsInput = named.includes('*') || /\binput\b/.test(named);
       const only = /ANY\(\$1::text\[\]\)/.test(sql) ? (params[0] as string[]) : null;

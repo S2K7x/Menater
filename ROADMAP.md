@@ -2599,6 +2599,72 @@ holds the door on irreversible actions.
 
 ## 7. Known technical debt
 
+### ~~A `Date` built for every timestamp, by a store that answers in text~~ — closed 2026-11-20
+
+Not previously in this list. `soc_run.started_at` and `soc_run_step.started_at`
+are `timestamptz`, and the console's most expensive read spent a fifth of its
+time on an object nothing kept.
+
+Postgres sends the column as TEXT — `2026-11-20 04:08:20.249+00`, probed on
+PostgreSQL 16.15 — `pg` hands that to `postgres-date`, which parses it into a
+`Date`, and `iso()` immediately calls `toISOString()` to get the string back.
+Nothing in between reads the date object: all four record builders in
+`pg-store.ts` read their timestamps through `iso()`, and no consumer of a
+`RunRecord`, `StepRecord` or `WaitRecord` wants anything but the ISO string.
+
+**Measured against a real PostgreSQL 16.15**, over a window seeded by driving
+the six workflows through the engine (`/api/simulate`, 100 alerts → 516 runs
+and 4,212 steps; no model key, so every verdict is the fail-safe one), by
+swapping the converter for pg's own parser inside one process, 61 interleaved
+pairs:
+
+| | before | after | |
+|---|---|---|---|
+| whole read path, 120-run window (default) | 8.87 ms | **7.02 ms** | −20.9%, faster in 59 of 61 pairs |
+| whole read path, 500-run window (ceiling) | 32.95 ms | **25.42 ms** | −22.9%, faster in 53 of 61 pairs |
+| the step query alone, ceiling | 21.00 ms | **14.19 ms** | −32.4% |
+| the window query alone, ceiling | 2.47 ms | **1.61 ms** | −35.1% |
+| one value | 0.861 us | **0.076 us** | 11.3× |
+
+The SQL is **4.9 ms** of the ceiling figure (`EXPLAIN ANALYZE`, bitmap index
+scan on `soc_run_step_run_idx`, 4,078 rows); the rest was always client-side,
+which is why no index could have helped. A CPU profile of the server under a
+mixed load of 60 alerts and 300 polls put `iso` above `buildCases` in self
+time, next to `postgres-date`'s `parseDate` — that is what found it.
+
+**The answer does not change**, and that is also why no assertion about a field
+can see the saving: 2,088,169 bytes of store records and 12,444 timestamps
+compared both ways on the real journal, byte-identical, and the built bundle
+unchanged. So `server/engine/pg-timestamps.test.ts` counts the WORK — how many
+`Date` objects the store made the driver build — which is the instrument
+`pg-projection.test.ts` had to reach for one file over, for the same reason.
+
+**What stays open.**
+
+- **The fast path only fires on a UTC server**, which is the deployment this
+  product documents (Docker's `postgres:16` runs UTC) and not a guarantee. A
+  Postgres configured in another timezone emits `+01`, the converter declines,
+  and pg's parser answers exactly as it does today — correct, and no saving.
+  Reading an offset would mean doing the arithmetic, which is where the bugs
+  in this kind of code live; the honest alternative, if somebody wants the
+  saving everywhere, is to pin the SESSION timezone to UTC on the pool. That
+  is safe on *this* schema and it was checked rather than assumed — `sql/`
+  contains no `date_trunc`, no `::date`, no `at time zone` and no
+  `current_date`, so no stored expression changes meaning with the session's
+  zone. It is still a decision rather than a line: the pool is shared, so it
+  would be a promise made on behalf of every query anybody adds later.
+- **It rides on the query and not on the pool**, deliberately: `runtime.ts`
+  shares one pool between this journal, the engine's `postgres` node, the
+  audit-chain check and the rule store, and the reason this store may ask for
+  text is that it converts everything to text anyway. `rules-store.ts` still
+  does `new Date(row.created_at).toISOString()` on a handful of rules per read
+  — the same round trip, three orders of magnitude smaller, and left alone.
+- **`pg`'s row materialisation is still the largest remaining share** of that
+  read: `parseRow` and `addFields` in `pg/lib/result.js` were 98 ms of the
+  profile's non-idle time against `parseDate`'s 46. Nothing cheap is left
+  there without leaving the driver's own API, which is not a Friday.
+
+
 ### What the CI environment guard cannot see, and two facts it reads off documentation — found 2026-11-18
 
 `dashboard/server/ci-environment.test.ts` closes the half § 9 left open — CI now

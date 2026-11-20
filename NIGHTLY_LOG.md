@@ -4,6 +4,207 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-11-20 — Friday · Performance and cost
+
+**Subject**: **the console's most expensive read spent a fifth of its time
+building `Date` objects it immediately threw away.** `soc_run.started_at` is a
+`timestamptz`; Postgres sends it as TEXT (`2026-11-20 04:08:20.249+00`), `pg`
+hands that to `postgres-date` which parses it into a `Date`, and `iso()` calls
+`toISOString()` to get the string back. Nothing in between reads the date
+object — all four record builders in `pg-store.ts` go through `iso()`, and no
+consumer of a `RunRecord`, `StepRecord` or `WaitRecord` wants anything else.
+
+**Result**: PR opened on `claude/sleepy-volta-j8n3qi`. One production file
+(`dashboard/server/engine/pg-store.ts`: a converter, a `types` object, and
+`q()` asking for it — **about 20 lines of code**, the rest comment), one new
+test file (`server/engine/pg-timestamps.test.ts`, **+6 tests, all 6 red on
+unmodified code**), one existing double taught pg's other call shape
+(`pg-projection.test.ts`, **no assertion changed**), plus `ROADMAP.md` (a § 7
+entry opened and closed with the before/after), `CLAUDE.md` (two traps rows, the
+three suite counts) and this journal. No client code at all — the built bundle
+is **byte-identical** (`index-DBjaBOOm.js` 450.46 kB, `index-DpyowbMH.css`
+62.42 kB). No dependency, no CSS, no class name, no SQL, no catalogue key, no
+route, no new environment variable. VulnPipe untouched; its suite was run
+anyway.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-j8n3qi` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Seventy-second entry saying so**; it is a line
+in the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: the baseline on the
+designated branch at `a58bfc2` (= `origin/main`) was, after `npm ci` on both
+halves (clean, **0 vulnerabilities** on each), typecheck **0 errors**, console
+**1975 passed | 1 skipped**, VulnPipe **480 passed**, a clean build, and **no
+PR open**. § 7's Friday-shaped entries are each refused by their own text (the
+analysis dictionary needs a decision about where the vocabulary is provided and
+touches 28 call sites in 13 files; the relay deadline, brotli q5, zstd and
+self-hosted fonts are each named as a human's call), so — like 11-06 and 11-13
+— I measured instead of picking: a CPU profile of the real server under a mixed
+load of 60 alerts and 300 polls, against a real PostgreSQL. `iso` came out
+**above `buildCases` in self time**, next to `postgres-date`'s `parseDate`.
+That is where the subject was.
+
+**What I learned that is written nowhere else.**
+
+1. **Per-query `types` works in pg 8.23 and is genuinely isolated.** Probed:
+   `pool.query({ text, values, types })` applies the custom parsers, and the
+   NEXT query on the same pool gets `Date` objects again. That is what let the
+   change be scoped to this store instead of to the pool `runtime.ts` shares
+   with the engine's `postgres` node, the audit-chain check and the rule store.
+   The parser receives `format: 'text'` and a string, and **a SQL NULL never
+   reaches it at all** — the row value is `null` and the parser is not called,
+   so `null` is free to mean *not a shape I can read*.
+2. **The forms the fast path declines are exactly the ones `new Date` is worst
+   at, and mutation is what said so.** With only UTC forms in the table,
+   replacing the fallback with `new Date(text).toISOString()` passed
+   everything — M7 survived. Probed, pg 8.23 / Node 22.23.5: `'infinity'` and
+   `'-infinity'` give the NUMBER `Infinity` where `new Date` **throws**; a `BC`
+   date **throws**; and `'0044-03-15 10:00:00+01'` is silently read as
+   **2044**. A throw inside a type parser comes out of the QUERY, so one such
+   row would take down a read of the journal rather than cost a formatting.
+   My own comment had named the wrong reason (the year-44 case *in UTC*, which
+   the fast path handles), and the mutation is what exposed that.
+3. **The SQL was never the cost.** `EXPLAIN ANALYZE` on the step query at the
+   ceiling: **4.9 ms**, bitmap index scan on `soc_run_step_run_idx`, 4,078
+   rows, 739 kB quicksort. The other ~20 ms is client-side row
+   materialisation, so no index, no `LIMIT` and no projection could have
+   touched it — and this read has already been projected twice (`CASE_INPUTS`,
+   `CASE_OUTPUTS`).
+4. **A single-run before/after at the default window is inside the noise.**
+   One run read −9.7%, another −19.9%, on the same code. 61 interleaved pairs
+   in one process give **−20.9% (8.87 → 7.02 ms)** with the after run faster in
+   **59 of 61 pairs** — the paired-win count is the statistic that settles it,
+   not the median alone. At the ceiling it is −22.9% (32.95 → 25.42 ms), 53 of
+   61.
+5. **The composition of `/api/snapshot`, measured on the way past** (24 cases,
+   120 runs, 130,306 raw bytes / 10,171 brotli): `cases` 54.4%, `trace` 44.7%
+   — and of the compressed answer, `trace.executions` is **18.4%** and
+   `chains[].steps` **6.9%**, i.e. **26.5% of every poll is detail only the
+   Tracking tab renders**. I did not touch it: *« traceability travels inside
+   the snapshot, not on a separate route »* is a `CLAUDE.md` architecture
+   decision and NIGHTLY.md forbids reopening one. Written down because the
+   number did not exist anywhere, and because serving it from the SAME cached
+   object would cost no extra database work — which is the only part of that
+   decision's justification the wire actually touches.
+6. **`GET /api/workflows` is the one route whose answer is re-encoded from
+   scratch on every request** — 30,348 raw / 6,922 brotli, built with
+   `all.map(wf => ({ ...wf, nodes: … }))`, so `respond.ts`'s identity memo
+   misses by construction (its own comment says so: *« every other route
+   composes a fresh literal per request »*). It is **once per page load**
+   (`WorkflowPanel` fetches on mount and the tab stays mounted), so 2.46 ms
+   once, and not a subject. Measured and left alone.
+7. **A mutation whose pattern goes stale reports a SURVIVOR, and the
+   test-count guard cannot see it.** Third in this repository's ruler family,
+   after the harness that restored from the index and the one whose mutation
+   did not parse. M6's `perl -0pi -e` pattern still named a condition a later
+   edit of mine had simplified, so the substitution matched nothing, the file
+   was untouched, the run WAS the control — ten tests, all green — and it was
+   printed in the survivors column. The count guard is right and useless here,
+   because nothing changed. The harness now `diff`s every mutable file against
+   its pre-mutation copy and prints *BROKEN MUTATION: nothing changed*. One
+   traps row; it cost one re-read.
+8. **An ETag on `/api/snapshot` is refused by doctrine, not by arithmetic.**
+   `json()` sends `Cache-Control: no-store` under *« a triage queue served from
+   a browser cache is a queue that lies about what is waiting »*, and a
+   browser only revalidates what it was allowed to store. An in-memory
+   client-held ETag would work and is a bigger change than tonight's; the
+   saving is ~10.6 kB per poll per tab on a LAN.
+
+**Do not redo.**
+
+- **Do not register the parsers with `pg.types.setTypeParser`.** It is
+  process-wide: it would change what three other readers of that shared pool
+  receive in order to speed up one, with nothing on screen to say so. A
+  subtraction over `server/` refuses it and the mutation that adds it to
+  `runtime.ts` is red.
+- **Do not fall back to `new Date(text)`** — learning 2. Delegate to
+  `pgTypes.getTypeParser(oid, format)`.
+- **Do not widen the fast path to arbitrary offsets by hand.** If the saving is
+  wanted on a non-UTC server, pin the session timezone instead; `sql/` contains
+  no `date_trunc`, no `::date`, no `at time zone` and no `current_date`
+  (checked), so no stored expression depends on it — but the pool is shared, so
+  it is a promise on behalf of queries nobody has written yet. § 7.
+- **Do not try to see this saving from an assertion about a field.** The answer
+  is byte-identical by design — 2,088,169 bytes of records and 12,444
+  timestamps compared both ways on the real journal. Count the work.
+- **Do not restore a mutated file with `git checkout`** while the change is
+  uncommitted (the 11-02 lesson, obeyed): the harness copies the working tree,
+  runs an unmutated control FIRST and LAST, and treats a run whose COLLECTED
+  TEST COUNT differs from the control as a broken mutation rather than a
+  survivor. That guard fired once tonight — a malformed M11 reported *no
+  tests*, which a count-blind harness would have called a survival.
+- **And do not trust a green mutation until the file is seen to have
+  changed** — learning 7. Both guards were needed tonight, on two different
+  mutations, and neither can catch the other's case.
+
+**Found and NOT fixed, with why.**
+
+- Learnings 5, 6 and 7 above, each with its reason.
+- **`rules-store.ts` does the same round trip** (`new Date(row.created_at)
+  .toISOString()`, four columns) on a handful of rules per read. Three orders
+  of magnitude smaller and on a different code path; left alone.
+- **`pg`'s own row materialisation is the largest remaining share** of that
+  read — `parseRow` and `addFields` were 98 ms of the profile's non-idle time
+  against `parseDate`'s 46. Nothing cheap is left without leaving the driver's
+  API.
+- **Standing leads, re-checked and unchanged**: `RuleStore.history` (still the
+  sharpest non-J0 item — the only reader of `soc_tuning_rule_history`, three
+  write paths filling it, no caller, and outside `dead-exports.test.ts`
+  because a class method is not a top-level export); the relay's missing
+  deadline; `finding_id` travelling unfenced; the wrong-SHAPE fallback
+  sentence; `schemas/` and `slack/` at the repository root; the ninety-odd
+  French strings in `server/engine/`; the unauthenticated scan target of
+  11-09; `.soc-warn-note` as a `<span>` on one Settings field.
+
+**Verified** (Node 22.23.5, npm 10.9.9, PostgreSQL 16.15, pg 8.23.0; every
+command run and its output read):
+
+| Command | Result |
+|---|---|
+| `npm ci` (both halves) | clean, **0 vulnerabilities** each |
+| baseline typecheck / test / build (console) | **0 errors**, **1975 passed \| 1 skipped**, clean |
+| baseline `npm test` (VulnPipe) | **480 passed** |
+| the new file against unmodified `pg-store.ts` (restored from `HEAD`) | **6 failed** — `expected 200 to be +0` on the counted work, and the converter it reads does not exist |
+| `npm run typecheck` (after) | **0 errors** |
+| `npm test` (after) | **1981 passed \| 1 skipped** (**+6**), 131 files |
+| `npm test` with `MENATER_TEST_PG` (as CI runs it) | **2014 passed \| 0 skipped** |
+| `store-contract.test.ts` against real Postgres | **66 passed** — both stores agree with the new parser in the real driver path |
+| `npm run build` | clean — bundle **byte-identical** to the baseline |
+| `npm test` (VulnPipe, after) | **480 passed** — untouched, run anyway |
+| whole read path, 61 interleaved pairs, 120-run window | **8.87 → 7.02 ms**, −20.9%, faster in 59/61 |
+| whole read path, 61 interleaved pairs, 500-run ceiling | **32.95 → 25.42 ms**, −22.9%, faster in 53/61 |
+| step query alone / window query alone, ceiling | **21.00 → 14.19 ms** (−32.4%) / **2.47 → 1.61 ms** (−35.1%) |
+| one value | **0.861 → 0.076 us** (11.3×) |
+| `EXPLAIN ANALYZE`, step query, ceiling | **4.9 ms** execution — the rest was always client-side |
+| records compared both ways, real journal | **byte-identical**, 2,088,169 bytes, 12,444 timestamps |
+| live API after the change | alert injected (202, chain `done`), audit chain **intact, 101 rows**, `/api/rules` answers, snapshot timestamps proper ISO |
+| mutation | **11 mutations, 11 killed**; control green FIRST and LAST, every run collecting 10 tests and seen to have changed the file, `pg-store.ts` restored byte-identical |
+
+| Mutation | Result |
+|---|---|
+| CONTROL (unmutated), first AND last | GREEN both times (10/10) |
+| M1 — the defect restored: `q()` asks for no `types` | RED — 2 |
+| M2 — the fast path always declines | RED — 1 |
+| M3 — any offset read as UTC | RED — 2 |
+| M4 — milliseconds padded on the LEFT | RED — 1 |
+| M5 — six fractional digits kept | RED — 1 |
+| M6 — every type wrapped, binary included | RED — 1 *(green while its pattern was stale: learning 7)* |
+| M7 — fallback via `new Date(text)` | RED — 1 *(green until learning 2's forms were added)* |
+| M8 — no fraction read at all | RED — 1 |
+| M9 — the `T` separator left as a space | RED — 4 |
+| M10 — registered process-wide in `runtime.ts` | RED — 1 |
+| M11 — the parsers moved onto the POOL | RED — 2 |
+
+The PostgreSQL cluster (`initdb` under `/var/tmp` as the `postgres` user, socket
+in `/var/tmp/pgsock`, port 55432) was stopped and deleted, the eight probes
+lived in `scripts/` and are **gone**, and `git status` shows only the five
+intended paths. No model key and no network egress were needed: the window was
+seeded through `/api/simulate`, so every verdict is the fail-safe one, which is
+what a fresh install does anyway.
+
 ## 2026-11-19 — Thursday · Bugs and technical debt
 
 **Subject**: **the quote an operator reads BEFORE paying for a scan was built
