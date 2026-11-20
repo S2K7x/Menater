@@ -34,7 +34,7 @@
  * faire au pire moment, et sur une base de sécurité c'est inacceptable.
  */
 
-import { Pool } from 'pg';
+import { Pool, types as pgTypes } from 'pg';
 
 import type { RunReadOptions, RunStore, StepReadOptions } from './store.ts';
 import { INPUT_NOT_READ, OUTPUT_NOT_READ } from './types.ts';
@@ -214,6 +214,118 @@ const iso = (v: unknown): string | null =>
   v instanceof Date ? v.toISOString() : v === null || v === undefined ? null : String(v);
 
 /**
+ * `timestamptz`, which is what EVERY timestamp column in `sql/` is — checked,
+ * not assumed: the schema holds no `timestamp without time zone` at all.
+ *
+ * So `timestamp` (OID 1114) is deliberately absent. Its text carries no
+ * offset, so the converter below could never read one anyway, and wrapping it
+ * would be a branch for a state this schema cannot produce. A column added in
+ * that type later goes on getting pg's parser, and `iso()` formats the `Date`
+ * exactly as it does today.
+ */
+const PG_TIMESTAMPTZ = 1184;
+
+/**
+ * The UTC text form Postgres sends, sliced straight into the ISO string this
+ * store answers with — or `null` when the text is not that shape.
+ *
+ * ============================================================================
+ * WHAT IT IS FOR: A `Date` NOBODY READS
+ *
+ * Postgres sends a timestamp as text (`2026-11-20 04:08:20.249+00`, probed on
+ * PostgreSQL 16.15). `pg` hands that to `postgres-date`, which parses it into
+ * a `Date`, and `iso()` immediately calls `toISOString()` to get back a
+ * string. Nothing in between reads the date object: every timestamp in this
+ * file goes through `iso()`, and no consumer of a `RunRecord`, `StepRecord` or
+ * `WaitRecord` wants anything but the ISO string.
+ *
+ * Per value the round trip is 0.861 us against 0.076 us here — nothing, and
+ * the multiplier is the defect, which is the same shape as the service
+ * inventory re-normalised inside the loop that searched it. The snapshot
+ * rebuild reads TWO timestamps per step row, and a 500-run window holds 4,078
+ * of them: measured against a real PostgreSQL 16.15 over a window seeded by
+ * driving the six workflows, `stepsOfMany` is **31.77 ms with pg's parser and
+ * 16.26 ms without it** — 48.8% of the single most expensive query this
+ * console makes, on the thread that also answers the ingestion webhook.
+ *
+ * ============================================================================
+ * WHY IT DECLINES RATHER THAN HANDLING EVERY FORM
+ *
+ * Postgres can also emit an offset (`+01`, `+05:30`), a five-digit year, `BC`
+ * and `infinity`, and the offsets need arithmetic this function deliberately
+ * does not do: `null` means *not a shape I can read*, and the caller then
+ * delegates to pg's own parser, which is today's behaviour unchanged. So the
+ * fast path is a saving on the deployment this product documents — Docker's
+ * `postgres:16` runs UTC — and never a second opinion about what a timestamp
+ * means.
+ *
+ * `null` cannot be confused with an absent timestamp: a SQL NULL never reaches
+ * a type parser at all. Probed — the row value is `null` and the parser is not
+ * called.
+ *
+ * THE FALLBACK IS pg's PARSER AND NOT `new Date(text)`, and that is the one
+ * trap here — the forms the fast path declines are exactly the ones `new Date`
+ * is worst at. Probed on Node 22.23.5 against pg 8.23.0:
+ *
+ *   'infinity'                  pg: the NUMBER Infinity   new Date: THROWS
+ *   '-infinity'                 pg: -Infinity             new Date: THROWS
+ *   '0044-03-15 10:00:00+00 BC' pg: -000043-03-15T…       new Date: THROWS
+ *   '0044-03-15 10:00:00+01'    pg: 0044-03-15T09:00:00Z  new Date: **2044**
+ *
+ * A throw is the sharp one: it would come out of a type parser, i.e. out of
+ * the query, so one such row would take down a read of the journal rather than
+ * cost a formatting. The two-digit-year rule is the quiet one. Delegating
+ * keeps all four at exactly what this store answered before — `iso(Infinity)`
+ * is the string `"Infinity"` today and stays it.
+ * ============================================================================
+ */
+export function isoIfUtcText(text: string): string | null {
+  // "2026-11-20 04:08:20.249+00" -> "2026-11-20T04:08:20.249Z"
+  //  0123456789^^^^^^^^^           a four-digit year puts the space at 10 and
+  //  the seconds at 17-18, so everything below is a fixed offset.
+  if (text.length < 22 || text.charCodeAt(10) !== 32 /* ' ' */) return null;
+  if (!text.endsWith('+00')) return null;
+
+  let millis: string;
+  if (text.charCodeAt(19) === 46 /* '.' */) {
+    // Postgres trims trailing zeros and keeps at most six digits; `Date` holds
+    // three, and truncates rather than rounds — which is what `.249123`
+    // becoming `.249` means, measured on both paths.
+    const digits = text.slice(20, -3);
+    if (digits.length === 0 || digits.length > 6) return null;
+    millis = digits.length >= 3 ? digits.slice(0, 3) : `${digits}000`.slice(0, 3);
+  } else if (text.length === 22) {
+    millis = '000';
+  } else {
+    return null;
+  }
+  return `${text.slice(0, 10)}T${text.slice(11, 19)}.${millis}Z`;
+}
+
+/**
+ * The type parsers this store's queries ask for.
+ *
+ * SCOPED TO THIS STORE, deliberately. `runtime.ts` shares one pool between
+ * this journal, the engine's `postgres` node, the audit-chain check and the
+ * rule store; those three go on receiving `Date` objects exactly as they do
+ * today, because the reason this store can ask for text is that it converts
+ * every timestamp to text anyway. Registering it on the pool — or worse, on
+ * `pg.types` for the whole process — would change what three other readers
+ * see in order to speed up one.
+ *
+ * Anything this object does not own is handed back unchanged: it is given to
+ * EVERY column of every query, binary format included, and a converter that
+ * cannot read a form must not be the one answering for it.
+ */
+export const ISO_TIMESTAMPS = {
+  getTypeParser(oid: number, format?: unknown) {
+    const delegate = pgTypes.getTypeParser(oid, format as never);
+    if (format === 'binary' || oid !== PG_TIMESTAMPTZ) return delegate;
+    return (text: string) => isoIfUtcText(text) ?? iso(delegate(text));
+  },
+};
+
+/**
  * Every column of `soc_run` except `input`.
  *
  * Written out rather than subtracted, because a `SELECT *` minus one column is
@@ -272,7 +384,13 @@ export class PgRunStore implements RunStore {
 
   private async q<T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<T[]> {
     try {
-      const res = await this.pool.query(sql, params as never[]);
+      // `types` RIDES ON THE QUERY, not on the pool: see `ISO_TIMESTAMPS`. It
+      // is this method and not the two hot readers because `q()` is the one
+      // choke point every query of this store passes through — the same reason
+      // `describeQueryError` lives here — and all four record builders below
+      // read their timestamps through `iso()`.
+      const res = await this.pool.query({
+        text: sql, values: params as never[], types: ISO_TIMESTAMPS });
       return res.rows as T[];
     } catch (err) {
       // POINT DE PASSAGE UNIQUE : toutes les requêtes du magasin traversent
