@@ -320,6 +320,43 @@ export function Fold({
   );
 }
 
+/**
+ * The title of a fold that IS its panel — so the title of a SECTION.
+ *
+ * ============================================================================
+ * WHY A HEADING, AND WHY HERE RATHER THAN AT EACH CALL SITE
+ *
+ * Most folds hold an EXPLANATION and are right to carry no heading
+ * (`CLARITY.md` § 3): an install script, a mapping table, a raw log, two audit
+ * hashes are not sections of the screen they sit on. But three folds in this
+ * console are the whole content of their `section.soc-panel` — the Health
+ * tab's engine workflow list, the Lookup tab's source catalogue, the Rules
+ * tab's test bench — and there the summary IS the panel's title, so the
+ * section carried no heading at all. Measured in Chromium 157 out of CDP
+ * `Accessibility.getFullAXTree`, walked from the root:
+ *
+ *     HEALTH   h1 h2 h2 h3 h3 h3 h2        — the workflow list unreachable
+ *     LOOKUP   h1 h2 h3 h2                 — the source catalogue unreachable
+ *     RULES    h1                          — ONE heading for five sections
+ *
+ * The heading goes AMONG the summary's spans and never around them: wrapping
+ * the whole summary is the shape the HTML content model prefers, and it names
+ * the section after its hint as well — probed here, « SOURCES1 of 5 » instead
+ * of « SOURCES ». A heading in a summary is exposed whether the fold is open
+ * or closed, which had to be probed because `CLARITY.md` § 8 records the
+ * opposite fact about a fold's CONTENT: the summary is the disclosure CONTROL,
+ * not the content.
+ *
+ * It is one component rather than a heading written at each of the three call
+ * sites because the level and the class are the part that must not drift: the
+ * class is what gives the summary's own register back, and a call site that
+ * forgot it would be a silent typographic change on that one screen.
+ * ============================================================================
+ */
+export function FoldSectionTitle({ children }: { children: ReactNode }) {
+  return <h2 className="soc-fold-section">{children}</h2>;
+}
+
 /* ==========================================================================
  * Carte de bienvenue
  * ========================================================================== */
