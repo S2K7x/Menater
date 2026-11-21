@@ -2548,6 +2548,38 @@ h2.soc-kicker,
 }
 
 /*
+ * A fold that IS its panel: its summary is the SECTION's title, so the title
+ * is a heading — and it must not LOOK like one, because the summary already
+ * sets the register three lines up.
+ *
+ * `font: inherit` is the shorthand, so it carries the line-height too; what
+ * it does not carry is `letter-spacing`, hence the second line. `inherit`
+ * rather than the summary's numbers copied, because the 760 px block takes
+ * that summary to 0.86rem and a copy would stop following it. Each
+ * declaration was measured by dropping it alone, at 1280 px:
+ *
+ *     font: inherit          13.76px/400/22.016px line box  ->  16px/900/20.8px
+ *     letter-spacing         0.8256px                       ->  0.96px
+ *     margin: 0              none                           ->  12px underneath
+ *
+ * and together they put the summary back at the 44 px it measured as a text
+ * node, on all six themes at 320, 375 and 1280 px.
+ *
+ * THE PARENT IS NAMED, and that is not a style preference: `.soc-panel h2` is
+ * (0,1,1) and a bare `.soc-fold-section` is (0,1,0), so it would lose outright
+ * — the trap this project has paid for six times before (C0.46 was the
+ * sixth, and there it was a TIE; here the bare form loses on specificity).
+ * `.soc-fold > summary
+ * h2.soc-fold-section` is (0,2,2), which the cascade decides rather than
+ * source order.
+ */
+.soc-fold > summary h2.soc-fold-section {
+  font: inherit;
+  letter-spacing: inherit;
+  margin: 0;
+}
+
+/*
  * A machine value NAMED by a fold title — today the file an operator is told
  * to paste a configuration into, tomorrow whatever a second log source calls
  * its own.

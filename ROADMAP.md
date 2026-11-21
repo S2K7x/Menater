@@ -1015,6 +1015,32 @@ stayed exactly where it was.*
 **What R does not do.** It adds no per-user layout preference; that is C1.5. It
 leaves the eight facts of a triage row intact: the table got shorter, not poorer.
 
+### C0.47 ✅ — Three sections that were a fold, and the Rules tab had ONE heading
+
+*Fourth instance of the shape C0.44, C0.45 and C0.46 each fixed on one screen,
+and the one where § 7's own predicate had to be made precise. `ROADMAP` § 7
+recorded it as « a `Fold` that is the immediate child of a `section.soc-panel`
+IS that panel », said it returned exactly two — the Health tab's engine
+workflow list and the Lookup tab's source catalogue — and filed the Rules tab's
+test bench among the nine folds that correctly carry no heading. It is three,
+and on the Rules tab the missing one was the only section heading the screen
+could have.*
+
+| Point | Detail |
+|---|---|
+| **The measurement** | Chromium 157, the three screens mounted with data on a throwaway preview page under the real wrappers (`.soc-app > main`), heading nodes read out of CDP `Accessibility.getFullAXTree` and **walked from the root** — the flat `nodes` array is not in document order. `RULES` went `h1` → `h1 h2`; `HEALTH` `h1 h2 h2 h3 h3 h3 h2` → `+ h2`; `LOOKUP` `h1 h2 h3 h2` → `+ h2` |
+| **The Rules tab is the one that matters** | **One heading for 659 px and five sections.** Somebody listing the headings of the screen where a team writes the rules deciding what stops reaching a human got the word « RULES » and no way to reach anything on it. The fold that carried the missing name is the test bench — the thing you open when you DOUBT a rule — and its own comment says it is *« un outil, pas un reglage »*, i.e. precisely a thing you come looking for by name |
+| **§ 7's predicate is too wide on the RENDERED tree, and the over-catch is the dangerous one** | The incident card's raw log and execution chain are immediate children of a `section.soc-panel` as well — measured, that panel holds `DIV.soc-case-head, DETAILS.soc-fold, DETAILS.soc-fold` — and it is **already named**, by the case title above them. Promoting those two turns evidence into sections on the screen where a human approves a containment. What makes a fold its panel's title is being the panel's **ONLY** content |
+| **So the guard is read BOTH ways** | From the source, with a real tag parser rather than a regex, so a fourth section fold is caught the day it is written — that is how this third one survived three passes. And from the rendered tree on all three screens, because the source form cannot see a panel whose single child arrives through a conditional. The first version of the source sweep stopped at the `>` inside `title={<FoldSectionTitle>…}` and reported the fix as MISSING on two of the three files it had just been applied to: a ruler that reads the reassuring answer, the family `CLARITY.md` § 7 already carries twice |
+| **The heading goes AMONG the summary's spans** | Probed in Chromium 157 on three candidate markups, open AND closed: spans only → no heading in either state; the heading among the spans → `heading(2) "SOURCES"` in **both**; the heading wrapping the whole summary → `heading(2) "SOURCES1 of 5"`, named after its hint. The wrapping form is the one the HTML content model prefers, which is why it is the mutation and not the fix. And the first line is why this works at all: `CLARITY.md` § 8 records that a closed fold's CONTENT is absent from the accessibility tree, and the obvious reading of that says the fix cannot work — the summary is the disclosure CONTROL, not the content |
+| **One component, not three headings** | `FoldSectionTitle` in `components/Guidance.tsx`, where `CLARITY.md` § 4 keeps these primitives. The level and the class are the part that must not drift: the class is what gives the summary's register back, and a call site that forgot it would be a silent typographic change on that one screen |
+| **A fold title is a NAME, so it keeps the register it had** | Three declarations, **each measured by dropping it alone** at 1280 px: `font: inherit` — the shorthand, so it carries line-height too — 13.76px/400/22.016px → 16px/900/20.8px · `letter-spacing: inherit` 0.8256 → 0.96px · `margin: 0`, since `h1, h2, h3` sets `margin: 0 0 12px`. Without them the summary grows **44 → 52.8px** on all three screens |
+| **The parent is NAMED** | `.soc-panel h2` is (0,1,1) and a bare `.soc-fold-section` is (0,1,0), so the bare form loses **outright** — not on a tie this time, which is the difference from C0.46. `.soc-fold > summary h2.soc-fold-section` is (0,2,2). Seventh time this project has paid for that shape, and the mutation that writes it bare is red |
+| **The class name was checked first, and the obvious one was TAKEN** | `.soc-fold-title` already exists: C0.42 uses it as a styleless wrapper keeping a sentence and a machine value in ONE flex item. `soc-fold-section` was free. *Check a class name is free before you write it* |
+| **Measured, and nothing visual moved** | 6 themes × 3 widths (320 / 375 / 1280) × the 3 screens = **54 cells**, comparing the AX outline, every heading's computed type and box, every panel's geometry and the document width. **108 differences, and all 108 are a heading that was ADDED** — nothing deleted, nothing replaced. Panel totals identical to the hundredth: Rules 659.11 / 917.75 / 978.27, Health 774.31 / 1132.22 / 1152.19, Lookup 922.22 / 1573.78 / 1735.78. No horizontal overflow at any width, before or after, and the `innerText` sweep comes back empty |
+| **The boundary, claimed by tests that pass BEFORE and after** | The nine folds that hold an EXPLANATION are left alone — the install script, the field mapping table, the raw log, the chain, the hashes, the pull form's advanced fields. `Explain`'s circled "i" is a `<details>` too, so a rule reading « a summary is a heading » would put one heading per popover trigger on every screen; Health renders three. And the summary keeps carrying the register, or a change that moved it onto the heading would satisfy every other assertion and alter three screens |
+| **Unchanged** | No catalogue key, no string, no colour, no token, no heading SIZE, no dependency, no server change, no route. `+37` lines in `Guidance.tsx` (31 of them comment), one token per call site, one 4-line CSS rule. Bundle 450.46 → 450.63 kB, render-blocking sheet 62.42 → 62.51 kB. **23 tests, 18 red on unmodified code**, 5 boundaries green before AND after on purpose; **14 mutations, 14 killed**, control green first and last |
+
 ### C0.46 ✅ — Settings → Code analysis: five sections, and a heading for none of them
 
 *This screen is six blocks. The first holds the engine picker and names itself
@@ -3583,43 +3609,91 @@ repositories, not one a night can invent: a number too low breaks the estimate
 it exists to protect, which is the *over-refusing a legal rule is a silent hole*
 trade this project has already paid for once.
 
-### Two more folds ARE their panel, so two more sections have no heading — found 2026-11-14
+### ~~Two more folds ARE their panel, so two more sections have no heading~~ — closed 2026-11-21
 
-Found by the sweep C0.46 owed itself, and left for a night of its own because
-it is two more screens and one subject is the rule.
+**There were three, and the predicate as this entry worded it catches five.**
+Both halves of that correction are the part worth keeping.
 
-C0.46 promoted the five section titles on Settings → Code analysis. The search
-that finds the next instance is **not** « who calls `Fold` » — most folds hold
-an explanation and are right to carry no heading, which is `CLARITY.md` § 3 —
-it is *which folds are sections*. There is a structural predicate for that, and
-it is exact: **a `Fold` that is the immediate child of a `section.soc-panel` IS
-that panel**, so its summary is the panel's title and the section carries no
-heading at all.
+The entry said the search is not « who calls `Fold` » — most folds hold an
+explanation and are right to carry no heading, `CLARITY.md` § 3 — but *which
+folds are sections*, and gave a structural predicate for it: **a `Fold` that is
+the immediate child of a `section.soc-panel`**. Over `src/components/` it
+listed Health's engine workflow list and Lookup's source catalogue, and filed
+the Rules tab's test bench among the nine that correctly carry none.
 
-Over `src/components/`, that predicate returns exactly two:
+Re-run, it returns **three**: `RuleTester` is a `<section className="soc-panel">`
+whose entire content is one `Fold`, exactly like the other two. On that screen
+it was the only section heading there was — measured in Chromium 157 on the
+three screens mounted with data, heading nodes read out of CDP
+`Accessibility.getFullAXTree` and WALKED from the root:
 
-| Screen | Panel | What the summary says |
+| screen | before | after |
 |---|---|---|
-| Health | `HealthPanel.tsx:555` | the published-workflows list, with its count on the closed fold |
-| Lookup | `IntelPanel.tsx:657` | the source catalogue — *« 1 of 7 reachable »*, which `CLARITY.md` § 3 calls the most useful sentence on the screen for an install with no keys |
+| **RULES** | `h1` | `h1 h2` |
+| HEALTH | `h1 h2 h2 h3 h3 h3 h2` | `h1 h2 h2 h3 h3 h3 h2 h2` |
+| LOOKUP | `h1 h2 h3 h2` | `h1 h2 h3 h2 h2` |
 
-Both are sections of their tab by construction, and neither is navigable. The
-other nine `Fold` call sites were read and are correctly unheaded: the install
-script and the mapping table (a procedure run once elsewhere, C0.25's own
-decision), the pull form's four advanced fields (a group of inputs inside a
-form, not a section), the rule test bench, the tunnel block, the incident
-card's raw log, chain, enrichment and hashes, the dismissed findings and the
-two explainer folds.
+**One heading for 659 px and five sections**, on the screen this document
+calls the one where a team writes the rules deciding what stops reaching a
+human — and the fold that carried the missing name is the test bench, the
+thing you open when you DOUBT a rule.
 
-**What makes this an entry rather than a diff**: the two sit on different tabs
-from each other, the level each should take depends on what already names its
-tab — Health's panels are `h2` under the page's `h1`, and the Lookup
-catalogue's neighbours would have to be read the same way — and `CLARITY.md`
-§ 7 is explicit that an outline is measured on the MOUNTED screen, which means
-two more browser mounts and two more before/after sweeps. The shape of the fix
-is known and already paid for three times (C0.44, C0.45, C0.46): the heading
-goes among the summary's spans, and the rule that gives its register back names
-its parent.
+And applied to the RENDERED tree rather than to the source, the predicate as
+worded is too WIDE: the incident card's raw log and execution chain are
+immediate children of a `section.soc-panel` too — measured,
+`DIV.soc-case-head, DETAILS.soc-fold, DETAILS.soc-fold` — and that panel is
+already named, by the case title above them. Promoting those two would have
+turned evidence into sections on the screen where a containment is approved.
+What makes a fold its panel's title is being the panel's **only** content;
+that is the predicate `fold-sections.test.ts` claims, from the source so a
+fourth one is caught the day it is written, and from the rendered tree because
+the source form cannot see a panel whose single child arrives through a
+conditional.
+
+What this entry got right and was worth the deferral: the level each should
+take depends on what names its tab (Health's and Lookup's sections are `h2`;
+Rules has none, so `h2` is the step under its `h1` either way), and the shape
+of the fix was already paid for three times — the heading goes among the
+summary's spans and the rule that gives its register back names its parent.
+See § 3, C0.47.
+
+**What this did NOT close, and it is on the same screen**: the Rules tab still
+skips a level in both states you click into. See the entry below.
+
+### The Rules tab skips a heading level in both states you click into — found 2026-11-21
+
+Found while measuring C0.47, left out of it because one subject is the rule and
+because the second half is a size decision rather than a defect.
+
+Measured in Chromium 157 on the tab mounted with two rules, the AX outline
+walked from the root:
+
+| state | outline |
+|---|---|
+| idle | `h1 RULES` · `h2 TRY IT ON AN ALERT` |
+| the template picker open | `h1 RULES` · **`h4 TEMPLATES`** · `h2 TRY IT…` |
+| the editor open | `h1 RULES` · **`h3 NEW RULE`** · `h4 CONDITIONS` · `h2 TRY IT…` |
+
+`h1 → h4` skips two levels, and it is the state somebody reaches by pressing
+*From a template* — the second button on the screen. `CLARITY.md` § 7's own
+rule applies: **a state you click into is a screen too**, and neither of these
+is a tab.
+
+`RuleEditor`'s title is a section by the same reading C0.47 used — a
+`section.soc-panel` sibling of the list — so `h2` is its level. What makes it
+an entry rather than a diff is the SIZE: `.soc-panel h2` is 1rem where `h3` is
+0.86rem, so the editor's title grows 13.76 → 16px unless the element is named
+to hold it back, and *promote by meaning, not by how big you want the text*
+does not say which of those two somebody wants here.
+
+`CONDITIONS` and `TEMPLATES` are both `h4.soc-wf-subhead`, and that class is
+**shared by four call sites** (`RulesPage` twice, `SettingsSetup`, `WorkflowPanel`).
+Promoting the element at one call site leaves the others alone, but the class
+declares no `line-height`, so an `h3` there picks up `1.05` from `h1, h2, h3`
+where an `h4` matches no type rule at all — the `h2.soc-kicker` shape, needing
+the same measured `inherit`. And whether the other two call sites are skips
+depends on what names their own sections, which is two more mounts. The whole
+of it is one night's subject.
 
 ### `var(--accent)` as TEXT is measured by nothing, and it fails on two themes
 
@@ -3648,6 +3722,35 @@ Chromium on the mounted report, accent on `--panel`:
 i.e. not large text under any reading. On Punk the accent is a dark red on
 khaki — the same pair that already took the focus ring to 1.24:1 and produced
 the `--focus` role token.
+
+**Corrected 2026-11-21 — it fails on THREE themes, and the table above is one
+surface.** Those figures are the accent on `--panel`. Text in this console also
+lands on `--bg`, `--surface`, `--surface-2` and `--hero`, and `--focus`'s own
+test already takes all of them for that reason. Re-measured over the five:
+
+| theme | worst | on |
+|---|---|---|
+| grayed | 8.98:1 | `--surface-2` |
+| attck | 5.30:1 | `--surface-2` |
+| blued | 5.05:1 | `--surface-2` |
+| **acme** | **3.62:1** | `--hero` — 3.90 on `--surface-2` |
+| **dark** | **2.91:1** | `--surface-2` |
+| **punk** | **1.34:1** | `--surface-2` |
+
+So the light theme is in it too, and a role token has to be measured on the
+whole set rather than on the panel somebody happened to look at.
+
+**And what a night of searching the palette says about the DECISION this entry
+defers.** Keeping the hue and the saturation and moving only the lightness, the
+nearest passing value is `#f4b3b1` on punk (a pale pink, 4.51:1 at worst),
+`#c41a0a` on acme and `#5191f8` on dark. The two dark themes' answers are fine;
+punk's is not an accent any more — it is within 1.1:1 of `--fg`'s cream, so a
+link in it would be nearly indistinguishable from the prose around it, which
+trades WCAG 1.4.3 for 1.4.1. That is the choice somebody has to make: a pale
+accent on punk, an underline (or another non-colour cue) for the call sites
+where the accent carries MEANING rather than emphasis, or punk's accent stays
+a background-and-border role and that theme loses accent text entirely. None
+of the three is a measurement.
 
 `color: var(--accent)` appears **34 times in `src/styles.css` and 25 times in
 `src/vulnpipe/styles.css`**, so this is not one element: it is links, active

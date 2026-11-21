@@ -4,6 +4,200 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-11-21 — Saturday · Interface, clarity, accessibility
+
+**Subject**: **three sections of this console were a `Fold`, so three sections
+had no heading — and on the Rules tab that was the only section heading the
+screen could have.** `ROADMAP` § 7 held the structural predicate for this
+shape, said it returned exactly two (Health's engine workflow list, Lookup's
+source catalogue) and filed the Rules tab's test bench among the nine folds
+that correctly carry none. Re-run, it returns **three**.
+
+**Result**: PR opened on `claude/sleepy-volta-sbdn41`. Four client files
+(`components/Guidance.tsx` +37, 31 of them comment; one token at each of three
+call sites), one 4-line CSS rule placed inside the fold block, one new test
+file (`components/fold-sections.test.tsx`, **23 tests, 18 red on unmodified
+code**), plus `ROADMAP.md` (§ 3 C0.47, the § 7 entry closed, a new § 7 entry,
+and a measured correction to the `var(--accent)`-as-text entry), `CLAUDE.md`
+(one traps row, the two suite counts), `CLARITY.md` § 8 (the predicate's
+wording) and this journal. No server change, no catalogue key, no string, no
+colour, no token, no heading SIZE, no dependency, no route. VulnPipe untouched;
+its suite was run anyway.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-sbdn41` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Seventy-third entry saying so**; it is a line
+in the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: the baseline at
+`7b56f45` (= `origin/main`) was, after `npm ci` on both halves, typecheck
+**0 errors**, console **1981 passed | 1 skipped**, VulnPipe **480 passed**, a
+clean build, and **no PR open**. § 7 has three Saturday-shaped entries. The
+incident card's outline is explicitly a design decision (« a look somebody has
+to choose ») and NIGHTLY.md says that is not mine. `var(--accent)` as text is
+a real WCAG 1.4.3 failure and I measured it rather than taking it (below) — the
+palette answer it needs is a human's call. The folds were the one with a known
+shape, paid for three times, and measuring them turned up the third instance.
+
+**What I learned that is written nowhere else.**
+
+1. **A predicate stated against the source over-catches against the rendered
+   tree, and the over-catch was the dangerous direction.** § 7's wording — « a
+   `Fold` that is the immediate child of a `section.soc-panel` » — is right off
+   the JSX and wrong off the DOM: the incident card's raw log and execution
+   chain are immediate children of one as well, and that panel is already named
+   by the case title. Measured, it holds `DIV.soc-case-head, DETAILS.soc-fold,
+   DETAILS.soc-fold`. Promoting those two would have turned evidence into
+   sections on the screen where a containment is approved. The property wanted
+   is **the panel's ONLY content**, and the test reads it both ways: off the
+   source so a fourth is caught the day it is written, off the tree because the
+   source form cannot see a panel whose single child arrives through a
+   conditional.
+2. **The Rules tab measured `h1` and nothing else.** 659 px, five sections, one
+   heading, on the screen this project repeatedly calls the one where a team
+   writes the rules deciding what stops reaching a human. Health had 7 headings
+   and was missing one; Lookup 4. The entry named Health and Lookup, so a night
+   that took the entry at its word would have fixed the two mild cases and left
+   the severe one.
+3. **A heading in a `<summary>` is exposed open AND closed — re-probed on
+   Chromium 157**, three candidate markups: spans only → no heading either
+   state; the heading among the spans → `heading(2) "SOURCES"` in both; the
+   heading wrapping the whole summary → `heading(2) "SOURCES1 of 5"`, i.e.
+   named after its hint. One detail nobody had recorded: the heading form also
+   changes the disclosure control's own accessible name from `"SOURCES1 of 5"`
+   to `"SOURCES 1 of 5"` — an element boundary adds a space, which is an
+   improvement and invisible to the sweep, whose comparison normalises
+   whitespace.
+4. **`var(--accent)` as text fails on THREE themes, not two, and the entry's
+   table is one surface.** Its figures are the accent on `--panel`; text also
+   lands on `--bg`, `--surface`, `--surface-2` and `--hero`, which `--focus`'s
+   own test already takes for exactly that reason. Over the five: punk 1.34,
+   dark 2.91, **acme 3.62** (on `--hero`), blued 5.05, attck 5.30, grayed 8.98.
+   So the light theme is in it too.
+5. **And the palette search says what the decision actually is.** Keeping hue
+   and saturation and moving only lightness, the nearest passing values are
+   `#5191f8` (dark) and `#c41a0a` (acme) — both fine — and `#f4b3b1` on punk,
+   which is within 1.1:1 of that theme's cream `--fg`. On punk a readable
+   accent is no longer an accent: it trades WCAG 1.4.3 for 1.4.1. The three
+   options are in § 7 and none of them is a measurement.
+6. **`.soc-fold-title` was already taken** — C0.42's styleless wrapper keeping a
+   sentence and a machine value in ONE flex item. Caught by the `grep`
+   `NIGHTLY.md` asks for, before a line was written. `soc-fold-section`.
+7. **The three declarations that give the register back, each measured by
+   dropping it alone**: `font: inherit` (the shorthand, so it carries
+   line-height: 13.76px/400/22.016px → 16px/900/20.8px), `letter-spacing:
+   inherit` (0.8256 → 0.96px, not part of the shorthand), `margin: 0`
+   (`h1, h2, h3` sets `0 0 12px`). Without them the summary grows **44 → 52.8
+   px** on all three screens. And the parent is NAMED because `.soc-panel h2`
+   is (0,1,1) and a bare modifier (0,1,0) loses **outright** — not on a tie, as
+   in C0.46.
+8. **A compound mutation whose second half does not apply is a BROKEN
+   mutation, not a survivor.** M13 (a section heading on a fold that explains)
+   came back GREEN. The harness's « did anything change? » guard — added last
+   night for the pattern that had gone stale — was satisfied by the import line
+   that DID apply, while the `perl` pattern for the title had the wrong
+   indentation and matched nothing. Fourth shape in this repository's ruler
+   family. The harness now fails the mutation if the edit command exits
+   non-zero, and each half asserts itself with a `grep`; written faithfully,
+   M13 is red on 2 tests.
+9. **The source sweep's first version read the reassuring answer too.** A regex
+   for the `<Fold` opening tag stops at the `>` inside
+   `title={<FoldSectionTitle>…}`, so it reported the fix as MISSING on two of
+   the three files it had just been applied to. Replaced by a brace-depth
+   scanner. Third ruler of the night that was wrong before it was right.
+10. **`2037 passed | 0 skipped` with a real Postgres**, measured rather than
+    deduced: a throwaway PostgreSQL 16 cluster, the schema applied the way
+    `docker/init-db.sh` applies it, `MENATER_TEST_PG` set as `ci.yml` sets it.
+    The two counts in `CLAUDE.md` are now 2004 / 2037. The cluster has to live
+    outside the scratchpad, whose parents are `0700 root` and which `initdb`
+    cannot traverse as the `postgres` user it insists on being.
+
+**Do not redo.**
+
+- **Do not promote every fold summary.** Nine folds in this half correctly
+  carry no heading, and `Explain`'s circled "i" is a `<details>` as well — the
+  rule « a summary is a heading » puts one heading per popover trigger on every
+  screen. Three tests claim that side and pass before AND after.
+- **Do not take § 7's predicate at its literal wording** against a rendered
+  tree — learning 1. And do not write the guard as a list of the three files
+  that satisfy it tonight: that is exactly how the third instance survived
+  three passes.
+- **Do not reach for `.soc-fold-title`** — learning 6.
+- **Do not write the register rule as a bare class.** It loses outright to
+  `.soc-panel h2`, the mutation is red, and the measurement is in the comment.
+- **Do not promote the Rules tab's editor title or its two
+  `h4.soc-wf-subhead` blocks in passing.** They are a real skip (`h1 → h4` on
+  the template picker, `h1 → h3` on the editor) and a new § 7 entry: the class
+  is shared by four call sites, it declares no `line-height`, and the editor
+  title's size moves 13.76 → 16px unless the element is named. One night's
+  subject.
+- **Do not restore a mutated file with `git checkout`** while the change is
+  uncommitted (the 11-02 lesson, obeyed): the harness copies the working tree,
+  runs an unmutated control FIRST and LAST, compares the collected test count
+  against the control, diffs every mutable file, and now also fails on the
+  edit's own exit code.
+
+**Found and NOT fixed, with why.**
+
+- Learnings 4 and 5: the accent-as-text failure, re-measured and widened to
+  three themes, with the three options a human has to choose between. § 7.
+- The Rules tab's two level skips. New § 7 entry; see above.
+- **A French comment in `HealthPanel.tsx` and two in `IntelPanel.tsx` and
+  `RulesPage.tsx`**, on the three blocks I touched. They are comments, not
+  user-facing strings, so they are outside the English-only rule's
+  enforcement — and rewriting prose I did not otherwise change is the noise
+  `NIGHTLY.md` forbids. Mentioned because they sit in the diff's context.
+- **Standing leads, re-checked and unchanged**: `RuleStore.history` (the
+  sharpest non-J0 item — the only reader of `soc_tuning_rule_history`, three
+  write paths filling it, no caller); the relay's missing deadline;
+  `finding_id` travelling unfenced; the wrong-SHAPE fallback sentence;
+  `schemas/` and `slack/` at the repository root; the ninety-odd French strings
+  in `server/engine/`; the unauthenticated scan target of 11-09;
+  `.soc-warn-note` as a `<span>` on one Settings field.
+
+**Verified** (Node 22.23.5, npm 10.9.9, Chromium 157.0.8103.78, PostgreSQL
+16.15; every command run and its output read):
+
+| Command | Result |
+|---|---|
+| `npm ci` (both halves) | clean, **0 vulnerabilities** each |
+| baseline typecheck / test / build (console) | **0 errors**, **1981 passed \| 1 skipped**, clean |
+| baseline `npm test` (VulnPipe) | **480 passed** |
+| the new file against unmodified production code | **18 failed \| 5 passed** — the 5 are the boundary claims, green before AND after on purpose |
+| `npm run typecheck` (after) | **0 errors** |
+| `npm test` (after) | **2004 passed \| 1 skipped** (**+23**), 132 files |
+| `npm test` with `MENATER_TEST_PG`, real PostgreSQL 16 | **2037 passed \| 0 skipped** |
+| `npm run build` | clean — bundle 450.46 → **450.63 kB**, render-blocking sheet 62.42 → **62.51 kB** |
+| `npm test` (VulnPipe, after) | **480 passed** — untouched, run anyway |
+| outline, Chromium 157, AX tree walked from the root | RULES `h1` → `h1 h2`; HEALTH `h1 h2 h2 h3 h3 h3 h2` → `+h2`; LOOKUP `h1 h2 h3 h2` → `+h2` |
+| 6 themes × 3 widths (320/375/1280) × 3 screens, before/after | **54 cells, 108 differences, all 108 a heading ADDED** — nothing deleted, nothing replaced |
+| panel totals, all 54 cells | identical to the hundredth (Rules 659.11/917.75/978.27, Health 774.31/1132.22/1152.19, Lookup 922.22/1573.78/1735.78) |
+| `scrollWidth` at 320 and 375 px | equal to the viewport, before and after, on all three screens |
+| the `innerText` hiding sweep | **empty** on all three screens |
+| the register rule dropped, measured | summary **44 → 52.8 px** on all three; each declaration measured alone |
+| heading-in-summary, probed on three markups × open/closed | the form among the spans is `heading(2) "SOURCES"` in **both** states |
+| mutation | **14 mutations, 14 killed**; control green FIRST and LAST, every run collecting 23 tests and seen to have changed the file; the five production files restored byte-identical |
+
+| Mutation | Result |
+|---|---|
+| CONTROL (unmutated), first AND last | GREEN both times (23/23) |
+| M1 — Health back to a plain title | RED — 5 |
+| M2 — Lookup back to a plain title | RED — 5 |
+| M3 — Rules back to a plain title | RED — 5 |
+| M4 — the heading is an `h3` | RED — 12 |
+| M5 — not a heading at all, class kept | RED — 12 |
+| M6 — the heading wraps the whole summary | RED — 7 |
+| M7 — the register rule removed | RED — 3 |
+| M8 — the register rule as a BARE class | RED — 3 |
+| M9 — `font: inherit` dropped | RED — 1 |
+| M10 — `margin: 0` dropped | RED — 1 |
+| M11 — `letter-spacing: inherit` dropped | RED — 1 |
+| M12 — the rule appended at the END of the sheet | RED — 1 |
+| M13 — a section heading on a fold that EXPLAINS | RED — 2 *(green while only half of it applied: learning 8)* |
+| M14 — the heading moved into the fold BODY | RED — 9 |
+
 ## 2026-11-20 — Friday · Performance and cost
 
 **Subject**: **the console's most expensive read spent a fifth of its time

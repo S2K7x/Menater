@@ -29,7 +29,7 @@ import type { Check, Diagnostics, HealthReport } from '../lib/types.ts';
 import { api, ApiError, humanDuration, type ChainReport } from '../lib/api.ts';
 import { useI18n } from '../i18n/context.tsx';
 import { Icon, type IconName } from './Icon.tsx';
-import { Announce, Explain, Fold } from './Guidance.tsx';
+import { Announce, Explain, Fold, FoldSectionTitle } from './Guidance.tsx';
 import { NoticeList } from './Notices.tsx';
 
 /** Seuls la classe CSS et l'icone sont figees : le libelle vient du catalogue. */
@@ -554,7 +554,7 @@ export function HealthPanel({
       */}
       <section className="soc-panel">
         <Fold
-          title={h.workflowsTitle}
+          title={<FoldSectionTitle>{h.workflowsTitle}</FoldSectionTitle>}
           hint={health.workflows.length === 0 ? h.workflowsEmpty : String(health.workflows.length)}
         >
         {health.workflows.length === 0 ? (

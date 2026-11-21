@@ -39,7 +39,7 @@ import { useI18n } from '../i18n/context.tsx';
 import type {
   IntelProvider, IntelResult, IntelSource, ObservableKind,
 } from '../lib/types.ts';
-import { Announce, Explain, Fold } from './Guidance.tsx';
+import { Announce, Explain, Fold, FoldSectionTitle } from './Guidance.tsx';
 import { Icon } from './Icon.tsx';
 
 /* ==========================================================================
@@ -656,7 +656,7 @@ export function IntelPanel({ prefill }: { prefill?: { value: string; n: number }
       */}
       <section className="soc-panel">
         <Fold
-          title={t.providersTitle}
+          title={<FoldSectionTitle>{t.providersTitle}</FoldSectionTitle>}
           hint={providers === null ? undefined : t.providersReady(reachable, relevant.length)}
           // A failure never folds (`CLARITY.md` § 3), and a region inside a
           // CLOSED `<details>` is absent from the accessibility tree — so the

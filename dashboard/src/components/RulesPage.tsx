@@ -23,7 +23,7 @@ import type {
 } from '../lib/types.ts';
 import { api, ApiError } from '../lib/api.ts';
 import { useI18n } from '../i18n/context.tsx';
-import { Announce, Fold } from './Guidance.tsx';
+import { Announce, Fold, FoldSectionTitle } from './Guidance.tsx';
 import { Icon } from './Icon.tsx';
 
 const OPERATORS: RuleOperator[] = [
@@ -632,7 +632,7 @@ function RuleTester({ activeRules }: { activeRules: number }) {
         d'essai sans regle active ne prouve rien, et ca se voit avant de
         l'ouvrir.
       */}
-      <Fold title={t.testTitle} hint={t.testAgainst(activeRules)}>
+      <Fold title={<FoldSectionTitle>{t.testTitle}</FoldSectionTitle>} hint={t.testAgainst(activeRules)}>
       <p className="soc-muted">{t.testLede}</p>
 
       <label className="soc-field">
