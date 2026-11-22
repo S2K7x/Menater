@@ -2625,6 +2625,86 @@ holds the door on irreversible actions.
 
 ## 7. Known technical debt
 
+### ~~Four diagnostic section titles nothing could print, and a console README describing the product that left~~ — closed 2026-11-22
+
+Not previously in this list, and the half that is code is four deleted type
+lines and the four values beside them.
+
+`Health → Test connectivity` groups its checks under titles the server
+catalogue declares as `groups`. It declared **nine**; `diagnostics.ts`
+references **five**. `access`, `workflows`, `chain` and `config` — Access,
+Workflows, Chaining, Configuration — are the n8n-era report, and that module's
+own header already said so: *« It used to be a report about an n8n instance: is
+the API reachable, are the six workflows published, has anybody renamed a node
+the console reads, is a credential attached. Every one of those questions
+disappeared with n8n. »*
+
+**Why the orphan sweep passed over them for their whole life**, in its own
+words: `n8n-removed.test.ts` refuses a catalogue key nothing mentions and
+states that it *« under-reports on names that collide with ordinary words »*.
+Those four are four of the most ordinary words in a server. What makes them
+checkable is that this sub-catalogue has a declaration on the OTHER side —
+exactly one module reads `m.groups`, and it names each group it uses — so
+`server/diagnostics-groups.test.ts` compares the two as sets, in one equality.
+
+**What the dead titles cost was the next reader.** `dashboard/README.md`, the
+file `CLAUDE.md` names as the console's own reference, documented all nine
+under *« About thirty checks »*. Measured by driving `runDiagnostics` — once
+with no database and once against a throwaway PostgreSQL 16 with the schema
+applied the way `docker/init-db.sh` applies it — it is **14 checks in 5 groups
+with no database configured and 15 with one**.
+
+Eleven more claims in the same file were measured false and corrected:
+
+| Claim | What the code does |
+|---|---|
+| `MENATER_N8N_URL=http://10.100.102.100:5678` in the `.env` snippet | No line of this product reads it |
+| The DEMO banner appears *« without `MENATER_N8N_API_KEY` »* | No such variable; `snapshot.ts` falls back for four other reasons |
+| The node contract is `Finalize Decision + shadow_mode`, `Assemble Enriched Payload`, renamed *« in the editor »* | `NODE_CONTRACT` holds engine ids (`finalize`, `assemble`, `expose`), and there is no editor |
+| *« Undetermined »* means the console opens no Postgres connection | It means the check did not run: no database, or the entry-point probe turned off |
+| *« Database health is inferred, not measured: it opens no Postgres connection »* | `runDiagnostics` calls `createPool`, authenticates and looks for the five tables |
+| The tab table names **Workflow** | That tab is **Ingestion**, and has been since N4 |
+| The glossary explains *« Observation mode »* | The term is **Watch-only mode**; *Observation* was the third ingestion mode n8n had |
+| *« The two halves do not talk yet »* | J0.1 ships the button, J0.2 the offer, J0.5 the way back, J0.7 the symmetric half |
+| *« VulnPipe keeps its state in memory »* | A JSONL journal per run, on disk, with an interrupted-run reader |
+| *« runs 620 tests »* | 2,009 |
+| *« the ~30 connectivity checks »*, *« those 56 kB »*, *« the older `SOC_*` names »* | Five groups; 65.9 kB of script and 27.6 kB of stylesheet; `SOC_API_PORT` alone |
+
+Plus three in the root `README.md`: the setup table said to open ingestion in
+mode **`Primary`** — an n8n-era mode name, six lines above the note that
+correctly says the two modes are `Closed` and `Open` — *« Settings → Health »*
+for a top-level tab, and **1,219 tests**.
+
+**The pattern is the transferable half.** The existing sweeps match
+`/\bn8n\b/i`, which is right for prose because a catalogue string says *« open
+in n8n »*. The residue does not survive as prose: it survives inside
+IDENTIFIERS, and `\b` does not fire between `N8N` and the `_` of
+`MENATER_N8N_URL`. Measured on the unfixed file, `grep -c '\bn8n\b'` answers
+**0** and `grep -o 'n8n'` answers **2**; a mutation that restores the variable
+under the word-boundary form **survives**. So the new rule matches the token
+and carves out `n8n_soc`, the application role this stack really creates, in
+both directions.
+
+**What stays open.**
+
+- **A README cannot be pinned in general**, and the two counts are therefore
+  deleted rather than updated. What a test can hold is a name from a closed
+  set, which is why the diagnostic groups are pinned and the tab table is not:
+  the ten labels are assembled in `App.tsx` as `{ id, label: c.nav.x }` pairs
+  rather than declared as data, so pinning that table means parsing a
+  component — and the honest alternative is to make the tab bar read a
+  declaration, which is a change to the product for a document's benefit.
+  Named here rather than guessed at.
+- **A document can leave the corpus silently.** `OPERATOR_DOCS` is a list, for
+  the reason the test's header gives, and nothing fails if an entry is removed
+  from it. A renamed FILE does fail (the `exists` claim); a deleted LINE does
+  not.
+- `schemas/03-ai-decision.schema.json` and `slack/04-approval-blockkit.json`
+  are still at the repository root, and the entry below still describes them.
+  They are referenced by nothing and they are not in the new corpus: deleting
+  them remains a two-line change whose own reasons for waiting have not
+  changed.
+
 ### ~~A `Date` built for every timestamp, by a store that answers in text~~ — closed 2026-11-20
 
 Not previously in this list. `soc_run.started_at` and `soc_run_step.started_at`

@@ -4,6 +4,220 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-11-22 — Sunday · Maintenance and state of the project
+
+**Subject**: **the connectivity diagnostic lost four of its nine section titles
+when n8n left, and nothing in 2,004 tests could say so — so
+`dashboard/README.md`, the file `CLAUDE.md` names as the console's own
+reference, went on documenting all nine, and eleven other things that are no
+longer true.**
+
+**Result**: PR opened on `claude/sleepy-volta-gehb5w`. One server catalogue
+(`server/i18n.ts`, four dead type lines and the four values beside them), one
+new test file (`server/diagnostics-groups.test.ts`, 2 tests, 1 red on
+unmodified code), one existing sweep widened by a third corpus
+(`src/components/n8n-removed.test.ts`, +3 tests, 1 red), plus
+`dashboard/README.md`, `README.md`, `ROADMAP.md` (a § 7 entry), `CLAUDE.md`
+(one traps row, the two suite counts, the § Architecture sentence about what
+the diagnostic checks) and this journal. No screen, no route, no string an
+operator reads on a screen, no colour, no dependency, no CSS. The built bundle
+is **byte-identical** to the baseline.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-gehb5w` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Seventy-fourth entry saying so**; it is a line
+in the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: the baseline at
+`0520559` (= `origin/main`) was, after `npm ci` on both halves, typecheck **0
+errors**, console **2004 passed | 1 skipped**, VulnPipe **480 passed**, a clean
+build, **0 npm vulnerabilities on both halves**, and **no PR open**. So the
+dependency half of a Sunday was already done and `NIGHTLY.md` forbids a bump
+without a known vulnerability. That left the documentation half, which is the
+part of a Sunday with teeth: *documentation describing an unimplemented
+intention is worse than no documentation.* The countable claims I checked first
+were all RIGHT — 14 tools, 8 prompts, 9 resources, 16 node types, 9 injection
+scenarios, 12 credential names, 10 tabs, 8 rule templates, 7 screenshots, 16
+site doc sections, 17 `.env.example` variables — which is why the drift had to
+be hunted rather than counted.
+
+**What I learned that is written nowhere else.**
+
+1. **`\bn8n\b` cannot see the name in the form it actually survives in.** Both
+   existing sweeps use the word-boundary form, which is right for a catalogue
+   string saying *« open in n8n »*. The residue lives in IDENTIFIERS, and `\b`
+   does not fire between `N8N` and the `_` of `MENATER_N8N_URL`. Measured on
+   the unfixed file: `grep -c '\bn8n\b'` = **0**, `grep -o 'n8n'` = **2**. The
+   mutation that restores the variable under the word-boundary form
+   **SURVIVES** — so the word form is the one already gone and the token form
+   is the one that lasts.
+2. **The orphan sweep's own comment predicted the four dead keys exactly.**
+   `n8n-removed.test.ts` says it *« under-reports on names that collide with
+   ordinary words »*. `access`, `workflows`, `chain`, `config`: every one of
+   them appears in `server/` or `src/` for an unrelated reason. A documented
+   limit is a defect with a date on it.
+3. **A path-aware orphan rule is NOT the generalisation to reach for.** I
+   measured it before writing anything: searching `.name` instead of the bare
+   name reports **5** orphans in the server catalogue and only ONE of them is
+   real (`groups.access`); `workflows`, `chain` and `config` are found as
+   `payload.workflows`, `chain.payload` and `conf.config`, and the four
+   `stages.outcomes.*` hits are Record keys looked up BY VALUE, which is what
+   that catalogue is for. Do not try it again — the answer for a sub-catalogue
+   with one consumer is to compare the two LISTS.
+4. **Comment-stripping in the new test is load-bearing, and it was measured.**
+   M3 (the last use of `g.ingestion` moved into a comment) is RED with the
+   strip and **GREEN without it**. That is the realistic regression: somebody
+   deletes a usage and leaves a comment explaining why it used to be there.
+5. **The new guard's first live catch was my own prose.** I wrote « which were
+   the n8n-era report » into the README I was fixing; the suite went red and
+   named the line. Rewriting it without the name is also the right product
+   answer — the operator-facing document says what IS, the archive carries the
+   history.
+6. **Two tests borrow a premise from the machine, and it is NOT my change.**
+   `server/refused-ingest.test.ts` (*« STILL invalidates for a caller that got
+   past the secret »*, expects `500 engine_failed`) and
+   `server/assistant/assistant.test.ts` (*« fences enrichment on the real
+   get_alert reply »*) both FAIL the moment a PostgreSQL answers at
+   `localhost:5432` with a database named `menater` reachable as `n8n_soc` —
+   which is the default config (`server/config.ts`). Verified pre-existing by
+   stashing my changes: 2 failed | 50 passed on unmodified `main`. CI is green
+   only because its service container creates `menater_test` and not `menater`.
+   Same family as `persistent-cache.test.ts` borrowing its refusal from the
+   machine's UID. **Not fixed — one subject a night** — and it is the sharpest
+   standing lead I leave.
+7. **The measured diagnostic numbers**, by driving `runDiagnostics` rather than
+   reading it: **14 checks in 5 groups** with no database (`Database` 1,
+   `Credentials` 5, `Console contract` 6, `Runs` 1, `Pipeline entry point` 1)
+   and **15 with one** (the `schema` check appears). The README said *« about
+   thirty »* across nine groups.
+8. **A throwaway PostgreSQL 16 in this container, reproducibly**: `initdb` as
+   the `postgres` user under `/var/tmp` (not the scratchpad — its parents are
+   `0700 root` and `initdb` cannot traverse them), `pg_ctl -o '-k /var/tmp'`,
+   then `sql/*.sql` applied with `-v app_password=…` the way
+   `docker/init-db.sh` does. **Create `menater_test` and NOT `menater`**, or
+   learning 6 bites. With it: **2042 passed | 0 skipped**, which is what CI
+   runs.
+
+**Do not redo.**
+
+- **Do not widen the orphan rule to a path-aware search** — learning 3.
+- **Do not write the operator-docs rule with `\b`** — learning 1, and the
+  mutation is green.
+- **Do not put the archive in that corpus.** `ROADMAP.md`,
+  `NIGHTLY_LOG.md`, `CLAUDE.md` and `NIGHTLY.md` name n8n constantly and must:
+  they are where this product records what it used to be.
+- **Do not try to pin the README's tab table** without changing the product
+  first: the ten labels are assembled in `App.tsx` as `{ id, label: c.nav.x }`
+  pairs rather than declared as data, so a guard would have to parse a
+  component. `TAB_SLUGS` has the ids and `nav` has the labels, and the mapping
+  between them exists only in that array. Named in § 7.
+- **Do not delete `schemas/` and `slack/` in passing.** § 7 has handed that to
+  a Sunday twice now; its own reasons for waiting (they cost nothing, and a
+  sweep that removes files drowns a real change) still hold, and tonight had a
+  real change to protect.
+- **Do not add the counts back to the two READMEs.** They are deleted, not
+  corrected: `npm test` prints the number, nobody re-measures a README, and the
+  two that were there read 620 and 1,219 against a suite of 2,009. `CLAUDE.md`
+  keeps its counts because this routine re-measures them as its gate.
+
+**Found and NOT fixed, with why.**
+
+- Learning 6, the two environment-dependent tests. The honest fix is to make
+  them provoke their own refusal rather than inherit « nothing answers at
+  localhost:5432/menater » — one night's subject, and a Wednesday's.
+- **`dashboard/README.md` is still an n8n-era document in its SHAPE**, not only
+  in the eleven claims I corrected: its component list names ten components
+  where `src/components/` holds far more, and its « What comes from the SOAR
+  market » table has not been re-read in months. I corrected what I could
+  MEASURE false and left what is merely old, because rewriting prose I cannot
+  check is the noise `NIGHTLY.md` forbids.
+- **`site/docs.src.html` and `site/page.src.html` were not swept.** They are
+  the public pages; they are generated into six outputs, and `site/check.cjs`
+  needs Playwright. They are not in the new corpus and that is a decision worth
+  revisiting on a Sunday with the browser available.
+- **Standing leads, re-checked and unchanged**: `RuleStore.history` (the only
+  reader of `soc_tuning_rule_history`, three write paths filling it, no
+  caller — still the sharpest non-J0 item); the relay's missing deadline;
+  `finding_id` travelling unfenced; the wrong-SHAPE fallback reported as
+  `fallback_api_unavailable`; the ninety-odd French strings in `server/engine/`;
+  `.soc-warn-note` as a `<span>` on one Settings field; the Rules tab's two
+  heading-level skips; `var(--accent)` as text failing WCAG 1.4.3 on three
+  themes.
+
+**State of the week** (11-16 → 11-22, seven nights, seven PRs merged):
+
+Read off `git log`, not from memory — the first draft of this table had the
+subjects on the wrong days:
+
+| Night | Subject | Landed |
+|---|---|---|
+| 11-16 | J0.7 — the scan report could not say the code was already under attack | #104 |
+| 11-17 | VulnPipe handed a model code from the repository with no fence at all | #105 |
+| 11-18 | 33 store-contract assertions that ran nowhere, under a green check | #106 |
+| 11-19 | The scan quote was priced from a fragment of the prompt it sends | #107 |
+| 11-20 | A `Date` built for every timestamp, by a store that answers in text | #108 |
+| 11-21 | Three sections that were a `Fold`, and the Rules tab had one heading | #109 |
+| 11-22 | This one | — |
+
+**What moved.** Six nights, six PRs, all merged, and the week has a shape: two
+of them closed a *fence* (VulnPipe had none at all), two closed a *ruler* (the
+assertions that ran nowhere, the price taken off 4% of the prompt), and two
+were measured interface work. CI now runs the store contract against a real
+Postgres, which is the single biggest change to what a green check means since
+`ci.yml` existed.
+
+**What is stuck.** `RuleStore.history` — the only reader of
+`soc_tuning_rule_history`, three write paths filling it, no caller. It has been
+a standing lead for six consecutive nights and nobody has taken it, because the
+honest answer is a deletion and every night finds something sharper than a
+deletion. That is how a lead becomes permanent.
+
+**What I recommend for next week**, in order: (1) learning 6 — two tests on the
+ingestion door whose verdict depends on what is listening on the machine, which
+is the family this project has already decided twice it will not tolerate;
+(2) `RuleStore.history`, as a deliberate deletion with its `sql/` table, which
+is a Thursday and should be taken even though it is not sharp; (3) the
+accent-as-text WCAG 1.4.3 failure on three themes, which is not a measurement
+and needs a human to choose between the three options in § 7.
+
+**Verified** (Node 22.23.5, npm 10.9.9, PostgreSQL 16.15; every command run and
+its output read):
+
+| Command | Result |
+|---|---|
+| `npm ci` (both halves) | clean, **0 vulnerabilities** each |
+| `npm audit` (both halves) | **found 0 vulnerabilities** |
+| baseline typecheck / test / build (console) | **0 errors**, **2004 passed \| 1 skipped**, clean |
+| baseline `npm test` (VulnPipe) | **480 passed** |
+| the new test file against unmodified code | **1 failed \| 1 passed**, naming `access`, `chain`, `config`, `workflows` |
+| the widened sweep against unmodified docs | **1 failed \| 11 passed**, naming the two `MENATER_N8N_*` lines |
+| `npm run typecheck` (after) | **0 errors** |
+| `npm test` (after) | **2009 passed \| 1 skipped** (**+5**), 133 files |
+| `npm test` with `MENATER_TEST_PG`, real PostgreSQL 16 | **2042 passed \| 0 skipped** |
+| `npm run build` | clean — bundle **450.63 kB** and sheet **62.51 kB**, byte-identical to the baseline |
+| `npm test` (VulnPipe, after) | **480 passed** — untouched, run anyway |
+| `runDiagnostics`, no database | **14 checks**, 5 groups |
+| `runDiagnostics`, real PostgreSQL 16 with the schema applied | **15 checks**, 5 groups |
+| the two failing tests of learning 6, with my changes stashed | **2 failed \| 50 passed** — pre-existing |
+| mutation | **8 mutations, 8 killed**; control green FIRST and LAST, every run collecting 14 tests and seen to have changed the file |
+| two measurements where a GREEN is the finding | M3' (strip removed) **survives**; M11 (`\b` form) **survives** |
+
+| Mutation | Result |
+|---|---|
+| CONTROL (unmutated), first AND last | GREEN both times (14/14) |
+| M1 — a dead group label comes back | RED — 1 |
+| M2 — a live group stops being read from the catalogue | RED — 2 |
+| M3 — the last use of a group moves into a comment | RED — 2 |
+| M5 — the dead n8n variable comes back to the console README | RED — 1 |
+| M6 — the name comes back as prose in the root README | RED — 1 |
+| M7 — the application-role carve-out is dropped | RED — 1 |
+| M8 — the carve-out names a role nothing carries | RED — 2 |
+| M10 — a document in the corpus is renamed away | RED — 3 |
+| M3' — M3 **with comment-stripping removed** | **SURVIVES** — which is what says the strip is load-bearing |
+| M11 — the sweep rewritten as `\bn8n\b`, variable restored | **SURVIVES** — learning 1 |
+
 ## 2026-11-21 — Saturday · Interface, clarity, accessibility
 
 **Subject**: **three sections of this console were a `Fold`, so three sections
@@ -9693,7 +9907,7 @@ both rows, `partial` 200 in 1.22 s. `GET` on it answers 404 (POST-only).
   `h2`, `DB_PRESETS.supabase`'s port disagreeing with its own hint, and the
   ninety-odd French strings in `server/engine/` (§ 7).
 
-**Verified** (Node 22.22.0, npm 10.9.4, PostgreSQL 16.14; every command run and
+**Verified** (Node 22.22.0, npm 10.9.4, PostgreSQL 16.15; every command run and
 its output read):
 
 | Command | Result |

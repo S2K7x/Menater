@@ -54,7 +54,7 @@
  * ============================================================================
  */
 
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -244,5 +244,117 @@ describe('neither catalogue carries a message nothing asks for', () => {
 
   it('mentions every key the Guide catalogue declares', () => {
     expect(orphans(guideCatalogue('en'))).toEqual([]);
+  });
+});
+
+/**
+ * ============================================================================
+ * AND THE THIRD CORPUS: THE DOCUMENTS AN OPERATOR FOLLOWS
+ *
+ * Everything above walks the catalogues and the product source — what the
+ * console SHOWS. The name survived somewhere neither of them can see: the
+ * READMEs and `.env` templates somebody reads before the console is running.
+ *
+ * `dashboard/README.md` — the file the root `CLAUDE.md` names as the console's
+ * own reference — still told an operator to copy
+ *
+ *     MENATER_N8N_URL=http://10.100.102.100:5678
+ *
+ * into their `.env`, and explained the DEMO banner as "without
+ * `MENATER_N8N_API_KEY`". Neither variable is read by a line of this product;
+ * the demonstration set is chosen by four other things entirely. A stale name
+ * in a screen is a word somebody disbelieves. A stale name in an install
+ * snippet is a line somebody RUNS, and then debugs.
+ *
+ * TWO THINGS THE RULE ABOVE COULD NOT HAVE CAUGHT, and the second is the
+ * transferable one.
+ *
+ *  1. The corpus. These files are not catalogues and not `.ts`, so no sweep in
+ *     this repository had ever opened them.
+ *  2. THE PATTERN. The rules above match `/\bn8n\b/i` — written for prose, and
+ *     right there, because a catalogue string says "open in n8n". The residue
+ *     does not survive as prose: it survives inside IDENTIFIERS, and `\b` does
+ *     not fire between `N8N` and the `_` of `MENATER_N8N_URL`. Measured on the
+ *     unfixed file: `grep -c '\bn8n\b'` answers 0 and `grep -o 'n8n'` answers
+ *     2. The word form is the one that is already gone; the token form is the
+ *     one that lasts, because nobody reads a variable name as a sentence.
+ *
+ * So this rule matches the TOKEN, and carves out the single legitimate one by
+ * name: `n8n_soc` is the application role this stack really creates — the
+ * compose file sets `MENATER_DB_USER: n8n_soc`, `sql/01-role-and-dedup.sql`
+ * creates it, and renaming it would lock every existing install out of its own
+ * database. The carve-out is asserted in BOTH directions: a corpus that no
+ * longer contains the role would mean the exemption is covering nothing, which
+ * is how an exemption quietly becomes a hole.
+ *
+ * THE ARCHIVE IS DELIBERATELY NOT IN HERE. `ROADMAP.md`, `NIGHTLY_LOG.md`,
+ * `CLAUDE.md` and `NIGHTLY.md` name n8n constantly and must: they are where
+ * this product records what it used to be. The corpus is the documents that
+ * tell somebody what to DO.
+ * ============================================================================
+ */
+
+/** The repository root. `process.cwd()` under vitest is `dashboard/`. */
+const REPO = join(process.cwd(), '..');
+
+/**
+ * The documents an operator follows, rather than every Markdown file there is.
+ *
+ * Listed rather than swept, and that is the one place this file accepts a
+ * list: the opposite of this corpus is the archive, and a sweep would have to
+ * carve four history files out by name anyway — which is the same list written
+ * inside out, with the failure mode reversed. A new operator-facing document
+ * joins this array; a new history file needs nothing. The `exists` claim below
+ * is what stops an entry going stale when a file is renamed.
+ */
+const OPERATOR_DOCS = [
+  'README.md',
+  'dashboard/README.md',
+  'VulnPipe/README.md',
+  'integrations/wazuh/README.md',
+  '.env.example',
+  'dashboard/.env.example',
+  'VulnPipe/.env.example',
+  'docker-compose.yml',
+];
+
+/**
+ * The application role, which is a real identifier and not a stale name.
+ *
+ * Matched case-INSENSITIVELY, so the carve-out and the rule agree about case:
+ * Postgres folds an unquoted identifier, so `N8N_SOC` in a connection string
+ * names the same role, and flagging it would be a false positive about a line
+ * that works. A FUNCTION rather than a shared `/g` regex, because `.test()` on
+ * one advances its own `lastIndex` and would then answer differently for the
+ * second document it is asked about.
+ */
+const APPLICATION_ROLE = 'n8n_soc';
+const hasRole = (text: string): boolean => new RegExp(APPLICATION_ROLE, 'i').test(text);
+const withoutRole = (text: string): string =>
+  text.replace(new RegExp(APPLICATION_ROLE, 'gi'), '');
+
+const docText = (file: string): string => readFileSync(join(REPO, file), 'utf8');
+
+describe('no document an operator follows names a product this stack does not run', () => {
+  it('reads every document in the corpus', () => {
+    // A renamed file must fail here rather than leave the sweep silently.
+    expect(OPERATOR_DOCS.filter((f) => existsSync(join(REPO, f)))).toEqual(OPERATOR_DOCS);
+  });
+
+  it('names n8n nowhere, in prose or inside an identifier', () => {
+    const offenders = OPERATOR_DOCS.flatMap((file) =>
+      docText(file)
+        .split('\n')
+        .map((line, i): [string, number, string] => [file, i + 1, line])
+        // The application role is the one legitimate occurrence; removing it
+        // first is what lets the rule match the bare token everywhere else.
+        .filter(([, , line]) => /n8n/i.test(withoutRole(line)))
+        .map(([f, n, line]) => `${f}:${n}: ${line.trim().slice(0, 80)}`));
+    expect(offenders).toEqual([]);
+  });
+
+  it('still carries the application role, so the carve-out covers something', () => {
+    const carrying = OPERATOR_DOCS.filter((f) => hasRole(docText(f)));
+    expect(carrying.length).toBeGreaterThan(0);
   });
 });

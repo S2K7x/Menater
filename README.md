@@ -52,7 +52,7 @@ at the top of Settings tracks all four**, and disappears when they are done.
 | # | What | Where | If you skip it |
 |---|---|---|---|
 | 1 | **Shared secret** | Settings → Ingestion | The endpoint stays **closed** whatever mode you pick |
-| 2 | **Open the door** — mode `Primary` | Settings → Ingestion | Every alert is refused |
+| 2 | **Open the door** — mode `Open` | Settings → Ingestion | Every alert is refused |
 | 3 | **Model key** (OpenRouter) | Settings → Credentials | **Every** alert takes the fail-safe verdict: `needs_human`, confidence 0. Nothing is lost, but nothing is triaged |
 | 4 | **A log source** | Settings → Ingestion → Sources | No alerts arrive |
 
@@ -132,7 +132,7 @@ pipeline.
 
 ## Testing it
 
-**Settings → Health → inject a test alert** offers nine scenarios, one per
+**Health → inject a test alert** offers nine scenarios, one per
 *path* rather than per story: no destination, with a hash, low severity,
 malformed, duplicate, and so on. Each creates a real case; the malformed one is
 rejected on purpose, and the duplicate one exercises deduplication.
@@ -171,7 +171,8 @@ Docker is still the normal mode. To work on the code with hot reload:
 ```bash
 cd dashboard && npm install
 npm run dev     # API (4400) + code analysis (4319) + Vite interface (5174)
-npm test        # 1219 tests, 1 skipped (the one needing a database)
+npm test        # the suite prints its own count; the Postgres store
+                # contract is the one file that skips without a database
 ```
 
 See [dashboard/README.md](dashboard/README.md).

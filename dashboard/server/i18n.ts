@@ -38,16 +38,21 @@ export interface ServerMessages {
     unknownKeys: (keys: string) => string;
     notANumber: (key: string, value: string) => string;
   };
-  /** Groupes du diagnostic : ils servent de titres de section à l'écran. */
+  /**
+   * Groupes du diagnostic : ils servent de titres de section à l'écran.
+   *
+   * This list IS the list `diagnostics.ts` uses, and
+   * `diagnostics-groups.test.ts` compares the two. It carried four more —
+   * Access, Workflows, Chaining, Configuration — for as long as it existed:
+   * the n8n-era report that produced them is gone, and nothing could say so.
+   * The orphan sweep could not, either: it searches the bare leaf NAME across
+   * the source, and those four are ordinary words that appear everywhere.
+   */
   groups: {
-    access: string;
-    workflows: string;
     contract: string;
-    chain: string;
     credentials: string;
     executions: string;
     database: string;
-    config: string;
     ingestion: string;
   };
 
@@ -278,14 +283,10 @@ const EN: ServerMessages = {
     notANumber: (key, value) => `"${key}" expects a number, got "${value}".`,
   },
   groups: {
-    access: 'Access',
-    workflows: 'Workflows',
     contract: 'Console contract',
-    chain: 'Chaining',
     credentials: 'Credentials',
     executions: 'Runs',
     database: 'Database',
-    config: 'Configuration',
     ingestion: 'Pipeline entry point',
   },
 
