@@ -104,32 +104,37 @@ reading.
 
 ## Connectivity diagnostic
 
-**Health → Test connectivity**. About thirty checks:
+**Health → Test connectivity**. Five groups — measured by driving
+`runDiagnostics`, it is **14 checks with no database configured and 15 with
+one**:
 
 | Group | What is checked |
 |---|---|
-| Access | Database reachability, SQL schema applied |
-| Workflows | The six exist and are published |
-| **Console contract** | The nodes whose output the console reads still exist |
-| Chaining | Each `Execute Workflow` points at the right id; error workflow declared |
-| Credentials | Postgres, Slack and authenticated HTTP nodes without an attached credential |
-| Runs | Recent failure rate |
-| Database | Missing table detected in traces |
-| Configuration | Refused access to `$env` detected |
-| Ingestion | The webhook answers and does reject an invalid payload |
+| **Database** | The engine's database answers, and the five tables the pipeline writes exist |
+| **Credentials** | The model key, without which every alert takes the fail-safe verdict; then Slack and the three enrichment keys, as warnings — a pipeline with no threat-intelligence key still triages, it triages on less |
+| **Console contract** | The named node outputs the console reads still exist, one check per workflow |
+| **Runs** | Whether the engine has actually run anything recently |
+| **Pipeline entry point** | The webhook answers, and does reject an invalid payload |
+
+Those five groups are the whole list, and
+`server/diagnostics-groups.test.ts` is what keeps it that way: the catalogue
+declared four more for a long time — Access, Workflows, Chaining,
+Configuration — left over from the external workflow engine this console no
+longer uses, and nothing could print them.
 
 ### The node contract, and why this test is the most important
 
-The console reads **exact node names** (`Finalize Decision + shadow_mode`,
-`Assemble Enriched Payload`…). It is a fragile coupling, and an accepted one:
-the node ids the console reads are a contract between `workflows/` and `cases.ts`.
+The console builds a case out of **named node outputs** (`finalize`,
+`assemble`, `expose`…), and `NODE_CONTRACT` in `server/engine/cases.ts` is the
+list of the ones it reads. It is a coupling, and an accepted one.
 
-The risk is real: someone renames a node in the editor, and the console goes
-**blind without saying so** — it would show cases with no decision rather than
-an error. That is the worst failure mode for a security tool.
+The risk is real: somebody renames a node, and the console goes **blind
+without saying so** — it would show cases with no decision rather than an
+error. That is the worst failure mode for a security tool.
 
-The diagnostic turns that risk into a visible finding, and names the missing
-node. **Run it after any workflow change.**
+Both halves now live in this repository, so the check is exact rather than a
+string comparison against another product's editor: the diagnostic reads the
+compiled workflow definitions, and names the missing node.
 
 ### Four states, not two
 
@@ -138,9 +143,10 @@ A test that could only say "green" or "red" would lie half the time.
 - **OK** — verified, it works.
 - **Watch** — it works, but something reduces coverage.
 - **Failing** — broken, with the fix.
-- **Undetermined** — the console cannot conclude. It opens no Postgres
-  connection: it cannot *confirm* the schema is applied, only detect that it is
-  not. A green shown there would be a useful lie.
+- **Undetermined** — the check did not run, so there is nothing to conclude:
+  no database is configured, so the run journal cannot be read, or the entry-point
+  probe was turned off for this diagnostic. A green shown there would be a
+  useful lie.
 
 ---
 
@@ -154,7 +160,7 @@ orientation, from general to particular:
 | **Tab header** | Every tab | What you are looking at, what it is for, and a **"How does it work?"** link that opens the Guide **on the right section** |
 | **Welcome card** | First visit | Three clickable ways in instead of a silent table. Dismissed on click, for good |
 | **Waiting line** | Top of Alerts | "3 alerts are waiting for your approval" or "Nothing is waiting for you" — the question you came to ask, answered in words |
-| **Glossary tooltip** | On the word | "Observation mode", "confidence", "human disagreement" explain themselves **in place**. Sending someone to the Guide to understand a word loses the page they were reading |
+| **Glossary tooltip** | On the word | "Watch-only mode", "confidence", "human disagreement" explain themselves **in place**. Sending someone to the Guide to understand a word loses the page they were reading |
 
 And one vocabulary rule, held everywhere: **a pipeline identifier is never shown
 raw**. `shadow_logged` becomes "decision logged, nothing was executed",
@@ -170,7 +176,7 @@ translating.
 |---|---|
 | **Alerts** | The triage queue and the incident card. What awaits a human decision rises to the top |
 | **Code** | Run a vulnerability analysis on a folder, a file or a repository, and read the report |
-| **Workflow** | The pipeline **as it runs**: the graph of the six workflows, the effect of each step, and the editable variables |
+| **Ingestion** | **How alerts get in**: the delivery architecture, the sources on each transport, and the pipeline as it runs — graph, per-step effect, editable variables |
 | **Rules** | The team's own tuning: what is normal here, and what should stop reaching a human |
 | **Tracking** | The unreduced view — broken chains, runs attached to no alert, searchable log, replay |
 | **Metrics** | The two rates that gate the switch to real mode |
@@ -197,7 +203,8 @@ look for a setting.
 **Merged: the interface.** One web application, one origin, one access lock, one
 build. The section lives in `src/vulnpipe/` and mounts on the tab's first visit —
 then stays mounted: changing tab during a scan does not cut it. It is **loaded on
-demand** (`React.lazy`): someone who only triages never downloads those 56 kB.
+demand** (`React.lazy`): someone who only triages never downloads its 65.9 kB
+of script and 27.6 kB of stylesheet.
 
 **Not merged: the engines.** The analyser indexes code with tree-sitter and calls
 LLMs; the console API has no dependency at all. The two services run side by
@@ -278,9 +285,11 @@ was being measured when a habit was.
 
 ## LIVE / DEMO mode
 
-The banner in the top right is permanent. Without `MENATER_N8N_API_KEY`, or if
-the database does not answer, the console falls back to a demonstration set **and says
-so** — an orange banner at the top of the page. The two never mix.
+The banner in the top right is permanent. The console falls back to a
+demonstration set **and says so** — an orange banner naming the reason — in
+four cases: demonstration mode forced in Settings, no database configured, a
+database that does not answer, and a database that answers with no run in the
+window. The two never mix.
 
 The demonstration cases deliberately cover the hard outcomes: fallback verdict,
 degraded enrichment, expired approval, lost audit. A demo that only shows the
@@ -383,9 +392,11 @@ password is refused — otherwise the console would become unreachable.
 ### Database reachability test
 
 The button opens a TCP connection to the host and port. It proves the port
-answers — **and nothing more**: the console has no Postgres driver of its own
-here, so it can check neither the credentials nor the existence of the tables.
-The result says so explicitly rather than implying a full test.
+answers — **and nothing more**: it checks neither the credentials nor the
+existence of the tables, and the result says so explicitly rather than implying
+a full test. The check that does open a connection, authenticate and look for
+the five tables is **Health → Test connectivity**, which is the one to run when
+this button is green and alerts still die.
 
 ---
 
@@ -395,12 +406,11 @@ Copy `.env.example` to `.env` (bootstrap; the Settings page takes over after
 that):
 
 ```
-MENATER_N8N_URL=http://10.100.102.100:5678
 MENATER_API_PORT=4400
 VULNPIPE_API_PORT=4319
 ```
 
-The older `SOC_*` names are still accepted as a fallback, so an existing `.env`
+`SOC_API_PORT` is still read as a fallback for the first, so an existing `.env`
 does not break. `VULNPIPE_API_URL` replaces the analysis service host if it does
 not run locally.
 
@@ -431,7 +441,7 @@ server/
   auth.ts          sessions, HttpOnly cookie, attempt throttling
   engine/cases.ts  collector: runs → cases + trace
   engine/attack.ts ATT&CK tagging
-  diagnostics.ts   the ~30 connectivity checks
+  diagnostics.ts   the connectivity checks, in five groups
   demo.ts          demonstration set
   i18n.ts          server catalogue (diagnostic, chain, sample set)
   engine/          the workflow engine: graph, nodes, transforms, Postgres store
@@ -452,8 +462,9 @@ src/
     styles.css           `vp-*` classes, scoped under `.vp-embed`
 ```
 
-`npm test` runs 620 tests. The interface tests came from the analyser and
-followed it in.
+`npm test` prints the count; this file deliberately does not, because a number
+in prose is a claim with a date on it. The interface tests came from the
+analyser and followed it in.
 
 Roadmap: **[../ROADMAP.md](../ROADMAP.md)**, one list for the whole product.
 
@@ -466,20 +477,19 @@ centre), not the brand, and renaming it would have changed nothing for the user.
 
 - **The approver's identity is self-declared.** The form does not authenticate
   it; the card says so explicitly (`identity_source: console_self_declared`).
-- **Database health is inferred**, not measured, in the diagnostic: it opens no
-  Postgres connection there.
-- **ATT&CK tagging is heuristic** — pattern matching on the rule name and the
-  raw log, shown as such.
 - **No distinct roles**: the lock is a single shared password. Reading, analysis
   and approval are not separated.
-- Rebuilding cases is two queries; a 15 s cache keeps ten open tabs off the database.
-  That is the reason for the slight delay after an injection.
-- History is limited to the **last 120 runs**.
-- **The two halves do not talk yet.** A VulnPipe scan creates no case in the
-  triage queue, and a SOC alert triggers no scan. The merge is the interface's;
-  bringing the two flows together remains to be done.
-- **VulnPipe keeps its state in memory.** Restarting the service loses past
-  scans: the section has no history, only the scan in progress.
+- **ATT&CK tagging is heuristic** — pattern matching on the rule name and the
+  raw log, shown as such.
+- Rebuilding cases walks the run journal; a 15 s cache keeps ten open tabs off
+  the database. That is the reason for the slight delay after an injection.
+- The run window defaults to the **last 120 runs**, and Settings takes it up to
+  500. History older than the window is in the database and not on the screen.
+- **Neither half starts the other.** A scan finding becomes a case only when
+  somebody presses *Send to the triage queue* on it, and an alert whose
+  technique says the way in was the application's own code carries an **offer**
+  to analyse that code — never a scan it started by itself. That is a rule, not
+  a gap: a scan is spent money.
 - **Without a model key, every alert takes the fail-safe verdict.** The pipeline
   runs, nothing is lost, and nothing is triaged either. The setup checklist says
   so, and so does the console at startup.
