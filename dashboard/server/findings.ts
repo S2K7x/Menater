@@ -213,10 +213,19 @@ export function scanRepository(
   if (expected !== kase.alert_id) return null;
 
   return {
-    // Nobody has told us what this service is called. The inventory is where
-    // that name lives, and it is keyed on machines, which this alert has none
-    // of. Absent stays absent — repeating the target here would dress one
-    // fact up as two.
+    // THE GATE KNOWS NO NAMES. A scan reports a target; it never reports what
+    // a team calls that code, so this function has nothing to put here.
+    //
+    // What this comment used to say is that the INVENTORY could not name it
+    // either — *« it is keyed on machines, which this alert has none of »* —
+    // and that is true of the inventory's INDEX and false of its DATA: every
+    // entry stores a repository, so the table reads the other way round with
+    // no observable at all. `declaredService` is that reading and
+    // `repositoryOf` in `snapshot.ts` — the one funnel every case passes
+    // through, live or sample — is where it is asked, because *which code*
+    // and *what it is called* are two facts with two origins and this one is
+    // the integrity gate. Repeating the target here would still be one fact
+    // dressed as two, which is why the funnel answers and not this.
     service: null,
     repository: target,
     matched_on: 'scan_target',

@@ -172,6 +172,38 @@ const ALERT_FLAW = {
 };
 
 /**
+ * A second promoted flaw, whose `target` IS the repository the inventory
+ * declares (J0.8).
+ *
+ * `ALERT_FLAW` above carries the crafted needle, which no entry declares — so
+ * before this existed the window held no case on which the table could name
+ * the code, and *« a service name selected by a foreign string is withheld »*
+ * was true of a reply that had none. This is that shape.
+ */
+const FLAW_DECLARED = {
+  vulnerability: 'IDOR', http_method: 'GET', route: '/invoices/:id', file: 'src/invoices.ts',
+};
+const SCAN_RUN_DECLARED = 'scan-ch-2';
+const ALERT_FLAW_DECLARED = {
+  alert_id: findingAlertId(SCAN_RUN_DECLARED, FLAW_DECLARED),
+  rule_name: 'IDOR in GET /invoices/:id',
+  severity: 'medium',
+  timestamp: NOW.toISOString(),
+  raw_log: 'Promoted from a code analysis report.',
+  source: 'vulnpipe',
+  extensions: {
+    vulnpipe: {
+      scan_run_id: SCAN_RUN_DECLARED,
+      target: REPOSITORY,
+      vulnerability: FLAW_DECLARED.vulnerability,
+      http_method: FLAW_DECLARED.http_method,
+      route: FLAW_DECLARED.route,
+      file: FLAW_DECLARED.file,
+    },
+  },
+};
+
+/**
  * The model answer that gets a containment action past the guardrails.
  *
  * `true_positive` at 0.9 satisfies G8; the lineage is empty because G11
@@ -286,14 +318,15 @@ const { TOOLS } = await import('./tools.ts');
 // The trust boundary moved to `src/lib/types.ts` with J0.7, because the
 // browser half needs the same fact. One declaration, read from its home.
 const { INVENTORY_MATCHES } = await import('../../src/lib/types.ts');
-const { invalidate } = await import('../snapshot.ts');
+const { invalidate, repositoryOf, snapshot } = await import('../snapshot.ts');
+const { getConfig } = await import('../config.ts');
 
 afterAll(() => rmSync(SCRATCH, { recursive: true, force: true }));
 
 beforeEach(async () => {
   live = assemble();
   invalidate();
-  for (const alert of [ALERT_WEB, ALERT_GATEWAY, ALERT_PLAIN, ALERT_FLAW]) {
+  for (const alert of [ALERT_WEB, ALERT_GATEWAY, ALERT_PLAIN, ALERT_FLAW, ALERT_FLAW_DECLARED]) {
     await live.engine.start('01-ingestion', alert, alert.alert_id);
   }
   invalidate();
@@ -367,6 +400,18 @@ describe('the code behind an alert, as the assistant and the MCP catalogue read 
 
     const flaw = await only('get_alert', { alert_id: ALERT_FLAW.alert_id });
     expect(flaw.out.repository?.matched_on).toBe('scan_target');
+
+    // J0.8's shape: a promoted flaw the operator's table DOES name. Asserted
+    // on the case the console renders, because the reply deliberately
+    // withholds the name — see the test that claims it.
+    const declared = repositoryOf(
+      (await snapshot('en')).cases.find((c) => c.alert_id === ALERT_FLAW_DECLARED.alert_id)!,
+      getConfig().inventory.entries,
+    );
+    expect(declared).toEqual({
+      service: SERVICE, repository: REPOSITORY,
+      matched_on: 'scan_target', matched_value: SCAN_RUN_DECLARED,
+    });
 
     const attention = await only('get_attention', {});
     expect(attention.out.awaiting_approval.count).toBeGreaterThan(0);
@@ -466,6 +511,58 @@ describe('the code behind an alert, as the assistant and the MCP catalogue read 
   });
 
   /**
+   * J0.8 — a service name the operator's table supplied but a FOREIGN string
+   * selected does not reach a model at all.
+   *
+   * `declaredService` lets the inventory name the code a promoted finding came
+   * out of, and the name is the operator's own either way; what chose the
+   * entry is `extensions.vulnpipe.target`, which no digest covers. Neither
+   * answer is clearly right — fencing it would have the assistant hedge about
+   * the operator's own service name, the argument ROADMAP § 7 makes for
+   * leaving `human_reasoning` unmarked; sending it plain would let a crafted
+   * bag have a model read a case as being about a real service. So this
+   * surface is held exactly where J0.6 left it, and the holding is CLAIMED
+   * rather than left to be noticed: `service: r.service` is one character from
+   * being restored.
+   *
+   * The operator-facing screens get the name — they print `matched_on` beside
+   * it, so the reader can see the answer came from the scan — and the vacuity
+   * half is the guard above, which asserts the case really does carry it.
+   */
+  it('withholds a service name a foreign string chose, on every tool', async () => {
+    const { replies } = await callEveryTool(SERVICE);
+
+    /** Every `CaseRepository` in a reply, wherever it travelled. */
+    const repositories = (value: unknown, path = ''): Array<{ path: string; r: any }> => {
+      if (Array.isArray(value)) return value.flatMap((v, i) => repositories(v, `${path}[${i}]`));
+      if (!value || typeof value !== 'object') return [];
+      const o = value as Record<string, unknown>;
+      const here = 'matched_on' in o && 'service' in o ? [{ path, r: o }] : [];
+      return [...here, ...Object.entries(o)
+        .flatMap(([k, v]) => repositories(v, path === '' ? k : `${path}.${k}`))];
+    };
+
+    const seen = replies.flatMap((reply) =>
+      repositories(reply.out).map((hit) => ({ tool: reply.tool, ...hit })));
+
+    // The vacuity half, in both directions: the walk really does find
+    // repositories of both origins, so neither claim below passes over
+    // nothing.
+    expect(seen.filter((s) => s.r.matched_on === 'scan_target').length).toBeGreaterThan(0);
+    expect(seen.filter((s) => INVENTORY_MATCHES.has(s.r.matched_on)).length).toBeGreaterThan(0);
+
+    for (const { tool, path, r } of seen) {
+      if (INVENTORY_MATCHES.has(r.matched_on)) continue;
+      expect(r.service, `${tool}.${path} names a service on a case the inventory did not `
+        + 'match, so a crafted scan target is what chose that entry').toBeNull();
+    }
+    // And the operator's own matches still carry theirs — this is a holding,
+    // not a removal.
+    expect(seen.filter((s) => INVENTORY_MATCHES.has(s.r.matched_on))
+      .every((s) => typeof s.r.service === 'string' && s.r.service !== '')).toBe(true);
+  });
+
+  /**
    * An alert the inventory does not map carries the two keys as `null`, and
    * NOT as absent.
    *
@@ -539,15 +636,27 @@ describe('the code behind an alert, as the assistant and the MCP catalogue read 
    * search actually finds the case by.
    */
   it('searches every field it claims to search', async () => {
+    const ids = (r: Record<string, any>) =>
+      (r.alerts as Array<{ alert_id: string }>).map((a) => a.alert_id).sort();
+
     const { out } = await only('search_alerts', { query: REPOSITORY });
     expect(out.searched_fields).toContain('repository.repository');
     expect(out.searched_fields).toContain('repository.service');
-    expect(out.matched).toBe(1);
-    expect(out.alerts[0].alert_id).toBe(ALERT_WEB.alert_id);
+    expect(out.matched).toBe(2);
+    expect(ids(out)).toEqual([ALERT_FLAW_DECLARED.alert_id, ALERT_WEB.alert_id].sort());
 
+    /*
+      J0.8's win, and it is the number the night was chosen on. An operator
+      asks about a SERVICE — the name a team uses, which is the case this tool
+      says it is for — and before the table could name a promoted flaw this
+      answered 1 of the 2 cases about that code: the detection on the machine,
+      and not the flaw out of the very repository the inventory maps to it.
+      Both ids rather than a count, because a count of 2 is also what a window
+      holding the wrong two cases produces.
+    */
     const byService = await only('search_alerts', { query: SERVICE });
-    expect(byService.out.matched).toBe(1);
-    expect(byService.out.alerts[0].alert_id).toBe(ALERT_WEB.alert_id);
+    expect(byService.out.matched).toBe(2);
+    expect(ids(byService.out)).toEqual([ALERT_FLAW_DECLARED.alert_id, ALERT_WEB.alert_id].sort());
 
     // Every declared path, resolved against the case the search should find.
     const web = (await only('get_alert', { alert_id: ALERT_WEB.alert_id })).out;

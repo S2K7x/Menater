@@ -28,12 +28,12 @@ import { getEngineStore } from './runtime.ts';
 import { demoCases } from './demo.ts';
 import { messages, type Locale } from './i18n.ts';
 import { connectionString, getConfig } from './config.ts';
-import { resolveRepository } from './inventory.ts';
+import { declaredService, resolveRepository } from './inventory.ts';
 import { scanRepository } from './findings.ts';
 import { PIPELINE_WORKFLOWS } from './engine/workflows/pipeline.ts';
 import { ROUTING_WORKFLOWS } from './engine/workflows/routing.ts';
 import type {
-  AlertCase, ConsoleSnapshot, HealthReport, Metrics, TraceReport,
+  AlertCase, CaseRepository, ConsoleSnapshot, HealthReport, InventoryEntry, Metrics, TraceReport,
 } from '../src/lib/types.ts';
 
 /**
@@ -356,10 +356,38 @@ export function invalidate(): void {
  * inventory visible on the next refresh instead of up to fifteen seconds
  * later.
  */
+/**
+ * Which code ONE case is about — the funnel's own line, exported.
+ *
+ * Five test files resolved this by re-typing the expression, which is the
+ * fixture-in-the-reader's-vocabulary shape `pipeline-to-case.test.ts` exists
+ * to end: a test that spells the funnel itself vouches for its own copy of it.
+ * They are unchanged; what is new is that they no longer have to.
+ *
+ * THE SCAN ANSWERS WHICH CODE, THE TABLE ANSWERS WHAT IT IS CALLED, and those
+ * are two facts with two origins. `scanRepository` is the integrity gate and
+ * stays exactly that: it reads the bag, recomputes the alert id and refuses a
+ * bag the id was not derived from — it knows no service names, because a scan
+ * does not. The inventory does, and until tonight it was never asked: its only
+ * index is on machines, and a promoted finding has none, so `scanRepository`
+ * wrote `service: null` under a comment that read the index's limit as the
+ * table's. See `declaredService` for what that cost and for why naming the
+ * code moves no trust boundary — `matched_on` is still `scan_target`, so
+ * `INVENTORY_MATCHES` still excludes the case and J0.7 still refuses to count
+ * it.
+ */
+export function repositoryOf(
+  c: AlertCase, entries: InventoryEntry[],
+): CaseRepository | null {
+  const scanned = scanRepository(c);
+  if (scanned === null) return resolveRepository(c, entries);
+  return { ...scanned, service: declaredService(scanned.repository, entries) };
+}
+
 function withRepositories(snap: ConsoleSnapshot): ConsoleSnapshot {
   const entries = getConfig().inventory.entries;
   snap.cases = snap.cases.map((c) => {
-    const repository = scanRepository(c) ?? resolveRepository(c, entries);
+    const repository = repositoryOf(c, entries);
     // A case nothing named keeps the object it already has: `null` is what
     // `buildCases` wrote, and copying every case to reinstall it would be work
     // done on every rebuild for every install with no inventory.
