@@ -268,11 +268,19 @@ export interface InventoryEntry {
  */
 export interface CaseRepository {
   /**
-   * What the team calls it, from the inventory entry that matched.
+   * What the team calls it, from the inventory entry that named it.
    *
-   * `null` when nothing named it — which is every promoted finding: the scan
-   * knows the target, and nobody has told us what the service is called.
-   * Absent stays absent rather than being filled with the target again.
+   * `null` when the operator's table does not name this code: no entry
+   * declares it, or two entries declare it under two different names and
+   * `declaredService` refuses to pick one. Absent stays absent rather than
+   * being filled with the repository again.
+   *
+   * It is NOT `null` on every promoted finding any more. The entry that
+   * matched an observable answers for a detection (J0.3), and the entry that
+   * declares the scanned repository answers for a flaw — the same table, read
+   * by its other column, which is a lookup needing no observable at all. What
+   * does not change is `matched_on`: the ANSWER still came from the scan, so
+   * `INVENTORY_MATCHES` goes on excluding the case.
    */
   service: string | null;
   repository: string;

@@ -4,6 +4,183 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-11-23 — Monday · Feature
+
+**Subject**: **a case opened by promoting a scan finding was the only case the
+operator's own service inventory never named — because `scanRepository`
+concluded that table *« is keyed on machines, which this alert has none of »*,
+which is true of its INDEX and false of its DATA.**
+
+**Result**: PR opened on `claude/sleepy-volta-x21708`. Four source files
+(`server/inventory.ts` +`declaredService`, `server/snapshot.ts`
++`repositoryOf`, `server/findings.ts` and `src/lib/types.ts` comment-only,
+`server/assistant/tools.ts` one expression), one new test file
+(`server/declared-service.test.ts`, 13 tests, 3 red on unmodified behaviour),
+two existing test files extended, plus `ROADMAP.md` (a J0.8 section, the J0
+table row, a note on § 7), `CLAUDE.md` (one traps row, the stale J0.1 claim,
+the architecture paragraph, the two suite counts) and this journal. **No screen
+change, no CSS, no catalogue string, no dependency, no SQL** — and the built
+bundle is **byte-identical to the baseline, hashes included**.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-x21708` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Seventy-fifth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: the baseline at
+`ecde155` (= `origin/main`) was, after `npm ci` on both halves, typecheck **0
+errors**, console **2009 passed | 1 skipped**, VulnPipe **480 passed**, a clean
+build, **0 vulnerabilities on both halves**, and **no PR open**. Monday is
+Feature and J0 outranks everything, and J0.4 is the only item still `◐` — but
+its own named gap (*« it does not read a scan report »*) the roadmap calls a
+subject rather than a slice, so I went looking for a reproducible defect in the
+J0 surface instead, which `NIGHTLY.md` ranks above a roadmap limitation.
+
+**What I measured before writing a line.** A probe driving the real pipeline —
+`findingToAlert` → `injectAlert` through the six real workflows → `buildCases`
+with the projection `snapshot.ts` passes → the funnel — on an install whose
+inventory maps `Billing API` to `/srv/src/billing-api` and the machine
+`web-01`, with one detection about that machine and one finding promoted out of
+a scan of that very repository:
+
+| | before | after |
+|---|---|---|
+| the detection's `service` | `Billing API` | `Billing API` |
+| **the flaw's `service`** | **`null`** | **`Billing API`** |
+| By-system block, flaws only | label `"/srv/src/billing-api"`, services `[]` | label `"Billing API"`, services `["Billing API"]` |
+| `search_alerts("billing api")` | **1 hit of 2** | **2 of 2** |
+| `matched_on` | `scan_target` | `scan_target` |
+| `repository` | the bag's string | the bag's string |
+
+**What I learned that is written nowhere else.**
+
+1. **The inventory has two columns and one index, and that asymmetry is the
+   whole defect.** `resolveRepository` indexes the identifiers because its
+   question is *which repository runs on this machine*. Every entry also stores
+   a repository, so the table answers *what is this code called* with no
+   observable — which is the only question a promoted finding can ask, since it
+   carries a target and deliberately no host. The comment beside the index read
+   the index's limit as the table's.
+2. **`VulnPipe`'s `GET /runs` cannot be joined on.** `RunSummary.target` is
+   `state.result?.target.label` — the SHORT display form (`shortLabel()` keeps
+   the last two path segments). So the obvious way to build J0.4's remaining
+   half (*what has a scan ever said about this code*) is to walk that list and
+   match the target, and it would **silently never match** an inventory line
+   holding the full path: the trap this repository already carries twice. That
+   slice needs a VulnPipe change first, and the honest one is a second field
+   carrying the string that was launched.
+3. **Vitest 4 swallows a probe's `console.log`.** `npx vitest run <file>`
+   printed nothing at all; `--disable-console-intercept` is what shows it. An
+   hour is easy to lose concluding the probe did not run.
+4. **A jsdom test CAN import `server/snapshot.ts`**, `pg` and all — measured
+   with a throwaway one-assertion file before relying on it. So a render test
+   can drive the real resolution funnel rather than re-typing it, which is what
+   `system-panel.test.tsx` now does.
+5. **Both of my own early-return guards were lines no test could fail on.**
+   `declaredService` opened with `if (entries.length === 0) return null` and
+   `if (key(repository) === '') return null`; removing both left **76 tests
+   green**, because `indexOf` skips any entry missing either half (so nothing
+   is indexed under `''`) and an empty table indexes to an empty map. Deleted,
+   with the measurement written beside the one-line body so the next reader
+   does not re-add them.
+6. **The trust question had a clean answer and it was a refusal.** What a
+   crafted `extensions.vulnpipe.target` can choose is the inventory ENTRY, never
+   the string — the name that comes back is the operator's own either way. So
+   naming the code moves nothing as long as `matched_on` stays `scan_target`,
+   and the mutation that promotes it to `'host'` is **red on seven tests**,
+   including J0.7's *« is still refused by the scan report's incident count »*.
+7. **`ROADMAP` § 1 still claimed *« Connectivity diagnostic (30 checks) »***,
+   which 11-22 measured false (14 checks in 5 groups, 15 with a database) and
+   corrected in two READMEs but not here. One line, corrected.
+
+**Do not redo.**
+
+- **Do not promote `matched_on` to an inventory value** when the scanned target
+  matches the table. It admits the case into `INVENTORY_MATCHES`, and J0.7's
+  *« N alerts in the triage queue are about … »* would then count a fabricated
+  incident on code somebody had just typed. Learning 6; the mutation is red on
+  seven.
+- **Do not substitute the entry's spelling into `repository`.** The entry is in
+  hand and it would take attacker-authored bytes out of the card and the
+  launcher prefill — which is exactly why it is one of the three options § 7's
+  *« a scan target nobody authenticated »* leaves to a human. A test pins that
+  `'/SRV/SRC/Billing-API'` still travels unchanged, so the option stays open
+  and visible rather than half-taken.
+- **Do not send the service name to the model** without a human choosing
+  between fence, plain and withhold. `codeOf` withholds it, the holding is
+  CLAIMED by a test, and the reasoning is in its header: fencing would have the
+  assistant hedge about the operator's own word (§ 7's `human_reasoning`
+  argument), plain would let a crafted bag have a model read a case as being
+  about a real service. `search_alerts` is unaffected either way — it searches
+  the RAW case, never that reply.
+- **Do not pick the first name** when two entries declare one repository under
+  two. `normalizeInventory` allows that shape on purpose (two services share a
+  monorepo; one service runs on two machines), so the resolver refuses rather
+  than tossing the coin `inventory.ts`'s header exists to refuse.
+- **Do not build J0.4's scan-history half on `GET /runs`** — learning 2.
+- **Do not use `git checkout` in a mutation harness** while the change is
+  uncommitted: it restores HEAD, i.e. deletes the fix under test. Mine restores
+  from a working-tree copy, diffs every mutable file to prove the mutation
+  applied, and ran the control FIRST and LAST (100 tests collected both times).
+
+**Found and NOT fixed, with why.**
+
+- **Three test files still spell the resolution funnel by hand**
+  (`src/lib/systems.test.ts`, `server/promoted-back-reference.test.ts`,
+  `src/vulnpipe/components/queue-on-this-code.test.tsx` all do
+  `{ ...c, repository: scanRepository(c) }`). That is now a measurable
+  divergence from production for a declared target — their fixtures carry no
+  service name where the console has one. `repositoryOf` is exported and two
+  files use it; switching the other three is a tidy-up, not tonight's subject,
+  and it touches files this change otherwise leaves alone.
+- **`resolveRepository`'s own `if (entries.length === 0) return null`** is the
+  same shape as the two guards I deleted (learning 5) — it is pre-existing and
+  I did not touch it, per *no refactor around the fix*.
+- **Standing leads, re-checked and unchanged**: the two environment-dependent
+  tests from 11-22's learning 6 (`refused-ingest.test.ts` and
+  `assistant.test.ts` fail when a PostgreSQL answers at `localhost:5432/menater`
+  — still the sharpest Wednesday); `RuleStore.history` (no caller, seven nights
+  standing); the relay's missing deadline; `finding_id` travelling unfenced; the
+  wrong-SHAPE fallback reported as `fallback_api_unavailable`; the ninety-odd
+  French strings in `server/engine/`; `.soc-warn-note` as a `<span>` on one
+  Settings field; the Rules tab's two heading-level skips; `var(--accent)` as
+  text failing WCAG 1.4.3 on three themes.
+
+**Verified** (Node 22.23.5, npm 10.9.9, PostgreSQL 16.16; every command run and
+its output read):
+
+| Command | Result |
+|---|---|
+| `npm ci` (both halves) | clean, **0 vulnerabilities** each |
+| baseline typecheck / test / build (console) | **0 errors**, **2009 passed \| 1 skipped**, clean |
+| baseline `npm test` (VulnPipe) | **480 passed** |
+| the new test file, funnel reverted to HEAD's behaviour | **3 failed \| 10 passed** |
+| `code-half.test.ts`, same revert | **2 failed \| 8 passed** |
+| `system-panel.test.tsx`, same revert | **1 failed \| 13 passed** |
+| `npm run typecheck` (after) | **0 errors** |
+| `npm test` (after) | **2025 passed \| 1 skipped** (**+16**), 134 files |
+| `npm test` with `MENATER_TEST_PG`, real PostgreSQL 16 | **2058 passed \| 0 skipped** — what CI runs |
+| `npm run build` | clean — bundle **450.63 kB** and sheet **62.51 kB**, **byte-identical to the baseline, hashes included** |
+| `npm test` (VulnPipe, after) | **480 passed** — untouched, run anyway |
+| mutation | **10 mutations, 10 killed**; control green FIRST and LAST, 100 tests collected both times, every run seen to have changed a file |
+| the measurement where a GREEN is the finding | my two early-return guards removed → **76 passed** (learning 5) |
+
+| Mutation | Result |
+|---|---|
+| CONTROL (unmutated), first AND last | GREEN both times (100/100) |
+| the funnel stops asking the table | RED — 6, across all three files |
+| `codeOf` sends the name plain | RED — 1, and it is the withholding claim |
+| **`matched_on` promoted to an inventory value** | **RED — 7**, J0.7's incident count among them |
+| the funnel substitutes the entry's spelling into `repository` | RED — 1 |
+| the resolver picks the first of two disagreeing names | RED — 2 |
+| a third agreeing entry un-refuses a disagreement | RED — 1 |
+| the lookup compares raw strings, not the inventory's `key()` | RED — 2 |
+| the lookup accepts a near-match (prefix either way) | RED — 1 |
+| an entry with no service name is indexed anyway | RED — 1 |
+| the index stores the comparison key, not the line that was typed | RED — 7 |
+
 ## 2026-11-22 — Sunday · Maintenance and state of the project
 
 **Subject**: **the connectivity diagnostic lost four of its nine section titles

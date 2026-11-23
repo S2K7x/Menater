@@ -39,8 +39,8 @@ import { render } from '../vulnpipe/test-utils.tsx';
 import { SystemPanel } from './SystemPanel.tsx';
 import { consoleDictionary } from '../i18n/console.ts';
 import type { AlertCase, Severity } from '../lib/types.ts';
-import { findingToAlert, scanRepository } from '../../server/findings.ts';
-import { resolveRepository } from '../../server/inventory.ts';
+import { findingToAlert } from '../../server/findings.ts';
+import { repositoryOf } from '../../server/snapshot.ts';
 import { tagAttack } from '../../server/engine/attack.ts';
 import { codeLead } from '../../server/engine/code-lead.ts';
 
@@ -82,10 +82,17 @@ const INVENTORY = [
   { service: 'Billing API', identifiers: ['web-01'], repository: '/srv/src/billing-api' },
 ];
 
-/** A detection about a machine, resolved by the real inventory resolver. */
+/**
+ * A detection about a machine, resolved by the funnel the console runs.
+ *
+ * `repositoryOf` and not `resolveRepository`: it is the one line `snapshot.ts`
+ * passes every case through, and a test that re-types the resolution vouches
+ * for its own copy of it — which is how a promoted finding's service name was
+ * missing here while production had it.
+ */
 function detection(over: Partial<AlertCase> = {}): AlertCase {
   const c = kase(over);
-  return { ...c, repository: resolveRepository(c, INVENTORY) };
+  return { ...c, repository: repositoryOf(c, INVENTORY) };
 }
 
 /** A case opened by promoting a finding, through the real promote pair. */
@@ -109,7 +116,7 @@ function promoted(target: string): AlertCase {
     severity: 'high',
     extensions: alert.extensions as Record<string, unknown>,
   });
-  return { ...c, repository: scanRepository(c) };
+  return { ...c, repository: repositoryOf(c, INVENTORY) };
 }
 
 describe('the two halves of one system are on one screen', () => {
@@ -234,6 +241,54 @@ describe('what the screen refuses to claim', () => {
     expect(container.querySelector('.soc-sys-target')).toBeNull();
     expect(screen.queryByText(t.code)).toBeNull();
     expect(screen.queryByRole('button', { name: t.analyseLabel('db-07') })).toBeNull();
+  });
+
+  /**
+   * J0.8 — the heading of a system the operator's table names.
+   *
+   * A system whose cases are ALL promoted flaws is the state of an install
+   * that has scanned its code and not yet been attacked, and it used to be
+   * headed by the raw repository path — correctly, in the register
+   * `soc-sys-name-literal` keeps for a value nobody named, since a path is
+   * case-sensitive and `h3` imposes display capitals. The table names it now,
+   * so the heading is a NAME and takes the display register, and the path
+   * moves to the meta line where the other half of this screen already puts
+   * it. The resolution itself is proven end to end by
+   * `server/declared-service.test.ts`; this claims the render.
+   */
+  it('heads a system the inventory names with the name, and the path below it', () => {
+    const { container } = render(
+      <SystemPanel
+        cases={[promoted('/srv/src/billing-api')]}
+        onSelect={() => {}}
+        onAnalyse={() => {}}
+      />,
+    );
+
+    expect(screen.getByRole('heading', { level: 3, name: 'Billing API' })).toBeTruthy();
+    expect(container.querySelector('.soc-sys-name-literal')).toBeNull();
+    // The path is still shown — it is what the offer beside it hands over.
+    expect(container.querySelector('.soc-sys-target')!.textContent)
+      .toBe('/srv/src/billing-api');
+    expect(screen.getByRole('button', { name: t.analyseLabel('Billing API') })).toBeTruthy();
+  });
+
+  /**
+   * And the boundary: code the table does not declare keeps the literal
+   * register, because then the heading really is a value nobody named.
+   * Green before J0.8 as much as after.
+   */
+  it('keeps the literal register on code the table does not name', () => {
+    const { container } = render(
+      <SystemPanel
+        cases={[promoted('acme/not-in-the-table')]}
+        onSelect={() => {}}
+        onAnalyse={() => {}}
+      />,
+    );
+
+    expect(screen.getByRole('heading', { level: 3, name: 'acme/not-in-the-table' })).toBeTruthy();
+    expect(container.querySelector('.soc-sys-name-literal')).toBeTruthy();
   });
 
   it('puts nothing standing in a live region', () => {

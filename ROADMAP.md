@@ -39,7 +39,7 @@ SOAR on the SOC side, Semgrep and Snyk on the code side.
 | Unified console: ten tabs, one origin, one lock | ✅ shipped |
 | English-only interface **and server** | ✅ shipped |
 | Mobile | ✅ shipped |
-| Connectivity diagnostic (30 checks) | ✅ shipped |
+| Connectivity diagnostic (14 checks in 5 groups, 15 with a database) | ✅ shipped |
 
 ### What is still open, and is not a defect
 
@@ -74,10 +74,81 @@ application. Until it is done, the merge is visual.
 | **J0.4** ◐ | **Unified "what threatens this system" view** — one screen stacking, for one asset, its alerts and its flaws. **First slice delivered**: the Alerts tab's second view groups the window by system — the alerts about a machine beside the flaws promoted out of the code the inventory says runs on it. **Second slice**: each block's *Analyse this code* offer now carries J0.2's two sentences, so one of ten offers says why it is the one to press. What is NOT there is the rest of a scan report: this reads the queue, and says so | The question the user actually asks, which neither tab answers alone |
 | ~~**J0.5**~~ ✅ | ~~**The door opens both ways**~~ — a report finding that has already been promoted says so, names what the queue made of it, and carries a jump to the case. `src/lib/promoted.ts` reads it out of the window the browser already holds; `src/lib/finding-identity.ts` is the one definition of a flaw's identity, used by the server to derive the alert id and by the report to find the case. Nothing is stored | J0.1 forgot its own outcome the moment you left the report: twelve findings, three of them sent, and no way to tell which three |
 | ~~**J0.7**~~ ✅ | ~~**The report says what the queue already holds about this code**~~ — a scan report of code the service inventory maps to a machine names the detections in the window about that machine, how many are waiting on a human, and how many say the way in was the application itself. `codeIncidents` in `src/lib/systems.ts`, gated on `INVENTORY_MATCHES`, which moved to `src/lib/types.ts` so both halves read one declaration. The press goes to J0.4's "By system" view | The symmetric half of J0.2. It is what separates *a flaw somebody should fix this quarter* from *a flaw somebody is standing on* — measured before it was written: the rendered report named the service **0** times |
+| ~~**J0.8**~~ ✅ | ~~**The operator's table names the code a flaw came out of**~~ — `declaredService` in `server/inventory.ts` reads the inventory by its OTHER column, so a case opened by promoting a scan finding carries the service name the operator declared for that repository. `repositoryOf` in `snapshot.ts` is the funnel that asks it. `matched_on` stays `scan_target`, so no trust boundary moves | Measured before it was written: the console named the service on a detection about the machine and `null` on the flaw out of that very code, and `search_alerts` by service name answered **1 of 2**. `scanRepository` had concluded the inventory *« is keyed on machines »* — true of its index, false of its data |
 | ~~**J0.6**~~ ✅ | ~~**The code half reaches the model**~~ — `repository` and `code_lead` travel on every assistant and MCP reply that carries an alert row, with the scan-derived half FENCED: `CaseRepository` has one shape and two origins, and only one of them is the operator's own table. `codeOf` + `INVENTORY_MATCHES` in `server/assistant/tools.ts`; `search_alerts` searches the service name too | Measured before it was written: across all fourteen tools, the number of replies naming the repository was **0**. The panel docked beside the incident card could not say what the card says |
 
 > **Order:** J0.3 before J0.1 and J0.2. Guessing the repository from an IP
 > address would be exactly the kind of invented default that § 8 forbids.
+
+### J0.8 ✅ — the one case whose origin IS a piece of code, and the only one nobody named
+
+**What it is.** A case opened by promoting a scan finding now carries the
+service name the operator's own inventory gives the scanned repository.
+`declaredService` in `server/inventory.ts` reads that table by its repository
+column — a lookup needing no observable — and `repositoryOf` in
+`server/snapshot.ts`, the funnel every case already passed through, is where it
+is asked.
+
+**Why it was missing, and how big the hole was.** `scanRepository` wrote
+`service: null` under a comment saying the inventory *« is where that name
+lives, and it is keyed on machines, which this alert has none of »*. That is
+true of the inventory's INDEX — J0.3 builds one on the identifiers, because its
+question is *which repository runs on this machine* — and **false of its
+DATA**: every entry also stores a repository. The same family as *a guard that
+was right until a second thing could answer* and *an invariant proved from a
+neighbouring constant*.
+
+Measured by driving the real pipeline on an install whose inventory maps
+`Billing API` to `/srv/src/billing-api` and the machine `web-01`, with one
+detection about that machine and one finding promoted out of a scan of that
+very repository:
+
+| | before | after |
+|---|---|---|
+| the detection's `service` | `Billing API` | `Billing API` |
+| **the flaw's `service`** | **`null`** | **`Billing API`** |
+| the By-system block, flaws only | `"/srv/src/billing-api"`, services `[]` | `"Billing API"`, services `["Billing API"]` |
+| `search_alerts("billing api")` | **1 hit of 2** | **2 of 2** |
+
+So the console named the service on the detection and refused to name it on the
+one case whose whole origin IS that code — and `search_alerts`, whose own
+description says *« use when the operator names a machine, an address, a
+SERVICE »*, could not find the flaw that way. The By-system heading is the
+visible half: a system whose cases are all promoted flaws is the state of an
+install that has scanned its code and not yet been attacked, and it was titled
+by the raw repository path.
+
+**Four decisions, and three of them are refusals.**
+
+| Decision | Why the other answer was worse |
+|---|---|
+| **`matched_on` stays `scan_target`** | What a crafted `extensions.vulnpipe.target` can do is SELECT an entry; the string that comes back is the operator's own either way. Promoting the case to an inventory match would have let it into `INVENTORY_MATCHES`, and then J0.7's *« N alerts in the triage queue are about … »* would count a fabricated incident on code somebody had just typed. Four tests claim that side and are green before this change as much as after; the mutation that promotes it is red on seven |
+| **`repository` is NOT substituted** | The obvious extra step is to hand on the entry's spelling instead of the bag's, which would take attacker-authored bytes out of the card and the launcher prefill. That is one of the three options § 7's *« a scan target nobody authenticated »* leaves to a human, and taking it quietly inside a naming change is not the way to take it. That entry is **unchanged**, and a test pins that the scanned spelling still travels |
+| **Two entries, two names: refused** | `normalizeInventory` refuses a duplicate IDENTIFIER and deliberately allows two entries to point at one repository, because two services legitimately share a monorepo and one service legitimately runs on two machines. So the door cannot refuse this ambiguity and the resolver does: entries that AGREE answer (the ordinary two-instance case), entries that DISAGREE answer nothing. Picking the first is the tie-break `inventory.ts`'s header exists to avoid, on the name an incident card prints |
+| **The model surface is held exactly where J0.6 left it** | `codeOf` withholds `service` when the answer is not the inventory's, and that is a refusal to decide rather than a decision. The string is the operator's, so fencing it would have the assistant hedge about their own service name — the argument § 7 makes for leaving `human_reasoning` unmarked; but a foreign string chose the entry, so sending it plain would let a crafted bag have a model read a case as being about a real service. Sending neither takes no new risk. **`search_alerts` is unaffected either way**: it searches the RAW case by design, never that reply |
+
+**What it costs.** Nothing on the wire and nothing in the bundle: the built
+`index-*.js` and `index-*.css` are **byte-identical** to the baseline, hashes
+included, because `CaseView` and `SystemPanel` have always rendered `service`
+when it is present. The whole change is server-side — a field the browser
+already drew gained an answer.
+
+**What it does NOT do, and is honest to say so:**
+
+- **It does not say on screen that the inventory recognised the repository.**
+  The card prints the name beside `matched_on`, which reads *« the scan this
+  case came from »*, so the reader can see which origin answered — but nothing
+  says *and your table declares this code is yours*. That is § 7's third
+  option, *« marking it on the card »*, still a screen change and still a
+  Saturday.
+- **It does not match loosely.** No suffix rule, no `.git` tolerance, no
+  trailing slash: the comparison is `trim().toLowerCase()`, the inventory's
+  own, and a near-match answers nothing. A guess here puts a real service's
+  name on code nobody declared.
+- **It does not close § 7's scan-target entry**, and the test that says so is
+  the one asserting the scanned spelling travels unchanged.
+- **The assistant and the MCP catalogue do not read the name** — see the fourth
+  decision. Which of the two answers that surface should give is a human's.
 
 ### J0.7 ✅ — the door J0.2 opened, from the other side
 
@@ -3163,6 +3234,21 @@ Why it was not fixed tonight, and what the options are:
 
 J0.6 needed none of those: on the model-facing surface the answer is the fence,
 which marks the string as foreign without discarding it.
+
+**J0.8 needed none of them either, and it is the night that came closest to
+taking one.** Letting the operator's inventory name the code a promoted finding
+came out of means looking the bag's `target` up in their own table — so the
+entry's spelling was right there, and handing THAT on instead of the bag's
+would have removed the attacker-authored bytes from the card and from the
+launcher prefill in one line. It was deliberately not taken: that is the second
+option above, i.e. a decision about what the launcher receives, and taking it
+inside a change about NAMING would have been a behaviour change nobody asked
+for. `server/declared-service.test.ts` pins that the scanned spelling still
+travels (`'/SRV/SRC/Billing-API'` in, `'/SRV/SRC/Billing-API'` out, with the
+service named), so the option stays open and visible rather than half-taken.
+What J0.8 does establish is that **the console can tell, exactly and without
+guessing, whether a scanned target is a repository its operator declared** —
+which is the fact the first two options were each trying to approximate.
 
 **J0.7 needed none of them either, and settled its own half by REFUSING the
 string.** The scan report's *« N alerts in the triage queue are about … »* line

@@ -297,15 +297,38 @@ export function readInventory(raw: unknown): InventoryEntry[] {
  * garbage the moment `cached` is replaced, and its index must go with it.
  * ============================================================================
  */
-const indexes = new WeakMap<InventoryEntry[], Map<string, IndexHit>>();
+const indexes = new WeakMap<InventoryEntry[], InventoryIndex>();
 
 interface IndexHit { entry: InventoryEntry; identifier: string }
 
-function indexOf(entries: InventoryEntry[]): Map<string, IndexHit> {
+/**
+ * The TWO questions this table can answer, built in one pass over it.
+ *
+ * `byIdentifier` is J0.3's: *which repository runs on this machine*. It is the
+ * only one the table had an index for, and `scanRepository`'s own comment drew
+ * the wrong conclusion from that for its whole life — *« the inventory is
+ * keyed on machines, which this alert has none of »*, which is true of the
+ * INDEX and false of the DATA. Every entry also stores a repository, so the
+ * table can be read the other way round, and `serviceOf` is that reading.
+ */
+interface InventoryIndex {
+  /** Identifier → the entry that claimed it. */
+  byIdentifier: Map<string, IndexHit>;
+  /**
+   * Repository → the name the operator gives that code, or `null` when the
+   * table gives it TWO.
+   *
+   * `null` is the refusal, not an absence, and the two answer alike on
+   * purpose: see `declaredService`.
+   */
+  serviceOf: Map<string, string | null>;
+}
+
+function indexOf(entries: InventoryEntry[]): InventoryIndex {
   const known = indexes.get(entries);
   if (known) return known;
 
-  const index = new Map<string, IndexHit>();
+  const index: InventoryIndex = { byIdentifier: new Map(), serviceOf: new Map() };
   for (const entry of entries) {
     for (const identifier of entry.identifiers) {
       const k = key(identifier);
@@ -313,11 +336,85 @@ function indexOf(entries: InventoryEntry[]): Map<string, IndexHit> {
       // order. `normalizeInventory` refuses a duplicate so a stored inventory
       // cannot hold one — but the resolver is exported and callable with any
       // list, and letting the last writer win would silently change its answer.
-      if (!index.has(k)) index.set(k, { entry, identifier });
+      if (!index.byIdentifier.has(k)) index.byIdentifier.set(k, { entry, identifier });
     }
+
+    // An entry missing either half names nothing: `normalizeInventory` reports
+    // both as problems and `readInventory` drops the row, but both functions
+    // here are exported and callable with any list, so neither may be assumed.
+    const repository = key(entry.repository);
+    const service = entry.service.trim();
+    if (repository === '' || service === '') continue;
+
+    if (!index.serviceOf.has(repository)) {
+      // The string as STORED, never the comparison key — the same rule
+      // `matched_value` follows: what is shown is the line they typed.
+      index.serviceOf.set(repository, service);
+      continue;
+    }
+    const first = index.serviceOf.get(repository)!;
+    // Already refused: it stays refused. A third entry agreeing with the first
+    // must not un-refuse a disagreement the second one established.
+    if (first === null) continue;
+    if (key(first) !== key(service)) index.serviceOf.set(repository, null);
   }
+
   indexes.set(entries, index);
   return index;
+}
+
+/**
+ * What the operator calls this code, or nothing.
+ *
+ * ============================================================================
+ * WHY THE TABLE IS READ BACKWARDS HERE
+ *
+ * A case opened by promoting a scan finding (J0.1) carries no host, no
+ * destination and no source, so `resolveRepository` has nothing to match it
+ * on — and `scanRepository` concluded from that that the inventory could not
+ * name it at all. It can: the entry that declares the scanned repository is
+ * the operator's own statement about what that code is called, and finding it
+ * needs no observable. Measured before this existed, on an install whose
+ * inventory maps `Billing API` to the scanned target: the console named the
+ * service on the detection about the machine and `null` on the flaw out of
+ * that very code, and `search_alerts('billing api')` returned **1 of 2**.
+ *
+ * ============================================================================
+ * IT NAMES; IT DOES NOT AUTHENTICATE, AND IT CHANGES NO ATTRIBUTION
+ *
+ * The caller's `repository` came out of `extensions`, an open bag, and
+ * `findingAlertId` does not cover `target` — ROADMAP § 7 carries that entry and
+ * this does not close it. So what a crafted bag can do is SELECT an entry; the
+ * string that comes back is the operator's own either way, and `matched_on`
+ * still says `scan_target`, so `INVENTORY_MATCHES` goes on excluding the case
+ * and J0.7's count goes on refusing it. Nothing here moves a trust boundary.
+ *
+ * ============================================================================
+ * TWO ENTRIES, TWO NAMES: REFUSED, NOT RESOLVED
+ *
+ * `normalizeInventory` refuses a duplicate IDENTIFIER — one machine, one
+ * repository — and deliberately allows two entries to point at one repository,
+ * because two services legitimately share a monorepo and one service
+ * legitimately runs on two machines. So the door cannot refuse this ambiguity
+ * and the resolver has to: entries that AGREE on the name answer it (that is
+ * the two-instance case, the ordinary one), entries that DISAGREE answer
+ * nothing. Picking the first would be the tie-break this file's header refuses
+ * to have, on the name an incident card prints.
+ *
+ * `null` therefore means *the table does not name this code* — whether because
+ * nothing declares it or because two things do, which is why the lookup below
+ * cannot tell a missing key from a refused one and does not need to.
+ */
+export function declaredService(
+  repository: string, entries: InventoryEntry[],
+): string | null {
+  // No guard on an empty list and none on an empty key, and that is measured
+  // rather than assumed: `indexOf` skips any entry missing either half, so
+  // nothing is ever indexed under `''` and an empty table indexes to an empty
+  // map. Both early returns were written here first and removing them left 76
+  // tests green — *two guards where one suffices is a line no test can fail
+  // on*. The behaviour is pinned by the test instead.
+  return indexOf(entries).serviceOf.get(key(repository)) ?? null;
 }
 
 /**
@@ -332,7 +429,7 @@ export function resolveRepository(
   entries: InventoryEntry[],
 ): CaseRepository | null {
   if (entries.length === 0) return null;
-  const index = indexOf(entries);
+  const index = indexOf(entries).byIdentifier;
 
   for (const field of MATCH_ORDER) {
     const value = observable(alert[field]);

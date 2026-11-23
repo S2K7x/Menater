@@ -126,16 +126,35 @@ const recorded = (value: string | null | undefined): string | null => {
  *
  * The shape is `CaseRepository`'s, deliberately unchanged: one shape for one
  * fact, so the card and the model are reading the same four fields. What moves
- * is the marking — `matched_on` is one of four words we chose, and `service`
- * only ever comes from an inventory entry (a promoted finding has none, which
- * is why it is `null` there), so both travel plain.
+ * is the marking — `matched_on` is one of four words we chose, so it travels
+ * plain.
+ *
+ * `service` IS WITHHELD RATHER THAN MARKED when the answer is not the
+ * inventory's, and that is a refusal to decide rather than a decision. It
+ * carried no marking because it could not be non-ours: only an inventory
+ * match had one. `declaredService` ends that — the operator's table can now
+ * name the code a promoted finding came out of — and neither of the two
+ * obvious answers is clearly right. The string is the OPERATOR'S either way,
+ * so fencing it would have the assistant hedge about their own service name,
+ * which is the argument ROADMAP § 7 makes for leaving `human_reasoning`
+ * unmarked; but what SELECTED the entry is `extensions.vulnpipe.target`, which
+ * no digest covers, so sending it plain would let a crafted bag have a model
+ * read a case as being about a real service. Sending neither keeps this
+ * surface byte-identical to what J0.6 shipped and takes no new risk, and the
+ * operator-facing screens — which print `matched_on` beside it, so the reader
+ * can see the answer came from the scan — get the name. Which of the two it
+ * should be is a human's call; `code-half.test.ts` claims the withholding so
+ * the state cannot change by accident.
+ *
+ * `search_alerts` is unaffected: it searches the RAW case by design, never
+ * this reply, so a query naming the service still finds the flaw.
  */
 function codeOf(c: AlertCase, fence: Fence) {
   const r = c.repository;
   if (!r) return null;
   const ours = INVENTORY_MATCHES.has(r.matched_on);
   return {
-    service: r.service,
+    service: ours ? r.service : null,
     repository: ours ? r.repository : fenced(fence, 'repository', r.repository),
     matched_on: r.matched_on,
     matched_value: ours ? r.matched_value : fenced(fence, 'matched_value', r.matched_value),
