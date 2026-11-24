@@ -13,7 +13,10 @@
  *      model, and both are one edit away from inverting.
  *   2. ANSWERING A BROWSER. Without the Origin check, any page the operator
  *      visits can use their browser as a tunnel into a local MCP server. The
- *      spec requires the check; this is what proves it is there.
+ *      spec requires the check; this is what proves it is there — and
+ *      `mcp-origin.test.ts` is what proves the check cannot be satisfied by
+ *      the attacker supplying both headers, which is what it did for its
+ *      whole life.
  *   3. DRIFTING FROM THE PANEL'S CATALOGUE. The value of this surface is that
  *      it is the SAME read-only catalogue. A second list would be a second
  *      thing to audit.
@@ -153,11 +156,28 @@ describe('the MCP endpoint — who gets in', () => {
     });
     expect(foreign.status).toBe(403);
 
-    const same = await call({
+    /*
+     * THIS LINE USED TO ASSERT 200, AND THAT WAS THE DEFECT WRITTEN DOWN.
+     *
+     * `originAllowed` compared `Origin` to `Host`, so "our own origin" meant
+     * "an origin agreeing with a header the caller also sent" — which a
+     * rebinding attack satisfies by construction, because the page is served
+     * from the name the browser then dials. The guard caught every browser
+     * except the one it exists for.
+     *
+     * The premise this endpoint has always stated is that no legitimate
+     * client is a browser, so the console's OWN page is refused here too: it
+     * never calls this endpoint (`src/lib/api.ts` has no caller for
+     * `/api/mcp`), and the self-test exists because a browser cannot test an
+     * endpoint whose guard refuses browsers — which CLAUDE.md and ROADMAP
+     * § 3 bis both said before the code did it. See `mcp-origin.test.ts` for
+     * the rebinding shapes and the measured client premise.
+     */
+    const ourOwnPage = await call({
       origin: 'http://localhost:4400',
       body: { jsonrpc: '2.0', id: 1, method: 'ping' },
     });
-    expect(same.status).toBe(200);
+    expect(ourOwnPage.status).toBe(403);
 
     const noOrigin = await call({ body: { jsonrpc: '2.0', id: 1, method: 'ping' } });
     expect(noOrigin.status).toBe(200);
