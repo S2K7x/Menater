@@ -1976,7 +1976,7 @@ the subset is a **conforming server**, not a corner cut.
 | Decision | Why |
 |---|---|
 | **Off by default, and an empty token closes the door** | The ingestion endpoint's rule, applied again. This one publishes a port; "no authentication configured" must never read as "no authentication required". Disabled it answers **404**, not 403 — an endpoint that announces itself to an unauthenticated caller tells them what to come back for |
-| **The `Origin` header is validated** | Required by the spec, and the attack is concrete: without it any page the operator visits can use their browser as a DNS-rebinding tunnel into a local MCP server. A real MCP client is not a browser and sends no Origin at all |
+| **Any `Origin` header at all is refused** | Required by the spec, and the attack is concrete: without it any page the operator visits can use their browser as a DNS-rebinding tunnel into a local MCP server. A real MCP client is not a browser and sends no Origin at all — measured on the three clients that exist (the reference SDK's transport, `mcp-remote@0.8.3`, Node's bare `fetch`), none of which sends one. It used to compare `Origin` against `Host`, which is **two headers the caller supplies**: a rebound page is same-origin with itself, so the comparison passed and the guard refused every browser except the one in the attack it exists for. Closed 2026-11-24; see § 7 for the half of the console it does not cover |
 | **It is behind its own token, not the console session** | An MCP client has no cookie, exactly as an appliance posting an alert has none. The fifth entry in `PUBLIC_ROUTES`, and "public" is as wrong a word for it there as it is for the webhook: it carries a bearer token compared in constant time |
 | **The fencing contract is in `instructions`** | A consumer outside the console never sees our system prompt, so the `<untrusted:…>` markers would arrive as unexplained noise around attacker-written text — worse than not fencing, because it *looks* handled. `instructions` is the one place an MCP server can speak to the model on the other side, and each result names its own single-use nonce |
 | **Tools are annotated `readOnlyHint`** | Advisory — the spec says a client must treat annotations from an untrusted server as untrusted — and true here regardless, because the catalogue contains nothing else |
@@ -2695,6 +2695,68 @@ holds the door on irreversible actions.
 ---
 
 ## 7. Known technical debt
+
+### DNS rebinding reaches the rest of this API, and no header can tell it apart — found 2026-11-24
+
+Raised by the change that closed the MCP endpoint's half of it (see § 3 bis),
+and deliberately **not** closed with it: the remedy is a configuration this
+product does not have, and the number in it is one nobody here may invent.
+
+`POST /api/mcp` now refuses any request carrying an `Origin` header, which it
+can do because no legitimate client of that endpoint is a browser. **That
+premise is true of exactly one route.** `grep` for `origin` across `server/`
+returns one module; the console's own interface is a browser and sends an
+`Origin` on every write it makes, so the same subtraction applied to `/api/*`
+would lock the operator out of their own console.
+
+**Measured over a raw socket, with `Host` AND `Origin` both forged** — the pair
+a browser really sends once a name the attacker owns has been rebound to
+`127.0.0.1` — against the real `handleRequest`:
+
+| route | lock OFF (the shipped default) | lock ON |
+|---|---|---|
+| `/api/snapshot` | **200** — 7 cases, `raw_log` included, 24,696 B | 401 |
+| `/api/settings` | **200** | 401 |
+| `/api/workflows` | **200** | 401 |
+| `/api/ingest/sources` | **200**, `base_url` echoing the forged host | 401 |
+| `/api/mcp` | 404 (off by default) | 404 |
+
+So **the console lock is the defence, and it works**: a rebound page is on the
+attacker's name, so the browser sends cookies for THAT name and the session
+never travels. What is left is an install with no console password — which is
+the shipped default, and which `dashboard/README.md` and the setup checklist
+both treat as a legitimate state for a machine on a trusted network.
+
+**Why no header closes it.** In rebinding the browser genuinely considers the
+page same-origin with the console, so it sends `Sec-Fetch-Site: same-origin`
+exactly as our own interface does, and `Origin` — when it sends one — equals
+the forged `Host`. Our own page and the attacker's are indistinguishable from
+inside this process. The standard defence is validating `Host` against a list
+of names the console expects to be reached on, and that is the decision:
+
+- It is **new configuration**, and a wrong value makes the console unreachable
+  — *the lock that locked the operator out*, in a form with no way back except
+  editing `config.json`.
+- It **contradicts a decision this product has made on purpose**: the ingestion
+  snippets, the MCP install block and the entry-point URL are all built from
+  `Host` precisely so that installing on a colleague's machine prints THEIR
+  address rather than `localhost`. A default-deny allowlist would have to be
+  filled in before any of those work.
+- A **default** that allowed `localhost`, `127.0.0.1`, `[::1]` and any private
+  address would cover the documented deployments and silently refuse somebody
+  reaching the console by a LAN hostname — i.e. it would break the install that
+  is hardest to debug, which is the *over-refusing a legal rule is a silent
+  hole* trade this project has already paid for once.
+
+Three shapes a human could choose between: a `console.allowedHosts` list that
+is empty-means-any (no change for anyone who does not set it, protection for
+anyone who does); the same thing defaulting to the loopback set with a named
+escape; or declaring the lock to be the answer and saying so where the default
+is presented, which costs no code and is a documentation decision rather than
+a security one. **Not a night's call.**
+
+What is NOT open: the MCP endpoint, closed; and the lock itself, which was
+measured answering 401 on every route above.
 
 ### ~~Four diagnostic section titles nothing could print, and a console README describing the product that left~~ — closed 2026-11-22
 

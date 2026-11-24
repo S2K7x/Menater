@@ -4,6 +4,187 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-11-24 — Tuesday · Security
+
+**Subject**: **the MCP endpoint's DNS-rebinding guard validated one header the
+caller supplies against another header the caller supplies.** `originAllowed`
+answered *is this Origin ours?* by comparing `Origin` to the `Host` of the same
+request — and in a rebinding attack the page is served from a name the attacker
+owns, so it is same-origin with itself and the comparison passes. The guard
+refused every browser **except** the one in the attack it exists for.
+
+**Result**: PR opened on `claude/sleepy-volta-bjh7ls`. Two source edits in one
+file (`server/assistant/mcp.ts`: `originAllowed`'s body, and the header's
+refusal #2), one new test file (`server/assistant/mcp-origin.test.ts`, 8 tests,
+5 red on unmodified code), one existing test corrected
+(`server/assistant/mcp.test.ts`, +1 red), plus `CLAUDE.md` (one traps row, the
+MCP decision row, the two suite counts), `ROADMAP.md` (the § 3 bis X-series row
+corrected, one new § 7 entry) and this journal. **+8 tests** — console 2025 →
+**2033**. No screen, no CSS, no class name, no catalogue string, no route, no
+dependency, no SQL; the built bundle is **byte-identical to the baseline,
+hashes included** (`index-qSrcibOl.js`, `index-C8qqIUUS.css`).
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-bjh7ls` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Seventy-sixth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: the baseline at
+`d05d30a` (= `origin/main`) was, after `npm ci` on both halves, typecheck **0
+errors**, console **2025 passed | 1 skipped**, VulnPipe **480 passed**, a clean
+build, **0 vulnerabilities on both halves**, and **no PR open**. Tuesday's list
+opens with prompt injection and continues with authz; 11-17 walked five of the
+six areas and left **two named findings unfixed**, with this one carrying its
+own precondition: *« one line plus a test; worth checking whether the console's
+own self-test sends one before changing it »*. That check is what this night
+is, and it turned the one-liner into a measurable defect rather than a tidy-up.
+
+**What I measured before writing a line.** The bypass, through the real
+handler:
+
+| Origin | Host | before | after |
+|---|---|---|---|
+| `http://evil.example:4400` | `evil.example:4400` | **200** | 403 |
+| `http://evil.example` | `evil.example` | **200** | 403 |
+| `https://evil.example` | `evil.example` | **200** | 403 |
+| `https://localhost:4400` | `localhost:4400` | **200** | 403 |
+| `https://evil.example` | `localhost:4400` | 403 | 403 |
+| *(none)* | `localhost:4400` | 200 | 200 |
+
+The last two are the point: the only shape the guard caught is the only shape
+an attack never produces, and the only shape it must keep serving is unchanged.
+
+**What I learned that is written nowhere else.**
+
+1. **The premise was measurable, and measuring it is what licensed the
+   absolute form.** `@modelcontextprotocol/sdk` 1.32.1's
+   `StreamableHTTPClientTransport`, driven against a recording server, sends
+   **no `origin`** on either of its two requests (`accept`, `accept-encoding`,
+   `accept-language`, `connection`, `content-length`, `content-type`, `host`,
+   `sec-fetch-mode`, `user-agent`, plus `mcp-protocol-version` and
+   `mcp-session-id` on the second). `mcp-remote@0.8.3` — the bridge this
+   repository tells a Claude Desktop user to install — **sets no Origin header
+   at all** and reaches the endpoint through that same transport. Node's bare
+   `fetch`, which `/api/assistant/mcp-test` uses, sends `sec-fetch-mode` and no
+   `origin`. Three clients, none a browser, none affected.
+2. **Node's `fetch` refuses to set `host`.** My first rebinding probe against
+   the rest of the API passed `host: 'evil.example:4400'` to `fetch` and got
+   the real host through — so only the Origin was forged and the measurement
+   was of a different request than the one I meant. Re-run over a raw socket.
+   A ruler that quietly measures something else, the family this repository
+   already carries four times; the tell was `base_url` echoing `127.0.0.1`
+   in a reply I had asked to be about `evil.example`.
+3. **`if (!origin)` and `'origin' in headers` disagree, and the disagreement
+   is measurable.** Probed on Node 22.23.5: `Origin:` and `Origin: ` both
+   arrive as the key `origin` holding `''` (so the truthiness test read them as
+   *no header*), two `Origin` headers arrive **joined into one string**, and an
+   opaque origin arrives as the literal `'null'`. No browser sends any of those
+   three, so none was the hole — but a guard that only needs to know whether a
+   header EXISTS should not be asking what it says.
+4. **Four documents already described the fix.** `CLAUDE.md` (*« the browser
+   cannot test it: the Origin guard refuses browsers on purpose »*), `ROADMAP`
+   § 3 bis (*« a browser cannot test an endpoint whose Origin guard refuses
+   browsers »*), and the comments on `originAllowed` and on the self-test. All
+   four were false for a browser on the console's own address, and all four are
+   true now without a word changing in two of them.
+5. **A bare specifier resolves from the importing FILE's directory.** The SDK
+   probe written into the scratchpad died on `ERR_MODULE_NOT_FOUND` — exactly
+   the trap `CLAUDE.md` records about the reachability instrument. Moved into
+   `VulnPipe/scripts/` and deleted after.
+6. **The rest of the API is reachable by the same attack and the console lock
+   is what stops it.** Measured over a raw socket with both headers forged:
+   lock OFF (the shipped default) gives **200 on `/api/snapshot`** — 7 cases,
+   `raw_log` included, 24,696 B — plus `/api/settings` and `/api/workflows`;
+   lock ON gives **401 on all four**, because the browser sends cookies for the
+   attacker's name and not for ours. That is § 7, not this PR: see below.
+
+**Do not redo.**
+
+- **Do not extend the Origin subtraction to `/api/*`.** The console's own
+  interface IS a browser and sends an `Origin` on every write; the same rule
+  there locks the operator out of their own console. `grep` for `origin` in
+  `server/` returns one module, and that is correct.
+- **Do not "fix" rebinding on the rest of the API with a header.** In rebinding
+  the browser genuinely considers the page same-origin, so it sends
+  `Sec-Fetch-Site: same-origin` exactly as our interface does. Our own page and
+  the attacker's are indistinguishable from inside the process. The only
+  defence is validating `Host` against expected names, which is new
+  configuration contradicting a decision this product made on purpose (the
+  ingestion snippets and the MCP block are built from `Host` so a colleague's
+  machine prints THEIR address). § 7 lists three shapes a human could pick.
+- **Do not add an allowlist of trusted origins here.** It is the exact-match
+  set that already cost this project every ingestion endpoint. The rule is the
+  subtraction.
+- **Do not reorder the enabled / origin / token checks.** 404, 403 and 401 are
+  three different facts and a page must not learn which by sending an Origin —
+  the token-first order turns the endpoint into an oracle for the one secret
+  that bounds the whole exposure. Two mutations carry it (M7, M8).
+- **Do not read the fix as closing rebinding.** The bearer token already bounded
+  the MCP half; this is defence-in-depth that now actually defends, and the
+  measured exposure is on the routes the fix does not touch.
+
+**Found and NOT fixed, with why.**
+
+- **`secretMatches` in `server/webhook.ts` still claims a digest it does not
+  compute.** The comment says *« compare a fixed-size digest of the length
+  first so the length itself does not leak »* over `timingSafeEqual(a, a)`,
+  which is a dummy constant-time op and not a digest — and its cost is a
+  function of the EXPECTED length, so it equalises nothing about the received
+  one. Carried from 11-17. The behaviour is right, the comment is wrong, and
+  correcting a comment in `webhook.ts` inside a change about `mcp.ts` is two
+  subjects.
+- **`connectionString(false)` still has no caller** (11-17). A parameter's
+  unused branch, which `dead-exports.test.ts` cannot see.
+- **Standing leads, unchanged and not re-checked beyond the baseline**: the two
+  environment-dependent tests (`refused-ingest.test.ts`, `assistant.test.ts`
+  fail when a PostgreSQL answers at `localhost:5432/menater` — and this night
+  stood one up at `menater_test`, which does not collide); `RuleStore.history`
+  with no caller; the relay's missing deadline; `finding_id` travelling
+  unfenced; the wrong-SHAPE fallback reported as `fallback_api_unavailable`;
+  the ninety-odd French strings in `server/engine/`; `.soc-warn-note` as a
+  `<span>` on one Settings field; the Rules tab's two heading-level skips;
+  `var(--accent)` as text failing WCAG 1.4.3 on three themes.
+
+**Verified** (Node 22.23.5, npm 10.9.9, PostgreSQL 16; every command run and
+its output read):
+
+| Command | Result |
+|---|---|
+| `npm ci` (both halves) | clean, **0 vulnerabilities** each |
+| baseline typecheck / test / build (console) | **0 errors**, **2025 passed \| 1 skipped**, clean |
+| baseline `npm test` (VulnPipe) | **480 passed** |
+| `gh api …/pulls` | no PR open |
+| RED check — the two test files, guard reverted to HEAD | **6 failed \| 48 passed** |
+| `npm run typecheck` (after) | **0 errors** |
+| `npm test` (after) | **2033 passed \| 1 skipped** (**+8**), 135 files |
+| `npm test` with `MENATER_TEST_PG`, real PostgreSQL 16, schema applied as `docker/init-db.sh` does | **2066 passed \| 0 skipped** — what CI runs |
+| `npm run build` | clean — **byte-identical to the baseline, hashes included** |
+| `npm test` (VulnPipe, after) | **480 passed** — untouched, run anyway |
+| mutation | **8 mutations, 8 killed, 0 survived, 0 broken**; control GREEN first AND last, 54 tests collected both times, every run seen to have changed the file |
+
+| Mutation | Result |
+|---|---|
+| CONTROL (unmutated), first AND last | GREEN both times (54/54) |
+| M1 the guard restored: `Origin` compared against `Host` | RED — 6 |
+| M2 truthiness instead of presence (an empty Origin passes) | RED — 1 |
+| M3 the guard always allows | RED — 6 |
+| M4 the guard always refuses | RED — 45 (the boundary: the only client left) |
+| M5 an opaque Origin treated as no Origin | RED — 1 |
+| M6 our own page let back in by name | RED — 3 |
+| M7 the token checked BEFORE the origin | RED — 1 |
+| M8 the 403 worded as a credential problem | RED — 1 |
+
+Three of the eleven tests pass BEFORE and after on purpose: a client sending no
+Origin is still served, a disabled endpoint still answers 404 whatever the
+Origin, and the console's own self-test — driven over a REAL loopback socket
+through the real `handleRequest`, which is the regression this change most
+plausibly causes — still answers `ok`. The probes
+(`VulnPipe/scripts/probe-sdk-origin.mjs`, `dashboard/scripts/probe-rebind-api.mjs`,
+`probe-rebind-raw.mjs`) and the mutation harness lived in `scripts/` or the
+scratchpad and are deleted; `git status` shows only the six intended paths.
+
 ## 2026-11-23 — Monday · Feature
 
 **Subject**: **a case opened by promoting a scan finding was the only case the

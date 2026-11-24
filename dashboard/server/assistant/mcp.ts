@@ -35,11 +35,14 @@
  *     authentication configured" must never read as "no authentication
  *     required" on a port a container publishes.
  *
- *  2. THE ORIGIN HEADER IS VALIDATED. The spec requires it, and the attack is
- *     concrete: without it, any web page the operator visits can have their
- *     browser talk to a local MCP server through DNS rebinding. Real MCP
- *     clients are not browsers and send no Origin at all; a request that sends
- *     one that is not ours is refused.
+ *  2. ANY ORIGIN HEADER IS REFUSED. The spec requires the check, and the
+ *     attack is concrete: without it, any web page the operator visits can
+ *     have their browser talk to a local MCP server through DNS rebinding.
+ *     Real MCP clients are not browsers and send no Origin at all — measured
+ *     on the three that exist, see `originAllowed` — so a request that sends
+ *     one is a page, and a page is refused whatever it claims to be. It used
+ *     to be compared against `Host`, which the caller also supplies; that is
+ *     the one shape the attack always satisfies.
  *
  *  3. IT IS STILL READ-ONLY. Everything the panel cannot do, this cannot do.
  *     The tools are annotated `readOnlyHint` so a client can say so to its
@@ -105,22 +108,75 @@ function tokenMatches(expected: string, given: string): boolean {
 }
 
 /**
- * The DNS-rebinding guard the spec requires.
+ * The DNS-rebinding guard the spec requires: ANY `Origin` is refused.
  *
- * A real MCP client — Claude Desktop, an editor, an agent — is not a browser
- * and sends no `Origin`. A browser always does. So the rule is: no Origin is
- * fine, OUR origin is fine, anything else is a page trying to use the
- * operator's browser as a tunnel into their console.
+ * ============================================================================
+ * IT USED TO COMPARE `Origin` AGAINST `Host`, AND BOTH ARE THE CALLER'S.
+ *
+ * The old rule read "no Origin is fine, OUR origin is fine, anything else is a
+ * page trying to use the operator's browser as a tunnel" — and decided what
+ * "ours" was by comparing the `Origin` header to the `Host` header of the same
+ * request. In a DNS-rebinding attack the attacker supplies both: the page is
+ * served from a name they own, so its origin IS the host the browser then
+ * dials once that name resolves to 127.0.0.1. The comparison passed.
+ *
+ * So the guard refused a browser whose `Origin` disagrees with `Host`, which
+ * is every browser EXCEPT the one in the attack it exists for. Measured
+ * through this handler, before:
+ *
+ *   200  Origin: http://evil.example:4400  Host: evil.example:4400   <- rebinding
+ *   200  Origin: http://evil.example       Host: evil.example        <- on port 80
+ *   200  Origin: https://evil.example      Host: evil.example        <- https page
+ *   200  Origin: https://localhost:4400    Host: localhost:4400      <- other scheme, our name
+ *   403  Origin: https://evil.example      Host: localhost:4400      <- the only shape it caught
+ *
+ * `Host` cannot be the authority here, and nothing in this process knows what
+ * address it is reached on — that is a deliberate decision (the ingestion
+ * snippets and the MCP install block are built from `Host` precisely so that
+ * installing on a colleague's machine prints THEIR address). CLAUDE.md's own
+ * rule, one costume further on: a rule about which address to SHOW is not a
+ * rule about which address to DIAL, and neither is a rule about which address
+ * to BELIEVE.
+ *
+ * WHAT MAKES THE ABSOLUTE FORM AVAILABLE HERE is the premise this function has
+ * always stated: no legitimate client of this endpoint is a browser. Measured
+ * on all three that exist rather than read off documentation — none sends an
+ * `Origin` at all:
+ *
+ *   @modelcontextprotocol/sdk 1.32.1, StreamableHTTPClientTransport, driven
+ *     against a recording server: 2 requests, `origin` absent from both.
+ *   mcp-remote 0.8.3 — the bridge `dashboard/README.md` and CLAUDE.md tell a
+ *     Claude Desktop user to install: sets no Origin header, and reaches this
+ *     endpoint through that same transport.
+ *   Node's bare `fetch`, which is what `/api/assistant/mcp-test` uses: sends
+ *     `sec-fetch-mode` and no `origin`.
+ *
+ * It is therefore the SUBTRACTION — nothing that identifies itself as a page
+ * gets in — and not a list of origins to trust, which is the exact-match set
+ * that has already cost this project every ingestion endpoint once.
+ *
+ * AND IT IS A PRESENCE TEST, NOT A TRUTHINESS TEST. `if (!origin)` read an
+ * `Origin` header sent EMPTY as no header at all: measured on Node 22.23.5,
+ * `Origin:` and `Origin: ` both arrive as the key `origin` holding `''`, two
+ * `Origin` headers arrive joined into one string, and an opaque origin arrives
+ * as the literal `'null'`. A browser sends none of those three, so none of
+ * them was the hole — but a guard whose answer depends on the VALUE of a
+ * header it is only ever asking about the existence of has a second question
+ * to get wrong, and this one got it wrong once already.
+ *
+ * WHAT THIS DOES NOT CLOSE, stated here because the fix is easy to over-read:
+ * the rest of this API has no rebinding guard, and on the shipped default
+ * (`auth.enabled: false`) no credential either, so a rebound page reads
+ * `/api/snapshot` — the whole triage queue. No request header distinguishes
+ * that attack: the browser considers the rebound page same-origin, so it sends
+ * `Sec-Fetch-Site: same-origin` and the console's own interface is
+ * indistinguishable from the attacker's. The defence there is validating
+ * `Host` against expected names, which is a configuration this product does
+ * not have and a number nobody here may invent. ROADMAP § 7.
+ * ============================================================================
  */
 function originAllowed(req: any): boolean {
-  const origin = req.headers?.origin;
-  if (!origin) return true;
-  const host = String(req.headers?.host ?? '');
-  try {
-    return new URL(String(origin)).host === host;
-  } catch {
-    return false;
-  }
+  return req.headers?.origin === undefined;
 }
 
 /**
