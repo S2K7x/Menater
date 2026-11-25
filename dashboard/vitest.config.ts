@@ -42,6 +42,35 @@ export default defineConfig({
        * VulnPipe cache paid for this exact lesson.
        */
       MENATER_CURSORS: '/nonexistent/menater-test-cursors.json',
+      /**
+       * SAME LOCK, FOURTH SINK — AND THE ONE THE SUITE REALLY WRITES.
+       *
+       * The three above point at files that do not exist, which makes
+       * `getConfig()` return its DEFAULTS. The defaults are a DATABASE:
+       * `localhost:5432`, database `menater`, user `n8n_soc`, empty password —
+       * which is precisely what `docker compose up` publishes. So pointing the
+       * config away from the developer's file aimed the suite straight at the
+       * developer's database instead.
+       *
+       * Measured against a real PostgreSQL 16 standing there with the schema
+       * `docker/init-db.sh` applies: one `npm test` wrote 11 runs, 89 run
+       * steps, 2 deduplication rows and 2 audit rows, and two tests failed —
+       * one of them with a different status depending on which files had run
+       * before it, because they were all sharing one database. The audit rows
+       * CANNOT be taken back out (append-only: `TRUNCATE` refused by the
+       * trigger, `DELETE` by the `REVOKE`), and `soc_ingested_alerts` has no
+       * expiry, so a test's invented alert id refuses a real alert of that id
+       * for ever.
+       *
+       * It is the NAME and deliberately not the host or the port: those six
+       * variables WIN over the file by design (`applyEnvOverrides`), so a host
+       * set here would override the coordinates a test chose, and five tests
+       * choose `127.0.0.1:1` on purpose to provoke a connection refusal.
+       * `server/suite-isolation.test.ts` claims all of that, including this
+       * shape, because the absence of this line is otherwise SILENT: CI creates
+       * `menater_test`, so deleting it leaves CI perfectly green.
+       */
+      MENATER_DB_NAME: 'menater-no-such-database-in-tests',
     },
   },
 });
