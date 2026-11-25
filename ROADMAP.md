@@ -4282,6 +4282,69 @@ Whatever the phase, these rules outrank any feature:
 > finished in `success` having executed nothing (runs 55 and 59). All the nodes
 > went back to `each`.
 
+### The suite had three locks and wrote to the fourth sink — fixed 2026-11-25
+
+`dashboard/vitest.config.ts` pointed `MENATER_CONFIG`, `MENATER_CREDENTIALS`
+and `MENATER_CURSORS` at paths that do not exist, each with a comment saying
+why: the suite READS and WRITES those files, so a run would otherwise re-point
+a developer's real installation at whatever a test made up.
+
+**The database had no lock, and the config lock is what aimed the suite at it.**
+A `MENATER_CONFIG` that does not exist makes `getConfig()` return its defaults,
+and those defaults are `localhost:5432`, database `menater`, user `n8n_soc`,
+empty password — exactly what `docker compose up` publishes. So on the machine
+of anybody running the documented installation mode, `npm test` dialled their
+own console's journal.
+
+**Measured** against a real PostgreSQL 16 at those coordinates, schema applied
+the way `docker/init-db.sh` applies it:
+
+| | one `npm test`, before | after |
+|---|---|---|
+| `soc_run` | **11** | 0 |
+| `soc_run_step` | **89** | 0 |
+| `soc_ingested_alerts` | **2** | 0 |
+| `soc_audit_log` | **2** | 0 |
+| failing tests | **2** | 0 |
+
+Three of those tables can be emptied by hand. `soc_audit_log` cannot:
+`TRUNCATE` is refused by `soc_audit_immutable()` and `DELETE` by the `REVOKE`
+in `sql/10-engine.sql` — both measured — so a test run left permanent rows in
+the hash chain that is this product's only tamper-evidence. And
+`soc_ingested_alerts` has no expiry, so an alert id a test invented decided for
+ever that a real alert of that id was a duplicate.
+
+**The failures were not stable, which is the part no single run shows.**
+`refused-ingest.test.ts`'s mirror asserts `500 engine_failed` for a caller that
+got past the secret, under a comment reasoning that `start` fails at connect
+time — a claim about the machine. With a database answering it read **202 run
+alone and 200 inside the full suite**, because every file was sharing one real
+database and the earlier ones had filled `soc_run`;
+`server/assistant/assistant.test.ts` fails only in the full suite, for the same
+reason — `snapshot()` stops falling back to the demonstration set once runs
+exist, so `get_alert` could not find the sample alert.
+
+**The lock is the database NAME and deliberately not the host.** Those six
+variables win over the file by design, on a cold read and on a save, so a host
+set for the whole suite overrides the coordinates a test CHOSE — and five tests
+choose `127.0.0.1:1` on purpose to provoke a refusal whose cause
+`describePgError` exists to recover. Measured: with the host locked those five
+go red and the suite can no longer test a connection failure at all. With the
+name locked, the blast radius is one test — `config-env.test.ts`, the file that
+reasons about these variables while inheriting one, whose `boot()` now clears
+the six it is not given, read off `DB_ENV` so a seventh is covered by
+construction.
+
+**The absence of the lock is silent**, because CI creates `menater_test`:
+deleting the line leaves CI green. `server/suite-isolation.test.ts` is the
+guard — 7 tests, 8 mutations, 8 killed.
+
+What is NOT closed: the three sibling locks are still asserted by nothing, and
+`MENATER_DB_USER` / `_PASSWORD` / `_SSL` are still free for a test to set,
+which is correct today (no test sets them) and is the shape that would need a
+claim if one ever did.
+
+
 ### The npm that maintains these lockfiles is not the npm in either image
 
 Opened by the advisory refresh of 2026-11-01, which closed the three dev

@@ -26,6 +26,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+/**
+ * The six variable NAMES, read off the table the override itself reads, so a
+ * seventh cannot be added without this helper clearing it too. Only the names
+ * are used here, and they are the same in every instance of the module, so a
+ * static import does not weaken the cold read the dynamic one below gives.
+ */
+import { DB_ENV } from './config.ts';
+
 let dir: string;
 let file: string;
 
@@ -48,9 +56,23 @@ const STORED = {
  * The module caches the resolved configuration in a module-level `cached`, and
  * reads `MENATER_CONFIG` at import time — so a test that wants a COLD read
  * (which is what a restart is) has to reset the registry and import again.
+ *
+ * AND IT NAMES THE WHOLE ENVIRONMENT IT REASONS ABOUT, which is the half this
+ * helper was missing. `vi.stubEnv` only ADDS, so a variable set for the suite
+ * as a whole — `vitest.config.ts` points the database name at one no install
+ * creates, so that a run cannot write into the operator's own journal — stayed
+ * set under a `boot()` that was asking what happens when nobody sets it. The
+ * file's own premise ("the coordinates a `config.json` holds before anybody
+ * sets a variable") was then false, silently: the precedence assertions still
+ * passed because they compare cold against hot, and only
+ * `meta.from_env` — which names EVERY variable in play — could see it.
+ * Clearing the six is what makes a cold boot cold.
  */
 async function boot(env: Record<string, string> = {}) {
   vi.resetModules();
+  for (const name of Object.values(DB_ENV)) {
+    if (!(name in env)) vi.stubEnv(name, undefined);
+  }
   for (const [k, v] of Object.entries(env)) vi.stubEnv(k, v);
   vi.stubEnv('MENATER_CONFIG', file);
   return import('./config.ts');

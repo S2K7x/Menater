@@ -4,6 +4,186 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-11-25 — Wednesday · Tests and QA
+
+**Subject**: **`npm test` wrote into the database of whatever MENATER is running
+on the machine.** `vitest.config.ts` locks three sinks — `config.json`, the
+credential store, the poller's cursors — at paths that do not exist. The
+database is the fourth sink, it is the one the suite really writes, and it had
+no lock: a `MENATER_CONFIG` that does not exist makes `getConfig()` return its
+DEFAULTS, and the defaults are `localhost:5432`, database `menater`, user
+`n8n_soc`, empty password — exactly what `docker compose up` publishes.
+
+**Result**: PR opened on `claude/sleepy-volta-t8m6a9`. One line of
+`vitest.config.ts` (plus the paragraph that says why), one helper hardened in
+`server/config-env.test.ts`, one new test file
+(`server/suite-isolation.test.ts`, 7 tests), plus `CLAUDE.md` (one traps row,
+the two suite counts), `ROADMAP.md` (a § 9 entry) and this journal. **+7 tests**
+— console 2033 → **2040**. **No product code**: the built bundle is
+byte-identical to the baseline, hashes included (`index-qSrcibOl.js`,
+`index-C8qqIUUS.css`).
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-t8m6a9` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix holds either way.
+**Seventy-seventh entry saying so**; it is a line in the routine's
+configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: the baseline at
+`0100397` (= `origin/main`) was, after `npm ci` on both halves, typecheck **0
+errors**, console **2033 passed | 1 skipped**, VulnPipe **480 passed**, a clean
+build, and no PR open. This was the standing lead 11-22 left and 11-23 and
+11-24 both re-checked and named *« still the sharpest Wednesday »* — a test
+borrowing a premise from the machine, which is Wednesday's theme exactly.
+
+**What I measured, on a real PostgreSQL 16 stood up at the shipped default
+coordinates with the schema `docker/init-db.sh` applies.** One `npm test`:
+
+| | before | after |
+|---|---|---|
+| `soc_run` | **11** | 0 |
+| `soc_run_step` | **89** | 0 |
+| `soc_ingested_alerts` | **2** | 0 |
+| `soc_audit_log` | **2** | 0 |
+| failing tests, DB up | **2** | 0 |
+
+**What I learned that is written nowhere else.**
+
+1. **The standing note was wrong in one direction and understated in the
+   other, and only running it said so.** It recorded « two tests fail ». Run as
+   a PAIR, only `refused-ingest.test.ts` fails; `assistant.test.ts` fails only
+   in the FULL suite. The reason is the finding: the files share one real
+   database, so the earlier ones fill `soc_run`, and `snapshot()` then stops
+   falling back to the demonstration set (`noRecentRuns`), so
+   `get_alert('ALT-2026-0823-0411')` returns nothing. The ingest failure is not
+   stable either — **`202` run alone, `200` in the full suite**, against an
+   expected `500`. Two wrong answers and a third depending on file order, out
+   of one borrowed premise.
+2. **The damage is partly irreversible, and I measured that rather than
+   assuming it.** `soc_audit_log` refuses `TRUNCATE` through
+   `soc_audit_immutable()` (*« est append-only : TRUNCATE interdit »*) and
+   `DELETE` through the `REVOKE` in `sql/10-engine.sql` (`permission denied`).
+   So the 2 rows a test run writes stay in the hash chain for ever. And
+   `soc_ingested_alerts` has no expiry, so `ALT-REFUSED-1` — a literal in a
+   test file — would refuse a real alert of that id, permanently.
+3. **The host is the WRONG lever, and that is the whole design decision.** My
+   first attempt set `MENATER_DB_HOST` and the suite went to **5 failures in 4
+   files**. Not a coincidence: `applyEnvOverrides` makes those six variables
+   win over the file *on a save as well as on a cold read*, so the variable
+   overrides the coordinates a test **saved** — and five tests save
+   `127.0.0.1:1` on purpose to provoke a connection refusal whose cause
+   `describePgError` exists to recover. A suite-wide host takes that capability
+   away from every present and future test. The NAME takes nothing away.
+4. **With the name locked the blast radius is exactly one test, and it is the
+   right one.** `config-env.test.ts`'s *« says nothing about a field no variable
+   names »* reads `meta.from_env`, i.e. every variable in play — so it is the
+   only thing that can see the file reasoning about `MENATER_DB_*` while
+   inheriting one. Its `boot()` now clears the six it is not given, read off
+   `DB_ENV` itself so a seventh is covered by construction. Its other
+   precedence assertions passed throughout because they compare cold against
+   hot, which is why this had been invisible.
+5. **`pg` treats a host beginning with `/` as a socket DIRECTORY** and appends
+   `.s.PGSQL.<port>`: probed, `host: '/nonexistent/x'` gives
+   `connect ENOENT /nonexistent/x/.s.PGSQL.5432` in **1.9 ms**, a regular file
+   gives `ENOTDIR` in 0.4 ms, and `.invalid` gives `ENOTFOUND` in 8.0 ms
+   (a resolver answered). Not used in the end — see learning 3 — but it is the
+   measurement that would make a host lock fast and network-free if anybody
+   ever needs one.
+6. **A floor that throws at module load is not a claim.** My first guard read
+   `vitest.config.ts` at top level, so the mutation breaking that reader made
+   the file fail to COLLECT: the harness saw a different test total (119 vs
+   125) rather than a named failure. Made lazy, the same mutation is 5 red
+   tests. That is this repository's own *« a run that collects a different
+   total than the control is a BROKEN MUTATION »* rule, met from the inside.
+7. **The guard must not read `process.env` textually.** My first version
+   asserted on `process.env.MENATER_DB_HOST`, and `ci-environment.test.ts`
+   immediately — and correctly, by its own definition — reported the new file
+   as an environment-GATED test with no `GATED` entry. Adding one would have
+   been a lie (the file asserts, it does not skip). Every claim now reads the
+   lock where it is DECLARED (`vitest.config.ts`, comments stripped) and its
+   effect from the resolved configuration, which is also the better subject.
+8. **One of my own guards was a line no test could fail on.** The comment strip
+   in the config reader: mutation M5 survived, because a commented-out lock is
+   already caught by *« the engine would actually dial it »*. Its real job is
+   the other direction — stopping a paragraph that NAMES the variables which
+   must not be set from being read as a variable that IS set, i.e. a false RED.
+   Claimed on a literal, which is how `ci-environment.test.ts` answers the same
+   problem: make the first guard load-bearing rather than delete it.
+
+**Do not redo.**
+
+- **Do not lock `MENATER_DB_HOST` or `MENATER_DB_PORT` for the suite.**
+  Learning 3, measured at 5 failures. `suite-isolation.test.ts` claims this, so
+  it goes red and says why.
+- **Do not add the new file to `ci-environment.test.ts`'s `GATED` table.** It is
+  not gated; an entry there asserts the CI job must provide the variable.
+  Learning 7.
+- **Do not point the lock at a database name `docker-compose.yml` could
+  produce.** The guard reads the compose default and `config.ts`'s own default
+  cold, rather than holding `menater` as a literal.
+- **Do not conclude from a single file run.** Learning 1: this defect's shape
+  only appears across the whole suite, because the contamination is what
+  changes the answer.
+
+**Found and NOT fixed, with why.**
+
+- **The three sibling locks are asserted by nothing.** Deleting
+  `MENATER_CURSORS` would put a developer's real poller cursors back in reach
+  and no test would notice. Same shape as tonight's, three times over; it is a
+  second subject and the new file is the place for it.
+- **`MENATER_DB_USER` / `_PASSWORD` / `_SSL` are still free.** Correct today —
+  no test sets them — and the shape that would need a claim if one ever did.
+- **Standing leads, carried unchanged**: `secretMatches` in `server/webhook.ts`
+  still claims a digest it does not compute (comment wrong, behaviour right);
+  `connectionString(false)` with no caller; `RuleStore.history` with no caller;
+  the relay's missing deadline; `finding_id` travelling unfenced; the
+  wrong-SHAPE fallback reported as `fallback_api_unavailable`; the ninety-odd
+  French strings in `server/engine/`; `.soc-warn-note` as a `<span>` on one
+  Settings field; the Rules tab's two heading-level skips; `var(--accent)` as
+  text failing WCAG 1.4.3 on three themes. **The two environment-dependent
+  tests are no longer among them** — that is tonight's subject.
+
+**Verified** (Node 22.23.5, npm 10.9.9, PostgreSQL 16.14; every command run and
+its output read):
+
+| Command | Result |
+|---|---|
+| `npm ci` (both halves) | clean |
+| baseline typecheck / test / build (console) | **0 errors**, **2033 passed \| 1 skipped**, clean |
+| baseline `npm test` (VulnPipe) | **480 passed** |
+| RED — full suite, real `menater` database up, lock removed | **5 failed \| 2034 passed** (the 2 originals + 2 guard claims + `ci-environment`) |
+| RED — the guard alone, lock removed | **2 of its 7 red** |
+| `npm run typecheck` (after) | **0 errors** |
+| `npm test` (after, no database on the machine) | **2040 passed \| 1 skipped** (**+7**), 136 files |
+| `npm test` (after, real `menater` database UP) | **2040 passed \| 1 skipped** — the same answer, which is the property |
+| `npm test` with `MENATER_TEST_PG`, real PostgreSQL 16 | **2073 passed \| 0 skipped** — what CI runs, store contract still compared |
+| writes into `menater` after a full run with the lock | **0, 0, 0**, audit count unmoved |
+| `npm run build` | clean — **byte-identical to the baseline, hashes included** |
+| `npm test` (VulnPipe, after) | **480 passed** — untouched, run anyway |
+| mutation | **8 mutations, 8 killed, 0 survived**; control GREEN first AND last, **126 tests collected on every one of the 10 runs**, every mutation seen to have changed its file |
+
+| Mutation | Result |
+|---|---|
+| CONTROL (unmutated), first AND last | GREEN both times (126/126) |
+| M1 the lock line deleted | RED — 4 |
+| M2 the lock set to the shipped default (`menater`) | RED — 4 |
+| M3 the lock COMMENTED OUT, prose still naming it | RED — 4 |
+| M4 the lock moved to the HOST | RED — 8 (the five refusal tests, plus the shape claim) |
+| M5 the guard's comment strip removed | RED — 1 |
+| M6 `config-env.test.ts`'s `boot()` stops clearing the six | RED — 1 |
+| M7 the guard's env-block reader parses nothing | RED — 5 (the floor) |
+| M8 the guard's compose reader matches nothing | RED — 1 (the floor) |
+
+One of the 7 new tests passes BEFORE and after on purpose: *« does not reach
+the one test that wants a real database »* — the boundary, because the
+plausible way this change breaks something is by silently switching the store
+contract's 33 assertions off, and the `MENATER_TEST_PG` run above is the
+behavioural half of that claim. The probe
+(`dashboard/scripts/probe-pg-host.mjs`) and the mutation harness lived in
+`scripts/` and the scratchpad and are deleted; the throwaway PostgreSQL lived
+under `/var/tmp`. `git status` shows only the six intended paths.
+
 ## 2026-11-24 — Tuesday · Security
 
 **Subject**: **the MCP endpoint's DNS-rebinding guard validated one header the
