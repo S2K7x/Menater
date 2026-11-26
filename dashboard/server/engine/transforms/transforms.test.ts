@@ -254,7 +254,7 @@ describe('03 — validation de la réponse du modèle', () => {
 
   it('refuse un raisonnement de plus de trois phrases', () => {
     const r = validateDecision({ ...good, reasoning: 'Un. Deux. Trois. Quatre.' }, ctx);
-    expect(r.violations.join(' ')).toMatch(/4 phrases/);
+    expect(r.violations.join(' ')).toMatch(/4 sentences/);
   });
 
   it('[G6] confidence < 0.7 impose needs_human', () => {

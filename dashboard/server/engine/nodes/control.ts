@@ -92,7 +92,7 @@ export function makeSubflow(deps: ControlDeps): NodeHandler {
   return async (ctx) => {
     const p = ctx.node.params as { workflowId: string; input?: ValueRef };
     if (typeof p.workflowId !== 'string' || p.workflowId === '') {
-      throw new Error(`« ${ctx.node.id} » : « workflowId » manquant.`);
+      throw new Error(`\u201c${ctx.node.id}\u201d: \u201cworkflowId\u201d is missing.`);
     }
     if (!deps.runSubflow) {
       throw new Error('No sub-workflow runner was given to the engine.');

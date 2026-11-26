@@ -99,22 +99,22 @@ export function validateDecision(
 
   if (d && typeof d === 'object') {
     if (!VERDICTS.includes(d.verdict as Verdict)) {
-      violations.push(`verdict invalide : ${JSON.stringify(d.verdict)} (attendu : ${VERDICTS.join('|')}).`);
+      violations.push(`verdict invalid: ${JSON.stringify(d.verdict)} (expected one of ${VERDICTS.join('|')}).`);
     }
     if (typeof d.confidence !== 'number' || Number.isNaN(d.confidence) || d.confidence < 0 || d.confidence > 1) {
       violations.push(`confidence must be a number between 0 and 1, received: ${JSON.stringify(d.confidence)}.`);
     }
     if (typeof d.reasoning !== 'string' || d.reasoning.trim() === '') {
-      violations.push('reasoning manquant ou vide.');
+      violations.push('reasoning missing or empty.');
     } else {
       if (d.reasoning.length > 600) {
         violations.push(`reasoning too long (${d.reasoning.length} characters, max 600).`);
       }
       const count = sentences(d.reasoning).length;
-      if (count > 3) violations.push(`reasoning fait ${count} phrases (max 3).`);
+      if (count > 3) violations.push(`reasoning is ${count} sentences (max 3).`);
     }
     if (!ACTIONS.includes(d.recommended_action as Action)) {
-      violations.push(`recommended_action invalide : ${JSON.stringify(d.recommended_action)}.`);
+      violations.push(`recommended_action invalid: ${JSON.stringify(d.recommended_action)}.`);
     }
     if (!Array.isArray(d.data_lineage) || d.data_lineage.some((x) => typeof x !== 'string')) {
       violations.push('data_lineage must be an array of strings.');
@@ -131,10 +131,10 @@ export function validateDecision(
     }
     if (d.recommended_action === 'isolate_host_temporary'
         && !(d.verdict === 'true_positive' && (d.confidence ?? 0) >= 0.85)) {
-      violations.push('[G8] isolate_host_temporary exige verdict=true_positive et confidence >= 0.85.');
+      violations.push('[G8] isolate_host_temporary requires verdict=true_positive and confidence >= 0.85.');
     }
     if (d.verdict === 'needs_human' && !['escalate', 'ticket'].includes(d.recommended_action as string)) {
-      violations.push('[G9] verdict needs_human impose recommended_action escalate ou ticket.');
+      violations.push('[G9] verdict needs_human requires recommended_action escalate or ticket.');
     }
     // G10 : une source indisponible doit être NOMMÉE. C'est ce qui empêche le
     // modèle de conclure avec assurance sur des données qu'il n'a pas eues.
@@ -157,7 +157,7 @@ export function validateDecision(
         .filter((x): x is string => x !== null);
       const bogus = [...new Set(cited.filter((c) => !context.sourcesOk.includes(c)))];
       if (bogus.length > 0) {
-        violations.push(`[G11] data_lineage cite une source non disponible : ${bogus.join(', ')}.`);
+        violations.push(`[G11] data_lineage cites source(s) that did not answer: ${bogus.join(', ')}.`);
       }
     }
   }

@@ -207,7 +207,7 @@ export class Engine {
 
   async start(workflowId: string, input: unknown, alertId: string | null = null): Promise<RunRecord> {
     const workflow = this.workflows.get(workflowId);
-    if (!workflow) throw new Error(`workflow « ${workflowId} » inconnu`);
+    if (!workflow) throw new Error(`workflow \u201c${workflowId}\u201d is not registered`);
 
     const run: RunRecord = {
       id: this.newId(),
@@ -429,7 +429,7 @@ export class Engine {
 
       const handler = this.handlers[next.node.type];
       if (!handler) {
-        const message = `Aucun gestionnaire pour le type « ${next.node.type} ».`;
+        const message = `No handler for node type \u201c${next.node.type}\u201d.`;
         await this.store.endStep(run.id, next.node.id, attempt, { status: 'failed', error: message });
         await this.store.setRunStatus(run.id, 'failed', message);
         await this.store.releaseRun(run.id, this.owner);
@@ -634,7 +634,7 @@ export function assertAcyclic(workflow: WorkflowDef): void {
     const seen = state.get(id);
     if (seen === 'closed') return;
     if (seen === 'open') {
-      throw new Error(`Cycle dans « ${workflow.id} » : ${[...path, id].join(' → ')}`);
+      throw new Error(`Cycle in \u201c${workflow.id}\u201d: ${[...path, id].join(' → ')}`);
     }
     state.set(id, 'open');
     for (const edge of outgoing.get(id) ?? []) walk(edge.to, [...path, id]);

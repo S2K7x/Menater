@@ -528,7 +528,7 @@ export class SectionBoundary extends Component<
   componentDidCatch(error: unknown) {
     // La console du navigateur reste la seule trace exploitable : la garder
     // permet de distinguer un fichier manquant d'un vrai bug de rendu.
-    console.error('[menater] section non chargée —', error);
+    console.error('[menater] section failed to load —', error);
   }
 
   render() {

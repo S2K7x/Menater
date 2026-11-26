@@ -89,7 +89,7 @@ describe('les variables absentes sont refusées, jamais inventées', () => {
   it('refuse une variable qui n’est pas un nombre', () => {
     const fn = registry().get('shadowOutcome')!;
     expect(() => fn({ alert: {}, rows: [] }, new Map([['shadow.exitThreshold', 'beaucoup']]), { runId: 'run-1' }))
-      .toThrow(/n'est pas un nombre/);
+      .toThrow(/is not a number/);
   });
 });
 

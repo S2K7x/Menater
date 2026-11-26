@@ -131,7 +131,7 @@ export function makeTransform(deps: PureDeps): NodeHandler {
       // « transformation inconnue » nu enverrait fouiller le code.
       throw new Error(
         `Unknown transform \u201c${name}\u201d. Registered: ` +
-          `${deps.transforms.names().join(', ') || '(aucune)'}.`,
+          `${deps.transforms.names().join(', ') || '(none)'}.`,
       );
     }
     // Un nœud de JONCTION déclare ses entrées par référence : la fonction
@@ -187,7 +187,7 @@ export function makeSwitch(deps: PureDeps): NodeHandler {
     if (typeof fallbackPort !== 'string' || fallbackPort === '') {
       // Le piège n8n, rendu impossible : pas de repli, pas d'exécution.
       throw new Error(
-        `« ${ctx.node.id} » : un switch DOIT avoir une sortie de repli. Sans ` +
+        `\u201c${ctx.node.id}\u201d: a switch MUST have a fallback port. Without ` +
           `it, an unexpected value stops the flow while reporting \u201csuccess\u201d.`,
       );
     }

@@ -181,7 +181,7 @@ export function exposeAuditAndMetrics(
         }
       : {
           available: true,
-          window: '7 jours glissants',
+          window: 'last 7 days',
           alerts_total: metrics.alerts_total,
           alerts_shadow: metrics.alerts_shadow,
           alerts_live: metrics.alerts_live,

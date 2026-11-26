@@ -4,6 +4,226 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-11-26 — Thursday · Bugs and technical debt
+
+**Subject**: **a translation pass that stopped mid-sentence, and the catalogue
+that could not see it.** `CLAUDE.md` § English only ends *« they live where they
+are produced, and they are English too »* about the strings the engine writes —
+and that sentence was asserted by nothing. A typed catalogue refuses a key added
+on one side only; it cannot refuse a string that never asked it anything.
+Measured: **27 French messages across 13 files**, every one of them something
+this console writes about a FAILURE, and **three of them switch language
+mid-sentence**.
+
+**Result**: PR opened on `claude/sleepy-volta-bt26ky`. 27 string edits in 13
+product files (no logic changed anywhere), three existing tests **corrected** to
+the English they were asserting the French of, one new test file
+(`server/english-only.test.ts`, 12 tests, 1 red on unmodified code and 13
+mutations killed), plus `CLAUDE.md` (one traps row, the § English only claim now
+naming its test, the two suite counts), `ROADMAP.md` (§ 7's entry rewritten and
+its headline count corrected, § 2 quater D2's verification method corrected) and
+this journal. **+12 tests** — console 2040 → **2052**. No CSS, no class name, no
+route, no SQL, no dependency, no catalogue key.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-bt26ky` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Seventy-eighth entry saying so**; it is a line
+in the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: the baseline at
+`812631b` (= `origin/main`), after `npm ci` on both halves, was typecheck **0
+errors**, console **2040 passed | 1 skipped**, VulnPipe **480 passed**, a clean
+build, 0 vulnerabilities on both halves, and **no PR open**. Thursday's theme is
+`ROADMAP` § 7 plus what the journal noted without fixing, and *« the ninety-odd
+French strings in `server/engine/` »* has been a standing lead for weeks. It
+turned out to be a tenth of that and a measurable defect rather than a tidy-up.
+
+**What I measured, through the real engine on the real workflows** (no model key,
+no database needed — every one of these is a failure path):
+
+| String | Where it surfaces | Measured |
+|---|---|---|
+| 7 of `validateDecision`'s ~16 violations | `fallbackDecision` writes them into `decision.reasoning` — the card, the chat approval request, the assistant's context, `soc_audit_log.payload` | six real model-answer shapes driven; **every one** came back with French and English in one list |
+| `Variable « shadow.exitThreshold » : « fifty » n'est pas un nombre.` | `soc_run.error` + `soc_run_step.error` of 04 | driven with a non-numeric pipeline variable |
+| `Deduplication returned no row. … affirmer que l'alerte est nouvelle.` | `soc_run.error`, and the detail a sender gets | driven with a dedup store answering zero rows |
+| `Aucune sortie du modele (output undefined).` | `validator_violations` on the demonstration card | read off `demoCases` |
+| `7 jours glissants` | 05's `expose` output, in the run journal | driven with `soc_metrics_7d()` stubbed to answer |
+| the Code tab's 503 banner, 2 sentences | the first thing a fresh install reads on that tab | existing relay tests |
+
+**What I learned that is written nowhere else.**
+
+1. **The § 7 headline count was never run and was wrong by an order of
+   magnitude.** It said *« about ninety across `server/engine/` (`routing.ts` 11,
+   `values.ts` 10, `pg-store.ts` 9, `io.ts` 7, `registry.ts` 7, `webhook.ts` 7
+   …) »*. The French **string literals** are 27 messages in 13 files, and
+   `pg-store.ts`, `io.ts`, `routing.ts` and `webhook.ts` hold **none** — every
+   sentence in them has been English since the `describePgError` /
+   `describeFetchError` passes. The ~90 was counting COMMENTS. Same family as
+   the 11-19 estimator numbers: a measurement written into a document is a claim
+   with a date on it.
+2. **`CLAUDE.md`'s own claim about these strings was the defect.** It says the
+   engine's guardrail messages are English. Seven of them were not. Documentation
+   that agrees with itself is not evidence, and the fix is the test rather than a
+   better sentence.
+3. **« Scanned for accented characters » is why 27 messages survived D2's
+   browser sweep, and it is only visible from the far side.** None of the
+   survivors carries an accent — `invalide`, `attendu`, `manquant`, `exige`,
+   `impose`, `ou`, `et`, `fait` — and `vulnpipe.ts`'s whole banner had had its
+   accents deliberately stripped (`ne repond pas`, `Le demarrer`,
+   `injoignable`). An accent-only detector is the obvious one and it passes over
+   the single most-read French string in the product.
+4. **Three sentences switch language MID-SENTENCE, and one is ungrammatical in
+   both.** `« … une sortie de repli. Sans it, an unexpected value stops the flow
+   while reporting “success”. »` That is what settles what this was: not a
+   language decision left in place, but an edit that stopped halfway with
+   nothing able to see it. The others: `Deduplication returned no row. With no
+   answer we cannot affirmer que l'alerte est nouvelle.` and `… letting it reach
+   the prototype changerait le comportement de tout le processus.`
+5. **THREE tests were asserting on the French**, one more than a grep for the
+   strings found (`transforms.test.ts` matched `/4 phrases/`, which no search for
+   the full sentence reaches). Third, fourth and fifth instance of that trap
+   here. All three corrected to the English, none relaxed.
+6. **A hand-rolled comment stripper over-reports AND under-reports in the same
+   pass, and a regex literal is how.** Mine read the `/` of
+   `.replace(/[^a-zA-Z0-9]+/g, '-')` as ordinary text, took the `'` inside the
+   regex as the start of a string and ran past the statement — so it reported two
+   French COMMENTS in `vulnpipe/lib/report-markdown.ts` as strings and silently
+   swallowed whatever lay between them. `ts.createSourceFile` has none of those
+   modes: comments are not nodes, a regex literal holds no strings, and a
+   template's `${…}` is not part of its text (so `${err.message}` is never read
+   as prose). `typescript` is already the devDependency `npm run typecheck` runs
+   on, so it costs the tree nothing.
+7. **A word list is a ruler that has to be falsified in BOTH directions, and
+   nine words taught it.** `execution`, `secret`, `base`, `refuse`, `cycle`,
+   `source`, `phrase`, `segment` and `impossible` all look French and are
+   English; each of them flagged real English sentences this product ships
+   (*« Only the current execution window was searched »*, *« No shared secret »*,
+   *« base it on the disagreement rate »*, *« Approve or refuse »*,
+   *« User Execution »*). They are claimed by a test so the list cannot grow
+   back into them.
+8. **The word rule needs PROSE, or it asks for a protocol change under cover of
+   a translation.** `alerte`, `sain` and `a_verifier` are VulnPipe's three
+   confidence zones, `attente` is the node 04 suspends on, `n8n_soc` is the
+   application role. The gate is "a space, or punctuation, with
+   identifier-shaped runs removed first" — and widening it from "has a space" to
+   "has a space or punctuation" is what catches `'(aucune)'`, the one
+   single-token offender, at the cost of nothing (measured: +1 flag, 0 false
+   positives over 11,685 literals).
+9. **The four signals overlap on almost everything this change removed**, so
+   each is claimed ONE PER TEST on a string that signal alone catches —
+   otherwise three of the four are lines no test can fail on. The elision-only
+   case is `"Journal d'audit absent"`: `journal`, `audit` and `absent` are all
+   English, and the apostrophe is the whole signal. English `don't` / `it's` do
+   not match, because there the apostrophe is not preceded by a word boundary.
+10. **`'7 jours glissants'` does NOT reach the audit row, and I assumed it did
+    before measuring.** `normalizeAuditRow` stores `payload: b`, so the whole 04
+    payload is in `soc_audit_log.payload` — but the `metrics` block is built by
+    05's `expose`, i.e. AFTER the INSERT. Driven with the metrics aggregate
+    stubbed to answer, `expose`'s output carries it and the INSERT's payload does
+    not. The claim I nearly wrote — *« a French label in the immutable hash
+    chain »* — was false.
+11. **`validator_violations` is a declaration with writers and no readers.**
+    `domain.ts` declares it, `decision.ts` writes it, `src/lib/types.ts`
+    declares it, and no component or tool reads it — `guardrails_applied` is the
+    one that is rendered. So the French violations reach an operator through
+    `fallbackDecision`'s `reasoning` and not through that field. It is a field,
+    not a top-level export, so `dead-exports.test.ts` cannot see it — the
+    limitation that file's own header states.
+12. **One French token is deliberately left in place.** `decision.ts`'s G10
+    passes when the reasoning mentions the unavailable source, or `unavailable`,
+    **or `indisponible`**. That is matching vocabulary, not a user-facing
+    string, and removing it makes a guardrail STRICTER — a behaviour change, not
+    a translation. The model is instructed in English by `DECISION_SYSTEM`, so
+    the branch is unreachable in practice. Named in § 7 so it does not read as
+    an oversight.
+
+**Do not redo.**
+
+- **Do not use a regex to find string literals in this repository.** Learning 6.
+  `ts.createSourceFile` is already available and exact.
+- **Do not add `execution`, `secret`, `base`, `refuse`, `cycle`, `source`,
+  `phrase`, `segment` or `impossible` to the French word list.** Learning 7, and
+  a test goes red naming the sentence.
+- **Do not drop the prose gate on the word rule.** Learning 8; the
+  protocol-identifier test is red on it.
+- **Do not translate `server/engine/`'s COMMENTS in a change that is not about
+  them.** It is a mass reformatting of files a change does not otherwise touch,
+  which the working rules refuse, and it has no operator on the other end.
+- **Do not translate `VulnPipe/src` as a translation.** Measured with the same
+  detector: **180 flagged literals in 57 files**, the largest block being
+  `master/claude-client.ts` — the arbitration **model prompt**. Changing what a
+  model is shown cannot be re-measured from an environment with no key. The
+  report strings beside it (`aggregator/severity-rules.ts`,
+  `indexer/indexer.ts`, `config/port.ts`) are an ordinary pass that needs
+  VulnPipe's own suite run against it, and would make a good subject on its own.
+- **Do not claim `7 jours glissants` reaches `soc_audit_log`.** Learning 10.
+
+**Found and NOT fixed, with why.**
+
+- **`validator_violations` has no reader** — learning 11. Either the card should
+  show why a decision was refused, or the field should go; both are decisions,
+  and it is now the sharpest instance of the family `dead-exports.test.ts` was
+  written for and cannot see.
+- **The relay's `if (res.headersSent) return res.end()` is unreachable**, which
+  I measured while looking for a sharper subject in the same file: driven over
+  real sockets on all four ways an answer stops early plus two client-abort
+  shapes, `forwarded` never emits `error` once a head has been relayed — only
+  `upstreamRes` does, and `upstreamRes.on('close')` already handles it with
+  `res.destroy()`. So the `res.end()` the file's own comment calls *the plausible
+  wrong fix* cannot be reached by any of them. Dead defensive code, not a bug.
+- **Standing leads, re-checked and unchanged**: `RuleStore.history` with no
+  caller (still the sharpest non-J0 item); the relay's missing deadline (§ 7,
+  needs a policy number a human picks); `secretMatches`'s comment claiming a
+  digest it does not compute; `connectionString(false)` with no caller;
+  `finding_id` travelling unfenced; the wrong-SHAPE fallback reported as
+  `fallback_api_unavailable`; `schemas/` and `slack/` at the repository root;
+  `.soc-warn-note` as a `<span>` on one Settings field; the Rules tab's two
+  heading-level skips; `var(--accent)` as text failing WCAG 1.4.3 on three
+  themes.
+
+**Verified** (Node 22.23.5, npm 10.9.9, PostgreSQL 16.15, TypeScript 5.9.3;
+every command run and its output read):
+
+| Command | Result |
+|---|---|
+| `npm ci` (both halves) | clean, 0 vulnerabilities |
+| baseline typecheck / test / build (console) | **0 errors**, **2040 passed \| 1 skipped**, clean |
+| baseline `npm test` (VulnPipe) | **480 passed** |
+| RED — the new file against unmodified code | **1 failed \| 10 passed**, listing all 43 flagged literals |
+| RED — the full suite after the string edits | **3 failed** — the three tests asserting on the French |
+| `npm run typecheck` (console, after) | **0 errors** |
+| `npm test` (console, after) | **2052 passed \| 1 skipped** (**+12**), 137 files |
+| `npm test` with `MENATER_TEST_PG`, real PostgreSQL 16.15 | **2085 passed \| 0 skipped** — what CI runs, store contract compared |
+| `npm run build` | clean. `index-C8qqIUUS.css` **byte-identical**; the JS hash moves (`index-qSrcibOl` → `index-W5uoVJZ5`, 450.63 → 450.62 kB) because two of the 27 strings are in `src/` |
+| `npm run typecheck` / `npm test` (VulnPipe) | **0 errors**, **480 passed** — untouched, run anyway |
+| the sweep's own corpus | **139 files, 11,685 non-blank literals, 43 flagged → 0** |
+| the same detector over `VulnPipe/src` | **57 files, 1,709 literals, 180 flagged** — not this night's subject |
+| mutation | **13 mutations, 13 killed, 0 survived**; control GREEN first AND last, **12 tests collected on every one of the 15 runs**, every mutated file seen to have changed |
+
+| Mutation | Result |
+|---|---|
+| CONTROL (unmutated), first AND last | GREEN both times (12/12) |
+| M1 the French G9 violation restored | RED — 1 |
+| M2 a guillemet-only message restored | RED — 1 |
+| M3 the accent-free relay sentence restored | RED — 1 |
+| M4 the half-English dedup sentence restored | RED — 1 |
+| M5 the single-word French literal restored | RED — 1 |
+| M6 the ACCENTS signal deleted | RED — 1 |
+| M7 the GUILLEMETS signal deleted | RED — 1 |
+| M8 the ELISION signal deleted | RED — 1 |
+| M9 the prose gate removed | RED — 2 |
+| M10 an English word added to the French list | RED — 2 |
+| M11 the walk returns no file | RED — 1 |
+| M12 the literal extractor returns nothing | RED — 4 |
+| M13 the AST extractor replaced by a naive regex | RED — 4 |
+
+The six probes lived in `dashboard/scripts/` and are **deleted**; the mutation
+harness and the relay event probe lived in the scratchpad; the throwaway
+PostgreSQL lived under `/var/tmp` and is stopped and removed, with its user.
+`git status` shows only the intended paths.
+
 ## 2026-11-25 — Wednesday · Tests and QA
 
 **Subject**: **`npm test` wrote into the database of whatever MENATER is running
