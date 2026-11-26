@@ -139,6 +139,6 @@ export function applyTheme(theme: ThemeId): void {
 
 export function useTheme(): ThemeValue {
   const value = useContext(ThemeContext);
-  if (!value) throw new Error('useTheme doit être utilisé sous <ThemeProvider>.');
+  if (!value) throw new Error('useTheme must be used inside a <ThemeProvider>.');
   return value;
 }

@@ -67,7 +67,7 @@ function need<T>(vars: ReadonlyMap<string, unknown>, key: string, kind: 'number'
   }
   const cast = kind === 'number' ? Number(value) : String(value);
   if (kind === 'number' && !Number.isFinite(cast as number)) {
-    throw new Error(`Variable « ${key} » : « ${String(value)} » n'est pas un nombre.`);
+    throw new Error(`Variable \u201c${key}\u201d: \u201c${String(value)}\u201d is not a number.`);
   }
   return cast as T;
 }
@@ -509,7 +509,7 @@ export function buildRegistry(deps: RegistryDeps): TransformRegistry {
   reg('auditRecordUnusable', (input) => ({
     error_code: 'AUDIT_RECORD_UNUSABLE',
     severity: 'high',
-    error_message: `Ligne d'audit inexploitable : ${(asRecord(input).problems as string[])?.join(' | ') ?? 'raison inconnue'}`,
+    error_message: `Audit row unusable: ${(asRecord(input).problems as string[])?.join(' | ') ?? 'no reason given'}`,
     details: asRecord(input),
   }));
   reg('auditWriteFailed', (input) => ({

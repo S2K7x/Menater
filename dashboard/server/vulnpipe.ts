@@ -191,10 +191,10 @@ export function proxyToVulnPipe(req: IncomingMessage, res: ServerResponse, url: 
     if (res.headersSent) return res.end();
     const where = `${upstream.origin}`;
     const detail = err.code === 'ECONNREFUSED'
-      ? `Le service d'analyse de code ne repond pas sur ${where}. `
-        + `Le demarrer : \`npm run serve\` dans le dossier VulnPipe, `
-        + `ou \`npm run dev\` depuis la console pour lancer les deux.`
-      : `Le service d'analyse de code est injoignable sur ${where} : ${err.message}`;
+      ? `The code-analysis service is not answering on ${where}. `
+        + `Start it with \`npm run serve\` in the VulnPipe folder, `
+        + `or \`npm run dev\` from the console to start both.`
+      : `The code-analysis service could not be reached on ${where}: ${err.message}`;
     res.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
     // Le champ `error` est celui que lit le client VulnPipe : le message
     // arrive ainsi dans le bandeau de la section, pas dans la console du

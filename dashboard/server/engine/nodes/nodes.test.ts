@@ -185,7 +185,7 @@ describe('switch — le piège de la sortie de repli, rendu impossible', () => {
     // flux s'arrêtait en affichant `success`. Ici il ne démarre pas.
     const h = pureHandlers(deps() as PureDeps);
     await expect(h.switch(ctx('switch', { cases }, { sev: 'low' })))
-      .rejects.toThrow(/sortie de repli/);
+      .rejects.toThrow(/fallback port/);
   });
 });
 

@@ -50,12 +50,12 @@ export function parsePath(path: string): string[] {
   if (path === '') return [];
   const segments = path.split('.');
   for (const segment of segments) {
-    if (segment === '') throw new PathError(`Chemin « ${path} » : segment vide.`);
+    if (segment === '') throw new PathError(`Path \u201c${path}\u201d: empty segment.`);
     if (FORBIDDEN.has(segment)) {
       throw new PathError(
         `Path \u201c${path}\u201d: \u201c${segment}\u201d is forbidden. A workflow ` +
           `definition is editable data; letting it reach the ` +
-          `prototype changerait le comportement de tout le processus.`,
+          `prototype would change the behaviour of the whole process.`,
       );
     }
   }
@@ -134,7 +134,7 @@ export function resolve(ref: ValueRef, scope: ResolveScope): unknown {
     }
     case 'ctx': {
       if (!(ref.field in scope.ctx)) {
-        throw new ResolveError(`Le contexte ne fournit pas « ${ref.field} » ici.`);
+        throw new ResolveError(`The context does not provide \u201c${ref.field}\u201d here.`);
       }
       return scope.ctx[ref.field];
     }
@@ -199,7 +199,7 @@ export function evaluate(condition: Condition, scope: ResolveScope): boolean {
   }
 
   if (!condition.right) {
-    throw new ConditionError(`« ${condition.op} » attend une valeur de droite.`);
+    throw new ConditionError(`\u201c${condition.op}\u201d expects a value on the right.`);
   }
   const right = resolve(condition.right, scope);
 
@@ -243,7 +243,7 @@ export function evaluate(condition: Condition, scope: ResolveScope): boolean {
 export function validateCondition(condition: Condition): void {
   const unary = ['isTrue', 'isFalse', 'exists', 'missing'];
   if (!unary.includes(condition.op) && !condition.right) {
-    throw new ConditionError(`« ${condition.op} » attend une valeur de droite.`);
+    throw new ConditionError(`\u201c${condition.op}\u201d expects a value on the right.`);
   }
   for (const ref of [condition.left, condition.right]) {
     if (ref && (ref.kind === 'input' || ref.kind === 'node')) parsePath(ref.path);

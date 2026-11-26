@@ -908,6 +908,17 @@ the enrichment skip reasons, and the shadow-comparison divergences.
 **Verified in the browser rather than assumed**: all the tabs of the day, with every
 Guide accordion expanded, scanned for accented characters. Zero.
 
+**And « scanned for accented characters » is the hole, which is only visible
+from the far side of it.** The engine's validator and guardrail messages named
+two paragraphs above were NOT all translated, and the reason that sweep said
+Zero is that the survivors carry no accent: `verdict invalide`,
+`reasoning manquant ou vide`, `recommended_action invalide`,
+`[G8] … exige … et …`, `[G9] … impose … ou ticket`, `reasoning fait N phrases`
+— and the Code tab's whole 503 banner, whose accents had been deliberately
+stripped (`ne repond pas`, `Le demarrer`, `injoignable`). 27 messages across 13
+files survived on that one property. See § 7 for the measurement and
+`server/english-only.test.ts` for the detector that does not rest on it.
+
 **And that sweep had a hole, found in the C0.24 pass.** Nine user-facing French
 strings survived it — the report's three verdict counters (`1 à corriger vite`),
 its empty state, its `(ligne 12)` and `Analyse` labels, and six column headers
@@ -4083,41 +4094,75 @@ and nothing checks that the ten screens using `Fold` still meet it once a
 summary wraps to two or three lines. Growing past 44 px is harmless; the
 question nobody has measured is whether any of them falls BELOW it.
 
-### The built-in engine writes French
+### ~~The built-in engine writes French~~ — the user-facing half closed 2026-11-26
 
-Found while doing C0.28: one French divergence detail was on screen, and the
-sweep behind it turned up **about ninety more** across `server/engine/`
-(`routing.ts` 11, `values.ts` 10, `pg-store.ts` 9, `io.ts` 7, `registry.ts` 7,
-`webhook.ts` 7, and a dozen files below that). They are the strings § 2 quater
-lists as "not in any catalogue, because they are written in the engine" — and
-that section asserts they are English.
+**The count in the previous version of this entry was never run, and it was
+wrong by an order of magnitude.** It said *« about ninety more across
+`server/engine/` (`routing.ts` 11, `values.ts` 10, `pg-store.ts` 9, `io.ts` 7,
+`registry.ts` 7, `webhook.ts` 7 …) »*. Measured with a sweep over the
+TypeScript AST, the French **string literals** — i.e. everything this console
+can WRITE — are **27 distinct messages across 13 files** (43 flagged literals,
+which is the sweep's own unit: a template split over three parts is three
+literals and one sentence): `decision.ts` 7, `values.ts` 4, `engine.ts` 3,
+`registry.ts` 2, `pure.ts` 2, `vulnpipe.ts` 2, and one each in `control.ts`,
+`audit.ts`, `errors.ts`, `ingestion.ts`, `demo.ts`,
+`src/components/Guidance.tsx` and `src/theme/context.tsx`. `pg-store.ts`,
+`io.ts` and `webhook.ts` hold **none** — every sentence in them is English and
+has been since the `describePgError` and `describeFetchError` passes. The ~90
+was counting COMMENTS, which are a different subject and are below.
 
-Most are internal invariant errors nobody sees. Some are not, and those are the
-ones that matter: `pg-store` explaining why a database refused the connection,
-`io.ts` saying "no database configured — set it in Settings → Database", the
-Slack and model failures that land on an incident card, the interrupted-step
-note the Tracking tab prints. **They are the sentences you read at the worst
-moment**, and they are in the wrong language.
+So the half that had an operator on the other end was a tenth of what the entry
+claimed, and it is closed. What it cost, measured through the real engine on
+the real workflows rather than reasoned about:
 
-Same cause as the report strings in C0.24: none of them renders without a
-failure, a database, or an n8n, so a browser sweep never reached them. Not
-fixed here — ninety edits inside the security engine is its own pass, with its
-own test risk, and it is not a readability change.
+| String | Where it surfaced |
+|---|---|
+| 7 of `validateDecision`'s ~16 violations | `fallbackDecision` interpolates them into `decision.reasoning` — the incident card, the chat approval request, the assistant's context and `soc_audit_log.payload` |
+| `Variable « shadow.exitThreshold » : « fifty » n'est pas un nombre.` | `soc_run.error` and `soc_run_step.error`, i.e. the Tracking tab and the card — reachable from Settings, where every numeric pipeline variable is a free-text box |
+| `Deduplication returned no row. … affirmer que l'alerte est nouvelle.` | the run error on a dedup store that answers no row, and the detail a sender is given |
+| `Ligne d'audit inexploitable : …` | 05's `unusable` branch |
+| the Code tab's 503 banner (2 sentences) | the first thing a fresh install reads on that tab |
+| `Aucune sortie du modele (output undefined).` | a `validator_violations` entry on the demonstration card, i.e. every install with no database |
+| `7 jours glissants` | 05's `expose` output, in the run journal |
 
-**`server/vulnpipe.ts` belongs to the same family and is not under
-`server/engine/`**, so no sweep of that directory would ever have reached it.
-Its two operator-facing sentences — *« Le service d'analyse de code ne repond
-pas sur … Le demarrer : `npm run serve` … »* and the injoignable variant — are
-the answer the Code tab shows when the analysis service is down, i.e. the only
-state in which they render, which is why the English-only sweep missed them.
-Found while testing that relay's failure paths and deliberately not fixed
-there: they are route answers, so the catalogue that should own them is
-`server/i18n.ts`, but the field they travel in (`error` /
-`plain_language_summary`) is read by the VulnPipe client, which has a
-catalogue of its own. Which of the two owns a relay's answer is a decision,
-not a translation.
+**Three of the 27 switched language MID-SENTENCE**, and one was ungrammatical
+in both (*« …une sortie de repli. Sans it, an unexpected value stops the flow
+while reporting “success”. »*). That is the detail that settles what this was:
+not a language decision left in place, but an edit that stopped halfway, with
+nothing able to see it. **Three tests were asserting ON the French** and are
+corrected to the English.
 
+`dashboard/server/english-only.test.ts` is what keeps it closed, and
+`CLAUDE.md`'s traps table holds the two ruler lessons that cost the most (a
+hand-rolled comment stripper derailed by a regex literal; a word list that has
+to be falsified in both directions, since an accent-only detector passes over
+the whole relay banner).
 
+**What stays open, and neither is a translation.**
+
+- **The comments.** `server/engine/` is commented in French throughout. The
+  sweep does not look at them — `ts.createSourceFile` does not make them nodes
+  — and translating them is a mass reformatting of files a change does not
+  otherwise touch, which this repository's own working rules refuse. It is a
+  pass of its own, and it has no operator on the other end.
+- **`VulnPipe/src`.** A separate package with its own vitest root, so the
+  console's sweep cannot reach it. Measured with the same detector: **180
+  flagged literals in 57 files**. The largest block is `master/claude-client.ts`
+  — the arbitration **model prompt**, in French — with `aggregator/severity-rules.ts`
+  (the explanations a report prints), `indexer/indexer.ts` (the notes a partial
+  index carries) and `config/port.ts` behind it. Translating a prompt changes
+  what a model is shown, and `CLAUDE.md` already records that this cannot be
+  A/B'd from an environment with no key: a product decision, not a
+  translation. The report strings beside it are an ordinary pass that needs
+  VulnPipe's own suite run against it.
+- **One French token is deliberately untouched.** `decision.ts`'s G10 passes
+  when the model's reasoning mentions the unavailable source, or the word
+  `unavailable`, **or the word `indisponible`** — matching vocabulary rather
+  than a user-facing string, and removing it would make a guardrail stricter,
+  which is a behaviour change and not a translation. The model is instructed in
+  English by `DECISION_SYSTEM` and answers in English, so the branch is
+  unreachable in practice; it is named here so the next reader does not take it
+  for an oversight.
 
 ### The analysis dictionary is 7 % of the eager chunk, and both its readers are now lazy
 

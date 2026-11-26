@@ -169,7 +169,7 @@ export function interpretDedup(rows: unknown): { is_duplicate: boolean } {
     // laisserait passer les doublons le jour où la requête change.
     throw new Error(
       `Deduplication returned no row. With no answer we cannot ` +
-        `affirmer que l'alerte est nouvelle.`,
+        `assert that this alert is new.`,
     );
   }
   return { is_duplicate: first.is_duplicate === true };

@@ -302,7 +302,7 @@ export function demoCases(locale: Locale): AlertCase[] {
       recommended_action: 'escalate', data_lineage: [],
       decision_source: 'fallback_api_unavailable', model: null, attempts: 3, is_fallback: true,
       guardrails_applied: [dm.forcedNeedsHuman(0.7)],
-      validator_violations: ['Aucune sortie du modele (output undefined).'], usage: null,
+      validator_violations: ['No model output (output undefined).'], usage: null,
     },
     approval: null,
     audit: { committed: false, row_id: null, integrity_hash: null, prev_hash: null, failure: 'relation "soc_audit_log" does not exist' },

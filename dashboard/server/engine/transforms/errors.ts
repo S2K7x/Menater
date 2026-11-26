@@ -172,7 +172,7 @@ export function assessError(
     db: {
       logged,
       error_id: logged ? String(db!.error_id) : null,
-      log_failure: logged ? null : clip(db?.error ?? 'insertion en base impossible'),
+      log_failure: logged ? null : clip(db?.error ?? 'the database write was not possible'),
     },
     window: {
       minutes: vars.windowMinutes,
