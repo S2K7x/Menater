@@ -360,7 +360,7 @@ export const DECISION: WorkflowDef = {
       position: { x: 800, y: 0 },
     },
     {
-      id: 'validate', type: 'transform', label: 'Validation + guardrails G6–G11',
+      id: 'validate-decision', type: 'transform', label: 'Validation + guardrails G6–G11',
       // JONCTION DÉCLARÉE — le même défaut de câblage que sur `finalize` et
       // `correction`, laissé sur les deux nœuds qui se trouvent entre eux.
       //
@@ -520,8 +520,8 @@ export const DECISION: WorkflowDef = {
     link('prompt', 'model'),
     // Modèle injoignable : repli, jamais une alerte perdue.
     link('model', 'fallback-api', 'error'),
-    link('model', 'validate'),
-    link('validate', 'valid'),
+    link('model', 'validate-decision'),
+    link('validate-decision', 'valid'),
     link('valid', 'finalize', 'true'),
     link('valid', 'correction', 'false'),
     link('correction', 'model-retry'),

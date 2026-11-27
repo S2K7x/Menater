@@ -2707,6 +2707,158 @@ holds the door on irreversible actions.
 
 ## 7. Known technical debt
 
+### ATT&CK tagging is linear in a field with no upper bound — found 2026-11-27
+
+Measured while looking for the subject above, and left alone because the only
+lever changes what is DETECTED.
+
+`tagAttack` runs ten regexes over `${ruleName} ${rawLog}`, once per case, on
+every snapshot rebuild — i.e. every 15 s for every case in the window. It is
+the largest of our own functions in a profile of the read path (**5.6 % self
+time, 39 % of `buildCases`**, above `buildCases` itself and above
+`stepsOfMany`), and `raw_log` has **no length cap**: `ingestion.ts` keeps
+`String(body.raw_log)` whole, deliberately, and the only bound is
+`readBody`'s 256 kB on the request.
+
+Measured per call, on one rule name and a log of each size:
+
+| raw_log | per call |
+|---|---|
+| 120 B (one syslog line) | 2.1 us |
+| 1.5 kB | 12.0 us |
+| 6 kB (the triage prompt's own cap) | 47.9 us |
+| 64 kB | 641.8 us |
+| 240 kB (just under the request cap) | **2,081 us** |
+
+So a window of cases carrying large logs is an unbounded amount of CPU on the
+thread that answers the ingestion webhook — 100 such cases is **208 ms every
+15 s** — driven by a field an attacker composed, which is this product's whole
+premise.
+
+**Three things a night should not redo.** The obvious fix is the cap the
+function already declares: it keeps the first three tags and applies
+`slice(0, 3)` AFTER running all ten rules, so breaking out early is provably
+output-identical (the ten tag ids are distinct, so the `!out.some(...)` dedup
+beside it is dead). Measured on the product's OWN shipped alerts — the nine
+injection scenarios and the seven demonstration cases — **not one reaches
+three tags**, so the early exit saves **0 %** and is an optimisation with no
+measurement behind it. Combining the ten patterns into one alternation with
+capture groups would make it one pass instead of ten, and it destroys what
+this file's header calls its whole point: *« the mapping is a table anyone can
+read and correct »*. And a memo across rebuilds needs a key that carries the
+text — keying on `alert_id` is the *« cache key that does not carry the
+code »* trap, because `buildCases` picks one payload per case and the window
+shifts under it.
+
+What is left is a decision for a human: **how much of a log an inferred tag
+may read.** A prefix bound (say the first 8 kB) makes the cost constant and
+changes what is detected — and this file has already dropped two rules (`LFI`,
+`RFI`) because matching the raw log at all is a source of false positives, so
+the trade is one the product has reasoned about before. It is not a night's
+call.
+
+
+### ~~Two nodes that share an id, and a projection that is a flat set of ids~~ — closed 2026-11-27
+
+Not previously in this list, and it is the other half of the `SELECT *` entry
+below: that pass stopped the window fetching the outputs the reader does not
+declare, and this one stops it fetching the outputs it declares and never
+opens.
+
+`NODE_CONTRACT` is per-workflow and it is also the query — `CASE_OUTPUTS` is
+its flattened union — while `stepsOfMany` filters on **`node_id` alone**. So
+the projection cannot tell two different nodes apart when they share an id,
+and the six workflows held two such pairs:
+
+| id | owned by | opened by the reader for |
+|---|---|---|
+| `validate` | `01-ingestion`, `03-ai-decision` | `01-ingestion` only |
+| `normalize` | `05-audit-log`, `06-error-handler` | `06-error-handler` only |
+
+Asking for one fetched the other. Measured on a real PostgreSQL 16.15 over a
+window seeded by driving the six workflows through the engine (100 alerts →
+500 runs, 4,100 steps), `05-audit-log`'s row output is **4,297 B per alert and
+the largest single output in the projection**: 412,830 bytes of jsonb per
+rebuild, read, sent and `JSON.parse`d for nothing, every 15 s, on the single
+thread that also answers the ingestion webhook.
+
+**The comment that accepted the inexactness counted the wrong side.** It said
+the flat union over-fetches *« the handful of ids two workflows share — five
+rows in a 980-row window, measured »*. Those five are the rows of the workflow
+that DOES declare it: `06-error-handler` runs only on a failure. The rows the
+collision actually buys are `05-audit-log`'s, and there is **one per alert**.
+
+**And the same table over-declared three more ids.** `cases.test.ts` asserts
+that every id the reader READS is declared and nothing asserted the converse,
+so `notify?`, `execute-failed` and `outcome` were declared, named NOWHERE in
+`cases.ts`, and their outputs fetched. `notify?` is **5,235 B per alert** on an
+install out of watch-only mode — the biggest of the lot, because it is an
+`if` node that passes the whole approval request through. `attente` stays,
+and the test now says why: it is read through `ran()`, i.e. existence and never
+output (4 B), and declaring it is what makes a rename fail a test.
+
+**Measured, interleaved, on the real journal** (`CASE_OUTPUTS` after against
+the same set plus the ids the old one carried):
+
+| window | before | after | |
+|---|---|---|---|
+| default, 120 runs, no model key | 7.86 ms | **6.70 ms** | −14.8%, faster in 27 of 31 pairs |
+| ceiling, 500 runs, no model key | 36.24 ms | **33.54 ms** | −7.4%, 418,920 B fewer, 22 of 31 |
+| ceiling, 500 runs, model key set | 27.69 ms | **23.77 ms** | −14.2%, 480,900 B fewer, 25 of 31 |
+| out of watch-only mode, 40 alerts at the wait | 12.97 ms | **10.76 ms** | −17.0%, 226,000 B fewer, 21 of 31 |
+
+**Why the fix is two renames and not a cleverer query — this is the
+transferable half.** Four ways of telling the two apart inside SQL were each
+measured against the real journal, interleaved, and each costs about what it
+saves:
+
+| shape | delta | pairs |
+|---|---|---|
+| join on `(workflow_id, node_id)` | **−0.30 ms** | 9 of 21 |
+| one `OR` group per workflow (5 groups) | **−0.28 ms** | 10 of 21 |
+| a second round trip for the shared ids | **+0.05 ms** | 10 of 21 |
+| one common set plus one exception group | +3.26 ms | 20 of 21 |
+| dropping the ROWS rather than the outputs | +3.75 ms | 19 of 21 |
+
+The join pays a string build and a 29-element `ANY` on every one of 4,100
+rows; the per-workflow groups pay up to five `run_id = ANY` tests per row; the
+second trip is awaited and eats the whole byte saving. The last line is the
+fastest and is **refused**: it removes the `OUTPUT_NOT_READ` net (an
+undeclared read would get `null` instead of the loud throw, so a handoff would
+read `absent` and every chain would report broken over healthy runs) and it
+breaks `steps.length === 0`, the Tracking tab's `empty_input` signal.
+
+So the two nodes **nobody reads** were renamed — `shape-row` in
+`05-audit-log`, `validate-decision` in `03-ai-decision` — and the query is
+untouched. Renaming the undeclared side is what keeps it cheap: nothing reads
+those outputs, so no historical journal row becomes unreadable, and the only
+path that replays a journal against a changed definition is `Engine.resume()`,
+which has no caller (see the entry below on declarations with no reader).
+
+`server/engine/projection-exactness.test.ts` holds four claims, **3 of them
+red on unmodified `main`**: every declared id is owned by exactly one workflow;
+the contract declares no id `cases.ts` never names; it declares every id named
+through `ran()` (the direction the existing check cannot see — dropping
+`attente` was green before it); and, driven through the real workflows with a
+stubbed provider, the window carries no output for a run whose workflow does
+not declare it.
+
+**What stays open**, and it is why this is not the end of the subject:
+
+- **`NODE_CONTRACT` is still two facts in one list** — the ids this file
+  NAMES (the rename guard, which is why `attente` is in it) and the outputs it
+  OPENS (the query). They coincide today for every entry but `attente`, and
+  the new test is what keeps that true. Splitting them would let `attente`
+  keep its rename protection without its output being in the projection; it
+  costs 4 B, so it is a tidiness change, not a measured one.
+- **The projection is per-NODE, not per-(workflow, node)**, and that is now an
+  invariant rather than a fix: a future pair of nodes sharing an id is refused
+  by a test instead of silently over-fetching. If one is ever WANTED, the
+  measurements above say the query cannot pay for it and the id has to move.
+- The `29 node ids` in the entry below is **26** since this pass; that number
+  is a measurement with a date on it, and so is this one.
+
+
 ### DNS rebinding reaches the rest of this API, and no header can tell it apart — found 2026-11-24
 
 Raised by the change that closed the MCP endpoint's half of it (see § 3 bis),

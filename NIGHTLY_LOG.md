@@ -4,6 +4,216 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-11-27 — Friday · Performance and cost
+
+**Subject**: **two nodes in two workflows share an id, and the console's
+projection is a flat set of ids.** `NODE_CONTRACT` is per-workflow and it is
+also the query — `CASE_OUTPUTS` is its flattened union — while `stepsOfMany`
+filters on `node_id` ALONE. So asking `06-error-handler` for `normalize`'s
+output also fetched `05-audit-log`'s: **4,297 B per alert, the largest single
+output in the projection, 412,830 bytes of jsonb per rebuild, opened by
+nothing.** Same shape on `validate` (owned by 01 and 03, read for 01). And the
+same table declared three more ids `cases.ts` names nowhere at all.
+
+**Result**: PR opened on `claude/sleepy-volta-unmade`. Three production files
+(`cases.ts`: four lines of `NODE_CONTRACT` plus the comment that stops calling
+the projection "deliberately coarser"; `workflows/routing.ts` and
+`workflows/pipeline.ts`: two node ids renamed, 18 mechanical lines), one test
+line corrected, one new test file (`server/engine/projection-exactness.test.ts`,
+4 claims, **3 red on unmodified `main`**), plus `CLAUDE.md` (one traps row, a
+stale count dated, the two suite counts), `ROADMAP.md` (one § 7 entry opened and
+closed, one § 7 entry opened and left for a human) and this journal. **+4
+tests** — console 2052 → **2056**, 2085 → **2089** with a real PostgreSQL. **No
+client code**: the built bundle is byte-identical to the baseline, hashes
+included. No dependency, no CSS, no class name, no SQL, no route, no catalogue
+key, no new environment variable. VulnPipe untouched; its suite was run anyway.
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-unmade` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Seventy-ninth entry saying so**; it is a line in
+the routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: the baseline at
+`0824363` (= `origin/main`), after `npm ci` on both halves, was typecheck **0
+errors**, console **2052 passed | 1 skipped**, VulnPipe **480 passed**, a clean
+build, and **no PR open**. § 7's Friday-shaped entries are each refused by their
+own text (the analysis dictionary needs a decision about where the vocabulary is
+provided and touches 28 call sites in 13 files; self-hosted fonts, stripping
+`index.html`'s comments, zstd and the relay deadline are each named as a human's
+call), so — like the four Fridays before it — I measured instead of picking.
+
+**What I measured, and in what order** (real PostgreSQL 16.15 stood up in the
+container, schema applied the way `docker/init-db.sh` applies it; windows seeded
+by driving the six workflows through the real engine):
+
+1. **The engine's WRITE path is 74 % idle.** 31 ms/alert against the real store,
+   and a CPU profile puts `writev` at 7.7 % and nothing of ours above 0.9 %.
+   That is round-trip latency behind *« l'intention est durable avant
+   l'action »*, i.e. architecture. Not a subject.
+2. **The in-memory store dominates any profile taken without a database** —
+   `beginStep` 20 %, `endStep` 17 %, `structuredClone` 15 %, because `steps` is
+   a flat array scanned per call. It is **test-only**: nothing under `server/`
+   constructs a `MemoryRunStore`, so that is suite cost, not product cost, and
+   `store.ts`'s header claiming it serves "the demonstration mode" is stale.
+3. **The read path, phase by phase, at the 500-run ceiling**: `stepsOfMany`
+   **22.8 ms (72 %)**, `recentRuns` 3.6 ms, `buildCases` 5.1 ms,
+   `computeMetrics` 0.09 ms. `EXPLAIN ANALYZE` says 5.0 ms of the 22.8 is SQL;
+   the rest is pg's client-side row materialisation (`parseRow` 23 % of the
+   whole profile), i.e. proportional to the columns and bytes fetched.
+4. That is what pointed at the projection, and the collision fell out of asking
+   which of the 1.97 MB it fetches is actually opened.
+
+**What I learned that is written nowhere else.**
+
+1. **You cannot buy the (workflow, node) discriminator back in SQL.** Four
+   shapes, each measured interleaved against the real journal: a join on
+   `(workflow_id, node_id)` **−0.30 ms**, one `OR` group per workflow
+   **−0.28 ms**, a second round trip for the shared ids **+0.05 ms** — against
+   **+3.26 ms** for simply not sharing the id. The join pays a string build and
+   a 29-element `ANY` per row over 4,100 rows; the groups pay up to five
+   `run_id = ANY` tests per row; the extra trip is awaited and eats the saving
+   whole. **The cheapest discriminator is a unique name.**
+2. **The fastest shape is the one to refuse.** Filtering the ROWS rather than
+   blanking the outputs is **+3.75 ms** (4,100 → 1,400 rows, 19 of 21 pairs) and
+   it removes two guarantees: `outputOf` would get `null` instead of its loud
+   throw for an undeclared read — so a handoff would read `absent` and every
+   chain would report broken over healthy runs — and `steps.length === 0`, the
+   Tracking tab's `empty_input` signal, becomes meaningless.
+3. **The comment that accepted the inexactness counted the wrong side.** It
+   said the flat union over-fetches *« five rows in a 980-row window,
+   measured »*. Five is the rows of the workflow that DOES declare the id
+   (`06-error-handler` runs only on a failure); the rows the collision buys are
+   `05-audit-log`'s, **one per alert**. A measurement can be right about a
+   number and wrong about what it counted.
+4. **`notify?` was the biggest of the dead declarations and only shows out of
+   watch-only mode**: 5,235 B per alert, because it is an `if` node that passes
+   the whole approval request through. `execute-failed` and `outcome` sit on
+   failure branches, so a shadow-mode window prices them at zero — which is why
+   this needed a live stubbed run to measure at all.
+5. **Postgres text cannot hold a NUL byte.** The obvious separator for a
+   `workflow || sep || node` key is `\u0000`; `psql` answers *« invalid Unicode
+   escape value »* and the parameterised form is refused the same way. Probed,
+   not read.
+6. **03-ai-decision never reaches its own guardrail node without a provider
+   that answers**, so every window driven with no model key prices
+   `validate` at zero. The harness has to stub a decision carrying
+   `verdict`, `confidence`, `reasoning`, **`recommended_action`** and
+   `data_lineage` — `proposed_action` is the plausible wrong name and the node
+   refuses the answer with *« Incomplete decision: recommended_action
+   missing »*, which lands on the `error` port and reports the provider
+   unreachable.
+7. **`tagAttack` is the largest of our own functions in the read path and the
+   early exit it is crying out for saves nothing.** It is now a § 7 entry with
+   its numbers: 2.1 us at a 120 B log, **2,081 us at 240 kB**, and `raw_log` has
+   no cap. The cap it declares (`slice(0, 3)`) is applied after the work, so
+   breaking out early is provably output-identical — and measured on the
+   product's own nine scenarios and seven demonstration cases, **not one alert
+   reaches three tags**, so the saving is 0 %.
+8. **A compound mutation hides the guard it removes.** Two of mine survived
+   until I split them: deleting the driven test's reached-node guard AND the
+   provider key together is green, removing the key alone is red; breaking the
+   `ran()` extraction AND its vacuity floor together is green, breaking the
+   extraction alone is red on both floors. *A mutation that removes two things
+   tests neither.*
+9. **One of my mutations was BROKEN and reported as a survivor** — a `perl`
+   pattern that never applied, so the run was the control. Fourth shape in this
+   repository's ruler family, after restoring from the index, a mutation that
+   did not parse, and a pattern gone stale. Re-derived in Python with the
+   replacement COUNT printed, it was red. **Print what the mutation changed, or
+   the harness is measuring the control.**
+
+**Do not redo.**
+
+- **Do not add a join, per-workflow `OR` groups or a second query to
+  `stepsOfMany`** to make the projection per-(workflow, node). All three are
+  measured at or below break-even; learning 1.
+- **Do not filter `soc_run_step` rows by `node_id`.** It is the fastest shape
+  measured and it breaks `OUTPUT_NOT_READ` and `empty_input`; learning 2.
+- **Do not add an early exit to `tagAttack` as an optimisation.** 0 % on the
+  product's own data; learning 7. The honest subject there is the cap on how
+  much log an inferred tag reads, and it is a human's call.
+- **Do not rename a node id the reader DECLARES.** The two renamed here are in
+  the complement of the contract, which is what makes them free: nothing reads
+  those outputs, so no historical journal row becomes unreadable.
+- **Do not optimise `MemoryRunStore`** believing it is production; learning 2.
+- **Do not profile this product's read path without a database.** The memory
+  store's quadratic scans bury everything real.
+
+**Found and NOT fixed, with why.**
+
+- **`NODE_CONTRACT` is still two facts in one list** — the ids `cases.ts` names
+  (the rename guard, which is the only reason `attente` is in it) and the
+  outputs it opens (the query). They coincide for every entry but `attente`
+  today, and the new test is what keeps that true. Splitting them buys 4 B.
+- **`Date.parse` is called 5,198 times per rebuild for 792 distinct strings**
+  (6.6× redundancy, 0.99 ms of which 0.84 ms is redundant, 2.7 % of the read
+  path). The sort comparator at `cases.ts:524` re-parses both operands on every
+  comparison, which is O(n log n) parses for n runs. A decorate-sort-undecorate
+  is provably order-identical. Small, real, and a night of its own.
+- **`store.ts`'s header says the memory store serves "the tests and the
+  demonstration mode only"**, and `demo.ts` builds cases directly: nothing in
+  `server/` constructs one. A stale sentence, not a defect.
+- **`decision-system.test.ts`'s `out()` helper returns `undefined` for a node
+  id that does not exist**, so the 03 rename surfaced as two assertions failing
+  on CONTENT rather than as "that node is gone". A two-line hardening, in a
+  file this change only touches for the rename.
+- **Standing leads, re-checked and unchanged**: `RuleStore.history` with no
+  caller (still the sharpest non-J0 item); the relay's missing deadline;
+  `secretMatches`'s comment claiming a digest it does not compute;
+  `connectionString(false)` with no caller; `finding_id` travelling unfenced;
+  the wrong-SHAPE fallback reported as `fallback_api_unavailable`; `schemas/`
+  and `slack/` at the repository root; `.soc-warn-note` as a `<span>` on one
+  Settings field; the Rules tab's two heading-level skips; `var(--accent)` as
+  text failing WCAG 1.4.3 on three themes; the French comments under
+  `server/engine/`; `VulnPipe/src`'s 180 flagged literals.
+
+**Verified** (Node 22.23.5, npm 10.9.9, PostgreSQL 16.15, TypeScript 5.9.3;
+every command run and its output read):
+
+| Command | Result |
+|---|---|
+| `npm ci` (both halves) | clean, 0 vulnerabilities |
+| baseline typecheck / test / build (console) | **0 errors**, **2052 passed \| 1 skipped**, clean |
+| baseline `npm test` (VulnPipe) | **480 passed** |
+| RED — the new file against unmodified `main` | **3 failed \| 1 passed**, naming `validate` and `notify?` |
+| RED — the full suite after the renames, before the test fix | **2 failed** — `decision-system.test.ts` reading 03's node by its old id |
+| `npm run typecheck` (console, after) | **0 errors** |
+| `npm test` (console, after) | **2056 passed \| 1 skipped** (**+4**), 138 files |
+| `npm test` with `MENATER_TEST_PG`, real PostgreSQL 16.15 | **2089 passed \| 0 skipped** — what CI runs |
+| `npm run build` | clean, and **byte-identical** to the baseline: `index-W5uoVJZ5.js` 450.62 kB, `index-C8qqIUUS.css` 62.51 kB |
+| `npm run typecheck` / `npm test` (VulnPipe) | **0 errors**, **480 passed** — untouched, run anyway |
+| read path, default window (120 runs) | 7.86 → **6.70 ms** (−14.8%), 100,548 B fewer, 27 of 31 pairs |
+| read path, ceiling (500 runs) | 36.24 → **33.54 ms** (−7.4%), 418,920 B fewer, 22 of 31 |
+| read path, ceiling, model key set | 27.69 → **23.77 ms** (−14.2%), 480,900 B fewer, 25 of 31 |
+| read path, out of watch-only mode | 12.97 → **10.76 ms** (−17.0%), 226,000 B fewer, 21 of 31 |
+| mutation | **13 mutations, 11 killed, 2 survived**; control GREEN first AND last, 55 tests collected on all 13 runs |
+
+| Mutation | Result |
+|---|---|
+| CONTROL (unmutated), first AND last | GREEN both times (55/55) |
+| M1 05's node named `normalize` again | RED — 2 |
+| M2 03's node named `validate` again | RED — 4 |
+| M3 05 declares the row-shaping node again | RED — 1 |
+| M4 06 stops declaring `normalize` | RED — 1 |
+| M9 06 declares `outcome` again | RED — 1 |
+| M10 04 declares `notify?` again | RED — 1 |
+| M11 04 declares `execute-failed` again | RED — 1 |
+| M12 04 stops declaring `attente` | RED — 1 |
+| M7b the provider key removed, reached-guard kept | RED — 1 |
+| M8 the driven test asks for every output | RED — 1 |
+| M15b the `ran()` extraction matches nothing | RED — 2 (both vacuity floors) |
+| M5 `.toBe(1)` → `.toBeGreaterThan(0)` | **SURVIVED — equivalent on correct code**; its strength is the RED-on-`main` run |
+| M13 the named-by-the-reader predicate → `true` | **SURVIVED — equivalent on correct code**; its strength is M3/M9/M10/M11 |
+
+The comment strip in the new test is kept with its measurement written beside
+it — **21 extracted ids either way** — because a comment is not a reference and
+no mutation can kill that line. The twenty-six probes lived in
+`dashboard/scripts/` and are **deleted**; the mutation harness lived in the
+scratchpad; the throwaway PostgreSQL lived under `/var/tmp` and is stopped and
+removed, with its user. `git status` shows only the intended paths.
+
 ## 2026-11-26 — Thursday · Bugs and technical debt
 
 **Subject**: **a translation pass that stopped mid-sentence, and the catalogue

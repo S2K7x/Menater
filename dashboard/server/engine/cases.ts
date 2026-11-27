@@ -146,22 +146,48 @@ export const NODE_CONTRACT: Record<string, string[]> = {
   '01-ingestion': ['validate', 'read-dedup', 'tuning', 'to-enrichment', 'respond-500'],
   '02-enrichment': ['assemble', 'to-decision'],
   '03-ai-decision': ['finalize', 'to-routing'],
+  // `attente` is here for the RENAME guard and not for its output: the file
+  // reads it through `ran()`, i.e. it asks whether a wait was ever opened and
+  // never what the node produced. Declaring it is what makes a rename fail a
+  // test — the id is load-bearing, because a rename would null every approval.
+  // `notify?` and `execute-failed` were declared and are named NOWHERE in this
+  // file, so they bought no rename protection and their outputs were fetched
+  // for nothing on every live install.
   '04-action-routing': [
-    'shadow-count', 'request', 'notify?', 'below-threshold', 'attente', 'interpret', 'timeout',
-    'rejected', 'execute', 'executed', 'execute-failed', 'audit-record', 'to-audit',
+    'shadow-count', 'request', 'below-threshold', 'attente', 'interpret', 'timeout',
+    'rejected', 'execute', 'executed', 'audit-record', 'to-audit',
   ],
-  '05-audit-log': ['normalize', 'append', 'expose', 'unusable', 'write-failed'],
-  '06-error-handler': ['normalize', 'assess', 'outcome'],
+  // NOT `shape-row`: that node builds the audit row and no branch here opens
+  // its output — the audit facts are read off `expose`/`append`. It was
+  // declared, and because the projection filters on `node_id` alone, asking
+  // `06-error-handler` for `normalize` fetched this workflow's row as well:
+  // 4,297 B per alert, the largest output in the window, read by nothing.
+  '05-audit-log': ['append', 'expose', 'unusable', 'write-failed'],
+  // Not `outcome`: declared, named nowhere here, output fetched for nothing.
+  '06-error-handler': ['normalize', 'assess'],
 };
 
 /**
  * The outputs one snapshot rebuild needs, as `stepsOfMany` takes them.
  *
  * DERIVED, never restated: a second list would be a second thing to keep in
- * step with the reader, and the whole point is that there is one. The union of
- * the per-workflow ids is deliberately coarser than the contract — a node id
- * two workflows share is fetched for both — because over-fetching is the safe
- * direction and it keeps the query free of a join.
+ * step with the reader, and the whole point is that there is one.
+ *
+ * FLATTENING IS EXACT ONLY WHILE NO TWO WORKFLOWS SHARE A DECLARED ID, and
+ * that is now an invariant rather than an accepted approximation.
+ * `stepsOfMany` filters on `node_id` alone, so a declared id a second
+ * workflow also owns is that workflow's output fetched, sent and `JSON.parse`d
+ * for every one of its runs. Two pairs did exactly that — `validate`
+ * (01-ingestion / 03-ai-decision) and `normalize` (05-audit-log /
+ * 06-error-handler) — and the one that cost was `05-audit-log`'s row: 4,297 B
+ * per alert, 412,830 B per rebuild on a 500-run window, opened by nothing.
+ *
+ * The id is the discriminator because nothing cheaper exists: a join on
+ * `(workflow_id, node_id)`, per-workflow `OR` groups and a second round trip
+ * were each measured against the real journal and each costs about what it
+ * saves. `projection-exactness.test.ts` holds the invariant, and the two
+ * nodes nobody reads were renamed (`shape-row`, `validate-decision`) rather
+ * than the query made cleverer.
  */
 export const CASE_OUTPUTS: ReadonlySet<string> = new Set(Object.values(NODE_CONTRACT).flat());
 

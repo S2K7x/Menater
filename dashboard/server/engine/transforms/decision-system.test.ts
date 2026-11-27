@@ -329,7 +329,7 @@ describe('the guardrails are judged against the enrichment that answered', () =>
     return {
       calls: sent.length,
       path: steps.map((st) => st.nodeId),
-      violations: (out('validate')?.violations ?? []) as string[],
+      violations: (out('validate-decision')?.violations ?? []) as string[],
       final: out('finalize') as any,
     };
   }
