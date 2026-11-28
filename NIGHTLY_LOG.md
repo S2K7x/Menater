@@ -4,6 +4,156 @@
 written in this repository is English. The French entries below are kept as
 they were — they are memory about live code, and rewriting them would lose it.*
 
+## 2026-11-28 — Saturday · Interface, clarity, accessibility
+
+**Subject**: **the Rules tab skipped a heading level in every state you click
+into**, and the shared subhead class behind it spans three levels. `h1 RULES`
+-> **`h4 TEMPLATES`** — two levels, in the state somebody reaches by pressing
+the second button on the page — plus `h1` -> `h3 NEW RULE` while they are
+typing a rule, and `h2 PUSH SOURCES` -> `h4 LOG SOURCES` in Settings. On the
+screen where a team writes the rules deciding what stops reaching a human.
+
+**Result**: PR opened on `claude/sleepy-volta-4rbysp`. Two components (three
+markup tokens and one class attribute), three CSS selectors, one new test file
+(`src/components/rules-heading-levels.test.tsx`, 16 claims, **12 red on
+unmodified `main`**), plus `ROADMAP.md` (§ 3 C0.48, one § 7 entry closed, one
+§ 7 entry opened for a human), `CLAUDE.md` (one traps row, the two suite
+counts), `CLARITY.md` (four § 8 rows) and this journal. **+16 tests** — console
+2056 -> **2072**, and **2105** with a real PostgreSQL 16.15, measured rather
+than derived. No catalogue key, no user-facing string, no colour, no token, no
+heading SIZE, no control, no live region, no dependency, no server change, no
+route, no SQL. VulnPipe untouched; its suite was run anyway (480 passed).
+
+**Note on the branch name.** `NIGHTLY.md` § 5 asks for
+`claude/nightly-YYYY-MM-DD-subject`; this session was handed
+`claude/sleepy-volta-4rbysp` with an instruction not to push anywhere else, as
+every session since 09-12 was. The `claude/` prefix — the part NIGHTLY.md calls
+mandatory — holds either way. **Eightieth entry saying so**; it is a line in the
+routine's configuration, not a thing a night can fix.
+
+**Why this subject.** The calendar rule did not preempt: the baseline at
+`0ee2069` (= `origin/main`), after `npm ci` on both halves, was typecheck **0
+errors**, console **2056 passed | 1 skipped**, VulnPipe **480 passed**, a clean
+build, and **no PR open**. Of § 7's three open interface entries, two say in
+their own text that they are a human's call — `var(--accent)` as text is a
+palette decision across six themes and both halves, and the incident card's
+outline plus the `h1` size step are *« both design decisions rather than
+defects »*. The third ends *« The whole of it is one night's subject »*, so I
+took the one the roadmap had already scoped.
+
+**What I learned that is written nowhere else.**
+
+1. **Five heading passes swept DESTINATIONS, and the defect was in a STATE.**
+   C0.36, C0.44, C0.45, C0.46 and C0.47 each walked tabs and sub-tabs.
+   `CLARITY.md` § 7 already carried the rule they were missing, in its own
+   words — *a state you click into is a screen too* — written when the open
+   incident card was found still failing WCAG 1.4.10 months after the pass
+   built to catch exactly that. The Rules tab has **four** such states and all
+   four skipped. The transferable part is not the fix, it is that the sweep has
+   to enumerate STATES, and the ones here are reached by pressing the two
+   buttons at the top of the screen.
+2. **A heading level belongs to the CALL SITE, never to the class that dresses
+   it.** `.soc-wf-subhead` has four call sites at three levels, and
+   `WorkflowPanel`'s node card — under an `h3 {node.label}` — is **correct as
+   an `h4`**. Promoting the class fixes the three that skip and silently breaks
+   the one that does not; the mutation that does it is red on 2. So the type is
+   taken back per LEVEL (`.soc-panel h2.soc-wf-subhead` and
+   `.soc-panel h3.soc-wf-subhead`) and the `h4` call site is untouched.
+3. **A line height is a RATIO, so it is measured AFTER the size it
+   multiplies.** My own comment first said that dropping `line-height: inherit`
+   on the level-2 form would give **20.8px**, reasoned from `.soc-panel h2`'s
+   1.3 × 16px. Measured, it is **13.728px**, because the font-size is held at
+   0.66rem by the line below it. A number reasoned instead of measured, written
+   into a comment, in a repository whose own § 7 says a measurement in a comment
+   is a claim with a date on it. Corrected, with the trap named beside it.
+4. **The precedent I mirrored carries a DEAD declaration, and copying it copied
+   the dead one.** `.soc-setup .soc-panel-head h2` sets `font-size`,
+   `letter-spacing` and `line-height`; its `letter-spacing: 0.06em` is a line no
+   test can fail on, because `.soc-panel h2` declares exactly 0.06em and an `em`
+   resolves against the size the rule beside it holds. Dropping it alone changes
+   nothing on any theme or width. Mine is two declarations. **A precedent is not
+   a measurement** — and that dead line is still in `.soc-setup`, deliberately:
+   it is not this diff's file and deleting it changes no behaviour.
+5. **A specificity probe that injects its own canceller measures itself.** To
+   ask whether the `.soc-panel` named in a selector is load-bearing, the
+   tempting probe is: inject a copy of the rule to cancel it, add the bare form
+   beside it. The canceller is (0,2,1) and the replacement (0,1,1), so the
+   canceller wins and the probe reports the parent as needed — **which is the
+   answer it was built to want**. It told me the level-3 parent was
+   load-bearing. Redone by editing the real stylesheet: the level-3 one is
+   **not** (there is no `.soc-panel h3` in this sheet, so (0,1,1) already beats
+   `h1, h2, h3`), and the two level-2 ones are (bare, they measure 10.56px ->
+   16px and 13.76px -> 16px, the defect back). The sheet now says which is
+   which instead of implying a test stands behind all three. The valid probe in
+   the other direction is additive and sound: re-inject copies of the BASE rules
+   AFTER the candidate, which is what moving it up the sheet amounts to.
+6. **`SourcesPanel` was the call site the § 7 entry left unmeasured, and it was
+   the skip; `WorkflowPanel`, which it suspected, was already right.** Two
+   mounts settled a question the entry had carried for a week. Both are in this
+   file so the next reader does not re-derive them: the first renders inside a
+   `section.soc-panel` titled `h2 {t.pushSources}` by `IngestionPanel`, the
+   second under its own `h3 {node.label}`.
+7. **The rule name is SHOUTED in the editor's heading, and it is not my
+   change.** Opening the editor from a row's edit button, measured in Chromium:
+   the list says `Nightly backup agent`, the heading's `textContent` says
+   `Nightly backup agent`, and `innerText` **and the AX name** say
+   `NIGHTLY BACKUP AGENT`. `h1, h2, h3` sets `text-transform: uppercase` and
+   Chromium computes an accessible name from rendered text. Pre-existing — it
+   was an `h3` with the same transform, and the before/after shows **0
+   `text-transform` differences in 108 cells** — and it is NOT obviously the
+   same answer as the three earlier *value in a heading* instances, which were
+   a URL, a path and a route. A rule name is a name. It is § 7 with three
+   shapes somebody could pick between.
+8. **The whole visual proof is one sentence, and it is the shape to aim for**:
+   108 cells (6 scenes × 6 themes × 3 widths), **126 differences, every one of
+   them the TAG NAME.** No size, line height, tracking, weight, family,
+   transform, colour or box moved; 0 cells whose document width, panel total or
+   long-heading count moved; 0 horizontal overflow and 0 long headings at 320 /
+   375 / 1280 after. `jsdom` cannot see any of that, so the type is pinned by
+   reading `styles.css` as text — comments stripped, because this file's own
+   prose and the sheet's quote the selectors the test hunts.
+
+**Do not redo.**
+
+- **Do not promote `.soc-wf-subhead` itself**, in the stylesheet or by changing
+  the component that uses it at level 4. Measured: `WorkflowPanel`'s node card
+  is correct as an `h4` and a class-level promotion breaks it.
+- **Do not grow the editor title to `.soc-panel h2`'s 1rem** without somebody
+  asking. It is the open half of the § 7 entry, the size is held on purpose
+  (`CLARITY.md` § 2 and the Settings checklist are the precedent), and the
+  number if anybody wants it is 13.76px -> 16px on four headings.
+- **Do not add `letter-spacing` to `.soc-panel h2.soc-rule-title`** to match
+  the `.soc-setup` precedent. Measured dead: `.soc-panel h2` already declares
+  0.06em and the `em` resolves against the size held one declaration earlier.
+- **Do not probe specificity by injecting a canceller.** See point 5; it
+  reports the reassuring answer. Edit the sheet.
+- **Do not take the `h1 { font-size: clamp(1.8rem, 4vw, 2.8rem) }` step or the
+  incident card's outline as this family's next instance.** Both are § 7
+  entries that say in their own text they are design decisions, and the card's
+  needs its four `h3` and four `h4` moved together or it trades one outline
+  defect for another.
+
+**Verified.**
+
+| Command | Result |
+|---|---|
+| `npm run typecheck` (console) | **0 errors** |
+| `npm test` (console, baseline at `0ee2069`) | 2056 passed \| 1 skipped, 138 files |
+| `npm test` (console, after) | **2072 passed \| 1 skipped** (**+16**), 139 files |
+| `npm test` with `MENATER_TEST_PG`, real PostgreSQL 16.15 | **2105 passed \| 0 skipped** — what CI runs |
+| `npm run build` (console) | OK. Render-blocking sheet 62,510 -> **62,718 B** raw (+208, the three selectors; the build strips CSS comments), 11,535 -> **11,563 B** gzipped (+28). Bundle 450.62 -> 450.65 kB |
+| `npm test` (VulnPipe, untouched) | **480 passed** |
+| The new file against unmodified `main` | **12 failed \| 3 passed** of 15 at that point; the 16th claim was added after |
+| Mutation pass, 14 mutations | **14 killed, 0 survivors.** Control green first AND last, every mutation seen to change its file, every run's collected total compared against the control's |
+| Browser sweep | Chromium 1243, throwaway preview page under `.soc-app > main`, transitions killed before sampling, AX outline **walked from the root**. 108 cells: **72 skips -> 0**, 126 differences and all 126 the tag name, 0 overflow, 0 long headings |
+
+The two mutations aimed at the TEST rather than the fix are the ones worth
+keeping: deleting the template block so the state carries one heading pair is
+**red** (so the « no skip » claims are not vacuous — the floor and the needle
+assertions are load-bearing), and renaming the sheet's rule so the selector
+sweep matches nothing is **red** (so the structural claim cannot pass over
+having examined nothing).
+
 ## 2026-11-27 — Friday · Performance and cost
 
 **Subject**: **two nodes in two workflows share an id, and the console's

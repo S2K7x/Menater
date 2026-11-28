@@ -266,7 +266,17 @@ export function RulesPage() {
 
         {showTemplates ? (
           <div className="soc-rule-templates">
-            <h4 className="soc-wf-subhead">{t.templatesTitle}</h4>
+            {/* LEVEL 2, AND THE PANEL AROUND IT NAMES NOTHING.
+                This block is the only named thing in the panel — the two
+                buttons above it need no title — so it is a section of the
+                screen and not a block inside one. It was an `h4` under the
+                `h1` page title: measured in Chromium, `h1 RULES` ->
+                `h4 TEMPLATES`, two levels skipped, in the state somebody
+                reaches by pressing the second button on the page. Giving the
+                panel an `h2` of its own instead would be inventing content to
+                satisfy a pattern. Its SIZE does not follow its level; see
+                `.soc-panel h2.soc-wf-subhead`. */}
+            <h2 className="soc-wf-subhead">{t.templatesTitle}</h2>
             <p className="soc-muted">{t.templatesLede}</p>
             {/* A `<p>`, not a `<span>`: `.soc-field span` is (0,1,1) and sits
                 later in the sheet than `.soc-warn-note` (0,1,0). A standing
@@ -446,7 +456,12 @@ function RuleEditor({
 
   return (
     <section className="soc-panel">
-      <h3 style={{ marginTop: 0 }}>{rule.id ? rule.name : t.add}</h3>
+      {/* The editor is a `section.soc-panel` sibling of the list, so it is a
+          section of the screen: level 2, exactly as the Settings checklist is.
+          Its size stays where it was — « promote by meaning, not by how big
+          you want the text » — which is what `.soc-panel h2.soc-rule-title`
+          holds back. */}
+      <h2 className="soc-rule-title" style={{ marginTop: 0 }}>{rule.id ? rule.name : t.add}</h2>
 
       <Announce>
         {problems.length > 0 ? (
@@ -524,7 +539,8 @@ function RuleEditor({
         <span className="soc-faint soc-help">{t.expiresHelp}</span>
       </label>
 
-      <h4 className="soc-wf-subhead">{t.conditions}</h4>
+      {/* A block inside the editor section above, so level 3. */}
+      <h3 className="soc-wf-subhead">{t.conditions}</h3>
       <p className="soc-muted">{t.conditionsHelp}</p>
 
       {conditions.map((cond, i) => (

@@ -295,7 +295,13 @@ export function SourcesPanel() {
   // ossec.conf block and the mapping table shredded across them.
   return (
     <div className="soc-ingest-sources">
-      <h4 className="soc-wf-subhead">{t.title}</h4>
+      {/* `IngestionPanel` renders this inside a `section.soc-panel` titled
+          « Push sources » (`h2`), so this is a block inside that section:
+          level 3. It was an `h4`, i.e. a skipped level. The fourth user of
+          `.soc-wf-subhead` — `WorkflowPanel`'s node card — sits under an `h3`
+          and is CORRECT as an `h4`: this class spans two levels now, and the
+          level belongs to the call site. */}
+      <h3 className="soc-wf-subhead">{t.title}</h3>
       <p className="soc-muted">{t.lede}</p>
 
       <div className="soc-field">

@@ -1660,6 +1660,62 @@ code, .soc-mono { font-family: var(--mono); }
   text-transform: uppercase; color: var(--faint); margin: 16px 0 8px; font-weight: 400;
 }
 
+/*
+ * A SUBHEAD THAT IS ALSO A HEADING, AT TWO DIFFERENT LEVELS.
+ *
+ * This class has four call sites and they are not all the same level, because
+ * the level belongs to the call site and not to the class: `WorkflowPanel`'s
+ * node card sits under an `h3` and is correct as an `h4`, while the Rules
+ * tab's template block is a section of its screen (level 2) and the editor's
+ * conditions and Settings -> Push sources' catalogue are blocks inside a
+ * section (level 3). So the type is taken back per LEVEL, and the `h4` call
+ * site is untouched by everything below.
+ *
+ * THE ELEMENT IS NAMED, and `.soc-panel` with it on the level-2 form, because
+ * `.soc-panel h2` is (0,1,1) and this class is (0,1,0) — it loses outright,
+ * which is the trap this project has now paid for an eighth time (C0.46 was
+ * the sixth, C0.47 the seventh). (0,2,1) wins by
+ * SPECIFICITY: re-injecting a copy of `.soc-panel h2` and of `h1, h2, h3`
+ * AFTER these rules — which is what moving them up the sheet amounts to —
+ * leaves all three readings unmoved, and written bare the level-2 one
+ * measures 10.56px -> 16px, i.e. the defect back.
+ *
+ * ON THE LEVEL-3 MEMBER THE PARENT IS NOT LOAD-BEARING, and this says so
+ * rather than implying a test stands behind it: there is no `.soc-panel h3`
+ * in this sheet, so `h3.soc-wf-subhead` at (0,1,1) already beats
+ * `h1, h2, h3` at (0,0,1) — written bare it measures identically, probed by
+ * editing this file and not by injecting a canceller (a canceller at (0,2,1)
+ * outranks a (0,1,1) replacement, so that probe measures itself: it reported
+ * the parent as load-bearing, which is the answer it was built to want). It
+ * is scoped anyway, for one reason: both level-3 call sites are inside a
+ * panel, and the day somebody writes `.soc-panel h3` a bare form would TIE
+ * with it and lose on source order — the failure this sheet already records
+ * twice.
+ *
+ * Measured in Chromium 1243 on the two screens that carry them — the Rules
+ * tab and Settings -> Push sources — each declaration dropped alone (grayed,
+ * 1280 px, against the `h4` the call sites used to be):
+ *
+ *   line-height: inherit     h2 16.896px -> 13.728px  (`.soc-panel h2` says 1.3)
+ *                            h3 16.896px -> 11.088px  (`h1, h2, h3` says 1.05)
+ *   font-size                h2 10.56px  -> 16px
+ *   letter-spacing           h2 1.6896px -> 0.6336px
+ *
+ * The first of those is the one worth reading: 1.3 x 16px = 20.8px is what
+ * the cascade looks like it would give, and the answer is 13.728px, because
+ * the font-size is held at 0.66rem by the line below — a line height is a
+ * RATIO, so it is measured after the size it multiplies, not before.
+ *
+ * `inherit` and not the number: these subheads sit in three different parents
+ * and an `h4` inherits its line height from each of them, so `inherit`
+ * reproduces what was there by construction where `1.6` would be a fourth
+ * copy of a number to keep in step. The `h2.soc-kicker` rule further down
+ * answers the same question the same way.
+ */
+.soc-panel h2.soc-wf-subhead,
+.soc-panel h3.soc-wf-subhead { line-height: inherit; }
+.soc-panel h2.soc-wf-subhead { font-size: 0.66rem; letter-spacing: 0.16em; }
+
 .soc-wf-params {
   font-family: var(--mono); font-size: 0.72rem; line-height: 1.5;
   background: var(--hero);
@@ -2000,6 +2056,31 @@ code, .soc-mono { font-family: var(--mono); }
  * rather than the engine's evaluation order. Nobody opens this screen to
  * replay a priority; they open it because something needs revisiting.
  */
+
+/*
+ * The editor's title is a SECTION of the Rules tab — a `section.soc-panel`
+ * sibling of the list — so its heading is level 2. It was an `h3`, which under
+ * an `h1` page title skipped a level outright. Its SIZE does not follow its
+ * level: it names a form somebody is already looking at, and growing it 16 %
+ * on the screen where a team writes the rules that decide what stops reaching
+ * a human is a visual choice nobody asked for. « Promote by meaning, not by
+ * how big you want the text. »
+ *
+ * Same shape and same reason as `.soc-setup .soc-panel-head h2` above: the
+ * ELEMENT is named because `.soc-panel h2` is (0,1,1) and a bare class would
+ * lose to it, and `line-height` is here because the measurement caught it —
+ * as an `h3` the title takes 1.05 from the base rule, `.soc-panel h2` says
+ * 1.3, and left to the cascade it grows 14.448px -> 17.888px.
+ *
+ * TWO declarations and not that rule's three. Its `letter-spacing: 0.06em`
+ * is a line no test can fail on, and so was mine until it was measured:
+ * `.soc-panel h2` already declares exactly 0.06em, and an `em` resolves
+ * against the size the line above holds — so dropping it alone changes
+ * nothing, on any theme or width. Each of the two kept here was measured by
+ * dropping it alone: font-size 13.76px -> 16px, line-height 14.448px ->
+ * 17.888px.
+ */
+.soc-panel h2.soc-rule-title { font-size: 0.86rem; line-height: 1.05; }
 
 .soc-rule-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
 
