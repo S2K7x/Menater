@@ -1097,6 +1097,29 @@ stayed exactly where it was.*
 **What R does not do.** It adds no per-user layout preference; that is C1.5. It
 leaves the eight facts of a triage row intact: the table got shorter, not poorer.
 
+### C0.48 ✅ — The Rules tab skipped a level in every state you click into
+
+*Fifth instance of the shape C0.44, C0.45, C0.46 and C0.47 each fixed, and the
+first where the thing that was missed is not a screen but a STATE. All four of
+those swept destinations — tabs and sub-tabs. `CLARITY.md` § 7 already says in
+as many words that **a state you click into is a screen too**, and the Rules
+tab has four of them: the template picker, the editor on a new rule, the editor
+on an existing one, and both open at once. None was in any sweep and every one
+of them skipped.*
+
+| Point | Detail |
+|---|---|
+| **The measurement** | Chromium 1243, a throwaway preview page under the real wrappers (`.soc-app > main`), heading nodes out of CDP `Accessibility.getFullAXTree` and **walked from the root**. `rules idle` `h1 h2` unchanged · `+ template picker` `h1 h4 h2` → `h1 h2 h2` · `+ editor` `h1 h3 h4 h2` → `h1 h2 h3 h2` · `+ both` `h1 h4 h3 h4 h2` → `h1 h2 h2 h3 h2` · `Settings → Push sources` `h2 h4` → `h2 h3`. Over 6 scenes × 6 themes × 3 widths = **108 cells, 72 skips → 0** |
+| **The worst one is two levels and the second button on the page** | `h1 RULES` → `h4 TEMPLATES`, reached by pressing *From a template*, on the screen where a team writes the rules deciding what stops reaching a human. `h1` → `h3 NEW RULE` is the other, and it is the state somebody is in while they TYPE a rule |
+| **The level belongs to the CALL SITE, not to the class** | `.soc-wf-subhead` has four call sites and they are not all one level. `WorkflowPanel`'s node card sits under an `h3 {node.label}` and is **correct as an `h4`** — measured, `h2 h2 h3 h4 h2`, unchanged by this pass. The Rules tab's template block is a section of its screen (level 2, because the panel around it holds two buttons and names nothing, and giving that panel an `h2` would be *inventing content to satisfy a pattern*); the editor's conditions and Settings → Push sources' catalogue are blocks inside a section (level 3). So the type is taken back **per level**, and promoting the class rather than the call site is the mutation that proves it |
+| **The editor's title is a section, and § 7 was right that the SIZE is the question** | It is a `section.soc-panel` sibling of the list, so level 2 — and `.soc-panel h2` is 1rem where `h3` is 0.86rem. § 7 recorded that *« promote by meaning, not by how big you want the text » does not say which of those two somebody wants here*. The size is **held**, for three reasons: `CLARITY.md` § 2 already establishes the move (the Settings checklist is an `h2` at the level-3 size), it makes the change provably outline-only, and growing four headings 16 % on the screen where containment rules are written is a visual choice nobody asked for. `.soc-panel h2.soc-rule-title`, the same shape and the same reason as `.soc-setup .soc-panel-head h2` |
+| **TWO declarations where the precedent has three, and measuring is what said so** | That precedent sets `font-size`, `letter-spacing` and `line-height`. Its `letter-spacing: 0.06em` is **a line no test can fail on**: `.soc-panel h2` already declares exactly 0.06em and an `em` resolves against the size the rule beside it holds, so dropping it alone changes nothing on any theme or width. Copied first, measured second, deleted third. (The precedent keeps its dead declaration — out of this diff's scope, and recorded here rather than tidied.) |
+| **A line height is a RATIO, so it is measured after the size it multiplies** | The comment on the subhead rule first said that dropping `line-height: inherit` would give **20.8px**, reasoned from `.soc-panel h2`'s 1.3 × 16px. Measured, it is **13.728px**, because the font-size is held at 0.66rem by the line below it. A number reasoned instead of measured, in a comment, in a repository whose own § 7 says *a measurement written into a comment is a claim with a date on it* |
+| **The parent is NAMED on the two level-2 rules, and NOT load-bearing on the level-3 one** | `.soc-panel h2` is (0,1,1), so a bare `h2.soc-wf-subhead` **ties** and wins only by source order — and `.soc-wf-subhead` sits 800 lines ABOVE it, so the tie loses. Probed by editing the sheet: written bare, the template block measures 10.56px → **16px** and the editor title 13.76px → **16px**, the defect back; re-injecting copies of `.soc-panel h2` and `h1, h2, h3` AFTER the new rules leaves all three unmoved, i.e. they win by specificity. There is no `.soc-panel h3` in this sheet, so the level-3 member's `.soc-panel` is **not** load-bearing and the comment says so instead of implying a test stands behind it. Eighth time this project has paid for this selector |
+| **And the probe that answered the specificity question first was a broken ruler** | It cancelled each rule by injecting a copy at (0,2,1) and added the bare form at (0,1,1) — so the canceller outranked the replacement and the probe measured itself. It reported the level-3 parent as load-bearing, **which is the answer it was built to want**. Redone by editing the real stylesheet, that one is unchanged. The tell is the one `CLARITY.md` § 7 already names: a reading that agrees with the conclusion you were hoping to justify |
+| **Measured, and nothing visual moved** | 108 cells comparing the AX outline, every heading's computed type (size, line height, tracking, weight, family, transform, colour) and bounding box, every panel's geometry, the document width and the `innerText` sweep. **126 differences, and every one of them is the TAG NAME.** 0 cells whose document width, panel total or long-heading count moved; 0 horizontal overflow and 0 long headings at 320 / 375 / 1280 on all six themes |
+| **Unchanged** | No catalogue key, no user-facing string, no colour, no token, no heading SIZE, no control, no live region, no dependency, no server change, no route, no SQL. Three markup tokens and one class attribute across two components, three CSS selectors. Render-blocking sheet **62,510 → 62,718 B raw (+208) and 11,535 → 11,563 gzipped (+28)** — the build strips CSS comments, so that is the three selectors and nothing else; bundle 450.62 → 450.65 kB. **16 tests, 12 red on unmodified code**, 3 boundaries green before AND after on purpose; **14 mutations, 14 killed**, control green first and last, every mutation seen to apply and its collected total compared against the control's |
+
 ### C0.47 ✅ — Three sections that were a fold, and the Rules tab had ONE heading
 
 *Fourth instance of the shape C0.44, C0.45 and C0.46 each fixed on one screen,
@@ -2859,6 +2882,50 @@ not declare it.
   is a measurement with a date on it, and so is this one.
 
 
+### A rule's own name, SHOUTED in the heading that names the editor — found 2026-11-28
+
+Found while measuring C0.48 and deliberately not touched by it: the element
+around that string moved, the string's rendering did not — measured, **0
+`text-transform` differences across all 108 cells**.
+
+`RuleEditor`'s title is `rule.id ? rule.name : t.add`, so on the *edit* path it
+is not a label at all: it is a value an operator typed. `h1, h2, h3` sets
+`text-transform: uppercase`, and Chromium computes an accessible name from
+RENDERED text. Measured in Chromium 1243 on the editor opened from a rule's
+edit button:
+
+| where | what it says |
+|---|---|
+| the list (`.soc-rule-head b`) | `Nightly backup agent` |
+| the editor heading, `textContent` | `Nightly backup agent` |
+| the editor heading, `innerText` | **`NIGHTLY BACKUP AGENT`** |
+| the editor heading, AX name | **`NIGHTLY BACKUP AGENT`** |
+
+So one screen prints the same rule name two ways, and a screen reader dictates
+the re-cased one. This is the family `CLARITY.md` § 8 calls *a VALUE inside a
+heading* — J0.4's repository URL, C0.42's `ossec.conf` path, C0.45's route —
+**and it is not obviously the same answer**, which is why it is here. That rule
+says « a NAME may take the display register; a VALUE keeps its spelling ». A
+tuning rule's name is a name: a human wrote it as a label, and the other three
+instances were a URL, a filesystem path and an HTTP route, every one of them a
+string something else has to match character for character. Nothing matches a
+rule name.
+
+What makes it a question anyway: the field accepts any string, so a team that
+names rules after what they match (`CVE-2026-1234`, `svc-backup-prod`,
+`/api/v2/orders`) is having a case-sensitive token re-cased on the one screen
+that edits it — and the list beside it disagrees. Three shapes somebody could
+pick between: `text-transform: none` on that title alone (the list's spelling
+wins, and the heading stops looking like the other section titles on the
+screen); the mono treatment C0.42 gave the `ossec.conf` path (states *this came
+from somewhere else and is exact*, and is a much louder visual change on a form
+header); or declaring a rule name a NAME and leaving it, in which case the LIST
+is the thing that is inconsistent. **Not a night's call**, and the fix is one
+declaration whichever way it goes.
+
+What is NOT open: the outline, closed by C0.48, and the type, which is held to
+the hundredth of a pixel.
+
 ### DNS rebinding reaches the rest of this API, and no header can tell it apart — found 2026-11-24
 
 Raised by the change that closed the MCP endpoint's half of it (see § 3 bis),
@@ -4050,6 +4117,31 @@ See § 3, C0.47.
 
 **What this did NOT close, and it is on the same screen**: the Rules tab still
 skips a level in both states you click into. See the entry below.
+
+### ~~The Rules tab skips a heading level in both states you click into~~ — closed 2026-11-28
+
+**Closed by C0.48.** It is FOUR states, not two, and the fourth call site of
+`.soc-wf-subhead` the entry below left unmeasured turned out to be a skip as
+well, while the one it suspected was already correct:
+
+| call site | measured outline | verdict |
+|---|---|---|
+| `RulesPage`, template picker | `h1 RULES` → `h4 TEMPLATES` | skipped two → `h2` |
+| `RulesPage`, editor title | `h1 RULES` → `h3 NEW RULE` | skipped one → `h2` |
+| `RulesPage`, conditions | under the editor's title | correct level, moved to `h3` with it |
+| `SettingsSetup`, log sources | `h2 PUSH SOURCES` → `h4 LOG SOURCES` | **skipped one** → `h3` |
+| `WorkflowPanel`, node params | `h2 INGESTION` → `h3 DEDUPLICATION` → `h4` | **correct, untouched** |
+
+Two answers to the questions this entry left open. **The SIZE is held** —
+`CLARITY.md` § 2 already establishes the move and the Settings checklist is the
+precedent, so `.soc-panel h2.soc-rule-title` keeps 0.86rem/1.05 and the change
+is provably outline-only. **And the `line-height` the entry predicted the
+shared class would need is real**: as an `h3` it takes 1.05 from `h1, h2, h3`
+and measures 16.896px → 11.088px without `inherit`. What the entry did not
+predict is that the class now spans two levels, so the type is taken back per
+level and the `h4` call site is untouched by all of it.
+
+The original text follows.
 
 ### The Rules tab skips a heading level in both states you click into — found 2026-11-21
 
